@@ -30,6 +30,7 @@ export class AudioEngine {
 
   private readonly statusListeners = new Set<(status: EngineStatus) => void>();
   private readonly activeNoteListeners = new Set<(midis: ReadonlySet<number>) => void>();
+  private currentActiveNotes: ReadonlySet<number> = new Set();
   private coreLoadStarted = false;
 
   constructor() {
@@ -56,6 +57,7 @@ export class AudioEngine {
     });
     this.voices = new VoiceManager(this.context, this.graph.voiceDestination);
     this.voices.subscribeActiveNotes((midis) => {
+      this.currentActiveNotes = midis;
       for (const listener of this.activeNoteListeners) listener(midis);
     });
     this.setStatus(this.context.state === 'running' ? 'running' : 'suspended');
@@ -257,9 +259,17 @@ export class AudioEngine {
     return () => this.statusListeners.delete(listener);
   }
 
+  /** Stable snapshot of live-input notes; reference changes only on events. */
+  getActiveNotes(): ReadonlySet<number> {
+    return this.currentActiveNotes;
+  }
+
+  /**
+   * Change subscription only — listeners are NOT invoked at subscribe time
+   * (useSyncExternalStore reads getActiveNotes itself).
+   */
   subscribeActiveNotes(listener: (midis: ReadonlySet<number>) => void): () => void {
     this.activeNoteListeners.add(listener);
-    listener(this.voices?.activeMidis() ?? new Set());
     return () => this.activeNoteListeners.delete(listener);
   }
 

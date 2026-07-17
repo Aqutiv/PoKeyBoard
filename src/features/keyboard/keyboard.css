@@ -1,0 +1,116 @@
+.piano {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+}
+
+.piano__controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.piano__shift,
+.piano__sustain {
+  min-height: var(--touch-target);
+  min-width: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  font-size: 15px;
+  transition: background 120ms ease;
+}
+
+.piano__shift:disabled {
+  opacity: 0.35;
+}
+
+.piano__shift:not(:disabled):active {
+  background: var(--surface-3);
+}
+
+.piano__sustain {
+  margin-left: auto;
+}
+
+.piano__sustain.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.piano__range {
+  color: var(--text-dim);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  min-width: 84px;
+  text-align: center;
+}
+
+.piano__keys {
+  position: relative;
+  flex: 1;
+  min-height: 130px;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  border-radius: var(--radius-s) var(--radius-s) var(--radius-m) var(--radius-m);
+  background: var(--key-black-edge);
+  overflow: hidden;
+}
+
+.piano-key {
+  position: absolute;
+  top: 0;
+}
+
+.piano-key--white {
+  height: 100%;
+  background: linear-gradient(to bottom, #efe8d8 0%, var(--ivory) 12%, var(--ivory) 82%, var(--ivory-shadow) 100%);
+  border: 1px solid #b9b1a0;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.12);
+  z-index: 1;
+}
+
+.piano-key--white.is-active {
+  background: linear-gradient(to bottom, #e8cf96 0%, #f2dfae 20%, #eed9a2 100%);
+  box-shadow: inset 0 3px 7px rgba(0, 0, 0, 0.22);
+}
+
+.piano-key--black {
+  height: 62%;
+  background: linear-gradient(to bottom, #33302c 0%, var(--key-black) 20%, var(--key-black-edge) 100%);
+  border: 1px solid var(--key-black-edge);
+  border-top: none;
+  border-radius: 0 0 4px 4px;
+  box-shadow:
+    inset 0 -4px 6px rgba(255, 255, 255, 0.06),
+    0 4px 6px rgba(0, 0, 0, 0.5);
+  z-index: 2;
+}
+
+.piano-key--black.is-active {
+  background: linear-gradient(to bottom, #8c6b25 0%, #6f5417 60%, #52400f 100%);
+  box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.45);
+}
+
+.piano-key__label {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: 10px;
+  color: #8d846f;
+  pointer-events: none;
+}

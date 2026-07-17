@@ -160,9 +160,9 @@ export class VoiceManager {
     return midis;
   }
 
+  /** Change subscription only; the current set is read via activeMidis(). */
   subscribeActiveNotes(listener: (midis: ReadonlySet<number>) => void): () => void {
     this.activeListeners.add(listener);
-    listener(this.activeMidis());
     return () => this.activeListeners.delete(listener);
   }
 

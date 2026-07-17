@@ -221,3 +221,36 @@ button {
   color: var(--text-dim);
   margin: 6px 0;
 }
+
+/* Play view layout: score area grows, keyboard takes the lower band. */
+.play-layout {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.play-layout__score {
+  flex: 1;
+  min-height: 80px;
+  display: flex;
+  flex-direction: column;
+}
+
+.play-layout__keyboard {
+  flex: 0 0 auto;
+  height: clamp(150px, 34vh, 300px);
+  display: flex;
+  flex-direction: column;
+}
+
+.play-layout__keyboard .piano {
+  flex: 1;
+}
+
+@media (orientation: landscape) and (max-height: 500px) {
+  .play-layout__keyboard {
+    height: clamp(130px, 46vh, 240px);
+  }
+}
