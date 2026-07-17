@@ -63,6 +63,7 @@ export class SampleBank {
   private loadedFiles = 0;
   private loadedBytes = 0;
   private lastError: string | undefined;
+  private progressSnapshot: SampleLoadProgress | null = null;
 
   private readonly baseUrl: string;
 
@@ -183,18 +184,20 @@ export class SampleBank {
     return null;
   }
 
+  /** Stable snapshot: same reference until progress changes (React-safe). */
   getProgress(): SampleLoadProgress {
-    const totalFiles = this.manifest?.files.length ?? 0;
-    const totalBytes = this.manifest?.totalBytes ?? 0;
-    const progress: SampleLoadProgress = {
-      phase: this.phase,
-      loadedFiles: this.loadedFiles,
-      totalFiles,
-      loadedBytes: this.loadedBytes,
-      totalBytes,
-    };
-    if (this.lastError !== undefined) progress.error = this.lastError;
-    return progress;
+    if (!this.progressSnapshot) {
+      const progress: SampleLoadProgress = {
+        phase: this.phase,
+        loadedFiles: this.loadedFiles,
+        totalFiles: this.manifest?.files.length ?? 0,
+        loadedBytes: this.loadedBytes,
+        totalBytes: this.manifest?.totalBytes ?? 0,
+      };
+      if (this.lastError !== undefined) progress.error = this.lastError;
+      this.progressSnapshot = progress;
+    }
+    return this.progressSnapshot;
   }
 
   subscribe(listener: (progress: SampleLoadProgress) => void): () => void {
@@ -272,6 +275,7 @@ export class SampleBank {
   }
 
   private emit(): void {
+    this.progressSnapshot = null;
     const progress = this.getProgress();
     for (const listener of this.listeners) listener(progress);
   }

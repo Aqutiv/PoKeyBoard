@@ -1,4 +1,47 @@
-/* Minimal base styles; the PoKeyBoard theme lands with the app shell. */
+/* ------------------------------------------------------------------ */
+/* PoKeyBoard theme: warm charcoal surfaces, ivory keys, amber accents */
+/* ------------------------------------------------------------------ */
+
+:root {
+  --surface-0: #171412; /* page background */
+  --surface-1: #1f1b18; /* panels */
+  --surface-2: #2a2521; /* raised elements */
+  --surface-3: #363029; /* hover / pressed */
+  --border: #3d362e;
+
+  --text: #f0e9dc;
+  --text-dim: #b3a996;
+  --text-faint: #7d7466;
+
+  --accent: #d9a441; /* restrained amber */
+  --accent-strong: #f0b954;
+  --accent-contrast: #241c0e;
+  --record: #e5484d; /* clear recording red */
+  --success: #6fbf73;
+
+  --ivory: #f5efe2; /* white keys */
+  --ivory-shadow: #d8d0bf;
+  --key-black: #201d1a;
+  --key-black-edge: #0d0b0a;
+
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+
+  --nav-size: 60px;
+  --touch-target: 46px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  color-scheme: dark;
+}
+
 *,
 *::before,
 *::after {
@@ -12,14 +55,169 @@ body,
   height: 100%;
 }
 
+html {
+  /* Dynamic viewport height keeps the keyboard usable while the mobile
+     browser address bar expands and contracts. */
+  height: 100dvh;
+}
+
 body {
   font-family:
     system-ui,
     -apple-system,
     'Segoe UI',
     Roboto,
+    'Helvetica Neue',
     sans-serif;
-  background: #1d1a17;
-  color: #f3ede2;
+  font-size: 16px;
+  line-height: 1.45;
+  background: var(--surface-0);
+  color: var(--text);
   -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: 2px;
+  border-radius: var(--radius-s);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* Shell layout: content region plus bottom nav (side rail when wide) */
+/* ---------------------------------------------------------------- */
+
+.app-shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: 1fr auto;
+  padding-left: var(--safe-left);
+  padding-right: var(--safe-right);
+}
+
+.app-shell__content {
+  min-height: 0;
+  overflow: hidden auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-nav {
+  display: flex;
+  justify-content: space-around;
+  align-items: stretch;
+  gap: 2px;
+  background: var(--surface-1);
+  border-top: 1px solid var(--border);
+  padding-bottom: var(--safe-bottom);
+}
+
+.app-nav__item {
+  flex: 1;
+  min-height: var(--nav-size);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text-dim);
+  transition: color 120ms ease;
+}
+
+.app-nav__item svg {
+  width: 22px;
+  height: 22px;
+}
+
+.app-nav__item[aria-current='page'] {
+  color: var(--accent-strong);
+}
+
+@media (min-width: 900px) {
+  .app-shell {
+    grid-template-rows: 1fr;
+    grid-template-columns: auto 1fr;
+  }
+
+  .app-nav {
+    order: -1;
+    flex-direction: column;
+    justify-content: flex-start;
+    gap: 6px;
+    border-top: none;
+    border-right: 1px solid var(--border);
+    padding: calc(var(--safe-top) + 12px) 6px 12px;
+    width: 84px;
+  }
+
+  .app-nav__item {
+    flex: 0 0 auto;
+    min-height: 60px;
+    border-radius: var(--radius-m);
+  }
+
+  .app-nav__item[aria-current='page'] {
+    background: var(--surface-2);
+  }
+}
+
+/* -------------------------------- */
+/* Generic page scaffolding elements */
+/* -------------------------------- */
+
+.page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  padding: calc(var(--safe-top) + 12px) 16px 16px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.page--play {
+  padding: calc(var(--safe-top) + 8px) 8px 8px;
+  max-width: none;
+}
+
+.page__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.page__title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+
+.page__hint {
+  color: var(--text-dim);
+  margin: 6px 0;
 }
