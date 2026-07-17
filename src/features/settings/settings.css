@@ -39,6 +39,18 @@
   accent-color: var(--accent);
 }
 
+.setting-row select {
+  min-height: 40px;
+  /* Extra right padding leaves room for the native dropdown arrow so the
+     longest option label (e.g. "Français") is never clipped. */
+  padding: 0 30px 0 10px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  font-size: 14px;
+}
+
 .setting-row--stack {
   flex-direction: column;
   align-items: flex-start;
