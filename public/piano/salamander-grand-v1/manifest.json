@@ -1,0 +1,658 @@
+{
+  "version": "salamander-grand-v1",
+  "source": "Salamander Grand Piano v3 by Alexander Holm",
+  "license": "CC-BY 3.0",
+  "sourceUrl": "https://github.com/sfzinstruments/SalamanderGrandPiano",
+  "format": "mp3-128k-48khz-mono",
+  "velocityLayers": [
+    {
+      "index": 0,
+      "sourceLayer": 5,
+      "label": "soft"
+    },
+    {
+      "index": 1,
+      "sourceLayer": 10,
+      "label": "medium"
+    },
+    {
+      "index": 2,
+      "sourceLayer": 15,
+      "label": "loud"
+    }
+  ],
+  "coreBytes": 5700834,
+  "totalBytes": 12299730,
+  "files": [
+    {
+      "file": "A0v5.mp3",
+      "midi": 21,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "A0v10.mp3",
+      "midi": 21,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "A0v15.mp3",
+      "midi": 21,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "C1v5.mp3",
+      "midi": 24,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "C1v10.mp3",
+      "midi": 24,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "C1v15.mp3",
+      "midi": 24,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Ds1v5.mp3",
+      "midi": 27,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Ds1v10.mp3",
+      "midi": 27,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Ds1v15.mp3",
+      "midi": 27,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Fs1v5.mp3",
+      "midi": 30,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Fs1v10.mp3",
+      "midi": 30,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Fs1v15.mp3",
+      "midi": 30,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "A1v5.mp3",
+      "midi": 33,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "A1v10.mp3",
+      "midi": 33,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "A1v15.mp3",
+      "midi": 33,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "C2v5.mp3",
+      "midi": 36,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "C2v10.mp3",
+      "midi": 36,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "C2v15.mp3",
+      "midi": 36,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Ds2v5.mp3",
+      "midi": 39,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Ds2v10.mp3",
+      "midi": 39,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Ds2v15.mp3",
+      "midi": 39,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Fs2v5.mp3",
+      "midi": 42,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Fs2v10.mp3",
+      "midi": 42,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "Fs2v15.mp3",
+      "midi": 42,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 192813
+    },
+    {
+      "file": "A2v5.mp3",
+      "midi": 45,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 192813
+    },
+    {
+      "file": "A2v10.mp3",
+      "midi": 45,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 192813
+    },
+    {
+      "file": "A2v15.mp3",
+      "midi": 45,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 192813
+    },
+    {
+      "file": "C3v5.mp3",
+      "midi": 48,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "C3v10.mp3",
+      "midi": 48,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "C3v15.mp3",
+      "midi": 48,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Ds3v5.mp3",
+      "midi": 51,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Ds3v10.mp3",
+      "midi": 51,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Ds3v15.mp3",
+      "midi": 51,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Fs3v5.mp3",
+      "midi": 54,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Fs3v10.mp3",
+      "midi": 54,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Fs3v15.mp3",
+      "midi": 54,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "A3v5.mp3",
+      "midi": 57,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "A3v10.mp3",
+      "midi": 57,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "A3v15.mp3",
+      "midi": 57,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "C4v5.mp3",
+      "midi": 60,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "C4v10.mp3",
+      "midi": 60,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "C4v15.mp3",
+      "midi": 60,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Ds4v5.mp3",
+      "midi": 63,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Ds4v10.mp3",
+      "midi": 63,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Ds4v15.mp3",
+      "midi": 63,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Fs4v5.mp3",
+      "midi": 66,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Fs4v10.mp3",
+      "midi": 66,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "Fs4v15.mp3",
+      "midi": 66,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "A4v5.mp3",
+      "midi": 69,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "A4v10.mp3",
+      "midi": 69,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "A4v15.mp3",
+      "midi": 69,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 144813
+    },
+    {
+      "file": "C5v5.mp3",
+      "midi": 72,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "C5v10.mp3",
+      "midi": 72,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "C5v15.mp3",
+      "midi": 72,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "Ds5v5.mp3",
+      "midi": 75,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "Ds5v10.mp3",
+      "midi": 75,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "Ds5v15.mp3",
+      "midi": 75,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "Fs5v5.mp3",
+      "midi": 78,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "Fs5v10.mp3",
+      "midi": 78,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "Fs5v15.mp3",
+      "midi": 78,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "A5v5.mp3",
+      "midi": 81,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "A5v10.mp3",
+      "midi": 81,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "A5v15.mp3",
+      "midi": 81,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 112941
+    },
+    {
+      "file": "C6v5.mp3",
+      "midi": 84,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 93741
+    },
+    {
+      "file": "C6v10.mp3",
+      "midi": 84,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 97965
+    },
+    {
+      "file": "C6v15.mp3",
+      "midi": 84,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 99885
+    },
+    {
+      "file": "Ds6v5.mp3",
+      "midi": 87,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 109869
+    },
+    {
+      "file": "Ds6v10.mp3",
+      "midi": 87,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 107565
+    },
+    {
+      "file": "Ds6v15.mp3",
+      "midi": 87,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 109869
+    },
+    {
+      "file": "Fs6v5.mp3",
+      "midi": 90,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 90669
+    },
+    {
+      "file": "Fs6v10.mp3",
+      "midi": 90,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 99501
+    },
+    {
+      "file": "Fs6v15.mp3",
+      "midi": 90,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 93741
+    },
+    {
+      "file": "A6v5.mp3",
+      "midi": 93,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 109485
+    },
+    {
+      "file": "A6v10.mp3",
+      "midi": 93,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 109101
+    },
+    {
+      "file": "A6v15.mp3",
+      "midi": 93,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 110253
+    },
+    {
+      "file": "C7v5.mp3",
+      "midi": 96,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 68013
+    },
+    {
+      "file": "C7v10.mp3",
+      "midi": 96,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 73389
+    },
+    {
+      "file": "C7v15.mp3",
+      "midi": 96,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 68397
+    },
+    {
+      "file": "Ds7v5.mp3",
+      "midi": 99,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 77997
+    },
+    {
+      "file": "Ds7v10.mp3",
+      "midi": 99,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 78765
+    },
+    {
+      "file": "Ds7v15.mp3",
+      "midi": 99,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 82989
+    },
+    {
+      "file": "Fs7v5.mp3",
+      "midi": 102,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 74157
+    },
+    {
+      "file": "Fs7v10.mp3",
+      "midi": 102,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 76845
+    },
+    {
+      "file": "Fs7v15.mp3",
+      "midi": 102,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 77229
+    },
+    {
+      "file": "A7v5.mp3",
+      "midi": 105,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 61869
+    },
+    {
+      "file": "A7v10.mp3",
+      "midi": 105,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 62637
+    },
+    {
+      "file": "A7v15.mp3",
+      "midi": 105,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 58029
+    },
+    {
+      "file": "C8v5.mp3",
+      "midi": 108,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 45357
+    },
+    {
+      "file": "C8v10.mp3",
+      "midi": 108,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 60333
+    },
+    {
+      "file": "C8v15.mp3",
+      "midi": 108,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 65325
+    }
+  ]
+}
