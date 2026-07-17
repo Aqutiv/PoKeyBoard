@@ -199,8 +199,7 @@ export const mg: Messages = {
       'Tsy misy feo amin’ny iPhone? Jereo ny bokotra mangina sy ny feo — mamono ny feon’ny web ny iPhone rehefa mangina ilay bokotra.',
     resetSettings: 'Avereno ny fandrindrana',
     deleteSamplesConfirm: 'Fafana ny santionam-piano voatariny? Tsy voakasika ny rakitrao.',
-    resetConfirm:
-      'Averina amin’ny mahazatra ny fandrindrana rehetra? Tsy voakasika ny rakitra.',
+    resetConfirm: 'Averina amin’ny mahazatra ny fandrindrana rehetra? Tsy voakasika ny rakitra.',
     capabilities: {
       standaloneDisplayMode: 'Mandeha ho toy ny rindrambaiko voapetraka',
       beforeInstallPrompt: 'Fangatahana fametrahana teratany',

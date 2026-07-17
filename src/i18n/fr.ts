@@ -199,8 +199,7 @@ export const fr: Messages = {
     resetSettings: 'Réinitialiser les réglages',
     deleteSamplesConfirm:
       'Supprimer les échantillons de piano téléchargés ? Vos prises ne sont pas affectées.',
-    resetConfirm:
-      'Réinitialiser tous les réglages par défaut ? Les prises ne sont pas affectées.',
+    resetConfirm: 'Réinitialiser tous les réglages par défaut ? Les prises ne sont pas affectées.',
     capabilities: {
       standaloneDisplayMode: 'Exécution en tant qu’application installée',
       beforeInstallPrompt: 'Invite d’installation native',
@@ -237,21 +236,20 @@ export const fr: Messages = {
     notValidTake: 'Ce fichier n’est pas une prise PoKeyBoard valide.',
     storageFailed:
       'L’enregistrement dans ce navigateur a échoué. Votre dernière modification peut ne pas être stockée.',
-    storageFull:
-      'Le stockage est plein. Libérez de l’espace ou exportez vos prises en sauvegarde.',
+    storageFull: 'Le stockage est plein. Libérez de l’espace ou exportez vos prises en sauvegarde.',
     audioUnavailable: 'L’audio n’a pas pu démarrer dans ce navigateur.',
     exportFailed: 'Échec de l’export audio.',
     exportCancelled: 'Export annulé.',
     exportEncodingInvalid: 'L’encodage a produit un fichier non valide. Veuillez réessayer.',
     exportEmpty: 'Enregistrez quelques notes avant d’exporter.',
-    exportTooLong:
-      'Cette prise dépasse 20 minutes — l’export est limité pour protéger la mémoire.',
+    exportTooLong: 'Cette prise dépasse 20 minutes — l’export est limité pour protéger la mémoire.',
     exportPianoLoading: 'Le piano se charge encore — réessayez l’export dans un instant.',
   },
   repairs: {
     takeId: 'Un nouvel id de prise a été attribué.',
     title: 'Un titre par défaut a été appliqué faute de titre.',
-    timestamp: ({ field }) => `Un horodatage ${field} par défaut a été appliqué car il était invalide.`,
+    timestamp: ({ field }) =>
+      `Un horodatage ${field} par défaut a été appliqué car il était invalide.`,
     samplePackVersion: 'La version du pack d’échantillons par défaut a été appliquée.',
     tempoDefaulted: 'Des réglages de tempo par défaut ont été appliqués car ils manquaient.',
     bpmClamped: 'Les BPM ont été ramenés dans la plage 40–240.',

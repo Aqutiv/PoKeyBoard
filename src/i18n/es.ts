@@ -185,8 +185,7 @@ export const es: Messages = {
       'Las tomas solo existen en este navegador — se recomiendan respaldos JSON periódicos (Tomas → Respaldar todas).',
     runningInstalled: '✓ Ejecutándose como app instalada.',
     installApp: 'Instalar PoKeyBoard',
-    installHintPre:
-      'Para instalar en iPhone o iPad: abre el menú Compartir en Safari y elige ',
+    installHintPre: 'Para instalar en iPhone o iPad: abre el menú Compartir en Safari y elige ',
     addToHomeScreen: 'Añadir a pantalla de inicio',
     installHintPost:
       '. En otros navegadores, busca la opción Instalar o Añadir a pantalla de inicio en el menú del navegador. Abre el icono instalado antes de crear tomas importantes — la app instalada puede usar un almacenamiento distinto.',
@@ -236,9 +235,9 @@ export const es: Messages = {
   errors: {
     generic: 'Algo salió mal.',
     notValidTake: 'Este archivo no es una toma válida de PoKeyBoard.',
-    storageFailed: 'Falló el guardado en este navegador. Tu último cambio puede no haberse guardado.',
-    storageFull:
-      'El almacenamiento está lleno. Libera espacio o exporta tus tomas como respaldo.',
+    storageFailed:
+      'Falló el guardado en este navegador. Tu último cambio puede no haberse guardado.',
+    storageFull: 'El almacenamiento está lleno. Libera espacio o exporta tus tomas como respaldo.',
     audioUnavailable: 'No se pudo iniciar el audio en este navegador.',
     exportFailed: 'Falló la exportación de audio.',
     exportCancelled: 'Exportación cancelada.',
@@ -246,12 +245,14 @@ export const es: Messages = {
     exportEmpty: 'Graba algunas notas antes de exportar.',
     exportTooLong:
       'Esta toma dura más de 20 minutos — la exportación se limita para proteger la memoria.',
-    exportPianoLoading: 'El piano todavía se está cargando — intenta exportar de nuevo en un momento.',
+    exportPianoLoading:
+      'El piano todavía se está cargando — intenta exportar de nuevo en un momento.',
   },
   repairs: {
     takeId: 'Se asignó un nuevo id de toma.',
     title: 'Se aplicó un título predeterminado por falta de uno.',
-    timestamp: ({ field }) => `Se aplicó una marca de tiempo ${field} predeterminada por ser inválida.`,
+    timestamp: ({ field }) =>
+      `Se aplicó una marca de tiempo ${field} predeterminada por ser inválida.`,
     samplePackVersion: 'Se aplicó la versión del paquete de muestras predeterminada.',
     tempoDefaulted: 'Se aplicaron ajustes de tempo predeterminados por faltar.',
     bpmClamped: 'Se ajustaron las BPM al rango de 40 a 240.',

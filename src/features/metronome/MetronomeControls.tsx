@@ -107,9 +107,7 @@ export function MetronomeControls() {
         type="button"
         className={`metronome__toggle${metronomeOn ? ' is-on' : ''}`}
         aria-pressed={metronomeOn}
-        aria-label={
-          metronomeOn ? m.metronome.on({ bpm: Math.round(tempo.bpm) }) : m.metronome.off
-        }
+        aria-label={metronomeOn ? m.metronome.on({ bpm: Math.round(tempo.bpm) }) : m.metronome.off}
         onClick={() => transportController.setMetronomeOn(!metronomeOn)}
       >
         ♩
