@@ -17,6 +17,14 @@ export const en: Messages = {
     saving: 'Saving…',
     savedLocally: 'Saved locally',
   },
+  play: {
+    pageLabel: 'Play',
+    shareAudio: 'Share audio',
+    dismiss: 'Dismiss',
+    loadingPiano: ({ percent }) => `Loading piano… ${percent}%`,
+    audioUnavailable: 'Audio is unavailable in this browser.',
+    recordingInterrupted: 'Recording stopped and saved when the app went to the background.',
+  },
   transport: {
     groupLabel: 'Transport',
     returnToStart: 'Return to beginning',

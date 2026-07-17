@@ -70,6 +70,14 @@ export interface Messages {
     saving: string;
     savedLocally: string;
   };
+  play: {
+    pageLabel: string;
+    shareAudio: string;
+    dismiss: string;
+    loadingPiano: (p: { percent: number }) => string;
+    audioUnavailable: string;
+    recordingInterrupted: string;
+  };
   transport: {
     groupLabel: string;
     returnToStart: string;

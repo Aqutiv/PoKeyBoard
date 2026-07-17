@@ -16,6 +16,15 @@ export const mg: Messages = {
     saving: 'Mitahiry…',
     savedLocally: 'Voatahiry an-toerana',
   },
+  play: {
+    pageLabel: 'Mitendry',
+    shareAudio: 'Zarao ny feo',
+    dismiss: 'Esory',
+    loadingPiano: ({ percent }) => `Am-pakàna ny piano… ${percent}%`,
+    audioUnavailable: 'Tsy misy feo azo ampiasaina amin’ity navigatera ity.',
+    recordingInterrupted:
+      'Najanona sy voatahiry ny fandraketana rehefa lasa ambadika ny rindrambaiko.',
+  },
   transport: {
     groupLabel: 'Fitaterana',
     returnToStart: 'Miverina any am-piandohana',

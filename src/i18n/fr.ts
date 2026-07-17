@@ -15,6 +15,15 @@ export const fr: Messages = {
     saving: 'Enregistrement…',
     savedLocally: 'Enregistré localement',
   },
+  play: {
+    pageLabel: 'Jouer',
+    shareAudio: 'Partager l’audio',
+    dismiss: 'Ignorer',
+    loadingPiano: ({ percent }) => `Chargement du piano… ${percent} %`,
+    audioUnavailable: 'L’audio n’est pas disponible dans ce navigateur.',
+    recordingInterrupted:
+      'L’enregistrement a été arrêté et sauvegardé quand l’application est passée en arrière-plan.',
+  },
   transport: {
     groupLabel: 'Transport',
     returnToStart: 'Revenir au début',

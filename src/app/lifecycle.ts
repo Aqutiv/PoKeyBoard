@@ -3,8 +3,11 @@ import { scrubController } from '@/features/notation/scrubController';
 import { transportController } from '@/features/transport/transportController';
 import { isBusyState } from '@/features/transport/transportMachine';
 
+/** Stable id for the interruption banner, translated at the render site. */
+export type InterruptionMessageKey = 'recordingInterrupted';
+
 export interface InterruptionSnapshot {
-  message: string | null;
+  message: InterruptionMessageKey | null;
 }
 
 /**
@@ -29,7 +32,7 @@ class LifecycleService {
       transportController.handleInterruption();
       audioEngine.allNotesOff();
       if (wasRecording) {
-        this.setMessage('Recording stopped and saved when the app went to the background.');
+        this.setMessage('recordingInterrupted');
       }
       // Autosave flushes via its own visibilitychange listener.
     };
@@ -61,7 +64,7 @@ class LifecycleService {
     this.setMessage(null);
   }
 
-  private setMessage(message: string | null): void {
+  private setMessage(message: InterruptionMessageKey | null): void {
     this.snapshot = { message };
     for (const listener of this.listeners) listener();
   }

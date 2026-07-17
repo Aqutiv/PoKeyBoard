@@ -6,6 +6,7 @@ import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
+import { useMessages } from '@/i18n/i18nContext';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { SaveStatusBadge } from './SaveStatusBadge';
@@ -15,6 +16,7 @@ const getLifecycle = () => lifecycleService.getSnapshot();
 
 /** The main instrument view: transport, score, metronome, keyboard. */
 export function PlayPage() {
+  const m = useMessages();
   const interruption = useSyncExternalStore(subscribeLifecycle, getLifecycle);
   const status = useEngineStatus();
   const progress = useSampleLoadProgress();
@@ -30,7 +32,7 @@ export function PlayPage() {
   return (
     <section
       className="page page--play"
-      aria-label="Play"
+      aria-label={m.play.pageLabel}
       data-piano-ready={progress.phase === 'core-ready' ? 'true' : 'false'}
     >
       <div className="play-layout">
@@ -44,19 +46,19 @@ export function PlayPage() {
               onClick={() => openExport(takeId)}
               disabled={!hasNotes}
             >
-              Share audio
+              {m.play.shareAudio}
             </button>
           </span>
         </header>
         {interruption.message ? (
           <p className="play-interruption" role="alert">
-            {interruption.message}{' '}
+            {m.play[interruption.message]}{' '}
             <button
               type="button"
               className="play-interruption__dismiss"
               onClick={() => lifecycleService.dismissMessage()}
             >
-              Dismiss
+              {m.play.dismiss}
             </button>
           </p>
         ) : null}
@@ -64,7 +66,7 @@ export function PlayPage() {
         <div className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (
             <p className="page__hint" role="status">
-              Loading piano… {percent}%
+              {m.play.loadingPiano({ percent })}
             </p>
           ) : null}
           {progress.error ? (
@@ -74,7 +76,7 @@ export function PlayPage() {
           ) : null}
           {status === 'error' ? (
             <p className="page__hint" role="alert">
-              Audio is unavailable in this browser.
+              {m.play.audioUnavailable}
             </p>
           ) : null}
           <MusicScore />

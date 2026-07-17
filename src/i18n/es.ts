@@ -15,6 +15,14 @@ export const es: Messages = {
     saving: 'Guardando…',
     savedLocally: 'Guardado localmente',
   },
+  play: {
+    pageLabel: 'Tocar',
+    shareAudio: 'Compartir audio',
+    dismiss: 'Descartar',
+    loadingPiano: ({ percent }) => `Cargando piano… ${percent}%`,
+    audioUnavailable: 'El audio no está disponible en este navegador.',
+    recordingInterrupted: 'La grabación se detuvo y se guardó cuando la app pasó a segundo plano.',
+  },
   transport: {
     groupLabel: 'Transporte',
     returnToStart: 'Volver al inicio',

@@ -12,7 +12,8 @@ export default defineConfig({
   base: basePath,
   // Bind the dev/preview server to all interfaces so phones on the same
   // Wi-Fi can reach it at http://<machine-ip>:5173 (Vite prints the URL).
-  server: { host: true },
+  // PORT lets a launcher assign a free port when 5173 is taken.
+  server: { host: true, port: Number(process.env.PORT) || undefined },
   define: {
     __APP_VERSION__: JSON.stringify(process.env.npm_package_version ?? 'dev'),
   },
