@@ -64,10 +64,18 @@ export class SampleBank {
   private loadedBytes = 0;
   private lastError: string | undefined;
 
-  constructor(private readonly baseUrl: string) {}
+  private readonly baseUrl: string;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
 
   getManifest(): SamplePackManifest | null {
     return this.manifest;
+  }
+
+  urlFor(file: string): string {
+    return `${this.baseUrl}${file}`;
   }
 
   async loadManifest(): Promise<SamplePackManifest> {
