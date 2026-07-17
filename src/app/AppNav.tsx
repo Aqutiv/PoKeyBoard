@@ -1,9 +1,11 @@
 import type { ReactNode } from 'react';
+import { useMessages } from '@/i18n/i18nContext';
+import type { Messages } from '@/i18n/types';
 import { useRouter, type Route } from './routerContext';
 
 interface NavItem {
   route: Route;
-  label: string;
+  labelKey: keyof Messages['nav'];
   icon: ReactNode;
 }
 
@@ -18,7 +20,7 @@ const strokeProps = {
 const NAV_ITEMS: NavItem[] = [
   {
     route: 'play',
-    label: 'Play',
+    labelKey: 'play',
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
         <rect x="3" y="5" width="18" height="14" rx="2" />
@@ -28,7 +30,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     route: 'takes',
-    label: 'Takes',
+    labelKey: 'takes',
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
         <path d="M4 6h16M4 12h16M4 18h10" />
@@ -37,7 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     route: 'settings',
-    label: 'Settings',
+    labelKey: 'settings',
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
         <circle cx="12" cy="12" r="3" />
@@ -47,7 +49,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     route: 'about',
-    label: 'About',
+    labelKey: 'about',
     icon: (
       <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
         <circle cx="12" cy="12" r="9" />
@@ -59,8 +61,9 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppNav() {
   const { route, navigate } = useRouter();
+  const m = useMessages();
   return (
-    <nav className="app-nav" aria-label="Main">
+    <nav className="app-nav" aria-label={m.nav.mainLabel}>
       {NAV_ITEMS.map((item) => (
         <button
           key={item.route}
@@ -70,7 +73,7 @@ export function AppNav() {
           onClick={() => navigate(item.route)}
         >
           {item.icon}
-          <span>{item.label}</span>
+          <span>{m.nav[item.labelKey]}</span>
         </button>
       ))}
     </nav>

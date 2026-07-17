@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { listTakeSummaries, type TakeSummary } from '@/data/takeRepository';
+import { useI18n, useMessages } from '@/i18n/i18nContext';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { shareOrDownloadFile, downloadBlob } from '@/utils/download';
-import { toUserMessage } from '@/utils/errors';
+import { toErrorMessageKey } from '@/utils/errors';
 import { formatDurationMs } from '@/utils/timing';
 import { ImportTakeDialog } from './ImportTakeDialog';
 import {
@@ -23,10 +24,10 @@ import {
 } from './takesService';
 import './takes.css';
 
-function formatUpdated(iso: string): string {
+function formatUpdated(iso: string, locale: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString(undefined, {
+  return date.toLocaleString(locale, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -36,6 +37,8 @@ function formatUpdated(iso: string): string {
 
 export function TakesPage() {
   const { navigate } = useRouter();
+  const m = useMessages();
+  const { locale } = useI18n();
   const activeTakeId = useTakeStore((s) => s.take.id);
   const openExport = useExportUiStore((s) => s.openExport);
   const [summaries, setSummaries] = useState<TakeSummary[] | null>(null);
@@ -51,8 +54,8 @@ export function TakesPage() {
   const refresh = useCallback(() => {
     listTakeSummaries()
       .then(setSummaries)
-      .catch((error: unknown) => setMessage(toUserMessage(error)));
-  }, []);
+      .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
+  }, [m]);
 
   useEffect(() => {
     refresh();
@@ -65,19 +68,22 @@ export function TakesPage() {
         if (doneMessage) setMessage(doneMessage);
         refresh();
       } catch (error) {
-        setMessage(toUserMessage(error));
+        setMessage(m.errors[toErrorMessageKey(error)]);
       }
     },
-    [refresh],
+    [refresh, m],
   );
 
-  const startImport = useCallback(async (file: File) => {
-    try {
-      setImportPreview(await previewImportFile(file));
-    } catch (error) {
-      setMessage(toUserMessage(error));
-    }
-  }, []);
+  const startImport = useCallback(
+    async (file: File) => {
+      try {
+        setImportPreview(await previewImportFile(file));
+      } catch (error) {
+        setMessage(m.errors[toErrorMessageKey(error)]);
+      }
+    },
+    [m],
+  );
 
   const onImportChosen = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -96,13 +102,15 @@ export function TakesPage() {
       void act(async () => {
         const result = await restoreBackupFile(file);
         setMessage(
-          `Backup restored: ${result.imported} take(s)` +
-            (result.skipped > 0 ? `, ${result.skipped} skipped` : '') +
-            (result.settingsRestored ? ', settings applied' : ''),
+          m.takes.backupRestored({
+            imported: result.imported,
+            skipped: result.skipped,
+            settingsRestored: result.settingsRestored,
+          }),
         );
       });
     },
-    [act],
+    [act, m],
   );
 
   const onDrop = useCallback(
@@ -127,7 +135,7 @@ export function TakesPage() {
   return (
     <section
       className={`page${dragOver ? ' page--dragover' : ''}`}
-      aria-label="Takes"
+      aria-label={m.takes.title}
       onDragOver={(event) => {
         event.preventDefault();
         setDragOver(true);
@@ -136,7 +144,7 @@ export function TakesPage() {
       onDrop={onDrop}
     >
       <header className="page__header">
-        <h1 className="page__title">Takes</h1>
+        <h1 className="page__title">{m.takes.title}</h1>
         <div className="takes-toolbar">
           <button
             type="button"
@@ -148,10 +156,10 @@ export function TakesPage() {
               })
             }
           >
-            New take
+            {m.takes.newTake}
           </button>
           <button type="button" className="btn" onClick={() => importInputRef.current?.click()}>
-            Import JSON
+            {m.takes.importJson}
           </button>
         </div>
       </header>
@@ -163,11 +171,9 @@ export function TakesPage() {
       ) : null}
 
       {summaries === null ? (
-        <p className="page__hint">Loading…</p>
+        <p className="page__hint">{m.takes.loading}</p>
       ) : summaries.length === 0 ? (
-        <p className="page__hint">
-          No takes yet. Record something on the Play screen, or import a take JSON file.
-        </p>
+        <p className="page__hint">{m.takes.empty}</p>
       ) : (
         <ul className="take-list">
           {summaries.map((summary) => {
@@ -185,25 +191,34 @@ export function TakesPage() {
                         navigate('play');
                       })
                     }
-                    aria-label={`Open ${summary.title}`}
+                    aria-label={m.takes.openLabel({ title: summary.title })}
                   >
                     <span className="take-item__title">
                       {summary.title}
-                      {summary.isDraft ? <span className="take-item__draft">Draft</span> : null}
+                      {summary.isDraft ? (
+                        <span className="take-item__draft">{m.takes.draft}</span>
+                      ) : null}
                       {isActive ? (
-                        <span className="take-item__active-dot" aria-label="Currently open" />
+                        <span
+                          className="take-item__active-dot"
+                          aria-label={m.takes.currentlyOpen}
+                        />
                       ) : null}
                     </span>
                     <span className="take-item__meta">
-                      {summary.noteCount} notes · {formatDurationMs(summary.durationMs)} ·{' '}
-                      {Math.round(summary.bpm)} BPM · {formatUpdated(summary.updatedAt)}
+                      {m.takes.meta({
+                        notes: summary.noteCount,
+                        duration: formatDurationMs(summary.durationMs),
+                        bpm: Math.round(summary.bpm),
+                        updated: formatUpdated(summary.updatedAt, locale),
+                      })}
                     </span>
                   </button>
                   <button
                     type="button"
                     className="take-item__more"
                     aria-expanded={expanded}
-                    aria-label={`More actions for ${summary.title}`}
+                    aria-label={m.takes.moreActionsLabel({ title: summary.title })}
                     onClick={() => setExpandedId(expanded ? null : summary.id)}
                   >
                     ⋯
@@ -225,7 +240,7 @@ export function TakesPage() {
                           value={renameText}
                           onChange={(event) => setRenameText(event.target.value)}
                           onBlur={() => commitRename(summary.id)}
-                          aria-label="New title"
+                          aria-label={m.takes.newTitle}
                           maxLength={200}
                         />
                       </form>
@@ -238,15 +253,15 @@ export function TakesPage() {
                           setRenameText(summary.title);
                         }}
                       >
-                        Rename
+                        {m.takes.rename}
                       </button>
                     )}
                     <button
                       type="button"
                       className="btn btn--small"
-                      onClick={() => void act(() => duplicateTake(summary.id), 'Duplicated.')}
+                      onClick={() => void act(() => duplicateTake(summary.id), m.takes.duplicated)}
                     >
-                      Duplicate
+                      {m.takes.duplicate}
                     </button>
                     <button
                       type="button"
@@ -258,7 +273,7 @@ export function TakesPage() {
                         })
                       }
                     >
-                      Export JSON
+                      {m.takes.exportJson}
                     </button>
                     <button
                       type="button"
@@ -268,12 +283,12 @@ export function TakesPage() {
                           const file = await takeJsonFile(summary.id);
                           if (file) {
                             const how = await shareOrDownloadFile(file);
-                            setMessage(how === 'shared' ? 'Shared.' : 'Downloaded.');
+                            setMessage(how === 'shared' ? m.takes.shared : m.takes.downloaded);
                           }
                         })
                       }
                     >
-                      Share JSON
+                      {m.takes.shareJson}
                     </button>
                     <button
                       type="button"
@@ -281,29 +296,29 @@ export function TakesPage() {
                       disabled={summary.noteCount === 0}
                       onClick={() => openExport(summary.id)}
                     >
-                      Share audio
+                      {m.takes.shareAudio}
                     </button>
                     <button
                       type="button"
                       className="btn btn--small"
                       onClick={() => {
-                        if (window.confirm(`Remove all notes from “${summary.title}”?`)) {
-                          void act(() => clearTakeNotes(summary.id), 'Notes cleared.');
+                        if (window.confirm(m.takes.removeNotesConfirm({ title: summary.title }))) {
+                          void act(() => clearTakeNotes(summary.id), m.takes.notesCleared);
                         }
                       }}
                     >
-                      Clear notes
+                      {m.takes.clearNotes}
                     </button>
                     <button
                       type="button"
                       className="btn btn--small btn--danger"
                       onClick={() => {
-                        if (window.confirm(`Delete “${summary.title}”? This cannot be undone.`)) {
-                          void act(() => deleteTake(summary.id), 'Deleted.');
+                        if (window.confirm(m.takes.deleteConfirm({ title: summary.title }))) {
+                          void act(() => deleteTake(summary.id), m.takes.deleted);
                         }
                       }}
                     >
-                      Delete
+                      {m.takes.delete}
                     </button>
                   </div>
                 ) : null}
@@ -321,13 +336,13 @@ export function TakesPage() {
             void act(async () => {
               const file = await backupAllFile();
               downloadBlob(file, file.name);
-            }, 'Backup downloaded.')
+            }, m.takes.backupDownloaded)
           }
         >
-          Backup all takes
+          {m.takes.backupAll}
         </button>
         <button type="button" className="btn" onClick={() => restoreInputRef.current?.click()}>
-          Restore backup
+          {m.takes.restoreBackup}
         </button>
       </footer>
 
@@ -337,7 +352,7 @@ export function TakesPage() {
         accept=".json,.pokeyboard.json,application/json"
         className="visually-hidden"
         onChange={onImportChosen}
-        aria-label="Import take JSON file"
+        aria-label={m.takes.importFileLabel}
       />
       <input
         ref={restoreInputRef}
@@ -345,7 +360,7 @@ export function TakesPage() {
         accept=".json,application/json"
         className="visually-hidden"
         onChange={onRestoreChosen}
-        aria-label="Restore backup file"
+        aria-label={m.takes.restoreFileLabel}
       />
 
       {importPreview ? (
@@ -358,7 +373,7 @@ export function TakesPage() {
             void act(async () => {
               await commitImport(preview, strategy);
               navigate('play');
-            }, 'Take imported.');
+            }, m.takes.takeImported);
           }}
         />
       ) : null}

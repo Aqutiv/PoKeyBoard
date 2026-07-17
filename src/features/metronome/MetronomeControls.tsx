@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
 import { useMetronomeOn, useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
+import { useMessages } from '@/i18n/i18nContext';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -30,6 +31,7 @@ function useActiveBeat(running: boolean, numerator: number): number {
 }
 
 export function MetronomeControls() {
+  const m = useMessages();
   const metronomeOn = useMetronomeOn();
   const state = useTransportState();
   const tempo = useTakeStore((s) => s.take.tempo);
@@ -100,13 +102,13 @@ export function MetronomeControls() {
   const beats = Array.from({ length: tempo.timeSignature.numerator }, (_, i) => i);
 
   return (
-    <div className="metronome" role="group" aria-label="Metronome">
+    <div className="metronome" role="group" aria-label={m.metronome.groupLabel}>
       <button
         type="button"
         className={`metronome__toggle${metronomeOn ? ' is-on' : ''}`}
         aria-pressed={metronomeOn}
         aria-label={
-          metronomeOn ? `Metronome on, ${Math.round(tempo.bpm)} beats per minute` : 'Metronome off'
+          metronomeOn ? m.metronome.on({ bpm: Math.round(tempo.bpm) }) : m.metronome.off
         }
         onClick={() => transportController.setMetronomeOn(!metronomeOn)}
       >
@@ -117,7 +119,7 @@ export function MetronomeControls() {
         <button
           type="button"
           className="metronome__step"
-          aria-label="Decrease tempo"
+          aria-label={m.metronome.decreaseTempo}
           onClick={() => applyBpm(tempo.bpm - 1)}
         >
           −
@@ -131,12 +133,12 @@ export function MetronomeControls() {
           onKeyDown={(event) => {
             if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
           }}
-          aria-label="Beats per minute"
+          aria-label={m.metronome.bpmLabel}
         />
         <button
           type="button"
           className="metronome__step"
-          aria-label="Increase tempo"
+          aria-label={m.metronome.increaseTempo}
           onClick={() => applyBpm(tempo.bpm + 1)}
         >
           +
@@ -144,11 +146,11 @@ export function MetronomeControls() {
       </div>
 
       <button type="button" className="metronome__tap" onClick={onTap}>
-        Tap
+        {m.metronome.tap}
       </button>
 
       <select
-        aria-label="Time signature"
+        aria-label={m.metronome.timeSignatureLabel}
         value={`${tempo.timeSignature.numerator}/${tempo.timeSignature.denominator}`}
         onChange={(event) => onTimeSignature(event.target.value)}
       >
@@ -160,13 +162,13 @@ export function MetronomeControls() {
       </select>
 
       <select
-        aria-label="Count-in length"
+        aria-label={m.metronome.countInLabel}
         value={String(tempo.countInBars)}
         onChange={(event) => onCountIn(event.target.value)}
       >
-        <option value="0">No count-in</option>
-        <option value="1">1 bar</option>
-        <option value="2">2 bars</option>
+        <option value="0">{m.metronome.noCountIn}</option>
+        <option value="1">{m.metronome.oneBar}</option>
+        <option value="2">{m.metronome.twoBars}</option>
       </select>
 
       <input
@@ -179,7 +181,7 @@ export function MetronomeControls() {
           setMetronomeVolume(Number(event.target.value));
           transportController.refreshMetronomeConfig();
         }}
-        aria-label="Metronome volume"
+        aria-label={m.metronome.volumeLabel}
         className="metronome__volume"
       />
 

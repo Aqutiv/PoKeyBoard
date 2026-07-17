@@ -15,10 +15,12 @@ import {
 import type { Take } from '@/domain/takeTypes';
 import { getTakeForExport } from '@/features/takes/takesService';
 import { transportController } from '@/features/transport/transportController';
+import { useMessages } from '@/i18n/i18nContext';
+import type { Messages } from '@/i18n/types';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { shareOrDownloadFile, downloadBlob } from '@/utils/download';
-import { toUserMessage } from '@/utils/errors';
+import { toErrorMessageKey } from '@/utils/errors';
 import { formatDurationMs } from '@/utils/timing';
 import './export.css';
 
@@ -33,13 +35,19 @@ function formatBytes(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1000))} KB`;
 }
 
-const STAGE_LABEL: Record<ExportProgress['stage'], string> = {
-  saving: 'Saving take…',
-  rendering: 'Rendering piano…',
-  encoding: 'Compressing audio…',
-};
+function stageLabel(m: Messages, stage: ExportProgress['stage']): string {
+  switch (stage) {
+    case 'saving':
+      return m.exportDialog.stageSaving;
+    case 'rendering':
+      return m.exportDialog.stageRendering;
+    case 'encoding':
+      return m.exportDialog.stageEncoding;
+  }
+}
 
 export function AudioExportDialog() {
+  const m = useMessages();
   const requestedTakeId = useExportUiStore((s) => s.requestedTakeId);
   const closeExport = useExportUiStore((s) => s.closeExport);
   const metronomeVolume = useSettingsStore((s) => s.metronomeVolume);
@@ -65,7 +73,7 @@ export function AudioExportDialog() {
     void getTakeForExport(requestedTakeId).then((take) => {
       if (!alive) return;
       if (!take) {
-        setPhase({ kind: 'error', take: null, message: 'This take could not be loaded.' });
+        setPhase({ kind: 'error', take: null, message: m.exportDialog.errorCouldNotLoad });
       } else {
         setPhase({ kind: 'options', take });
       }
@@ -73,7 +81,7 @@ export function AudioExportDialog() {
     return () => {
       alive = false;
     };
-  }, [requestedTakeId]);
+  }, [requestedTakeId, m]);
 
   // Revoke preview object URLs.
   useEffect(
@@ -115,7 +123,7 @@ export function AudioExportDialog() {
   const startRender = useCallback(
     (take: Take) => {
       if (!transportController.sendExportEvent('EXPORT_START')) {
-        setPhase({ kind: 'error', take, message: 'Stop playback or recording before exporting.' });
+        setPhase({ kind: 'error', take, message: m.exportDialog.errorStopPlayback });
         return;
       }
       setPhase({ kind: 'working', take, progress: { stage: 'saving', fraction: -1 } });
@@ -136,11 +144,11 @@ export function AudioExportDialog() {
           if (error instanceof ExportCancelledError) {
             setPhase({ kind: 'options', take });
           } else {
-            setPhase({ kind: 'error', take, message: toUserMessage(error) });
+            setPhase({ kind: 'error', take, message: m.errors[toErrorMessageKey(error)] });
           }
         });
     },
-    [quality, includeMetronome, metronomeVolume],
+    [quality, includeMetronome, metronomeVolume, m],
   );
 
   const cancelRender = useCallback(() => {
@@ -159,17 +167,19 @@ export function AudioExportDialog() {
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="export-dialog-title" className="modal__title">
-          Export audio
+          {m.exportDialog.title}
         </h2>
 
         {phase.kind === 'options' ? (
           <>
             <p className="export-summary">
-              {phase.take.title} · about{' '}
-              {formatDurationMs(Math.round(estimateRenderSeconds(phase.take) * 1000))} of audio
+              {m.exportDialog.summary({
+                title: phase.take.title,
+                duration: formatDurationMs(Math.round(estimateRenderSeconds(phase.take) * 1000)),
+              })}
             </p>
             <fieldset className="export-options">
-              <legend>Quality</legend>
+              <legend>{m.exportDialog.quality}</legend>
               <label>
                 <input
                   type="radio"
@@ -177,7 +187,7 @@ export function AudioExportDialog() {
                   checked={quality === 'share'}
                   onChange={() => setQuality('share')}
                 />
-                Shareable — {QUALITY_BITRATE.share} kbps
+                {m.exportDialog.shareable({ kbps: QUALITY_BITRATE.share })}
               </label>
               <label>
                 <input
@@ -186,7 +196,7 @@ export function AudioExportDialog() {
                   checked={quality === 'high'}
                   onChange={() => setQuality('high')}
                 />
-                High — {QUALITY_BITRATE.high} kbps
+                {m.exportDialog.high({ kbps: QUALITY_BITRATE.high })}
               </label>
             </fieldset>
             <label className="export-metronome">
@@ -195,18 +205,17 @@ export function AudioExportDialog() {
                 checked={includeMetronome}
                 onChange={(event) => setIncludeMetronome(event.target.checked)}
               />
-              Include metronome
+              {m.exportDialog.includeMetronome}
             </label>
-            <p className="export-note">Reverb: uses the take’s current setting.</p>
+            <p className="export-note">{m.exportDialog.reverbNote}</p>
             {estimateRenderSeconds(phase.take) > RENDER_WARN_MINUTES * 60 ? (
               <p className="export-warning" role="alert">
-                Long take (~{estimateRenderMemoryMB(phase.take)} MB working memory). Export may be
-                slow on phones.
+                {m.exportDialog.longTakeWarning({ mb: estimateRenderMemoryMB(phase.take) })}
               </p>
             ) : null}
             <div className="modal__actions">
               <button type="button" className="btn" onClick={close}>
-                Cancel
+                {m.exportDialog.cancel}
               </button>
               <button
                 ref={primaryRef}
@@ -214,7 +223,7 @@ export function AudioExportDialog() {
                 className="btn btn--primary"
                 onClick={() => startRender(phase.take)}
               >
-                Render audio
+                {m.exportDialog.renderAudio}
               </button>
             </div>
           </>
@@ -223,7 +232,7 @@ export function AudioExportDialog() {
         {phase.kind === 'working' ? (
           <>
             <p className="export-stage" role="status">
-              {STAGE_LABEL[phase.progress.stage]}
+              {stageLabel(m, phase.progress.stage)}
               {phase.progress.fraction >= 0
                 ? ` ${Math.round(phase.progress.fraction * 100)}%`
                 : null}
@@ -248,7 +257,7 @@ export function AudioExportDialog() {
             </div>
             <div className="modal__actions">
               <button type="button" className="btn" onClick={cancelRender}>
-                Cancel
+                {m.exportDialog.cancel}
               </button>
             </div>
           </>
@@ -257,8 +266,11 @@ export function AudioExportDialog() {
         {phase.kind === 'ready' ? (
           <>
             <p className="export-stage" role="status">
-              Audio ready{phase.result.fromCache ? ' (reused cached export)' : ''} —{' '}
-              {formatBytes(phase.result.sizeBytes)} · {formatDurationMs(phase.result.durationMs)}
+              {m.exportDialog.ready({
+                fromCache: phase.result.fromCache,
+                size: formatBytes(phase.result.sizeBytes),
+                duration: formatDurationMs(phase.result.durationMs),
+              })}
             </p>
             {phase.deliveredHow ? <p className="export-note">{phase.deliveredHow}</p> : null}
             {previewUrl ? <audio className="export-preview" controls src={previewUrl} /> : null}
@@ -273,7 +285,7 @@ export function AudioExportDialog() {
                   setPreviewUrl(previewUrlRef.current);
                 }}
               >
-                Play preview
+                {m.exportDialog.playPreview}
               </button>
               <button
                 type="button"
@@ -281,20 +293,20 @@ export function AudioExportDialog() {
                 onClick={() => {
                   void audioExportService
                     .deleteCachedExport(phase.take.id)
-                    .then(() => setPhase({ ...phase, deliveredHow: 'Cached export deleted.' }));
+                    .then(() => setPhase({ ...phase, deliveredHow: m.exportDialog.cachedDeleted }));
                 }}
               >
-                Delete cached export
+                {m.exportDialog.deleteCached}
               </button>
               <button
                 type="button"
                 className="btn"
                 onClick={() => {
                   downloadBlob(phase.result.blob, phase.result.fileName);
-                  setPhase({ ...phase, deliveredHow: 'Downloaded.' });
+                  setPhase({ ...phase, deliveredHow: m.takes.downloaded });
                 }}
               >
-                Download MP3
+                {m.exportDialog.downloadMp3}
               </button>
               <button
                 type="button"
@@ -307,15 +319,17 @@ export function AudioExportDialog() {
                     setPhase({
                       ...phase,
                       deliveredHow:
-                        how === 'shared' ? 'Shared.' : 'Downloaded (sharing unavailable).',
+                        how === 'shared'
+                          ? m.exportDialog.delivered
+                          : m.exportDialog.deliveredNoShare,
                     }),
                   );
                 }}
               >
-                Share audio
+                {m.exportDialog.shareAudio}
               </button>
               <button type="button" className="btn" onClick={close}>
-                Close
+                {m.exportDialog.close}
               </button>
             </div>
           </>
@@ -333,11 +347,11 @@ export function AudioExportDialog() {
                   className="btn"
                   onClick={() => setPhase({ kind: 'options', take: phase.take as Take })}
                 >
-                  Back
+                  {m.exportDialog.back}
                 </button>
               ) : null}
               <button type="button" className="btn" onClick={close}>
-                Close
+                {m.exportDialog.close}
               </button>
             </div>
           </>

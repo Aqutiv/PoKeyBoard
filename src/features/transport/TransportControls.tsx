@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { usePlayheadMs, useTransportState } from '@/app/hooks/useTransport';
+import { useMessages } from '@/i18n/i18nContext';
 import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
 import { canTransition } from './transportMachine';
@@ -12,6 +13,7 @@ const strokeProps = {
 } as const;
 
 export function TransportControls() {
+  const m = useMessages();
   const state = useTransportState();
   const playheadMs = usePlayheadMs();
   const durationMs = useTakeStore((s) => s.take.durationMs);
@@ -34,14 +36,12 @@ export function TransportControls() {
       const playhead = transportController.getPlayheadMs();
       const willRemove = take.notes.some((note) => note.startMs >= playhead);
       if (willRemove) {
-        const ok = window.confirm(
-          'Replace mode deletes every note from the playhead onward before recording. Continue?',
-        );
+        const ok = window.confirm(m.transport.replaceConfirm);
         if (!ok) return;
       }
     }
     void transportController.record(recordMode);
-  }, [recording, state, recordMode]);
+  }, [recording, state, recordMode, m]);
 
   const onPlayPause = useCallback(() => {
     if (playing) transportController.pause();
@@ -60,12 +60,12 @@ export function TransportControls() {
   const seekDisabled = recording || durationMs === 0;
 
   return (
-    <div className="transport" role="group" aria-label="Transport">
+    <div className="transport" role="group" aria-label={m.transport.groupLabel}>
       <div className="transport__buttons">
         <button
           type="button"
           className="transport__btn"
-          aria-label="Return to beginning"
+          aria-label={m.transport.returnToStart}
           onClick={() => transportController.returnToStart()}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
@@ -75,7 +75,7 @@ export function TransportControls() {
         <button
           type="button"
           className={`transport__btn transport__btn--record${recording ? ' is-active' : ''}`}
-          aria-label={recording ? 'Record, active — stop recording' : 'Record, inactive'}
+          aria-label={recording ? m.transport.recordActive : m.transport.recordInactive}
           aria-pressed={recording}
           onClick={onRecord}
         >
@@ -86,7 +86,7 @@ export function TransportControls() {
         <button
           type="button"
           className="transport__btn transport__btn--play"
-          aria-label={playing ? 'Pause' : 'Play'}
+          aria-label={playing ? m.transport.pause : m.transport.play}
           onClick={onPlayPause}
           disabled={!playing && !canTransition(state, 'PLAY')}
         >
@@ -103,7 +103,7 @@ export function TransportControls() {
         <button
           type="button"
           className="transport__btn"
-          aria-label="Stop"
+          aria-label={m.transport.stop}
           onClick={() => transportController.stop()}
           disabled={state === 'idle' && playheadMs === 0}
         >
@@ -121,22 +121,22 @@ export function TransportControls() {
             type="button"
             className="transport__undo"
             onClick={() => undoLastPass()}
-            aria-label="Undo last recording pass"
+            aria-label={m.transport.undoLastPass}
           >
-            Undo pass
+            {m.transport.undoPass}
           </button>
         ) : null}
 
         <label className="transport__mode">
-          <span className="visually-hidden">Recording mode</span>
+          <span className="visually-hidden">{m.transport.recordingMode}</span>
           <select
             value={recordMode}
             onChange={(event) => setRecordMode(event.target.value as RecordMode)}
             disabled={recording}
-            aria-label="Recording mode"
+            aria-label={m.transport.recordingMode}
           >
-            <option value="overdub">Overdub</option>
-            <option value="replace">Replace</option>
+            <option value="overdub">{m.transport.overdub}</option>
+            <option value="replace">{m.transport.replace}</option>
           </select>
         </label>
       </div>
@@ -150,21 +150,21 @@ export function TransportControls() {
         value={Math.min(playheadMs, durationMs)}
         onChange={onSeek}
         disabled={seekDisabled}
-        aria-label="Seek position"
+        aria-label={m.transport.seekPosition}
         aria-valuetext={formatDurationMs(playheadMs, true)}
       />
       {state === 'countIn' ? (
         <p className="transport__status" role="status">
-          Count-in…
+          {m.transport.countIn}
         </p>
       ) : null}
       {state === 'recording' ? (
         <p className="transport__status transport__status--recording" role="status">
-          ● Recording
+          {m.transport.recording}
         </p>
       ) : null}
       {!hasNotes && state === 'idle' ? (
-        <p className="transport__status">Press record and play something to capture a take.</p>
+        <p className="transport__status">{m.transport.emptyHint}</p>
       ) : null}
     </div>
   );

@@ -1,6 +1,20 @@
 import { useEffect, useRef, useState } from 'react';
+import { useMessages } from '@/i18n/i18nContext';
+import type { Messages, Repair } from '@/i18n/types';
 import { formatDurationMs } from '@/utils/timing';
 import type { ImportPreview } from './takesService';
+
+/** Translate one structured repair record for display. */
+function repairText(m: Messages, repair: Repair): string {
+  switch (repair.code) {
+    case 'timestamp':
+      return m.repairs.timestamp({ field: repair.field ?? '' });
+    case 'noteIdsAssigned':
+      return m.repairs.noteIdsAssigned({ count: repair.count ?? 0 });
+    default:
+      return m.repairs[repair.code];
+  }
+}
 
 interface ImportTakeDialogProps {
   preview: ImportPreview;
@@ -10,6 +24,7 @@ interface ImportTakeDialogProps {
 
 /** Pre-import preview: title, duration, note count, tempo, repairs, collisions. */
 export function ImportTakeDialog({ preview, onConfirm, onCancel }: ImportTakeDialogProps) {
+  const m = useMessages();
   const [strategy, setStrategy] = useState<'copy' | 'replace'>('copy');
   const confirmRef = useRef<HTMLButtonElement | null>(null);
   const { take, repairs } = preview.parsed;
@@ -33,36 +48,41 @@ export function ImportTakeDialog({ preview, onConfirm, onCancel }: ImportTakeDia
         onClick={(event) => event.stopPropagation()}
       >
         <h2 id="import-dialog-title" className="modal__title">
-          Import take
+          {m.importDialog.title}
         </h2>
         <dl className="import-preview">
           <div>
-            <dt>Title</dt>
+            <dt>{m.importDialog.titleLabel}</dt>
             <dd>{take.title}</dd>
           </div>
           <div>
-            <dt>Duration</dt>
+            <dt>{m.importDialog.duration}</dt>
             <dd>{formatDurationMs(take.durationMs)}</dd>
           </div>
           <div>
-            <dt>Notes</dt>
+            <dt>{m.importDialog.notes}</dt>
             <dd>{take.notes.length}</dd>
           </div>
           <div>
-            <dt>Tempo</dt>
+            <dt>{m.importDialog.tempo}</dt>
             <dd>
-              {Math.round(take.tempo.bpm)} BPM · {take.tempo.timeSignature.numerator}/
-              {take.tempo.timeSignature.denominator}
+              {m.importDialog.tempoValue({
+                bpm: Math.round(take.tempo.bpm),
+                numerator: take.tempo.timeSignature.numerator,
+                denominator: take.tempo.timeSignature.denominator,
+              })}
             </dd>
           </div>
         </dl>
 
         {repairs.length > 0 ? (
           <div className="import-repairs">
-            <p>Minor problems were repaired:</p>
+            <p>{m.importDialog.repairsHeading}</p>
             <ul>
               {repairs.map((repair) => (
-                <li key={repair}>{repair}</li>
+                <li key={`${repair.code}:${repair.field ?? repair.count ?? ''}`}>
+                  {repairText(m, repair)}
+                </li>
               ))}
             </ul>
           </div>
@@ -70,7 +90,7 @@ export function ImportTakeDialog({ preview, onConfirm, onCancel }: ImportTakeDia
 
         {preview.collision ? (
           <fieldset className="import-collision">
-            <legend>A take with this ID already exists</legend>
+            <legend>{m.importDialog.collisionLegend}</legend>
             <label>
               <input
                 type="radio"
@@ -78,7 +98,7 @@ export function ImportTakeDialog({ preview, onConfirm, onCancel }: ImportTakeDia
                 checked={strategy === 'copy'}
                 onChange={() => setStrategy('copy')}
               />
-              Import as a new copy
+              {m.importDialog.importAsCopy}
             </label>
             <label>
               <input
@@ -87,14 +107,14 @@ export function ImportTakeDialog({ preview, onConfirm, onCancel }: ImportTakeDia
                 checked={strategy === 'replace'}
                 onChange={() => setStrategy('replace')}
               />
-              Replace the existing take
+              {m.importDialog.replaceExisting}
             </label>
           </fieldset>
         ) : null}
 
         <div className="modal__actions">
           <button type="button" className="btn" onClick={onCancel}>
-            Cancel
+            {m.importDialog.cancel}
           </button>
           <button
             ref={confirmRef}
@@ -102,7 +122,7 @@ export function ImportTakeDialog({ preview, onConfirm, onCancel }: ImportTakeDia
             className="btn btn--primary"
             onClick={() => onConfirm(strategy)}
           >
-            Import
+            {m.importDialog.import}
           </button>
         </div>
       </div>
