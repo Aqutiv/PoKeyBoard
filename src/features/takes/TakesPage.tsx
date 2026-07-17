@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { listTakeSummaries, type TakeSummary } from '@/data/takeRepository';
+import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { shareOrDownloadFile, downloadBlob } from '@/utils/download';
 import { toUserMessage } from '@/utils/errors';
@@ -36,6 +37,7 @@ function formatUpdated(iso: string): string {
 export function TakesPage() {
   const { navigate } = useRouter();
   const activeTakeId = useTakeStore((s) => s.take.id);
+  const openExport = useExportUiStore((s) => s.openExport);
   const [summaries, setSummaries] = useState<TakeSummary[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -270,6 +272,14 @@ export function TakesPage() {
                       }
                     >
                       Share JSON
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--small"
+                      disabled={summary.noteCount === 0}
+                      onClick={() => openExport(summary.id)}
+                    >
+                      Share audio
                     </button>
                     <button
                       type="button"

@@ -1,4 +1,5 @@
 import { AboutPage } from '@/features/about/AboutPage';
+import { AudioExportDialog } from '@/features/export/AudioExportDialog';
 import { PlayPage } from '@/features/play/PlayPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { TakesPage } from '@/features/takes/TakesPage';
@@ -27,6 +28,7 @@ function Shell() {
         <CurrentView />
       </div>
       <AppNav />
+      <AudioExportDialog />
     </div>
   );
 }

@@ -102,6 +102,11 @@ async function resolveTake(id: string): Promise<Take | null> {
   return getTake(id);
 }
 
+/** Freshest take content for audio export (flushes the active take first). */
+export async function getTakeForExport(id: string): Promise<Take | null> {
+  return resolveTake(id);
+}
+
 export async function takeJsonFile(id: string): Promise<File | null> {
   const take = await resolveTake(id);
   if (!take) return null;

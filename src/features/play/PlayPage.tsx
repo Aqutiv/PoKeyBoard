@@ -4,6 +4,7 @@ import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
+import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { SaveStatusBadge } from './SaveStatusBadge';
 
@@ -15,6 +16,9 @@ export function PlayPage() {
     progress.totalFiles > 0 ? Math.round((progress.loadedFiles / progress.totalFiles) * 100) : 0;
 
   const title = useTakeStore((s) => s.take.title);
+  const takeId = useTakeStore((s) => s.take.id);
+  const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
+  const openExport = useExportUiStore((s) => s.openExport);
   const playbackActiveMidis = usePlaybackActiveMidis();
 
   return (
@@ -22,7 +26,17 @@ export function PlayPage() {
       <div className="play-layout">
         <header className="play-header">
           <h1 className="play-header__title">{title}</h1>
-          <SaveStatusBadge />
+          <span className="play-header__side">
+            <SaveStatusBadge />
+            <button
+              type="button"
+              className="play-header__export"
+              onClick={() => openExport(takeId)}
+              disabled={!hasNotes}
+            >
+              Share audio
+            </button>
+          </span>
         </header>
         <TransportControls />
         <div className="play-layout__score">

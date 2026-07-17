@@ -1,11 +1,12 @@
 import type { NoteSourceId, SampleSelection } from './audioTypes';
 
 export const MAX_VOICES = 48;
-const ATTACK_S = 0.003;
+/** Envelope constants shared with the offline renderer so exports match. */
+export const ATTACK_S = 0.003;
 /** Time constant for the exponential-ish release ramp. */
-const RELEASE_TC = 0.07;
+export const RELEASE_TC = 0.07;
 /** How long after release begins the source is hard-stopped. */
-const RELEASE_STOP_AFTER_S = 0.6;
+export const RELEASE_STOP_AFTER_S = 0.6;
 const STEAL_FADE_TC = 0.012;
 const ALL_OFF_FADE_TC = 0.02;
 
