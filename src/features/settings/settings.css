@@ -40,15 +40,28 @@
 }
 
 .setting-row select {
-  min-height: 40px;
-  /* Extra right padding leaves room for the native dropdown arrow so the
-     longest option label (e.g. "Français") is never clipped. */
-  padding: 0 30px 0 10px;
-  background: var(--surface-2);
+  /* Drop the native control: its built-in arrow crowds the text and its
+     popup rows clip on Chromium. We draw our own chevron and center the
+     label with an explicit line-height so nothing is cut off. */
+  appearance: none;
+  -webkit-appearance: none;
+  height: 40px;
+  line-height: 38px;
+  padding: 0 34px 0 12px;
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   font-size: 14px;
+  background-color: var(--surface-2);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%23b3a996' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px;
+}
+
+.setting-row select option {
+  background: var(--surface-2);
+  color: var(--text);
 }
 
 .setting-row--stack {
