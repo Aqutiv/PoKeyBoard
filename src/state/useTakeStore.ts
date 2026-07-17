@@ -23,6 +23,7 @@ export interface TakeStoreState {
   setTitle(title: string): void;
   setTempo(tempo: TempoSettings): void;
   setPlayheadMs(playheadMs: number): void;
+  setDisplayQuantization(quantization: Take['display']['quantization']): void;
   markSaved(): void;
 }
 
@@ -102,6 +103,13 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
       take: { ...state.take, display: { ...state.take.display, playheadMs } },
       // An empty take's playhead isn't worth creating a draft row for.
       dirty: state.dirty || state.take.notes.length > 0,
+    })),
+
+  setDisplayQuantization: (quantization) =>
+    set((state) => ({
+      // Display-only change: saves, but never invalidates cached audio.
+      take: { ...state.take, display: { ...state.take.display, quantization } },
+      dirty: true,
     })),
 
   markSaved: () => set({ dirty: false }),

@@ -1,6 +1,7 @@
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
+import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
 import { useTakeStore } from '@/state/useTakeStore';
 import { SaveStatusBadge } from './SaveStatusBadge';
@@ -38,6 +39,7 @@ export function PlayPage() {
               Audio is unavailable in this browser.
             </p>
           ) : null}
+          <MusicScore />
         </div>
         <MetronomeControls />
         <div className="play-layout__keyboard">

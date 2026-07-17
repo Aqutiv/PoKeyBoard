@@ -1,0 +1,432 @@
+import type { TimeSignature } from '@/domain/takeTypes';
+import { firstChordIndexAt, type ChordGroup, type ScoreLayout } from './notationLayout';
+import { ledgerLineSteps, midiToStaffPosition, type StaffKind } from './staffMapping';
+
+/** Staff geometry (CSS pixels; the canvas is DPR-scaled by the component). */
+export const GAP = 9;
+export const STAFF_H = GAP * 4;
+export const TREBLE_TOP = 34;
+export const STAFF_SPACING = 48;
+export const BASS_TOP = TREBLE_TOP + STAFF_H + STAFF_SPACING;
+export const SCORE_MIN_HEIGHT = BASS_TOP + STAFF_H + 38;
+/** Fixed gutter: brace, clefs, and time signature; notes scroll beneath it. */
+export const GUTTER = 58;
+
+const THEME = {
+  staffLine: '#57503f',
+  barLine: '#6d6154',
+  note: '#f0e9dc',
+  noteDim: '#b3a996',
+  highlight: '#f0b954',
+  record: '#e5484d',
+  ghost: 'rgba(240, 233, 220, 0.4)',
+  playhead: '#f0b954',
+  gutterBg: 'rgba(31, 27, 24, 0.96)',
+  measureNumber: '#7d7466',
+  rest: '#9c9280',
+};
+
+export interface ScoreView {
+  widthPx: number;
+  heightPx: number;
+  pxPerMs: number;
+  /** Take time at the left edge of the scrolling region (after the gutter). */
+  scrollMs: number;
+}
+
+export interface GhostNote {
+  midi: number;
+  /** 0..1 remaining life; drawn with matching alpha. */
+  life: number;
+}
+
+export interface OpenRecordingNote {
+  midi: number;
+  startMs: number;
+  durationMs: number;
+}
+
+export interface ScoreRenderInput {
+  layout: ScoreLayout;
+  timeSignature: TimeSignature;
+  playheadMs: number;
+  recording: boolean;
+  openNotes: readonly OpenRecordingNote[];
+  ghosts: readonly GhostNote[];
+}
+
+function staffTopFor(staff: StaffKind): number {
+  return staff === 'treble' ? TREBLE_TOP : BASS_TOP;
+}
+
+function yForStep(staff: StaffKind, step: number): number {
+  return staffTopFor(staff) + STAFF_H - (step * GAP) / 2;
+}
+
+function xForMs(view: ScoreView, ms: number): number {
+  return GUTTER + (ms - view.scrollMs) * view.pxPerMs;
+}
+
+export function drawScore(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  input: ScoreRenderInput,
+): void {
+  ctx.clearRect(0, 0, view.widthPx, view.heightPx);
+  drawStaffLines(ctx, view);
+  drawMeasures(ctx, view, input.layout);
+  drawChords(ctx, view, input);
+  drawOpenNotes(ctx, view, input.openNotes, input.recording);
+  drawGhosts(ctx, view, input);
+  drawPlayhead(ctx, view, input.playheadMs);
+  drawGutter(ctx, view, input.timeSignature);
+}
+
+function drawStaffLines(ctx: CanvasRenderingContext2D, view: ScoreView): void {
+  ctx.strokeStyle = THEME.staffLine;
+  ctx.lineWidth = 1;
+  for (const top of [TREBLE_TOP, BASS_TOP]) {
+    for (let line = 0; line < 5; line += 1) {
+      const y = top + line * GAP + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(view.widthPx, y);
+      ctx.stroke();
+    }
+  }
+}
+
+function drawMeasures(ctx: CanvasRenderingContext2D, view: ScoreView, layout: ScoreLayout): void {
+  const fromMs = view.scrollMs - 200;
+  const toMs = view.scrollMs + (view.widthPx - GUTTER) / view.pxPerMs + 200;
+  ctx.strokeStyle = THEME.barLine;
+  ctx.fillStyle = THEME.measureNumber;
+  ctx.font = '10px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  for (const measure of layout.measures) {
+    if (measure.endMs < fromMs || measure.startMs > toMs) continue;
+    const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
+    if (x >= GUTTER - 8) {
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x, TREBLE_TOP);
+      ctx.lineTo(x, TREBLE_TOP + STAFF_H);
+      ctx.moveTo(x, BASS_TOP);
+      ctx.lineTo(x, BASS_TOP + STAFF_H);
+      ctx.stroke();
+      ctx.fillText(String(measure.index + 1), x + 3, TREBLE_TOP - 8);
+    }
+    if (measure.empty) {
+      const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
+      if (cx > GUTTER && cx < view.widthPx) {
+        ctx.fillStyle = THEME.rest;
+        for (const top of [TREBLE_TOP, BASS_TOP]) {
+          // Whole rest: a small block hanging from the second line.
+          ctx.fillRect(cx - 6, top + GAP + 0.5, 12, GAP * 0.55);
+        }
+        ctx.fillStyle = THEME.measureNumber;
+      }
+    }
+  }
+  // Final bar line at the layout end.
+  const endX = Math.round(xForMs(view, layout.totalMs)) + 0.5;
+  if (endX > GUTTER && endX < view.widthPx + 4) {
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(endX, TREBLE_TOP);
+    ctx.lineTo(endX, TREBLE_TOP + STAFF_H);
+    ctx.moveTo(endX, BASS_TOP);
+    ctx.lineTo(endX, BASS_TOP + STAFF_H);
+    ctx.stroke();
+  }
+}
+
+function drawChords(ctx: CanvasRenderingContext2D, view: ScoreView, input: ScoreRenderInput): void {
+  const { layout, playheadMs } = input;
+  const fromMs = view.scrollMs - 2000;
+  const toMs = view.scrollMs + (view.widthPx - GUTTER) / view.pxPerMs + 400;
+  const start = firstChordIndexAt(layout.chords, fromMs);
+
+  for (let i = start; i < layout.chords.length; i += 1) {
+    const chord = layout.chords[i] as ChordGroup;
+    if (chord.displayStartMs > toMs) break;
+    drawChord(ctx, view, chord, playheadMs);
+  }
+}
+
+function drawChord(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  chord: ChordGroup,
+  playheadMs: number,
+): void {
+  const x = xForMs(view, chord.displayStartMs);
+  if (x < GUTTER - 40) return;
+
+  const rx = GAP * 0.64;
+  const ry = GAP * 0.5;
+  const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
+
+  // Ledger lines first, behind heads.
+  ctx.strokeStyle = THEME.staffLine;
+  ctx.lineWidth = 1;
+  for (const note of chord.notes) {
+    for (const step of ledgerLineSteps(note.step)) {
+      const y = yForStep(note.staff, step) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x - rx - 4, y);
+      ctx.lineTo(x + rx + 4, y);
+      ctx.stroke();
+    }
+  }
+
+  let minY = Number.POSITIVE_INFINITY;
+  let maxY = Number.NEGATIVE_INFINITY;
+
+  for (const note of chord.notes) {
+    const y = yForStep(note.staff, note.step);
+    minY = Math.min(minY, y);
+    maxY = Math.max(maxY, y);
+    const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
+    const color = sounding ? THEME.highlight : THEME.note;
+
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-0.32);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, chord.symbol.base === 'whole' ? rx * 1.25 : rx, ry, 0, 0, Math.PI * 2);
+    if (hollow) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.8;
+      ctx.stroke();
+    } else {
+      ctx.fillStyle = color;
+      ctx.fill();
+    }
+    ctx.restore();
+
+    if (note.accidental) {
+      ctx.fillStyle = color;
+      ctx.font = `${GAP * 1.5}px system-ui, sans-serif`;
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('#', x - rx - 3, y);
+    }
+    if (chord.symbol.dotted) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x + rx + 5, y - (note.step % 2 === 0 ? GAP / 2 : 0), 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+
+  // Stem and flags (whole notes have neither).
+  if (chord.symbol.base !== 'whole') {
+    const stemLength = GAP * 3.4;
+    ctx.strokeStyle = THEME.note;
+    ctx.lineWidth = 1.6;
+    ctx.beginPath();
+    if (chord.stemDown) {
+      const sx = x - rx + 0.8;
+      ctx.moveTo(sx, minY);
+      ctx.lineTo(sx, maxY + stemLength);
+      ctx.stroke();
+      drawFlags(ctx, chord, sx, maxY + stemLength, 1);
+    } else {
+      const sx = x + rx - 0.8;
+      ctx.moveTo(sx, maxY);
+      ctx.lineTo(sx, minY - stemLength);
+      ctx.stroke();
+      drawFlags(ctx, chord, sx, minY - stemLength, -1);
+    }
+  }
+}
+
+function drawFlags(
+  ctx: CanvasRenderingContext2D,
+  chord: ChordGroup,
+  x: number,
+  stemEndY: number,
+  direction: 1 | -1,
+): void {
+  const flags = chord.symbol.base === 'eighth' ? 1 : chord.symbol.base === 'sixteenth' ? 2 : 0;
+  ctx.strokeStyle = THEME.note;
+  ctx.lineWidth = 1.6;
+  for (let i = 0; i < flags; i += 1) {
+    const y = stemEndY + direction * i * (GAP * 0.7);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.bezierCurveTo(x + GAP * 1.1, y + direction * GAP * 0.5, x + GAP * 1.2, y + direction * GAP * 1.3, x + GAP * 0.4, y + direction * GAP * 2);
+    ctx.stroke();
+  }
+}
+
+function drawOpenNotes(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  openNotes: readonly OpenRecordingNote[],
+  recording: boolean,
+): void {
+  if (!recording || openNotes.length === 0) return;
+  for (const open of openNotes) {
+    const position = midiToStaffPosition(open.midi);
+    const y = yForStep(position.staff, position.step);
+    const x = xForMs(view, open.startMs);
+    const width = Math.max(6, open.durationMs * view.pxPerMs);
+    // Extension bar shows the note is still held.
+    ctx.fillStyle = 'rgba(229, 72, 77, 0.28)';
+    ctx.fillRect(x, y - 3, width, 6);
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(-0.32);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, GAP * 0.64, GAP * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = THEME.record;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawGhosts(ctx: CanvasRenderingContext2D, view: ScoreView, input: ScoreRenderInput): void {
+  if (input.ghosts.length === 0) return;
+  const x = Math.max(GUTTER + 14, xForMs(view, input.playheadMs));
+  for (const ghost of input.ghosts) {
+    const position = midiToStaffPosition(ghost.midi);
+    const y = yForStep(position.staff, position.step);
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, ghost.life));
+    ctx.strokeStyle = THEME.staffLine;
+    for (const step of ledgerLineSteps(position.step)) {
+      const ly = yForStep(position.staff, step) + 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x - GAP, ly);
+      ctx.lineTo(x + GAP, ly);
+      ctx.stroke();
+    }
+    ctx.translate(x, y);
+    ctx.rotate(-0.32);
+    ctx.beginPath();
+    ctx.ellipse(0, 0, GAP * 0.64, GAP * 0.5, 0, 0, Math.PI * 2);
+    ctx.fillStyle = THEME.ghost;
+    ctx.fill();
+    ctx.restore();
+  }
+}
+
+function drawPlayhead(ctx: CanvasRenderingContext2D, view: ScoreView, playheadMs: number): void {
+  const x = xForMs(view, playheadMs);
+  if (x < GUTTER - 2 || x > view.widthPx + 2) return;
+  ctx.strokeStyle = THEME.playhead;
+  ctx.lineWidth = 1.6;
+  ctx.beginPath();
+  ctx.moveTo(x, TREBLE_TOP - 16);
+  ctx.lineTo(x, BASS_TOP + STAFF_H + 12);
+  ctx.stroke();
+  ctx.fillStyle = THEME.playhead;
+  ctx.beginPath();
+  ctx.moveTo(x - 5, TREBLE_TOP - 22);
+  ctx.lineTo(x + 5, TREBLE_TOP - 22);
+  ctx.lineTo(x, TREBLE_TOP - 13);
+  ctx.closePath();
+  ctx.fill();
+}
+
+let glyphSupport: { treble: boolean; bass: boolean } | null = null;
+
+function detectGlyphSupport(ctx: CanvasRenderingContext2D): { treble: boolean; bass: boolean } {
+  if (glyphSupport) return glyphSupport;
+  ctx.save();
+  ctx.font = `${GAP * 4}px serif`;
+  const treble = ctx.measureText('\u{1D11E}').width > GAP;
+  const bass = ctx.measureText('\u{1D122}').width > GAP;
+  ctx.restore();
+  glyphSupport = { treble, bass };
+  return glyphSupport;
+}
+
+function drawGutter(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  timeSignature: TimeSignature,
+): void {
+  ctx.fillStyle = THEME.gutterBg;
+  ctx.fillRect(0, 0, GUTTER, view.heightPx);
+  ctx.strokeStyle = THEME.barLine;
+  ctx.lineWidth = 1.4;
+  // System bar line joining the staffs at the left edge.
+  ctx.beginPath();
+  ctx.moveTo(4.5, TREBLE_TOP);
+  ctx.lineTo(4.5, BASS_TOP + STAFF_H);
+  ctx.stroke();
+
+  const support = detectGlyphSupport(ctx);
+  ctx.fillStyle = THEME.noteDim;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  // Treble (G) clef.
+  if (support.treble) {
+    ctx.font = `${GAP * 4.1}px serif`;
+    ctx.fillText('\u{1D11E}', 8, TREBLE_TOP + STAFF_H - GAP + GAP * 1.4);
+  } else {
+    drawFallbackTrebleClef(ctx, 14, TREBLE_TOP);
+  }
+  // Bass (F) clef.
+  if (support.bass) {
+    ctx.font = `${GAP * 3.2}px serif`;
+    ctx.fillText('\u{1D122}', 8, BASS_TOP + GAP * 3.1);
+  } else {
+    drawFallbackBassClef(ctx, 14, BASS_TOP);
+  }
+
+  // Time signature on both staffs.
+  ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;
+  ctx.textAlign = 'center';
+  const tsX = GUTTER - 14;
+  for (const top of [TREBLE_TOP, BASS_TOP]) {
+    ctx.fillText(String(timeSignature.numerator), tsX, top + GAP * 1.8);
+    ctx.fillText(String(timeSignature.denominator), tsX, top + GAP * 3.9);
+  }
+  ctx.textAlign = 'left';
+}
+
+/** Stylized G clef: spiral around the G line plus a tall flourish. */
+function drawFallbackTrebleClef(ctx: CanvasRenderingContext2D, x: number, staffTop: number): void {
+  const gy = staffTop + STAFF_H - GAP; // G4 line
+  ctx.strokeStyle = THEME.noteDim;
+  ctx.lineWidth = 1.8;
+  ctx.beginPath();
+  ctx.arc(x, gy, GAP * 0.75, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x + GAP * 0.75, gy);
+  ctx.bezierCurveTo(x + GAP, staffTop - 6, x - GAP * 0.4, staffTop - 12, x, staffTop - 4);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(x, staffTop - 4);
+  ctx.lineTo(x, staffTop + STAFF_H + 8);
+  ctx.stroke();
+}
+
+/** Stylized F clef: comma curve with the two dots around the F line. */
+function drawFallbackBassClef(ctx: CanvasRenderingContext2D, x: number, staffTop: number): void {
+  const fy = staffTop + GAP; // F3 line
+  ctx.strokeStyle = THEME.noteDim;
+  ctx.fillStyle = THEME.noteDim;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(x - 2, fy, GAP * 0.42, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(x - 2, fy);
+  ctx.bezierCurveTo(x + GAP * 1.6, fy - GAP * 1.2, x + GAP * 1.6, fy + GAP * 1.6, x - 2, fy + GAP * 2.6);
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.arc(x + GAP * 1.7, fy - 3, 1.7, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(x + GAP * 1.7, fy + 4, 1.7, 0, Math.PI * 2);
+  ctx.fill();
+}
