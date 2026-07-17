@@ -85,7 +85,9 @@ export function AudioExportDialog() {
 
   const close = useCallback(() => {
     if (phase?.kind === 'working') return; // must cancel first
-    if (phase?.kind === 'ready') transportController.sendExportEvent('DISMISS_AUDIO');
+    // Always release the transport, whatever phase we close from, so a
+    // dismissed dialog can never leave it stuck in an export state.
+    transportController.releaseExport();
     if (previewUrlRef.current) {
       URL.revokeObjectURL(previewUrlRef.current);
       previewUrlRef.current = null;

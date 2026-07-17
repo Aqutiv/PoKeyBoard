@@ -96,6 +96,28 @@ export class TransportController {
     return this.send(event);
   }
 
+  /**
+   * Drive the transport out of any export state back to idle. Safe to call
+   * from anywhere the export dialog closes — a no-op unless an export is in
+   * progress — so a dismissed dialog can never wedge the next export.
+   */
+  releaseExport(): void {
+    switch (this.state) {
+      case 'renderingAudio':
+      case 'encodingAudio':
+        this.send('EXPORT_CANCEL');
+        return;
+      case 'audioReady':
+        this.send('DISMISS_AUDIO');
+        return;
+      case 'error':
+        this.send('RESET');
+        return;
+      default:
+        return;
+    }
+  }
+
   fail(message: string): void {
     this.errorMessage = message;
     this.stopEverything();

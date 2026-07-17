@@ -49,6 +49,7 @@ export function AboutPage() {
       <h2 className="page__hint" style={{ fontWeight: 650 }}>
         Credits
       </h2>
+      <p className="page__hint">Product Manager / Vibe Coder: Idan Robbins</p>
       <p className="page__hint">
         Piano: Salamander Grand Piano v3 by Alexander Holm (CC-BY 3.0), adapted for the web. MP3
         encoding by the LAME encoder compiled to WebAssembly. Full notices ship with the source in
