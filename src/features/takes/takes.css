@@ -1,0 +1,247 @@
+.btn {
+  min-height: 40px;
+  padding: 0 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  font-size: 14px;
+  transition: background 120ms ease;
+}
+
+.btn:not(:disabled):active {
+  background: var(--surface-3);
+}
+
+.btn:disabled {
+  opacity: 0.4;
+}
+
+.btn--primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+  font-weight: 600;
+}
+
+.btn--primary:not(:disabled):active {
+  background: var(--accent-strong);
+}
+
+.btn--small {
+  min-height: 34px;
+  font-size: 13px;
+  padding: 0 10px;
+}
+
+.btn--danger {
+  color: var(--record);
+  border-color: rgba(229, 72, 77, 0.4);
+}
+
+.takes-toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+.takes-message {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+
+.take-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.take-item {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+
+.take-item.is-active {
+  border-color: var(--accent);
+}
+
+.take-item__row {
+  display: flex;
+  align-items: stretch;
+}
+
+.take-item__main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.take-item__title {
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 100%;
+}
+
+.take-item__draft {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.take-item__active-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--success);
+}
+
+.take-item__meta {
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.take-item__more {
+  min-width: var(--touch-target);
+  font-size: 20px;
+  color: var(--text-dim);
+  border-left: 1px solid var(--border);
+  border-radius: 0 var(--radius-m) var(--radius-m) 0;
+}
+
+.take-item__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px 10px;
+  border-top: 1px solid var(--border);
+}
+
+.take-item__rename input {
+  min-height: 34px;
+  background: var(--surface-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  padding: 0 8px;
+  font-size: 14px;
+}
+
+.takes-footer {
+  display: flex;
+  gap: 8px;
+  padding-top: 12px;
+  margin-top: auto;
+}
+
+.page--dragover {
+  outline: 2px dashed var(--accent);
+  outline-offset: -8px;
+}
+
+/* Shared modal styling (import dialog, export dialog). */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 6, 0.62);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 40;
+  padding: 16px;
+}
+
+.modal {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l);
+  box-shadow: var(--shadow-2);
+  width: min(440px, 100%);
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 18px;
+}
+
+.modal__title {
+  margin: 0 0 12px;
+  font-size: 17px;
+}
+
+.modal__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.import-preview {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+
+.import-preview dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.import-preview dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+
+.import-repairs {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.import-repairs ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.import-collision {
+  margin: 14px 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-collision legend {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 0 4px;
+}
+
+.import-collision label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
