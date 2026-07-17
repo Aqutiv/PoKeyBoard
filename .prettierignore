@@ -1,0 +1,15 @@
+node_modules/
+dist/
+dev-dist/
+coverage/
+playwright-report/
+test-results/
+blob-report/
+samples-staging/
+package-lock.json
+public/piano/
+public/metronome/
+public/icons/
+assets/
+.agents/
+*.plan

@@ -1,0 +1,25 @@
+/* Minimal base styles; the PoKeyBoard theme lands with the app shell. */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  background: #1d1a17;
+  color: #f3ede2;
+  -webkit-font-smoothing: antialiased;
+}
