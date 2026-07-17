@@ -64,6 +64,14 @@
   color: var(--text);
 }
 
+.setting-row select:focus-visible {
+  /* The global focus ring draws 4px outside the control, which the
+     settings scroll container clips at its edges. Draw it inset, with the
+     control's own corner radius so the ring hugs the border. */
+  outline-offset: -2px;
+  border-radius: var(--radius-m);
+}
+
 .setting-row--stack {
   flex-direction: column;
   align-items: flex-start;
