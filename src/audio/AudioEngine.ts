@@ -12,6 +12,12 @@ import { VoiceManager } from './VoiceManager';
 
 export const SAMPLE_PACK_PATH = 'piano/salamander-grand-v1/';
 
+/** Live input events with audio-clock timestamps (the recorder subscribes). */
+export type InputNoteEvent =
+  | { type: 'on'; midi: number; velocity: number; audioTime: number; sourceId: NoteSourceId }
+  | { type: 'off'; midi: number; audioTime: number; sourceId: NoteSourceId }
+  | { type: 'sustain'; down: boolean; audioTime: number; sourceId: NoteSourceId };
+
 /**
  * The stable piano service. A module singleton created outside React render
  * cycles; components call methods and subscribe to its events. The audio
@@ -30,6 +36,7 @@ export class AudioEngine {
 
   private readonly statusListeners = new Set<(status: EngineStatus) => void>();
   private readonly activeNoteListeners = new Set<(midis: ReadonlySet<number>) => void>();
+  private readonly inputListeners = new Set<(event: InputNoteEvent) => void>();
   private currentActiveNotes: ReadonlySet<number> = new Set();
   private coreLoadStarted = false;
 
@@ -163,15 +170,27 @@ export class AudioEngine {
     const sample = this.bank.getSample(midi, velocity);
     if (!sample) return false;
     this.voices.noteOn(sample, midi, sourceId);
+    this.emitInput({ type: 'on', midi, velocity, audioTime: this.currentTime, sourceId });
     return true;
   }
 
   noteOff(midi: number, sourceId: NoteSourceId): void {
     this.voices?.noteOff(midi, sourceId);
+    this.emitInput({ type: 'off', midi, audioTime: this.currentTime, sourceId });
   }
 
   setSustain(down: boolean, sourceId: NoteSourceId): void {
     this.voices?.setSustain(down, sourceId);
+    this.emitInput({ type: 'sustain', down, audioTime: this.currentTime, sourceId });
+  }
+
+  subscribeInput(listener: (event: InputNoteEvent) => void): () => void {
+    this.inputListeners.add(listener);
+    return () => this.inputListeners.delete(listener);
+  }
+
+  private emitInput(event: InputNoteEvent): void {
+    for (const listener of this.inputListeners) listener(event);
   }
 
   allNotesOff(): void {

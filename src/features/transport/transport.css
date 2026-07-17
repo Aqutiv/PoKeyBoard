@@ -1,0 +1,129 @@
+.transport {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.transport__buttons {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.transport__btn {
+  min-width: var(--touch-target);
+  min-height: var(--touch-target);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.transport__btn svg {
+  width: 22px;
+  height: 22px;
+}
+
+.transport__btn:disabled {
+  opacity: 0.35;
+}
+
+.transport__btn:not(:disabled):active {
+  background: var(--surface-3);
+}
+
+.transport__btn--record {
+  color: var(--record);
+}
+
+.transport__btn--record.is-active {
+  background: var(--record);
+  border-color: var(--record);
+  color: #fff;
+  animation: record-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes record-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(229, 72, 77, 0.55);
+  }
+  50% {
+    box-shadow: 0 0 0 7px rgba(229, 72, 77, 0);
+  }
+}
+
+.transport__btn--play {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.transport__btn--play:not(:disabled):active {
+  background: var(--accent-strong);
+}
+
+.transport__time {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-left: 4px;
+  white-space: nowrap;
+}
+
+.transport__undo {
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.transport__mode select {
+  min-height: 36px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.transport__seek {
+  width: 100%;
+  accent-color: var(--accent);
+  min-height: 28px;
+}
+
+.transport__seek:disabled {
+  opacity: 0.4;
+}
+
+.transport__status {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.transport__status--recording {
+  color: var(--record);
+  font-weight: 600;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}

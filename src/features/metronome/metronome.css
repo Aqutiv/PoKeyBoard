@@ -1,0 +1,108 @@
+.metronome {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.metronome__toggle {
+  min-width: var(--touch-target);
+  min-height: 40px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-2);
+  color: var(--text-dim);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.metronome__toggle.is-on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.metronome__bpm {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.metronome__step {
+  min-width: 36px;
+  min-height: 40px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-size: 17px;
+}
+
+.metronome__step:first-child {
+  border-radius: var(--radius-m) 0 0 var(--radius-m);
+}
+
+.metronome__bpm .metronome__step:last-child {
+  border-radius: 0 var(--radius-m) var(--radius-m) 0;
+}
+
+.metronome__bpm-input {
+  width: 52px;
+  min-height: 40px;
+  text-align: center;
+  background: var(--surface-1);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-right: none;
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metronome__tap {
+  min-height: 40px;
+  padding: 0 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.metronome select {
+  min-height: 40px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+.metronome__volume {
+  width: 90px;
+  accent-color: var(--accent);
+  min-height: 28px;
+}
+
+.metronome__beats {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.metronome__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  transition: background 60ms linear;
+}
+
+.metronome__dot.is-accent {
+  width: 11px;
+  height: 11px;
+}
+
+.metronome__dot.is-active {
+  background: var(--accent-strong);
+}

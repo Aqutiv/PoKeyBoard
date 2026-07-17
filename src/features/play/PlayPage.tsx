@@ -1,7 +1,9 @@
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
+import { MetronomeControls } from '@/features/metronome/MetronomeControls';
+import { TransportControls } from '@/features/transport/TransportControls';
 
-/** Play view — score and transport land in later slices. */
+/** Play view — the score renderer lands in the notation slice. */
 export function PlayPage() {
   const status = useEngineStatus();
   const progress = useSampleLoadProgress();
@@ -11,16 +13,25 @@ export function PlayPage() {
   return (
     <section className="page page--play" aria-label="Play">
       <div className="play-layout">
+        <TransportControls />
         <div className="play-layout__score">
-          <p className="page__hint" role="status">
-            {progress.phase === 'loading-core' || progress.phase === 'loading-manifest'
-              ? `Loading piano… ${percent}%`
-              : null}
-            {progress.phase === 'core-ready' ? 'Piano ready — play something.' : null}
-            {progress.error ? `${progress.error} ` : null}
-            {status === 'error' ? 'Audio is unavailable in this browser.' : null}
-          </p>
+          {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (
+            <p className="page__hint" role="status">
+              Loading piano… {percent}%
+            </p>
+          ) : null}
+          {progress.error ? (
+            <p className="page__hint" role="alert">
+              {progress.error}
+            </p>
+          ) : null}
+          {status === 'error' ? (
+            <p className="page__hint" role="alert">
+              Audio is unavailable in this browser.
+            </p>
+          ) : null}
         </div>
+        <MetronomeControls />
         <div className="play-layout__keyboard">
           <PianoKeyboard />
         </div>
