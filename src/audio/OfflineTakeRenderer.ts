@@ -44,10 +44,15 @@ export async function renderTakeToBuffer(
     throw new ExportError(
       `Take too long to render (${Math.round(seconds / 60)} min)`,
       `This take is longer than ${MAX_RENDER_MINUTES} minutes — export is capped to protect memory.`,
+      'exportTooLong',
     );
   }
   if (take.notes.length === 0) {
-    throw new ExportError('Cannot export an empty take', 'Record some notes before exporting.');
+    throw new ExportError(
+      'Cannot export an empty take',
+      'Record some notes before exporting.',
+      'exportEmpty',
+    );
   }
 
   // Make sure every root the take needs is decoded (range shifts etc.).
@@ -97,6 +102,7 @@ export async function renderTakeToBuffer(
     throw new ExportError(
       `${missingSamples} notes had no decoded sample`,
       'The piano is still loading — try the export again in a moment.',
+      'exportPianoLoading',
     );
   }
 

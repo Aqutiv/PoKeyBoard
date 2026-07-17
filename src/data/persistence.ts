@@ -2,7 +2,8 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
-import { QuotaExceededStorageError, toUserMessage } from '@/utils/errors';
+import { QuotaExceededStorageError, toErrorMessageKey } from '@/utils/errors';
+import type { ErrorMessageKey } from '@/i18n/types';
 import { invalidateCachedAudio } from './audioCacheRepository';
 import {
   getMetadata,
@@ -17,7 +18,8 @@ export type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 export interface SaveStatusSnapshot {
   status: SaveStatus;
-  message: string | null;
+  /** Translation key for the error message; null unless status is 'error'. */
+  messageKey: ErrorMessageKey | null;
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
@@ -30,7 +32,7 @@ const SETTINGS_DEBOUNCE_MS = 500;
  * requests persistent storage after the first meaningful save.
  */
 class PersistenceService {
-  private snapshot: SaveStatusSnapshot = { status: 'idle', message: null };
+  private snapshot: SaveStatusSnapshot = { status: 'idle', messageKey: null };
   private readonly listeners = new Set<() => void>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private settingsTimer: ReturnType<typeof setTimeout> | null = null;
@@ -120,11 +122,9 @@ class PersistenceService {
       this.setStatus('saved', null);
       void this.maybeRequestPersistentStorage(take.notes.length);
     } catch (error) {
-      const message =
-        error instanceof QuotaExceededStorageError
-          ? 'Storage is full. Free up space or export your takes as backup.'
-          : toUserMessage(error);
-      this.setStatus('error', message);
+      const messageKey: ErrorMessageKey =
+        error instanceof QuotaExceededStorageError ? 'storageFull' : toErrorMessageKey(error);
+      this.setStatus('error', messageKey);
     }
   }
 
@@ -159,8 +159,8 @@ class PersistenceService {
     }
   }
 
-  private setStatus(status: SaveStatus, message: string | null): void {
-    this.snapshot = { status, message };
+  private setStatus(status: SaveStatus, messageKey: ErrorMessageKey | null): void {
+    this.snapshot = { status, messageKey };
     for (const listener of this.listeners) listener();
   }
 }

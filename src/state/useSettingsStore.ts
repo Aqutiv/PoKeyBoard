@@ -6,10 +6,12 @@ import {
   type QuantizationSetting,
 } from '@/domain/takeTypes';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
+import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
 
 export type VelocityMode = 'touch' | 'fixed';
 
 export interface SettingsState {
+  language: SupportedLanguage;
   masterVolume: number;
   reverbMix: number;
   velocityMode: VelocityMode;
@@ -20,6 +22,7 @@ export interface SettingsState {
   displayQuantization: QuantizationSetting;
   keyboardAnchorMidi: number;
 
+  setLanguage(language: SupportedLanguage): void;
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
   setVelocityMode(mode: VelocityMode): void;
@@ -33,6 +36,7 @@ export interface SettingsState {
 }
 
 export const SETTINGS_DEFAULTS = {
+  language: DEFAULT_LANGUAGE as SupportedLanguage,
   masterVolume: DEFAULT_MASTER_VOLUME,
   reverbMix: DEFAULT_REVERB_MIX,
   velocityMode: 'touch' as VelocityMode,
@@ -52,6 +56,7 @@ export const SETTINGS_DEFAULTS = {
 export const useSettingsStore = create<SettingsState>()((set) => ({
   ...SETTINGS_DEFAULTS,
 
+  setLanguage: (language) => set({ language }),
   setMasterVolume: (value) => {
     audioEngine.setMasterVolume(value);
     set({ masterVolume: value });

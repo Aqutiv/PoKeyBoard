@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
+import { useMessages } from '@/i18n/i18nContext';
 import { transportController } from '@/features/transport/transportController';
 import type { QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -45,6 +46,7 @@ interface InertiaState {
 }
 
 export function MusicScore() {
+  const m = useMessages();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -278,7 +280,7 @@ export function MusicScore() {
         ref={canvasRef}
         className="score__canvas"
         role="img"
-        aria-label={`Grand staff score with ${notes.length} note${notes.length === 1 ? '' : 's'}`}
+        aria-label={m.score.label({ count: notes.length })}
         onPointerDown={onScorePointerDown}
         onPointerMove={onScorePointerMove}
         onPointerUp={onScorePointerUp}
@@ -290,20 +292,18 @@ export function MusicScore() {
         </div>
       ) : null}
       <label className="score__quant">
-        <span className="visually-hidden">Display quantization</span>
+        <span className="visually-hidden">{m.score.displayQuantization}</span>
         <select
           value={quantization}
           onChange={(event) => setDisplayQuantization(event.target.value as QuantizationSetting)}
-          aria-label="Display quantization"
+          aria-label={m.score.displayQuantization}
         >
-          <option value="off">No grid</option>
-          <option value="1/8">1/8 grid</option>
-          <option value="1/16">1/16 grid</option>
+          <option value="off">{m.score.noGrid}</option>
+          <option value="1/8">{m.score.grid8}</option>
+          <option value="1/16">{m.score.grid16}</option>
         </select>
       </label>
-      {showEmptyHint ? (
-        <div className="score__empty">Play the keys, or press record to capture a take.</div>
-      ) : null}
+      {showEmptyHint ? <div className="score__empty">{m.score.emptyHint}</div> : null}
     </div>
   );
 }

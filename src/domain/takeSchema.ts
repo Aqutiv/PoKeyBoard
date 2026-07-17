@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Repair } from '@/i18n/types';
 import { ImportValidationError } from '@/utils/errors';
 import { newId } from '@/utils/ids';
 import { migrateRawTake, type RawTakeData } from './takeMigrations';
@@ -97,38 +98,38 @@ function clampWithinEpsilon(value: number, min: number, max: number): number {
  * ids, and clamping float-precision drift. Anything genuinely invalid is left
  * for the schema to reject with a useful message.
  */
-export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs: string[] } {
-  const repairs: string[] = [];
+export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs: Repair[] } {
+  const repairs: Repair[] = [];
   const data: RawTakeData = { ...input };
 
   if (typeof data.id !== 'string' || data.id.length === 0) {
     data.id = newId();
-    repairs.push('Assigned a new take id.');
+    repairs.push({ code: 'takeId' });
   }
   if (typeof data.title !== 'string' || data.title.trim().length === 0) {
     data.title = UNTITLED_TAKE_TITLE;
-    repairs.push('Defaulted a missing title.');
+    repairs.push({ code: 'title' });
   }
   for (const field of ['createdAt', 'updatedAt'] as const) {
     const value = data[field];
     if (typeof value !== 'string' || Number.isNaN(Date.parse(value))) {
       data[field] = new Date().toISOString();
-      repairs.push(`Defaulted an invalid ${field} timestamp.`);
+      repairs.push({ code: 'timestamp', field });
     }
   }
   if (typeof data.samplePackVersion !== 'string' || data.samplePackVersion.length === 0) {
     data.samplePackVersion = DEFAULT_SAMPLE_PACK_VERSION;
-    repairs.push('Defaulted the sample-pack version.');
+    repairs.push({ code: 'samplePackVersion' });
   }
 
   if (data.tempo === undefined) {
     data.tempo = { bpm: 120, timeSignature: { numerator: 4, denominator: 4 }, countInBars: 1 };
-    repairs.push('Defaulted missing tempo settings.');
+    repairs.push({ code: 'tempoDefaulted' });
   } else if (typeof data.tempo === 'object' && data.tempo !== null) {
     const tempo = { ...(data.tempo as RawTakeData) };
     if (isFiniteNumber(tempo.bpm) && (tempo.bpm < 40 || tempo.bpm > 240)) {
       tempo.bpm = Math.min(240, Math.max(40, tempo.bpm));
-      repairs.push('Clamped BPM into the 40–240 range.');
+      repairs.push({ code: 'bpmClamped' });
     }
     if (
       isFiniteNumber(tempo.countInBars) &&
@@ -136,7 +137,7 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
       (tempo.countInBars < 0 || tempo.countInBars > 2)
     ) {
       tempo.countInBars = Math.min(2, Math.max(0, tempo.countInBars));
-      repairs.push('Clamped count-in length.');
+      repairs.push({ code: 'countInClamped' });
     }
     data.tempo = tempo;
   }
@@ -147,7 +148,7 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
       masterVolume: DEFAULT_MASTER_VOLUME,
       reverbMix: DEFAULT_REVERB_MIX,
     };
-    repairs.push('Defaulted missing instrument settings.');
+    repairs.push({ code: 'instrumentDefaulted' });
   } else if (typeof data.instrument === 'object' && data.instrument !== null) {
     const instrument = { ...(data.instrument as RawTakeData) };
     for (const field of ['masterVolume', 'reverbMix'] as const) {
@@ -197,13 +198,13 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
       }
       return note;
     });
-    if (roundedAny) repairs.push('Rounded fractional note timing to whole milliseconds.');
-    if (assignedIds > 0) repairs.push(`Assigned ids to ${assignedIds} note(s).`);
+    if (roundedAny) repairs.push({ code: 'noteTimingRounded' });
+    if (assignedIds > 0) repairs.push({ code: 'noteIdsAssigned', count: assignedIds });
   }
 
   if (data.display === undefined || typeof data.display !== 'object' || data.display === null) {
     data.display = { quantization: '1/16', zoom: 1, playheadMs: 0 };
-    if (input.display !== undefined) repairs.push('Reset invalid display settings.');
+    if (input.display !== undefined) repairs.push({ code: 'displayReset' });
   } else {
     const display = { ...(data.display as RawTakeData) };
     if (!['off', '1/8', '1/16'].includes(display.quantization as string)) {
@@ -257,7 +258,7 @@ function formatZodIssues(error: z.ZodError): string[] {
 
 export interface ParsedTake {
   take: Take;
-  repairs: string[];
+  repairs: Repair[];
 }
 
 /**

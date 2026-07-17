@@ -42,7 +42,7 @@ export interface ExportResult {
 
 export class ExportCancelledError extends ExportError {
   constructor() {
-    super('Export cancelled', 'Export cancelled.');
+    super('Export cancelled', 'Export cancelled.', 'exportCancelled');
   }
 }
 
@@ -105,6 +105,7 @@ class AudioExportService {
       throw new ExportError(
         `Encoded MP3 implausibly small (${blob.size} bytes)`,
         'Encoding produced an invalid file. Please try again.',
+        'exportEncodingInvalid',
       );
     }
 
@@ -170,6 +171,7 @@ class AudioExportService {
         throw new ExportError(
           `MP3 encode failed on worker and main thread: ${reason}`,
           `Audio export failed: ${reason}`,
+          'exportFailed',
           { cause: fallbackError },
         );
       }

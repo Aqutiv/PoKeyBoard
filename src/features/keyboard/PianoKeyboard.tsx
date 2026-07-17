@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useLiveActiveNotes } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
+import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
 import { ComputerKeyboardInput } from './computerKeyboard';
@@ -40,6 +41,7 @@ function midiAfterWhites(startMidi: number, count: number): number {
 }
 
 export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
+  const m = useMessages();
   const keysRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -180,7 +182,7 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
           className="piano__shift"
           onClick={() => shiftRange(-1)}
           disabled={layout.lowMidi <= FULL_RANGE_LOW}
-          aria-label="Shift keyboard range down one octave"
+          aria-label={m.piano.shiftDown}
         >
           ‹
         </button>
@@ -192,7 +194,7 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
           className="piano__shift"
           onClick={() => shiftRange(1)}
           disabled={layout.highMidi >= FULL_RANGE_HIGH}
-          aria-label="Shift keyboard range up one octave"
+          aria-label={m.piano.shiftUp}
         >
           ›
         </button>
@@ -202,7 +204,7 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
           aria-pressed={sustainOn}
           onClick={toggleSustain}
         >
-          Sustain
+          {m.piano.sustain}
         </button>
       </div>
       <div
@@ -222,7 +224,7 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
               key={key.midi}
               role="button"
               tabIndex={-1}
-              aria-label={`${midiToNoteName(key.midi)} key`}
+              aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
               aria-pressed={isActive(key.midi)}
               className={`piano-key piano-key--white${isActive(key.midi) ? ' is-active' : ''}`}
               style={{
@@ -244,7 +246,7 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
               key={key.midi}
               role="button"
               tabIndex={-1}
-              aria-label={`${midiToNoteName(key.midi)} key`}
+              aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
               aria-pressed={isActive(key.midi)}
               className={`piano-key piano-key--black${isActive(key.midi) ? ' is-active' : ''}`}
               style={{

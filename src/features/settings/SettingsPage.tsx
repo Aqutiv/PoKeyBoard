@@ -2,26 +2,29 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
 import { detectCapabilities, type AppCapabilities } from '@/audio/audioCapabilities';
+import { LANGUAGE_OPTIONS } from '@/i18n';
+import { useMessages } from '@/i18n/i18nContext';
+import type { SupportedLanguage } from '@/i18n/types';
 import { installService } from '@/pwa/install';
 import { updateManager } from '@/pwa/updateManager';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import './settings.css';
 
-const CAPABILITY_LABELS: Record<keyof AppCapabilities, string> = {
-  standaloneDisplayMode: 'Running as installed app',
-  beforeInstallPrompt: 'Native install prompt',
-  share: 'System sharing',
-  shareFiles: 'File sharing',
-  storagePersist: 'Persistent storage API',
-  storageEstimate: 'Storage estimate API',
-  fileSystemAccess: 'File System Access',
-  wakeLock: 'Screen wake lock',
-  audioWorklet: 'AudioWorklet',
-  webCodecsAudioEncoder: 'WebCodecs audio encoder',
-  pointerEvents: 'Pointer events',
-  touch: 'Touch input',
-};
+const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
+  'standaloneDisplayMode',
+  'beforeInstallPrompt',
+  'share',
+  'shareFiles',
+  'storagePersist',
+  'storageEstimate',
+  'fileSystemAccess',
+  'wakeLock',
+  'audioWorklet',
+  'webCodecsAudioEncoder',
+  'pointerEvents',
+  'touch',
+];
 
 function formatMB(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
@@ -48,6 +51,7 @@ const PREVIEW_VELOCITY = 0.7;
 const PREVIEW_DURATION_MS = 600;
 
 export function SettingsPage() {
+  const m = useMessages();
   const settings = useSettingsStore();
   const transportState = useTransportState();
   const updateAvailable = useUpdateAvailable();
@@ -71,9 +75,9 @@ export function SettingsPage() {
           : { kind: 'not-downloaded', totalBytes: manifest.totalBytes },
       );
     } catch {
-      setPack({ kind: 'error', message: 'Could not check the sample pack.', totalBytes: 0 });
+      setPack({ kind: 'error', message: m.settings.couldNotCheck, totalBytes: 0 });
     }
-  }, []);
+  }, [m]);
 
   useEffect(() => {
     const id = setTimeout(() => void refreshPackState(), 0);
@@ -123,16 +127,16 @@ export function SettingsPage() {
       .catch((error: unknown) => {
         setPack({
           kind: 'error',
-          message: error instanceof Error ? error.message : 'Download failed.',
+          message: error instanceof Error ? error.message : m.settings.downloadFailed,
           totalBytes: 0,
         });
       });
-  }, [refreshPackState]);
+  }, [refreshPackState, m]);
 
   const deletePack = useCallback(() => {
-    if (!window.confirm('Delete downloaded piano samples? Your takes are not affected.')) return;
+    if (!window.confirm(m.settings.deleteSamplesConfirm)) return;
     void audioEngine.deleteDownloadedSamples().then(() => void refreshPackState());
-  }, [refreshPackState]);
+  }, [refreshPackState, m]);
 
   // Play a standard mid-note so the volume/reverb sliders preview their effect
   // (routes through the master + reverb graph, so it reflects the live value).
@@ -146,15 +150,31 @@ export function SettingsPage() {
   }, []);
 
   return (
-    <section className="page settings" aria-label="Settings">
+    <section className="page settings" aria-label={m.settings.title}>
       <header className="page__header">
-        <h1 className="page__title">Settings</h1>
+        <h1 className="page__title">{m.settings.title}</h1>
       </header>
 
       <div className="settings__scroll">
-        <h2 className="settings__section">Sound</h2>
+        <h2 className="settings__section">{m.settings.language}</h2>
         <label className="setting-row">
-          <span>Piano volume</span>
+          <span>{m.settings.language}</span>
+          <select
+            value={settings.language}
+            onChange={(e) => settings.setLanguage(e.target.value as SupportedLanguage)}
+            aria-label={m.settings.language}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <h2 className="settings__section">{m.settings.sound}</h2>
+        <label className="setting-row">
+          <span>{m.settings.pianoVolume}</span>
           <input
             type="range"
             min={0}
@@ -167,7 +187,7 @@ export function SettingsPage() {
           />
         </label>
         <label className="setting-row">
-          <span>Reverb</span>
+          <span>{m.settings.reverb}</span>
           <input
             type="range"
             min={0}
@@ -180,9 +200,13 @@ export function SettingsPage() {
           />
         </label>
 
-        <h2 className="settings__section">Playing</h2>
-        <div className="setting-row setting-row--stack" role="radiogroup" aria-label="Velocity">
-          <span>Velocity</span>
+        <h2 className="settings__section">{m.settings.playing}</h2>
+        <div
+          className="setting-row setting-row--stack"
+          role="radiogroup"
+          aria-label={m.settings.velocity}
+        >
+          <span>{m.settings.velocity}</span>
           <label>
             <input
               type="radio"
@@ -190,7 +214,7 @@ export function SettingsPage() {
               checked={settings.velocityMode === 'touch'}
               onChange={() => settings.setVelocityMode('touch')}
             />
-            From touch position on the key
+            {m.settings.velocityTouch}
           </label>
           <label>
             <input
@@ -199,12 +223,12 @@ export function SettingsPage() {
               checked={settings.velocityMode === 'fixed'}
               onChange={() => settings.setVelocityMode('fixed')}
             />
-            Fixed
+            {m.settings.velocityFixed}
           </label>
         </div>
         {settings.velocityMode === 'fixed' ? (
           <label className="setting-row">
-            <span>Fixed velocity</span>
+            <span>{m.settings.fixedVelocity}</span>
             <input
               type="range"
               min={0.2}
@@ -216,7 +240,7 @@ export function SettingsPage() {
           </label>
         ) : null}
         <label className="setting-row">
-          <span>Note labels on keys</span>
+          <span>{m.settings.noteLabels}</span>
           <input
             type="checkbox"
             checked={settings.showNoteLabels}
@@ -224,7 +248,7 @@ export function SettingsPage() {
           />
         </label>
         <label className="setting-row">
-          <span>Sound while scrubbing the score</span>
+          <span>{m.settings.scrubAudition}</span>
           <input
             type="checkbox"
             checked={settings.scrubAudition}
@@ -232,23 +256,23 @@ export function SettingsPage() {
           />
         </label>
 
-        <h2 className="settings__section">Offline piano</h2>
-        {pack.kind === 'checking' ? <p className="settings__hint">Checking…</p> : null}
+        <h2 className="settings__section">{m.settings.offlinePiano}</h2>
+        {pack.kind === 'checking' ? <p className="settings__hint">{m.settings.checking}</p> : null}
         {pack.kind === 'not-downloaded' ? (
           <div className="setting-row setting-row--stack">
-            <span>
-              Download the full piano ({formatMB(pack.totalBytes)}) to keep every key playable
-              offline.
-            </span>
+            <span>{m.settings.downloadPrompt({ size: formatMB(pack.totalBytes) })}</span>
             <button type="button" className="btn" onClick={downloadPack}>
-              Download piano for offline use
+              {m.settings.downloadButton}
             </button>
           </div>
         ) : null}
         {pack.kind === 'downloading' ? (
           <div className="setting-row setting-row--stack" aria-live="polite">
             <span>
-              Downloading… {formatMB(pack.loadedBytes)} / {formatMB(pack.totalBytes)}
+              {m.settings.downloading({
+                loaded: formatMB(pack.loadedBytes),
+                total: formatMB(pack.totalBytes),
+              })}
             </span>
             <progress value={pack.loadedBytes} max={pack.totalBytes} />
           </div>
@@ -256,10 +280,10 @@ export function SettingsPage() {
         {pack.kind === 'offline-ready' ? (
           <div className="setting-row setting-row--stack">
             <span className="settings__ok">
-              ✓ Full piano available offline ({formatMB(pack.totalBytes)})
+              {m.settings.fullOffline({ size: formatMB(pack.totalBytes) })}
             </span>
             <button type="button" className="btn" onClick={deletePack}>
-              Delete downloaded samples
+              {m.settings.deleteSamples}
             </button>
           </div>
         ) : null}
@@ -269,30 +293,30 @@ export function SettingsPage() {
               {pack.message}
             </span>
             <button type="button" className="btn" onClick={downloadPack}>
-              Try again
+              {m.settings.tryAgain}
             </button>
           </div>
         ) : null}
 
-        <h2 className="settings__section">Storage</h2>
+        <h2 className="settings__section">{m.settings.storage}</h2>
         <p className="settings__hint">
           {storageInfo.persisted === true
-            ? 'Persistent storage granted — the browser will avoid evicting your takes.'
+            ? m.settings.persistGranted
             : storageInfo.persisted === false
-              ? 'Persistent storage not granted; the browser may clear data under pressure.'
-              : 'Persistent storage status unknown in this browser.'}
+              ? m.settings.persistNotGranted
+              : m.settings.persistUnknown}
           {storageInfo.usage !== null && storageInfo.quota !== null
-            ? ` Using ${formatMB(storageInfo.usage)} of ${formatMB(storageInfo.quota)}.`
+            ? m.settings.storageUsing({
+                usage: formatMB(storageInfo.usage),
+                quota: formatMB(storageInfo.quota),
+              })
             : ''}
         </p>
-        <p className="settings__hint">
-          Takes live in this browser only — regular JSON backups (Takes → Backup all) are
-          recommended.
-        </p>
+        <p className="settings__hint">{m.settings.takesLocalHint}</p>
 
-        <h2 className="settings__section">Install</h2>
+        <h2 className="settings__section">{m.settings.install}</h2>
         {installService.isStandalone ? (
-          <p className="settings__hint settings__ok">✓ Running as an installed app.</p>
+          <p className="settings__hint settings__ok">{m.settings.runningInstalled}</p>
         ) : installService.canPromptInstall ? (
           <button
             type="button"
@@ -301,63 +325,59 @@ export function SettingsPage() {
               void installService.promptInstall().then(() => setInstallTick((n) => n + 1))
             }
           >
-            Install PoKeyBoard
+            {m.settings.installApp}
           </button>
         ) : (
           <p className="settings__hint">
-            To install on iPhone or iPad: open the Share menu in Safari and choose{' '}
-            <strong>Add to Home Screen</strong>. On other browsers, look for an Install or Add to
-            Home Screen entry in the browser menu. Open the installed icon before creating important
-            takes — the installed app can use separate storage.
+            {m.settings.installHintPre}
+            <strong>{m.settings.addToHomeScreen}</strong>
+            {m.settings.installHintPost}
           </p>
         )}
 
-        <h2 className="settings__section">Updates</h2>
+        <h2 className="settings__section">{m.settings.updates}</h2>
         {updateAvailable ? (
           <div className="setting-row setting-row--stack">
-            <span>An update is ready.</span>
+            <span>{m.settings.updateReady}</span>
             <button
               type="button"
               className="btn btn--primary"
               disabled={isBusyState(transportState)}
               onClick={() => updateManager.applyUpdate()}
             >
-              {isBusyState(transportState) ? 'Finish playing first…' : 'Apply update and reload'}
+              {isBusyState(transportState) ? m.settings.finishPlaying : m.settings.applyUpdate}
             </button>
           </div>
         ) : (
-          <p className="settings__hint">Up to date — version {__APP_VERSION__}.</p>
+          <p className="settings__hint">{m.settings.upToDate({ version: __APP_VERSION__ })}</p>
         )}
 
-        <h2 className="settings__section">Diagnostics</h2>
+        <h2 className="settings__section">{m.settings.diagnostics}</h2>
         <ul className="caps-list">
-          {(Object.keys(CAPABILITY_LABELS) as Array<keyof AppCapabilities>).map((key) => (
+          {CAPABILITY_KEYS.map((key) => (
             <li key={key} className="caps-list__item">
               <span aria-hidden="true">{caps[key] ? '✓' : '—'}</span>
-              <span>{CAPABILITY_LABELS[key]}</span>
+              <span>{m.settings.capabilities[key]}</span>
             </li>
           ))}
           <li className="caps-list__item">
             <span aria-hidden="true">·</span>
-            <span>Estimated output latency: {audioEngine.getOutputLatencyMs()} ms</span>
+            <span>{m.settings.outputLatency({ ms: audioEngine.getOutputLatencyMs() })}</span>
           </li>
         </ul>
-        <p className="settings__hint">
-          No sound on iPhone? Check the ring/silent switch and volume — iPhones mute web audio while
-          the switch is on silent.
-        </p>
+        <p className="settings__hint">{m.settings.iphoneHint}</p>
 
-        <h2 className="settings__section">Reset</h2>
+        <h2 className="settings__section">{m.settings.reset}</h2>
         <button
           type="button"
           className="btn"
           onClick={() => {
-            if (window.confirm('Reset all settings to defaults? Takes are not affected.')) {
+            if (window.confirm(m.settings.resetConfirm)) {
               settings.resetSettings();
             }
           }}
         >
-          Reset settings
+          {m.settings.resetSettings}
         </button>
       </div>
     </section>
