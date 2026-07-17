@@ -40,7 +40,10 @@ export function computeTakeDurationMs(notes: readonly NoteEvent[]): number {
   return max;
 }
 
-export function removeNotesByIds(notes: readonly NoteEvent[], ids: ReadonlySet<string>): NoteEvent[] {
+export function removeNotesByIds(
+  notes: readonly NoteEvent[],
+  ids: ReadonlySet<string>,
+): NoteEvent[] {
   return notes.filter((note) => !ids.has(note.id));
 }
 

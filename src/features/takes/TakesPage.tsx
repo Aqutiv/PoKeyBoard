@@ -190,7 +190,9 @@ export function TakesPage() {
                     <span className="take-item__title">
                       {summary.title}
                       {summary.isDraft ? <span className="take-item__draft">Draft</span> : null}
-                      {isActive ? <span className="take-item__active-dot" aria-label="Currently open" /> : null}
+                      {isActive ? (
+                        <span className="take-item__active-dot" aria-label="Currently open" />
+                      ) : null}
                     </span>
                     <span className="take-item__meta">
                       {summary.noteCount} notes · {formatDurationMs(summary.durationMs)} ·{' '}

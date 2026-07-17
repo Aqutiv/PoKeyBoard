@@ -60,7 +60,11 @@ describe('layoutScore', () => {
 
   it('sorts chords by display start for binary search', () => {
     const layout = layoutScore(
-      [note({ id: 'b', startMs: 1000 }), note({ id: 'a', startMs: 0 }), note({ id: 'c', startMs: 2000 })],
+      [
+        note({ id: 'b', startMs: 1000 }),
+        note({ id: 'a', startMs: 0 }),
+        note({ id: 'c', startMs: 2000 }),
+      ],
       OPTS,
     );
     const starts = layout.chords.map((c) => c.displayStartMs);

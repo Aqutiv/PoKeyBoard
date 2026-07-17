@@ -23,10 +23,18 @@ describe('beat and bar durations', () => {
 
   it('computes count-in length from bars', () => {
     expect(
-      countInDurationMs({ bpm: 120, timeSignature: { numerator: 4, denominator: 4 }, countInBars: 2 }),
+      countInDurationMs({
+        bpm: 120,
+        timeSignature: { numerator: 4, denominator: 4 },
+        countInBars: 2,
+      }),
     ).toBe(4000);
     expect(
-      countInDurationMs({ bpm: 120, timeSignature: { numerator: 4, denominator: 4 }, countInBars: 0 }),
+      countInDurationMs({
+        bpm: 120,
+        timeSignature: { numerator: 4, denominator: 4 },
+        countInBars: 0,
+      }),
     ).toBe(0);
   });
 

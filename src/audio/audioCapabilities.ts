@@ -51,8 +51,7 @@ export function detectCapabilities(): AppCapabilities {
     storageEstimate: typeof nav.storage?.estimate === 'function',
     fileSystemAccess: 'showOpenFilePicker' in window,
     wakeLock: 'wakeLock' in navigator,
-    audioWorklet:
-      typeof AudioContext !== 'undefined' && 'audioWorklet' in AudioContext.prototype,
+    audioWorklet: typeof AudioContext !== 'undefined' && 'audioWorklet' in AudioContext.prototype,
     webCodecsAudioEncoder: 'AudioEncoder' in globalThis,
     pointerEvents: 'PointerEvent' in globalThis,
     touch: 'ontouchstart' in window || navigator.maxTouchPoints > 0,

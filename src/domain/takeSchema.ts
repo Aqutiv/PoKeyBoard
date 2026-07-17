@@ -2,7 +2,12 @@ import { z } from 'zod';
 import { ImportValidationError } from '@/utils/errors';
 import { newId } from '@/utils/ids';
 import { migrateRawTake, type RawTakeData } from './takeMigrations';
-import { computeTakeDurationMs, sortNotes, sortPedalEvents, UNTITLED_TAKE_TITLE } from './noteEvents';
+import {
+  computeTakeDurationMs,
+  sortNotes,
+  sortPedalEvents,
+  UNTITLED_TAKE_TITLE,
+} from './noteEvents';
 import {
   CURRENT_SCHEMA_VERSION,
   DEFAULT_INSTRUMENT_ID,

@@ -28,7 +28,11 @@ export function PlayPage() {
   const playbackActiveMidis = usePlaybackActiveMidis();
 
   return (
-    <section className="page page--play" aria-label="Play">
+    <section
+      className="page page--play"
+      aria-label="Play"
+      data-piano-ready={progress.phase === 'core-ready' ? 'true' : 'false'}
+    >
       <div className="play-layout">
         <header className="play-header">
           <h1 className="play-header__title">{title}</h1>

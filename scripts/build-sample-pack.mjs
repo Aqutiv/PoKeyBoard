@@ -16,7 +16,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const RAW_BASE = 'https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples';
+const RAW_BASE =
+  'https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples';
 const PACK_VERSION = 'salamander-grand-v1';
 const STAGING_DIR = 'samples-staging';
 const OUT_DIR = path.join('public', 'piano', PACK_VERSION);
@@ -118,13 +119,20 @@ async function convert(name, midi) {
   // reverb restores a sense of space.
   await runFfmpeg([
     '-y',
-    '-i', input,
-    '-t', String(trim),
-    '-af', `afade=t=out:st=${fadeStart}:d=1.5`,
-    '-ar', '48000',
-    '-ac', '1',
-    '-c:a', 'libmp3lame',
-    '-b:a', '128k',
+    '-i',
+    input,
+    '-t',
+    String(trim),
+    '-af',
+    `afade=t=out:st=${fadeStart}:d=1.5`,
+    '-ar',
+    '48000',
+    '-ac',
+    '1',
+    '-c:a',
+    'libmp3lame',
+    '-b:a',
+    '128k',
     output,
   ]);
   return { output };
@@ -159,7 +167,9 @@ async function main() {
       jobs.push({ name, midi, layer });
     }
   }
-  console.log(`Sample jobs: ${jobs.length} (${rootMidis().length} roots x ${VELOCITY_LAYERS.length} layers)`);
+  console.log(
+    `Sample jobs: ${jobs.length} (${rootMidis().length} roots x ${VELOCITY_LAYERS.length} layers)`,
+  );
 
   console.log('Downloading FLACs...');
   const downloadFailures = await runPool(jobs, (job) => download(job.name), 6);

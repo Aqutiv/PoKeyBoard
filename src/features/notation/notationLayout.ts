@@ -82,8 +82,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
 
   const chords: ChordGroup[] = [...groups.values()].map((groupNotes) => {
     groupNotes.sort((a, b) => a.step - b.step || a.midi - b.midi);
-    const averageStep =
-      groupNotes.reduce((sum, note) => sum + note.step, 0) / groupNotes.length;
+    const averageStep = groupNotes.reduce((sum, note) => sum + note.step, 0) / groupNotes.length;
     let longest = groupNotes[0] as LaidOutNote;
     for (const note of groupNotes) {
       if (note.durationMs > longest.durationMs) longest = note;

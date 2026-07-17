@@ -13,7 +13,9 @@ export function applySustainToNotes(
 ): NoteEvent[] {
   if (pedals.length === 0) return [...notes];
 
-  const sortedPedals = [...pedals].sort((a, b) => a.atMs - b.atMs || Number(a.down) - Number(b.down));
+  const sortedPedals = [...pedals].sort(
+    (a, b) => a.atMs - b.atMs || Number(a.down) - Number(b.down),
+  );
 
   const isPedalDownAt = (timeMs: number): boolean => {
     let down = false;
@@ -40,6 +42,9 @@ export function applySustainToNotes(
       return { ...note, durationMs: Math.min(MAX_NOTE_DURATION_MS, note.durationMs + 8_000) };
     }
     const extended = pedalUp - note.startMs;
-    return { ...note, durationMs: Math.min(MAX_NOTE_DURATION_MS, Math.max(note.durationMs, extended)) };
+    return {
+      ...note,
+      durationMs: Math.min(MAX_NOTE_DURATION_MS, Math.max(note.durationMs, extended)),
+    };
   });
 }

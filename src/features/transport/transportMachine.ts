@@ -95,6 +95,12 @@ export function canTransition(state: TransportState, event: TransportEvent): boo
 
 /** States during which a service-worker update must not be offered/applied. */
 export function isBusyState(state: TransportState): boolean {
-  return state === 'countIn' || state === 'recording' || state === 'playing' ||
-    state === 'scrubbing' || state === 'renderingAudio' || state === 'encodingAudio';
+  return (
+    state === 'countIn' ||
+    state === 'recording' ||
+    state === 'playing' ||
+    state === 'scrubbing' ||
+    state === 'renderingAudio' ||
+    state === 'encodingAudio'
+  );
 }

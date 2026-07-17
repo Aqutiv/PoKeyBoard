@@ -20,9 +20,7 @@ export async function loadSettings(): Promise<Partial<PersistableSettings>> {
 }
 
 export async function saveSettings(state: SettingsState): Promise<void> {
-  await db.settings.bulkPut(
-    SETTING_KEYS.map((key) => ({ key, value: state[key] })),
-  );
+  await db.settings.bulkPut(SETTING_KEYS.map((key) => ({ key, value: state[key] })));
 }
 
 export async function getAllSettingsForBackup(): Promise<Record<string, unknown>> {

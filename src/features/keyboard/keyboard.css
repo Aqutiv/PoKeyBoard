@@ -74,7 +74,13 @@
 
 .piano-key--white {
   height: 100%;
-  background: linear-gradient(to bottom, #efe8d8 0%, var(--ivory) 12%, var(--ivory) 82%, var(--ivory-shadow) 100%);
+  background: linear-gradient(
+    to bottom,
+    #efe8d8 0%,
+    var(--ivory) 12%,
+    var(--ivory) 82%,
+    var(--ivory-shadow) 100%
+  );
   border: 1px solid #b9b1a0;
   border-top: none;
   border-radius: 0 0 5px 5px;
@@ -89,7 +95,12 @@
 
 .piano-key--black {
   height: 62%;
-  background: linear-gradient(to bottom, #33302c 0%, var(--key-black) 20%, var(--key-black-edge) 100%);
+  background: linear-gradient(
+    to bottom,
+    #33302c 0%,
+    var(--key-black) 20%,
+    var(--key-black-edge) 100%
+  );
   border: 1px solid var(--key-black-edge);
   border-top: none;
   border-radius: 0 0 4px 4px;

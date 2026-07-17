@@ -276,7 +276,9 @@ export function SettingsPage() {
           <button
             type="button"
             className="btn"
-            onClick={() => void installService.promptInstall().then(() => setInstallTick((n) => n + 1))}
+            onClick={() =>
+              void installService.promptInstall().then(() => setInstallTick((n) => n + 1))
+            }
           >
             Install PoKeyBoard
           </button>
@@ -284,8 +286,8 @@ export function SettingsPage() {
           <p className="settings__hint">
             To install on iPhone or iPad: open the Share menu in Safari and choose{' '}
             <strong>Add to Home Screen</strong>. On other browsers, look for an Install or Add to
-            Home Screen entry in the browser menu. Open the installed icon before creating
-            important takes — the installed app can use separate storage.
+            Home Screen entry in the browser menu. Open the installed icon before creating important
+            takes — the installed app can use separate storage.
           </p>
         )}
 
@@ -320,8 +322,8 @@ export function SettingsPage() {
           </li>
         </ul>
         <p className="settings__hint">
-          No sound on iPhone? Check the ring/silent switch and volume — iPhones mute web audio
-          while the switch is on silent.
+          No sound on iPhone? Check the ring/silent switch and volume — iPhones mute web audio while
+          the switch is on silent.
         </p>
 
         <h2 className="settings__section">Reset</h2>

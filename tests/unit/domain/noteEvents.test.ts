@@ -62,7 +62,10 @@ describe('sortPedalEvents', () => {
 describe('computeTakeDurationMs', () => {
   it('returns the latest note end', () => {
     expect(
-      computeTakeDurationMs([note({ startMs: 0, durationMs: 400 }), note({ startMs: 300, durationMs: 500 })]),
+      computeTakeDurationMs([
+        note({ startMs: 0, durationMs: 400 }),
+        note({ startMs: 300, durationMs: 500 }),
+      ]),
     ).toBe(800);
   });
 

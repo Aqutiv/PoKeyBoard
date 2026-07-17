@@ -1,5 +1,10 @@
 import { create } from 'zustand';
-import { computeTakeDurationMs, createEmptyTake, removeNotesByIds, sortNotes } from '@/domain/noteEvents';
+import {
+  computeTakeDurationMs,
+  createEmptyTake,
+  removeNotesByIds,
+  sortNotes,
+} from '@/domain/noteEvents';
 import type { NoteEvent, PedalEvent, Take, TempoSettings } from '@/domain/takeTypes';
 
 export interface TakeStoreState {

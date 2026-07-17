@@ -37,12 +37,7 @@ export interface SampleSelection {
 }
 
 export type SampleLoadPhase =
-  | 'idle'
-  | 'loading-manifest'
-  | 'loading-core'
-  | 'core-ready'
-  | 'loading-extra'
-  | 'error';
+  'idle' | 'loading-manifest' | 'loading-core' | 'core-ready' | 'loading-extra' | 'error';
 
 export interface SampleLoadProgress {
   phase: SampleLoadPhase;

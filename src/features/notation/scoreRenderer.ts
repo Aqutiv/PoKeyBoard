@@ -258,7 +258,14 @@ function drawFlags(
     const y = stemEndY + direction * i * (GAP * 0.7);
     ctx.beginPath();
     ctx.moveTo(x, y);
-    ctx.bezierCurveTo(x + GAP * 1.1, y + direction * GAP * 0.5, x + GAP * 1.2, y + direction * GAP * 1.3, x + GAP * 0.4, y + direction * GAP * 2);
+    ctx.bezierCurveTo(
+      x + GAP * 1.1,
+      y + direction * GAP * 0.5,
+      x + GAP * 1.2,
+      y + direction * GAP * 1.3,
+      x + GAP * 0.4,
+      y + direction * GAP * 2,
+    );
     ctx.stroke();
   }
 }
@@ -421,7 +428,14 @@ function drawFallbackBassClef(ctx: CanvasRenderingContext2D, x: number, staffTop
   ctx.fill();
   ctx.beginPath();
   ctx.moveTo(x - 2, fy);
-  ctx.bezierCurveTo(x + GAP * 1.6, fy - GAP * 1.2, x + GAP * 1.6, fy + GAP * 1.6, x - 2, fy + GAP * 2.6);
+  ctx.bezierCurveTo(
+    x + GAP * 1.6,
+    fy - GAP * 1.2,
+    x + GAP * 1.6,
+    fy + GAP * 1.6,
+    x - 2,
+    fy + GAP * 2.6,
+  );
   ctx.stroke();
   ctx.beginPath();
   ctx.arc(x + GAP * 1.7, fy - 3, 1.7, 0, Math.PI * 2);

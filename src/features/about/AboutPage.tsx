@@ -43,8 +43,8 @@ export function AboutPage() {
       </p>
       <p className="page__hint">
         Audio normally pauses when the app goes to the background or the screen locks. Takes are
-        local to this browser profile — installing the app can use separate storage, so export
-        JSON backups for anything important.
+        local to this browser profile — installing the app can use separate storage, so export JSON
+        backups for anything important.
       </p>
       <h2 className="page__hint" style={{ fontWeight: 650 }}>
         Credits

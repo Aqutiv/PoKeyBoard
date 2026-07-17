@@ -8,7 +8,12 @@ import { newId } from '@/utils/ids';
 import { clamp, countInDurationMs } from '@/utils/timing';
 import { applySustainToNotes } from './sustainPedal';
 import { TransportClock } from './transportClock';
-import { canTransition, transition, type TransportEvent, type TransportState } from './transportMachine';
+import {
+  canTransition,
+  transition,
+  type TransportEvent,
+  type TransportState,
+} from './transportMachine';
 
 export type RecordMode = 'overdub' | 'replace';
 
@@ -82,7 +87,12 @@ export class TransportController {
   }
 
   /** Export flow (task: audio export) drives these transitions. */
-  sendExportEvent(event: Extract<TransportEvent, 'EXPORT_START' | 'RENDER_DONE' | 'ENCODE_DONE' | 'DISMISS_AUDIO' | 'EXPORT_CANCEL' | 'FAIL'>): boolean {
+  sendExportEvent(
+    event: Extract<
+      TransportEvent,
+      'EXPORT_START' | 'RENDER_DONE' | 'ENCODE_DONE' | 'DISMISS_AUDIO' | 'EXPORT_CANCEL' | 'FAIL'
+    >,
+  ): boolean {
     return this.send(event);
   }
 
@@ -241,8 +251,11 @@ export class TransportController {
 
   private onInput(event: InputNoteEvent): void {
     if (this.state !== 'recording') return;
+    // Count-in presses never reach here (the state guard above filters
+    // them). A press in the tiny scheduling gap before the audio-clock
+    // anchor is a real performance note — clamp it to the start instead of
+    // dropping it, or the first eager note after tapping record is lost.
     const rawMs = this.recordStartMs + (event.audioTime - this.recordAnchorAudioTime) * 1000;
-    if (rawMs < this.recordStartMs - 5) return; // pressed during count-in
     const takeMs = Math.max(this.recordStartMs, Math.round(rawMs));
 
     if (event.type === 'on') {
@@ -279,7 +292,12 @@ export class TransportController {
   }
 
   /** In-progress (held) notes, for prompt score display while recording. */
-  getOpenRecordingNotes(): Array<{ midi: number; startMs: number; durationMs: number; velocity: number }> {
+  getOpenRecordingNotes(): Array<{
+    midi: number;
+    startMs: number;
+    durationMs: number;
+    velocity: number;
+  }> {
     if (this.state !== 'recording') return [];
     const nowMs = this.clock.currentTakeMs();
     return [...this.openNotes.values()].map((open) => ({

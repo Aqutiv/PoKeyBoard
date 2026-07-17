@@ -30,8 +30,10 @@ function runFfmpeg(args) {
 
 function plain(size, name) {
   return runFfmpeg([
-    '-i', MASTER,
-    '-vf', `scale=${size}:${size}:flags=lanczos`,
+    '-i',
+    MASTER,
+    '-vf',
+    `scale=${size}:${size}:flags=lanczos`,
     path.join(OUT_DIR, name),
   ]);
 }
@@ -39,7 +41,8 @@ function plain(size, name) {
 function maskable(size, name) {
   const inner = Math.round(size * 0.66);
   return runFfmpeg([
-    '-i', MASTER,
+    '-i',
+    MASTER,
     '-vf',
     `scale=${inner}:${inner}:flags=lanczos,pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:color=${THEME_BG}`,
     path.join(OUT_DIR, name),

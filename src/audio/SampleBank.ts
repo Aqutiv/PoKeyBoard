@@ -118,7 +118,11 @@ export class SampleBank {
     this.setPhase(this.isCoreReady() ? 'core-ready' : 'error');
   }
 
-  /** Decode any additional roots needed to play [lowMidi, highMidi]. */
+  /**
+   * Decode any additional roots needed to play [lowMidi, highMidi]. Runs
+   * concurrently with the core load; the phase is recomputed from actual
+   * loaded state afterwards (never captured-and-restored — that races).
+   */
   async ensureRangeLoaded(
     context: BaseAudioContext,
     lowMidi: number,
@@ -132,10 +136,9 @@ export class SampleBank {
         entry.midi <= highMidi + MAX_ROOT_DISTANCE_SEMITONES,
     );
     if (needed.length === 0) return;
-    const previousPhase = this.phase;
-    this.setPhase('loading-extra');
+    if (this.phase === 'core-ready') this.setPhase('loading-extra');
     await this.loadEntries(context, needed);
-    this.setPhase(previousPhase === 'core-ready' || previousPhase === 'idle' ? 'core-ready' : previousPhase);
+    if (this.isCoreReady()) this.setPhase('core-ready');
   }
 
   isCoreReady(): boolean {

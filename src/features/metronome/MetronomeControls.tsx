@@ -106,9 +106,7 @@ export function MetronomeControls() {
         className={`metronome__toggle${metronomeOn ? ' is-on' : ''}`}
         aria-pressed={metronomeOn}
         aria-label={
-          metronomeOn
-            ? `Metronome on, ${Math.round(tempo.bpm)} beats per minute`
-            : 'Metronome off'
+          metronomeOn ? `Metronome on, ${Math.round(tempo.bpm)} beats per minute` : 'Metronome off'
         }
         onClick={() => transportController.setMetronomeOn(!metronomeOn)}
       >

@@ -118,18 +118,12 @@ export function AudioExportDialog() {
       }
       setPhase({ kind: 'working', take, progress: { stage: 'saving', fraction: -1 } });
       audioExportService
-        .exportTake(
-          take,
-          { quality, includeMetronome, metronomeVolume },
-          (progress) => {
-            if (progress.stage === 'encoding') {
-              transportController.sendExportEvent('RENDER_DONE');
-            }
-            setPhase((current) =>
-              current?.kind === 'working' ? { ...current, progress } : current,
-            );
-          },
-        )
+        .exportTake(take, { quality, includeMetronome, metronomeVolume }, (progress) => {
+          if (progress.stage === 'encoding') {
+            transportController.sendExportEvent('RENDER_DONE');
+          }
+          setPhase((current) => (current?.kind === 'working' ? { ...current, progress } : current));
+        })
         .then((result) => {
           if (result.fromCache) transportController.sendExportEvent('RENDER_DONE');
           transportController.sendExportEvent('ENCODE_DONE');
@@ -237,7 +231,9 @@ export function AudioExportDialog() {
               role="progressbar"
               aria-valuemin={0}
               aria-valuemax={100}
-              aria-valuenow={phase.progress.fraction >= 0 ? Math.round(phase.progress.fraction * 100) : undefined}
+              aria-valuenow={
+                phase.progress.fraction >= 0 ? Math.round(phase.progress.fraction * 100) : undefined
+              }
             >
               <div
                 className="export-bar__fill"
@@ -281,9 +277,9 @@ export function AudioExportDialog() {
                 type="button"
                 className="btn"
                 onClick={() => {
-                  void audioExportService.deleteCachedExport(phase.take.id).then(() =>
-                    setPhase({ ...phase, deliveredHow: 'Cached export deleted.' }),
-                  );
+                  void audioExportService
+                    .deleteCachedExport(phase.take.id)
+                    .then(() => setPhase({ ...phase, deliveredHow: 'Cached export deleted.' }));
                 }}
               >
                 Delete cached export
@@ -308,7 +304,8 @@ export function AudioExportDialog() {
                   void shareOrDownloadFile(file).then((how) =>
                     setPhase({
                       ...phase,
-                      deliveredHow: how === 'shared' ? 'Shared.' : 'Downloaded (sharing unavailable).',
+                      deliveredHow:
+                        how === 'shared' ? 'Shared.' : 'Downloaded (sharing unavailable).',
                     }),
                   );
                 }}

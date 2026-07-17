@@ -12,7 +12,11 @@ export function SaveStatusBadge() {
     return (
       <span className="save-status save-status--error" role="alert">
         {message ?? 'Save failed'}{' '}
-        <button type="button" className="save-status__retry" onClick={() => persistenceService.retry()}>
+        <button
+          type="button"
+          className="save-status__retry"
+          onClick={() => persistenceService.retry()}
+        >
           Retry
         </button>
       </span>

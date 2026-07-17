@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTake } from '@/domain/noteEvents';
-import { normalizeTake, parseTakeJson, parseTakeJsonString, repairRawTake } from '@/domain/takeSchema';
+import {
+  normalizeTake,
+  parseTakeJson,
+  parseTakeJsonString,
+  repairRawTake,
+} from '@/domain/takeSchema';
 import { ImportValidationError } from '@/utils/errors';
 
 function specExampleTake(): Record<string, unknown> {
@@ -142,7 +147,9 @@ describe('parseTakeJsonString', () => {
 
 describe('repairRawTake', () => {
   it('leaves genuinely invalid values for the schema to reject', () => {
-    const { data } = repairRawTake({ notes: [{ midi: 200, startMs: 5, durationMs: 5, velocity: 2 }] });
+    const { data } = repairRawTake({
+      notes: [{ midi: 200, startMs: 5, durationMs: 5, velocity: 2 }],
+    });
     const note = (data.notes as Record<string, unknown>[])[0]!;
     expect(note.midi).toBe(200);
     expect(note.velocity).toBe(2);

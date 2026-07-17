@@ -30,7 +30,11 @@ export function quantizeGridMs(setting: QuantizationSetting, bpm: number): numbe
 }
 
 /** Snap a start time to the visual grid (identity when quantization is off). */
-export function quantizeStartMs(startMs: number, setting: QuantizationSetting, bpm: number): number {
+export function quantizeStartMs(
+  startMs: number,
+  setting: QuantizationSetting,
+  bpm: number,
+): number {
   const grid = quantizeGridMs(setting, bpm);
   if (grid === null) return startMs;
   return Math.round(startMs / grid) * grid;
