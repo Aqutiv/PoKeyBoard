@@ -41,6 +41,12 @@ function useUpdateAvailable(): boolean {
   );
 }
 
+// Standard preview note for the sound sliders: middle C, mezzo-forte, long
+// enough for the reverb tail to be audible after it releases.
+const PREVIEW_MIDI = 60;
+const PREVIEW_VELOCITY = 0.7;
+const PREVIEW_DURATION_MS = 600;
+
 export function SettingsPage() {
   const settings = useSettingsStore();
   const transportState = useTransportState();
@@ -128,6 +134,17 @@ export function SettingsPage() {
     void audioEngine.deleteDownloadedSamples().then(() => void refreshPackState());
   }, [refreshPackState]);
 
+  // Play a standard mid-note so the volume/reverb sliders preview their effect
+  // (routes through the master + reverb graph, so it reflects the live value).
+  const previewNote = useCallback(() => {
+    void audioEngine.unlockFromUserGesture();
+    audioEngine.scheduleNote(
+      { midi: PREVIEW_MIDI, velocity: PREVIEW_VELOCITY, durationMs: PREVIEW_DURATION_MS },
+      audioEngine.currentTime,
+      'settings-preview',
+    );
+  }, []);
+
   return (
     <section className="page settings" aria-label="Settings">
       <header className="page__header">
@@ -145,6 +162,8 @@ export function SettingsPage() {
             step={0.05}
             value={settings.masterVolume}
             onChange={(e) => settings.setMasterVolume(Number(e.target.value))}
+            onPointerDown={previewNote}
+            onPointerUp={previewNote}
           />
         </label>
         <label className="setting-row">
@@ -156,6 +175,8 @@ export function SettingsPage() {
             step={0.05}
             value={settings.reverbMix}
             onChange={(e) => settings.setReverbMix(Number(e.target.value))}
+            onPointerDown={previewNote}
+            onPointerUp={previewNote}
           />
         </label>
 
