@@ -1,0 +1,1052 @@
+You are a senior React Native, mobile audio, and music-notation engineer. Build a polished, production-quality iOS and Android application named “PoKeyBoard”.
+
+Do not merely provide a plan or sample snippets. Work directly in the repository, implement the app, run the available checks, and leave the project in a buildable state.
+
+If the repository contains an existing standalone HTML piano application, use it as a behavioral and visual reference only. Port its functionality into a native React Native application. Do not wrap the HTML app in a WebView.
+
+# 1. Product goal
+
+PoKeyBoard is a mobile-first piano performance, notation, and recording app.
+
+A user should be able to:
+
+1. Play a realistic-sounding piano using a multi-touch on-screen keyboard.
+2. See played notes appear immediately on a musical staff.
+3. Use a built-in metronome.
+4. Record a performance as editable, structured note-event data rather than microphone audio.
+5. Save multiple performances as persistent “takes”.
+6. Reopen, rename, duplicate, delete, import, and export takes.
+7. Play a take back while seeing:
+   - the score follow the playhead;
+   - the corresponding piano keys animate;
+   - the same piano sound used during live performance.
+8. Pause playback and scrub the score in either direction.
+9. Hear the notes crossed during score scrubbing, at a cadence that follows the user’s scrolling speed.
+10. See the corresponding keyboard keys animate during scrubbing.
+11. render a take into compressed, shareable audio;
+12. Open the native iOS or Android share sheet so the audio can be shared through WhatsApp, Messages, email, Files, Drive, and other installed apps.
+
+The app must work offline after installation. No account, backend, or cloud service is required for version 1.
+
+# 2. Important terminology
+
+A “take” is the structured performance data: notes, durations, velocities, pedal events, tempo settings, and metadata.
+
+“Recording” normally means capturing piano note events generated inside the app. It does not mean recording from the microphone.
+
+“Audio export” means rendering the structured take through the same piano engine and producing a compressed audio file.
+
+Do not request microphone permission. PoKeyBoard does not need the microphone for its core functionality or audio export.
+
+# 3. Required technology stack
+
+Use the latest mutually compatible stable releases and pin exact versions in the lockfile.
+
+Use:
+
+- React Native with Expo
+- TypeScript with strict mode
+- Expo Router
+- Expo prebuild / Continuous Native Generation
+- Custom Expo development builds, not Expo Go
+- react-native-audio-api for the real-time and offline audio graph
+- @shopify/react-native-skia for musical notation and other performance-sensitive drawing
+- react-native-gesture-handler
+- react-native-reanimated
+- expo-sqlite for persistent takes
+- expo-file-system for JSON and audio files
+- expo-document-picker for importing take JSON files
+- expo-sharing for native file sharing
+- expo-keep-awake while recording, playing, or exporting
+- zod or an equivalent runtime schema validator for imported JSON
+- a lightweight typed state-management solution such as Zustand
+
+Do not use a browser-only Web Audio implementation.
+
+Do not maintain two separate piano engines. Design the audio scheduling code so that both real-time playback and offline audio export use the same sample mapping, envelopes, sustain behavior, reverb settings, velocity mapping, and note scheduling logic.
+
+# 4. Repository and execution rules
+
+Before implementation:
+
+1. Inspect the repository and identify any existing piano logic, assets, branding, or data structures.
+2. Preserve useful algorithms where appropriate, but reorganize them into native mobile architecture.
+3. Briefly state the implementation plan and intended file structure.
+4. Then proceed with implementation without waiting for routine approval.
+
+During implementation:
+
+- Use actual working code, not pseudocode.
+- Do not leave TODOs in any core user flow.
+- Do not silently replace a difficult requirement with a mock.
+- Handle errors visibly and recoverably.
+- Run type checking, linting, and tests after meaningful changes.
+- Test native audio behavior in both iOS and Android builds where the environment permits.
+- Document any limitation that truly cannot be verified in the available environment.
+
+# 5. Application structure
+
+Create three primary areas:
+
+## Play
+
+The main instrument screen containing:
+
+- app/take title;
+- save status;
+- musical score;
+- playhead;
+- transport controls;
+- recording controls;
+- metronome controls;
+- piano keyboard;
+- sustain control;
+- share/export action.
+
+## Takes
+
+A persistent local library showing:
+
+- take title;
+- date last edited;
+- duration;
+- tempo;
+- note count;
+- optional small score preview.
+
+Actions:
+
+- Open
+- Rename
+- Duplicate
+- Share audio
+- Export JSON
+- Delete, with confirmation
+- Import JSON
+- Create new take
+
+Sort takes by most recently edited by default.
+
+## Settings
+
+Include:
+
+- piano volume;
+- reverb amount;
+- fixed or touch-position velocity;
+- fixed velocity value;
+- sustain behavior;
+- score quantization;
+- score zoom;
+- scrub audition on/off;
+- metronome volume;
+- count-in length;
+- appearance preference where practical;
+- reset settings.
+
+# 6. Mobile-first visual design
+
+Create a premium but approachable visual identity for PoKeyBoard.
+
+Recommended direction:
+
+- warm dark charcoal or walnut surfaces;
+- ivory white keys rather than pure white;
+- subtle key shadows and depth;
+- restrained amber or gold accent color;
+- clear red recording state;
+- large, thumb-friendly transport controls;
+- uncluttered typography;
+- high contrast without looking clinical.
+
+Requirements:
+
+- Support portrait and landscape layouts.
+- Respect safe areas, notches, and system navigation areas.
+- Use a minimum practical touch target of approximately 44–48 logical pixels.
+- Avoid a desktop toolbar compressed onto a phone.
+- Keep the keyboard large enough to play comfortably.
+- In portrait, prioritize score visibility and at least one playable octave.
+- In landscape, expand the keyboard and score.
+- Support phones and tablets.
+- Prevent layout jumps when controls appear or disappear.
+- Use subtle animations, but never delay audio in order to synchronize an animation.
+- All visual key presses must be driven from the same note-event state used by the audio system.
+
+# 7. Piano keyboard
+
+Implement a multi-touch piano keyboard with at least three logical octaves. A larger configurable range is welcome, but three octaves must be fully supported by the audio and notation engines.
+
+Suggested default range:
+
+- C3 through B5
+
+Requirements:
+
+- Correct white-key and black-key geometry.
+- Multi-touch chords.
+- Track each touch independently by touch identifier.
+- Note-on when a finger enters a key.
+- Note-off when that finger leaves or is released.
+- Support glissando by moving a held finger across keys.
+- Never leave stuck notes after:
+  - interrupted gestures;
+  - app backgrounding;
+  - incoming calls or audio interruptions;
+  - navigation;
+  - component unmounting;
+  - playback stop.
+- Black keys must receive hit testing before overlapping white keys.
+- Animate a key immediately on note-on.
+- Use octave/range shift controls on small screens rather than requiring accidental one-finger panning while playing.
+- Do not let a single playing finger unexpectedly scroll the keyboard.
+- During playback or score scrubbing, the keyboard may auto-pan to reveal active notes, but it must not auto-pan while the user is actively playing.
+- Add optional note labels such as C4.
+- Add a visible sustain control that can be latched on mobile.
+- Sustain must also be captured as timestamped pedal events in a recording.
+
+Velocity:
+
+- Mobile devices do not provide reliable piano-style key velocity.
+- Default to deriving velocity from the vertical position of the initial touch within a key:
+  - near the top: softer;
+  - near the bottom: stronger.
+- Apply a musically sensible nonlinear velocity curve.
+- Provide an accessibility setting for fixed velocity.
+- Clamp stored velocity to the range 0.0–1.0.
+
+# 8. Realistic piano audio
+
+The final app must be sample-based. Do not ship an oscillator-only piano as the final implementation.
+
+Use a legally redistributable, permissively licensed multi-sampled acoustic grand-piano sample bank.
+
+Asset requirements:
+
+- Include the sample source and license in THIRD_PARTY_NOTICES.md.
+- Do not scrape or redistribute unlicensed samples.
+- Store a sample-pack version identifier.
+- Include at least three useful velocity layers.
+- Use multiple root samples across the supported keyboard range.
+- Pitch-shift only within a small interval around each root sample.
+- Include release behavior and natural decay.
+- Release samples are desirable where the chosen sample bank supports them.
+- Add a small room or studio reverb using an impulse response or an equivalent efficient effect.
+- Let the user control reverb wet/dry mix.
+- Keep enough master headroom to avoid clipping.
+- Add a gentle limiter or soft-clipping stage if necessary.
+- Target at least 32 simultaneous voices; 48 is preferable.
+- Implement predictable voice stealing, prioritizing the oldest quiet/releasing voice.
+- Reuse decoded AudioBuffers instead of decoding a sample for every note.
+- Preload the visible keyboard range first, then complete the remainder.
+- Provide an obvious loading state before the instrument is ready.
+
+Audio architecture should expose operations resembling:
+
+- initialize()
+- preloadSamplePack()
+- noteOn(midi, velocity, source)
+- noteOff(midi, source)
+- setSustain(down)
+- allNotesOff()
+- setMasterVolume()
+- setReverbMix()
+- scheduleNote()
+- dispose()
+
+Use a stable audio-context clock for scheduling. Do not use React state updates or raw setTimeout calls as the source of audio timing truth.
+
+# 9. Live musical notation
+
+Use React Native Skia to render an interactive horizontal score.
+
+For version 1, implement a clear, musically correct grand staff rather than attempting a complete professional engraving engine.
+
+Required notation features:
+
+- Treble and bass staff.
+- Treble and bass clefs.
+- Bar lines and measure numbers.
+- Time signature.
+- Notes positioned correctly according to MIDI pitch.
+- Ledger lines.
+- Stems.
+- Basic beams or flags for eighth and sixteenth notes.
+- Whole, half, quarter, eighth, and sixteenth durations.
+- Dots where needed.
+- Accidentals for black-key notes.
+- Basic rests.
+- Chords when notes begin within the same quantization window.
+- Current playhead.
+- Current or most recently played note name.
+- Highlight notes during playback and scrubbing.
+
+Use C major as the default displayed key context. Display accidentals explicitly instead of attempting automatic key-signature inference in version 1.
+
+Split notes between staffs using a sensible middle-C boundary, while allowing ledger lines near the split.
+
+Rendering rules:
+
+- Preserve raw performance timing for playback.
+- Quantize only the visual representation unless the user explicitly applies destructive quantization.
+- Default visual quantization: nearest sixteenth note.
+- Allow visual quantization to be changed to:
+  - Off
+  - Eighth note
+  - Sixteenth note
+- Keep note-event audio timing unchanged when display quantization changes.
+- Render only visible or near-visible measures for large takes.
+- Handle at least 2,000 note events without making scrolling unusable.
+- Show an empty staff and a clear prompt when no take exists.
+
+When the user plays without recording:
+
+- Show a temporary “ghost” note on the staff.
+- Show its note name.
+- Do not permanently modify the current take.
+
+When recording:
+
+- Commit notes to the active take.
+- Show them on the score as soon as practical.
+- Extend the visible duration while a key remains held.
+
+# 10. Metronome
+
+Implement a built-in, sample-accurate or scheduled-ahead metronome using the audio-context clock.
+
+Features:
+
+- 40–240 BPM
+- BPM stepper
+- Editable numeric BPM
+- Tap tempo
+- Time signatures:
+  - 2/4
+  - 3/4
+  - 4/4
+  - 6/8
+- Accent the first beat of each measure.
+- Independent volume.
+- Start/stop toggle.
+- Visible beat indicators.
+- Count-in:
+  - Off
+  - 1 bar
+  - 2 bars
+- Store metronome and tempo settings in each take.
+- Continue metronome timing accurately while recording.
+- Do not rely on an unscheduled JavaScript interval for each click.
+- Exclude the metronome from shared audio by default.
+- Offer “Include metronome” in the audio-export dialog.
+
+# 11. Recording and transport
+
+Transport controls:
+
+- Return to beginning
+- Record
+- Play
+- Pause
+- Stop
+- Current time / total duration
+- Seek/scrub position
+- Optional loop toggle if it can be added without destabilizing core behavior
+
+Recording behavior:
+
+1. Pressing Record arms recording.
+2. Apply the configured count-in.
+3. Start the recording timeline at beat one after the count-in.
+4. Record note-on and note-off timing from the audio-context clock.
+5. Capture velocity.
+6. Capture sustain events.
+7. Stop finalizes all active notes safely.
+8. Autosave the take.
+9. Provide “Undo last recording pass”.
+10. Provide “Clear take” with confirmation.
+
+When recording into a non-empty take, provide a clear mode:
+
+- Overdub from current playhead
+- Replace from current playhead
+
+Default to overdub.
+
+Do not destroy existing notes without explicit confirmation.
+
+Playback behavior:
+
+- Schedule notes ahead using the audio-context clock.
+- Animate keys at the corresponding scheduled times.
+- Highlight score notes.
+- Move the playhead smoothly.
+- Auto-scroll the score while playing.
+- Pause must preserve the current position.
+- Resume must continue from that position.
+- Stop must release all voices and return to a predictable state.
+- Seeking while paused must update the score and keyboard state without starting normal playback.
+- Rapid play/pause/stop actions must not create duplicate schedulers.
+
+Use a transport state machine rather than scattered booleans. Example states:
+
+- idle
+- countIn
+- recording
+- playing
+- paused
+- scrubbing
+- exporting
+
+Invalid transitions should be prevented.
+
+# 12. Paused score scrubbing with audible preview
+
+This interaction is a defining feature and must be implemented carefully.
+
+When normal playback is paused or stopped:
+
+- The user can drag the score horizontally.
+- The playhead remains visually fixed while the score moves beneath it, or an equivalent direct-manipulation design may be used.
+- Convert score position into take time continuously.
+- As note onsets cross the playhead, audition those notes.
+- Animate the corresponding keyboard keys.
+- Forward dragging plays crossed notes in chronological order.
+- Backward dragging plays crossed notes in reverse chronological order.
+- Slow dragging produces slowly spaced note previews.
+- Fast dragging produces rapidly spaced note previews.
+- Inertial scrolling should continue auditioning notes while the score continues moving.
+- The audible preview should naturally follow actual crossing times rather than playing at one fixed rate.
+- Avoid replaying the same onset repeatedly due to tiny finger jitter.
+- Use a small hysteresis threshold.
+- Clamp preview-note duration to a short useful range so rapid scrubbing does not create an unbounded wall of sustained sound.
+- Fade preview voices cleanly when scrubbing stops.
+- Sustain from the original take does not need to be fully reconstructed during rapid scrubbing; prioritize intelligible note previews.
+- Disable normal transport scheduling during scrubbing.
+- Normal playback should resume from the final scrub position.
+- Add a setting to turn scrub audition off while preserving silent visual seeking.
+
+Create and unit-test a pure function similar to:
+
+getCrossedNoteOnsets(previousTimeMs, nextTimeMs, notes)
+
+It must:
+
+- return ascending events for forward movement;
+- return descending events for backward movement;
+- avoid duplicate boundary events;
+- handle chords;
+- handle large jumps efficiently.
+
+# 13. Canonical take format
+
+Use a versioned JSON format. All times should be integer milliseconds relative to the beginning of the take.
+
+Use a structure based on:
+
+{
+  "schemaVersion": 1,
+  "id": "uuid",
+  "title": "My Take",
+  "createdAt": "ISO-8601 timestamp",
+  "updatedAt": "ISO-8601 timestamp",
+  "durationMs": 12345,
+  "samplePackVersion": "grand-piano-v1",
+  "tempo": {
+    "bpm": 120,
+    "timeSignature": {
+      "numerator": 4,
+      "denominator": 4
+    },
+    "countInBars": 1
+  },
+  "instrument": {
+    "id": "grand-piano",
+    "masterVolume": 0.85,
+    "reverbMix": 0.18
+  },
+  "notes": [
+    {
+      "id": "uuid",
+      "midi": 60,
+      "startMs": 0,
+      "durationMs": 420,
+      "velocity": 0.78
+    }
+  ],
+  "pedalEvents": [
+    {
+      "atMs": 1000,
+      "down": true
+    },
+    {
+      "atMs": 1800,
+      "down": false
+    }
+  ],
+  "display": {
+    "quantization": "1/16",
+    "zoom": 1,
+    "playheadMs": 0
+  }
+}
+
+Rules:
+
+- MIDI note is the canonical pitch representation.
+- Derive note names rather than trusting imported note-name strings.
+- Sort notes deterministically by startMs, MIDI pitch, and id.
+- Reject NaN, negative durations, invalid MIDI values, and velocities outside 0–1.
+- Repair minor recoverable import issues where safe.
+- Display a useful error for invalid files.
+- Preserve unknown forward-compatible metadata where practical.
+- Add migrations when the schema changes.
+- Imported files with colliding IDs should receive a new local ID unless they are explicitly replacing the same take.
+
+# 14. Persistent take library
+
+Use expo-sqlite.
+
+A practical table may contain:
+
+takes:
+- id TEXT PRIMARY KEY
+- title TEXT NOT NULL
+- created_at TEXT NOT NULL
+- updated_at TEXT NOT NULL
+- duration_ms INTEGER NOT NULL
+- bpm REAL NOT NULL
+- note_count INTEGER NOT NULL
+- data_json TEXT NOT NULL
+- audio_export_uri TEXT NULL
+- audio_export_hash TEXT NULL
+- is_draft INTEGER NOT NULL DEFAULT 0
+
+Also maintain a metadata/migrations table.
+
+Persistence requirements:
+
+- Database migrations must be idempotent.
+- Use transactions for take writes.
+- Autosave active changes with a short debounce.
+- Force an immediate save when:
+  - recording stops;
+  - the app backgrounds;
+  - a take is closed;
+  - the user starts audio export.
+- Restore the last open take and playhead after an ordinary restart.
+- Keep a recoverable draft when the user has not named or explicitly saved a new take.
+- Never lose a completed recording merely because the user navigates away.
+- Clean references to missing cached audio files.
+- Invalidate an audio-export cache whenever take data or export settings change.
+
+# 15. JSON open, save, import, and export
+
+Implement:
+
+- Import take JSON through the system document picker.
+- Export a take as a human-readable JSON file.
+- Suggested extension:
+  - .pokeyboard.json
+  - ordinary .json should also be accepted.
+- Use runtime schema validation.
+- Show a preview before completing import:
+  - title;
+  - duration;
+  - note count;
+  - BPM.
+- Provide a clear conflict strategy for duplicate IDs.
+- Allow JSON export through the system share sheet.
+- Use safe, sanitized file names.
+- Include schemaVersion in every exported file.
+
+# 16. Compressed shareable audio
+
+A take must be exportable as a compressed audio file without using the microphone.
+
+Primary output:
+
+- M4A container
+- AAC-LC audio
+- Stereo
+- 44.1 kHz where supported
+- Approximately 160 kbps for music
+- MIME type: audio/mp4
+- File extension: .m4a
+
+Add an export dialog containing:
+
+- Take title
+- Estimated duration
+- Quality:
+  - Shareable: approximately 128 kbps
+  - High: approximately 192 kbps
+- Include metronome: off by default
+- Reverb: use take setting
+- Render and Share
+- Cancel
+
+Export pipeline:
+
+1. Snapshot and validate the current take.
+2. Compute its duration, including note releases and a reverb tail.
+3. Create an OfflineAudioContext.
+4. Build the same piano graph used by live playback.
+5. Load the same sample buffers or equivalent offline buffers.
+6. Schedule all notes, envelopes, sustain changes, and optional metronome events.
+7. Render to an AudioBuffer.
+8. Prevent clipping and leave sensible headroom.
+9. Convert the rendered PCM to a temporary WAV or feed it directly to a native encoder.
+10. Encode it to AAC-LC in an M4A container.
+11. Write the final file to the app cache.
+12. Open the iOS/Android system share sheet.
+13. Clean temporary intermediate files.
+14. Keep the final cached export only while its take hash remains valid.
+
+The live and offline sound must match closely.
+
+Do not:
+
+- record sound through the device microphone;
+- use speaker-to-microphone loopback;
+- pretend a WAV file is compressed by renaming it;
+- use a fake .m4a extension;
+- block the interface without feedback during rendering.
+
+Show:
+
+- export progress;
+- current stage, such as “Rendering piano” or “Compressing audio”;
+- cancellation where technically safe;
+- actionable errors;
+- success only after a valid playable output file exists.
+
+Native encoding:
+
+First inspect whether the installed audio stack exposes a supported offline-buffer-to-file or graph-to-file encoding route.
+
+If it does not, implement a small local Expo native module for encoding:
+
+- iOS: use AVFoundation APIs to encode PCM or a temporary WAV into AAC-LC/M4A.
+- Android: use platform MediaCodec and MediaMuxer to encode AAC into an M4A/MP4 container.
+- Expose a small typed TypeScript API.
+- Keep this module local to the repository.
+- Include native error propagation.
+- Avoid introducing FFmpeg solely for this feature unless there is a clearly documented technical reason and its binary size and licensing implications are documented.
+
+Suggested module API:
+
+encodeWavToM4A({
+  inputUri,
+  outputUri,
+  bitrate,
+  sampleRate,
+  channels
+}): Promise<{
+  uri: string;
+  durationMs: number;
+  sizeBytes: number;
+}>
+
+Validate the exported file by checking:
+
+- it exists;
+- it is not empty;
+- duration is plausible;
+- extension and container are correct;
+- it can be decoded or played back by the app.
+
+Use a filename such as:
+
+PoKeyBoard - My Take.m4a
+
+Use the system share sheet rather than a WhatsApp-specific SDK. Installed compatible apps should appear as normal share targets.
+
+Provide a temporary WAV fallback only as a clearly labeled development/error fallback. Successful compressed M4A export on both iOS and Android is part of the final definition of done.
+
+# 17. Audio-export caching
+
+Compute a deterministic hash from:
+
+- canonical take JSON;
+- piano sample-pack version;
+- instrument settings;
+- metronome inclusion;
+- export quality;
+- exporter version.
+
+Store:
+
+- audio_export_uri
+- audio_export_hash
+
+If the hash still matches and the file exists, offer immediate sharing without rerendering.
+
+When a take changes:
+
+- invalidate its cached export;
+- safely delete stale files later;
+- do not block the user’s recording interaction on cache cleanup.
+
+# 18. App lifecycle and audio interruptions
+
+Handle:
+
+- app background and foreground;
+- audio focus loss;
+- phone calls;
+- Siri/assistant interruptions;
+- headphones or Bluetooth disconnection;
+- route changes;
+- screen lock where relevant.
+
+Default version-1 behavior:
+
+- Autosave immediately.
+- Pause recording or playback safely.
+- Release active notes.
+- Preserve the playhead.
+- Explain what happened when the user returns if an active recording was interrupted.
+
+Background playback is not required for version 1.
+
+Do not add microphone permissions or foreground microphone services.
+
+# 19. Accessibility
+
+Implement:
+
+- VoiceOver and TalkBack labels for all controls.
+- State descriptions such as:
+  - “Record, inactive”
+  - “Metronome, on, 120 beats per minute”
+  - “C4 key, pressed”
+- Logical focus order.
+- Dynamic text sizing where it will not break the keyboard.
+- High-contrast active and selected states.
+- Do not rely only on color for recording or playback status.
+- Reduced-motion support for decorative animation.
+- Fixed-velocity option for users who cannot reliably control touch position.
+- Large enough controls for one-handed operation.
+
+# 20. Suggested architecture
+
+Organize the project by domain rather than placing everything in one screen.
+
+A reasonable structure:
+
+app/
+  _layout.tsx
+  index.tsx
+  play.tsx
+  takes/
+    index.tsx
+    [id].tsx
+  settings.tsx
+
+src/
+  audio/
+    PianoEngine.ts
+    PianoGraphFactory.ts
+    SampleBank.ts
+    VoiceManager.ts
+    TransportScheduler.ts
+    MetronomeEngine.ts
+    OfflineTakeRenderer.ts
+    AudioExportService.ts
+    audioTypes.ts
+  components/
+    TransportControls.tsx
+    MetronomeControls.tsx
+    ExportDialog.tsx
+    LoadingOverlay.tsx
+  features/
+    keyboard/
+      PianoKeyboard.tsx
+      PianoKey.tsx
+      keyboardGeometry.ts
+      touchNoteTracker.ts
+    notation/
+      MusicScore.tsx
+      notationLayout.ts
+      notationTypes.ts
+      quantization.ts
+      staffMapping.ts
+      scrubController.ts
+    takes/
+      TakeList.tsx
+      TakeListItem.tsx
+      TakeEditorHeader.tsx
+  data/
+    database.ts
+    migrations.ts
+    takeRepository.ts
+    settingsRepository.ts
+  domain/
+    takeSchema.ts
+    takeTypes.ts
+    takeMigrations.ts
+    takeHash.ts
+  state/
+    useTransportStore.ts
+    useTakeStore.ts
+    useSettingsStore.ts
+  utils/
+    midi.ts
+    timing.ts
+    filenames.ts
+    errors.ts
+
+modules/
+  audio-export/
+    Native audio encoder module, if required
+
+assets/
+  piano/
+  impulses/
+  metronome/
+  fonts/
+
+tests/
+  Unit and integration tests
+
+Keep audio-engine objects outside React render cycles. React components should invoke stable services rather than reconstructing the audio graph on each render.
+
+# 21. Testing
+
+Use Jest and React Native Testing Library or the current recommended Expo equivalents.
+
+At minimum, add unit tests for:
+
+- MIDI-to-note-name conversion.
+- MIDI-to-staff-position mapping.
+- Quantization.
+- Chord grouping.
+- Measure boundaries.
+- Take duration calculation.
+- Take schema validation.
+- JSON migration.
+- Invalid imported data.
+- Database migration.
+- Autosave behavior.
+- Transport state transitions.
+- Playback scheduling.
+- Sustain-event handling.
+- getCrossedNoteOnsets in both directions.
+- Duplicate suppression during scrub jitter.
+- Audio-export hash invalidation.
+- File-name sanitization.
+
+Add integration or device-level checks for these user journeys:
+
+## Journey A: recording
+
+1. Create a new take.
+2. Turn on a one-bar count-in.
+3. Record a C-major scale.
+4. Stop.
+5. Confirm notes appear on the staff.
+6. Confirm duration and pitch data are stored.
+7. Close and reopen the app.
+8. Reopen the take.
+9. Confirm it remains intact.
+
+## Journey B: playback
+
+1. Open the saved scale.
+2. Play it.
+3. Confirm the playhead advances.
+4. Confirm score notes highlight.
+5. Confirm matching keys animate.
+6. Pause and resume.
+7. Confirm playback resumes at the correct point.
+
+## Journey C: scrubbing
+
+1. Pause playback.
+2. Drag slowly forward.
+3. Confirm crossed notes sound slowly.
+4. Drag quickly forward.
+5. Confirm notes sound more rapidly.
+6. Drag backward.
+7. Confirm reverse chronological audition.
+8. Confirm keys animate.
+9. Release the gesture.
+10. Confirm preview voices fade and no keys remain stuck.
+
+## Journey D: persistence
+
+1. Save several takes.
+2. Rename one.
+3. Duplicate one.
+4. Delete one with confirmation.
+5. Export JSON.
+6. Import the JSON as a new take.
+7. Confirm all expected metadata and notes remain.
+
+## Journey E: audio sharing
+
+1. Open a non-empty take.
+2. Render shareable audio.
+3. Confirm an actual M4A file is created.
+4. Confirm its duration is close to the take duration plus the expected release tail.
+5. Confirm it can be played on the device.
+6. Confirm the native share sheet opens.
+7. Confirm the same unchanged take reuses its cached audio.
+8. Edit the take.
+9. Confirm the cache is invalidated and audio is rerendered.
+
+# 22. Performance requirements
+
+Target:
+
+- Perceived touch-to-sound latency below approximately 50 ms on representative physical devices.
+- Smooth 60 fps keyboard interaction and score scrolling where hardware permits.
+- No React rerender required for each individual audio sample or scheduling tick.
+- At least 32-note polyphony.
+- No stuck notes after repeated rapid gestures.
+- No timing drift during a several-minute take.
+- No audible metronome drift.
+- Efficient score rendering for at least 2,000 note events.
+- No full database rewrite for a minor settings change.
+- No duplicate audio schedulers after rapid transport actions.
+- Export should render faster than real time where the audio API permits.
+- Show progress rather than freezing during large exports.
+- Avoid unnecessary copies of large PCM buffers.
+- For longer takes, use chunking or native file operations if needed to avoid memory exhaustion.
+
+# 23. Privacy and permissions
+
+The app is local-first.
+
+Do not collect analytics by default.
+
+Do not require:
+
+- login;
+- network access;
+- contacts;
+- photos;
+- location;
+- microphone.
+
+Only request a platform permission when a user action genuinely requires it.
+
+Sharing should use a user-initiated native share sheet.
+
+Document all platform permissions in the README and app configuration.
+
+# 24. Out of scope for version 1
+
+Do not expand scope into these features unless all required features are complete:
+
+- cloud accounts or synchronization;
+- social profiles;
+- collaborative editing;
+- microphone recording;
+- external MIDI keyboard support;
+- automatic song recognition;
+- AI composition;
+- a full notation editor;
+- MusicXML import/export;
+- paid subscriptions;
+- background playback.
+
+Design interfaces cleanly enough that some of these could be added later.
+
+# 25. Documentation and deliverables
+
+Deliver:
+
+1. A complete buildable React Native project.
+2. iOS and Android configuration.
+3. A legally usable bundled piano sample pack and license notices.
+4. Database schema and migrations.
+5. Versioned take JSON schema.
+6. Native M4A encoder module if necessary.
+7. Unit tests.
+8. A useful README containing:
+   - prerequisites;
+   - installation;
+   - development-build commands;
+   - iOS run instructions;
+   - Android run instructions;
+   - test commands;
+   - lint and type-check commands;
+   - audio asset licensing;
+   - architectural overview;
+   - take JSON format;
+   - audio-export pipeline;
+   - known verified limitations.
+9. THIRD_PARTY_NOTICES.md.
+10. An app icon and launch screen using the exact name “PoKeyBoard”.
+11. A short architecture document explaining:
+    - audio clock ownership;
+    - live/offline engine reuse;
+    - transport state machine;
+    - persistence;
+    - scrubbing;
+    - native compression;
+    - cache invalidation.
+
+# 26. Definition of done
+
+The project is not complete until all of the following are true:
+
+- It builds for iOS and Android using development/native builds.
+- The app is named PoKeyBoard everywhere user-visible.
+- The keyboard supports multi-touch chords.
+- It uses sample-based piano audio.
+- The piano works without Internet access.
+- Notes appear correctly on the musical staff.
+- The metronome remains synchronized.
+- A performance can be recorded as structured events.
+- Takes survive a full app restart.
+- Takes can be opened, renamed, duplicated, and deleted.
+- Take JSON can be imported and exported.
+- Playback synchronizes sound, score, playhead, and key animation.
+- Paused score scrubbing sounds notes in both directions.
+- Scrub-audition cadence follows scrolling speed.
+- No keys or voices remain stuck.
+- A take can be rendered into a real compressed AAC/M4A file.
+- The exported audio is playable.
+- The native share sheet opens with that file.
+- Audio export does not require microphone permission.
+- Core tests pass.
+- Type checking passes.
+- Linting passes.
+- The README contains working commands.
+- There are no placeholder implementations in the required flows.
+
+# 27. Recommended implementation order
+
+Implement in vertical slices:
+
+1. Project scaffolding, navigation, theme, and strict TypeScript.
+2. Real-time sample-based piano engine.
+3. Multi-touch keyboard and sustain.
+4. Transport state machine.
+5. Event recording.
+6. Basic grand-staff notation.
+7. Metronome and count-in.
+8. Accurate playback synchronization.
+9. SQLite persistence and takes library.
+10. JSON import/export.
+11. Paused audible score scrubbing.
+12. Offline rendering.
+13. Native AAC/M4A encoding.
+14. Native share sheet.
+15. Lifecycle/error handling.
+16. Accessibility.
+17. Tests, performance review, and documentation.
+
+At the end, report:
+
+- what was implemented;
+- important architectural decisions;
+- commands that were run;
+- test/type-check/lint results;
+- native builds that were verified;
+- any narrowly defined remaining issue.
+
+Begin by inspecting the repository, then implement PoKeyBoard.
