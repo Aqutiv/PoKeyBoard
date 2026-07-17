@@ -1,5 +1,7 @@
+import { useSyncExternalStore } from 'react';
 import { usePlaybackActiveMidis } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
+import { lifecycleService } from '@/app/lifecycle';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
@@ -8,8 +10,12 @@ import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { SaveStatusBadge } from './SaveStatusBadge';
 
-/** Play view — the score renderer lands in the notation slice. */
+const subscribeLifecycle = (onStoreChange: () => void) => lifecycleService.subscribe(onStoreChange);
+const getLifecycle = () => lifecycleService.getSnapshot();
+
+/** The main instrument view: transport, score, metronome, keyboard. */
 export function PlayPage() {
+  const interruption = useSyncExternalStore(subscribeLifecycle, getLifecycle);
   const status = useEngineStatus();
   const progress = useSampleLoadProgress();
   const percent =
@@ -38,6 +44,18 @@ export function PlayPage() {
             </button>
           </span>
         </header>
+        {interruption.message ? (
+          <p className="play-interruption" role="alert">
+            {interruption.message}{' '}
+            <button
+              type="button"
+              className="play-interruption__dismiss"
+              onClick={() => lifecycleService.dismissMessage()}
+            >
+              Dismiss
+            </button>
+          </p>
+        ) : null}
         <TransportControls />
         <div className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (

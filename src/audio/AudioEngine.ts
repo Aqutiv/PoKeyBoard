@@ -6,6 +6,7 @@ import type {
   SampleLoadProgress,
   ScheduledNoteEvent,
 } from './audioTypes';
+import { ensurePlaybackSession } from './iosAudioSession';
 import { createPianoGraph, type PianoGraph } from './PianoGraphFactory';
 import { SampleBank } from './SampleBank';
 import { VoiceManager } from './VoiceManager';
@@ -86,6 +87,8 @@ export class AudioEngine {
   async unlockFromUserGesture(): Promise<void> {
     this.initialize();
     if (!this.context) return;
+    // Keep Web Audio audible with the iPhone silent switch engaged.
+    ensurePlaybackSession();
     if (this.context.state !== 'running') {
       try {
         await this.context.resume();

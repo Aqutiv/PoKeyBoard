@@ -94,6 +94,22 @@ export function AudioExportDialog() {
     closeExport();
   }, [phase, closeExport]);
 
+  // Escape closes (except mid-render, where Cancel is the way out).
+  useEffect(() => {
+    if (!requestedTakeId) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') close();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [requestedTakeId, close]);
+
+  // Focus the primary action when the options phase appears.
+  const primaryRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    if (phase?.kind === 'options') primaryRef.current?.focus();
+  }, [phase?.kind]);
+
   const startRender = useCallback(
     (take: Take) => {
       if (!transportController.sendExportEvent('EXPORT_START')) {
@@ -197,6 +213,7 @@ export function AudioExportDialog() {
                 Cancel
               </button>
               <button
+                ref={primaryRef}
                 type="button"
                 className="btn btn--primary"
                 onClick={() => startRender(phase.take)}

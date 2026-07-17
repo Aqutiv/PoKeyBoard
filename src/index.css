@@ -239,6 +239,23 @@ button {
   text-overflow: ellipsis;
 }
 
+.play-interruption {
+  margin: 0;
+  padding: 8px 12px;
+  background: rgba(229, 72, 77, 0.12);
+  border: 1px solid rgba(229, 72, 77, 0.45);
+  border-radius: var(--radius-m);
+  color: var(--text);
+  font-size: 13px;
+}
+
+.play-interruption__dismiss {
+  text-decoration: underline;
+  color: var(--text-dim);
+  font-size: 13px;
+  margin-left: 6px;
+}
+
 .play-header__side {
   display: flex;
   align-items: center;
