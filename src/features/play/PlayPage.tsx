@@ -2,6 +2,8 @@ import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngi
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { TransportControls } from '@/features/transport/TransportControls';
+import { useTakeStore } from '@/state/useTakeStore';
+import { SaveStatusBadge } from './SaveStatusBadge';
 
 /** Play view — the score renderer lands in the notation slice. */
 export function PlayPage() {
@@ -10,9 +12,15 @@ export function PlayPage() {
   const percent =
     progress.totalFiles > 0 ? Math.round((progress.loadedFiles / progress.totalFiles) * 100) : 0;
 
+  const title = useTakeStore((s) => s.take.title);
+
   return (
     <section className="page page--play" aria-label="Play">
       <div className="play-layout">
+        <header className="play-header">
+          <h1 className="play-header__title">{title}</h1>
+          <SaveStatusBadge />
+        </header>
         <TransportControls />
         <div className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (

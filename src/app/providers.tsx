@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
+import { persistenceService } from '@/data/persistence';
 import { RouterProvider } from './router';
 
 /**
@@ -10,6 +11,7 @@ import { RouterProvider } from './router';
 export function AppProviders({ children }: { children: ReactNode }) {
   useEffect(() => {
     audioEngine.initialize();
+    void persistenceService.init();
 
     const unlock = () => {
       void audioEngine.unlockFromUserGesture();

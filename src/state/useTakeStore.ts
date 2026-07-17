@@ -8,6 +8,12 @@ export interface TakeStoreState {
   lastPassNoteIds: string[];
   /** Unsaved changes exist (autosave layer watches this). */
   dirty: boolean;
+  /**
+   * Bumps only when the audible content changes (notes, pedals, tempo,
+   * instrument) — the autosave layer invalidates cached export audio when
+   * this moves. Title and playhead changes do not bump it.
+   */
+  contentRevision: number;
 
   setTake(take: Take, options?: { dirty?: boolean }): void;
   updateTake(mutate: (take: Take) => Take): void;
@@ -32,11 +38,16 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
   take: createEmptyTake(),
   lastPassNoteIds: [],
   dirty: false,
+  contentRevision: 0,
 
   setTake: (take, options) => set({ take, lastPassNoteIds: [], dirty: options?.dirty ?? false }),
 
   updateTake: (mutate) =>
-    set((state) => ({ take: touched(mutate(state.take)), dirty: true })),
+    set((state) => ({
+      take: touched(mutate(state.take)),
+      dirty: true,
+      contentRevision: state.contentRevision + 1,
+    })),
 
   appendRecordedNotes: (notes, pedals, passNoteIds) =>
     set((state) => {
@@ -53,6 +64,7 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
         }),
         lastPassNoteIds: passNoteIds,
         dirty: true,
+        contentRevision: state.contentRevision + 1,
       };
     }),
 
@@ -64,6 +76,7 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
         take: touched({ ...state.take, notes, durationMs: computeTakeDurationMs(notes) }),
         lastPassNoteIds: [],
         dirty: true,
+        contentRevision: state.contentRevision + 1,
       };
     }),
 
@@ -72,16 +85,23 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
       take: touched({ ...state.take, notes: [], pedalEvents: [], durationMs: 0 }),
       lastPassNoteIds: [],
       dirty: true,
+      contentRevision: state.contentRevision + 1,
     })),
 
   setTitle: (title) => set((state) => ({ take: touched({ ...state.take, title }), dirty: true })),
 
-  setTempo: (tempo) => set((state) => ({ take: touched({ ...state.take, tempo }), dirty: true })),
+  setTempo: (tempo) =>
+    set((state) => ({
+      take: touched({ ...state.take, tempo }),
+      dirty: true,
+      contentRevision: state.contentRevision + 1,
+    })),
 
   setPlayheadMs: (playheadMs) =>
     set((state) => ({
       take: { ...state.take, display: { ...state.take.display, playheadMs } },
-      dirty: true,
+      // An empty take's playhead isn't worth creating a draft row for.
+      dirty: state.dirty || state.take.notes.length > 0,
     })),
 
   markSaved: () => set({ dirty: false }),
