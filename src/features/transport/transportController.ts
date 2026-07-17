@@ -248,6 +248,15 @@ export class TransportController {
 
     this.send('RECORD');
 
+    // Overdub: sound the already-recorded take as backing so the player can
+    // play in time with it. Snapshotting here fixes the backing to the
+    // pre-existing notes; notes recorded during this pass are heard live and
+    // are never in the backing. In replace mode the kept notes are all before
+    // the playhead, so nothing schedules forward — a natural no-op.
+    const current = useTakeStore.getState().take;
+    const backing = sortNotes(applySustainToNotes(current.notes, current.pedalEvents));
+    if (backing.length > 0) this.beginPlaybackScheduler(backing, startPlayheadMs);
+
     const begin = () => {
       if (this.state !== 'countIn') return; // stopped during count-in
       if (!this.metronomeOn) this.metronome.stop();
@@ -337,24 +346,37 @@ export class TransportController {
     void audioEngine.unlockFromUserGesture();
 
     const take = useTakeStore.getState().take;
-    this.playNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
+    const notes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
 
     const fromMs = this.pausedPlayheadMs;
-    this.playCursor = this.playNotes.findIndex((note) => note.startMs >= fromMs);
-    if (this.playCursor === -1) this.playCursor = this.playNotes.length;
-
     this.clock.start(fromMs, audioEngine.currentTime + START_SLACK_S);
     if (this.metronomeOn) {
       this.configureMetronome();
       this.metronome.start(this.clock.audioTimeForTakeMs(0));
     }
     this.send('PLAY');
+    this.beginPlaybackScheduler(notes, fromMs);
+  }
+
+  /**
+   * Start (or restart) the look-ahead scheduler that plays `notes` from
+   * `fromMs`. Used by playback and by overdub recording (to sound the
+   * already-recorded take as backing). The clock must already be started.
+   */
+  private beginPlaybackScheduler(notes: NoteEvent[], fromMs: number): void {
+    this.clearScheduler();
+    this.playNotes = notes;
+    this.playCursor = notes.findIndex((note) => note.startMs >= fromMs);
+    if (this.playCursor === -1) this.playCursor = notes.length;
     this.scheduleTick();
     this.schedulerTimer = setInterval(() => this.scheduleTick(), SCHEDULER_INTERVAL_MS);
   }
 
   private scheduleTick(): void {
-    if (this.state !== 'playing') return;
+    // Runs during playback and while recording/counting-in (overdub backing).
+    if (this.state !== 'playing' && this.state !== 'recording' && this.state !== 'countIn') {
+      return;
+    }
     const horizonMs = this.clock.currentTakeMs() + SCHEDULE_AHEAD_MS;
     while (this.playCursor < this.playNotes.length) {
       const note = this.playNotes[this.playCursor] as NoteEvent;
@@ -366,9 +388,13 @@ export class TransportController {
       );
       this.playCursor += 1;
     }
-    const durationMs = useTakeStore.getState().take.durationMs;
-    if (this.playCursor >= this.playNotes.length && this.clock.currentTakeMs() >= durationMs) {
-      this.pauseInternal(durationMs);
+    // Auto-pause at the end applies to normal playback only; an overdub pass
+    // keeps recording past the end of the existing take.
+    if (this.state === 'playing') {
+      const durationMs = useTakeStore.getState().take.durationMs;
+      if (this.playCursor >= this.playNotes.length && this.clock.currentTakeMs() >= durationMs) {
+        this.pauseInternal(durationMs);
+      }
     }
   }
 
@@ -395,7 +421,9 @@ export class TransportController {
           clearTimeout(this.countInTimer);
           this.countInTimer = null;
         }
+        this.clearScheduler();
         this.metronome.stop();
+        audioEngine.allNotesOff();
         this.clock.pause();
         this.pausedPlayheadMs = this.recordStartMs;
         this.send('STOP');
@@ -420,6 +448,7 @@ export class TransportController {
 
   private finalizeRecording(): void {
     const endMs = Math.max(this.recordStartMs, Math.round(this.clock.currentTakeMs()));
+    this.clearScheduler();
     this.inputUnsub?.();
     this.inputUnsub = null;
     for (const open of this.openNotes.values()) {
@@ -431,6 +460,8 @@ export class TransportController {
       this.recordedPedals = [];
     }
     this.metronome.stop();
+    // Stop backing-playback voices (and any still-ringing live notes).
+    audioEngine.allNotesOff();
     this.clock.pause();
     this.pausedPlayheadMs = endMs;
     useTakeStore.getState().setPlayheadMs(endMs);

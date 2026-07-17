@@ -21,7 +21,9 @@ function computeSnapshot(): ReadonlySet<number> {
     cache = scrubActive;
     return cache;
   }
-  if (state !== 'playing') {
+  // Playback lights notes under the playhead; recording does the same so an
+  // overdub pass shows its backing on the keyboard (matching the score).
+  if (state !== 'playing' && state !== 'recording') {
     if (cache !== EMPTY && cache.size > 0) cache = EMPTY;
     return cache;
   }
@@ -43,7 +45,7 @@ function computeSnapshot(): ReadonlySet<number> {
  */
 export function usePlaybackActiveMidis(): ReadonlySet<number> {
   const state = useTransportState();
-  const polling = state === 'playing' || state === 'scrubbing';
+  const polling = state === 'playing' || state === 'scrubbing' || state === 'recording';
 
   const subscribe = useCallback(
     (onStoreChange: () => void) => {
