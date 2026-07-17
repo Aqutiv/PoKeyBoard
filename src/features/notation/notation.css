@@ -6,7 +6,10 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   overflow: hidden;
-  touch-action: pan-x;
+  /* The score is a scrub gesture surface; it owns its horizontal drags. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .score__canvas {

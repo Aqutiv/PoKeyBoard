@@ -1,3 +1,4 @@
+import { usePlaybackActiveMidis } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
@@ -14,6 +15,7 @@ export function PlayPage() {
     progress.totalFiles > 0 ? Math.round((progress.loadedFiles / progress.totalFiles) * 100) : 0;
 
   const title = useTakeStore((s) => s.take.title);
+  const playbackActiveMidis = usePlaybackActiveMidis();
 
   return (
     <section className="page page--play" aria-label="Play">
@@ -43,7 +45,7 @@ export function PlayPage() {
         </div>
         <MetronomeControls />
         <div className="play-layout__keyboard">
-          <PianoKeyboard />
+          <PianoKeyboard extraActiveMidis={playbackActiveMidis} />
         </div>
       </div>
     </section>

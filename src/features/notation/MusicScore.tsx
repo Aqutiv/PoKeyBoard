@@ -7,6 +7,7 @@ import { useTakeStore } from '@/state/useTakeStore';
 import { midiToNoteName } from '@/utils/midi';
 import { layoutScore, type ScoreLayout } from './notationLayout';
 import { drawScore, GUTTER, SCORE_MIN_HEIGHT, type ScoreView } from './scoreRenderer';
+import { scrubController } from './scrubController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import './notation.css';
 
@@ -14,6 +15,10 @@ const BASE_PX_PER_MS = 0.09;
 const GHOST_LIFE_MS = 1300;
 /** Playhead rests at this fraction of the scrolling region while moving. */
 const PLAYHEAD_ANCHOR = 0.42;
+/** Flick releases faster than this (take-ms per real-ms) coast with inertia. */
+const INERTIA_MIN_VELOCITY = 0.15;
+const INERTIA_STOP_VELOCITY = 0.02;
+const INERTIA_DECAY_PER_FRAME = 0.94;
 
 interface LiveGhost {
   midi: number;
@@ -23,6 +28,20 @@ interface LiveGhost {
 interface LayoutBox {
   layout: ScoreLayout;
   version: number;
+}
+
+interface DragState {
+  pointerId: number;
+  startClientX: number;
+  playhead0: number;
+  scroll0: number;
+  samples: Array<{ t: number; x: number }>;
+}
+
+interface InertiaState {
+  /** Take-ms advanced per real millisecond (signed). */
+  velocity: number;
+  lastT: number;
 }
 
 export function MusicScore() {
@@ -56,6 +75,13 @@ export function MusicScore() {
   const ghostsRef = useRef<LiveGhost[]>([]);
   const scrollMsRef = useRef(0);
   const lastSignatureRef = useRef('');
+  const durationRef = useRef(0);
+  const dragRef = useRef<DragState | null>(null);
+  const inertiaRef = useRef<InertiaState | null>(null);
+  const durationMs = useTakeStore((s) => s.take.durationMs);
+  useEffect(() => {
+    durationRef.current = durationMs;
+  }, [durationMs]);
 
   useEffect(() => {
     layoutBoxRef.current = { layout, version: layoutBoxRef.current.version + 1 };
@@ -112,6 +138,26 @@ export function MusicScore() {
       const ctx = canvas?.getContext('2d');
       const { width, height, dpr } = sizeRef.current;
       if (!canvas || !ctx || width <= 0) return;
+
+      // Inertial scrubbing: keep coasting and auditioning between frames.
+      const inertia = inertiaRef.current;
+      if (inertia && scrubController.isActive) {
+        const nowI = performance.now();
+        const dt = Math.min(64, nowI - inertia.lastT);
+        inertia.lastT = nowI;
+        const current = transportController.getPlayheadMs();
+        const next = current + inertia.velocity * dt;
+        scrubController.update(next);
+        scrollMsRef.current = Math.max(0, scrollMsRef.current + inertia.velocity * dt);
+        inertia.velocity *= Math.pow(INERTIA_DECAY_PER_FRAME, dt / 16.7);
+        const hitEdge = next <= 0 || next >= durationRef.current;
+        if (Math.abs(inertia.velocity) < INERTIA_STOP_VELOCITY || hitEdge) {
+          inertiaRef.current = null;
+          scrubController.end();
+        }
+      } else if (inertia) {
+        inertiaRef.current = null;
+      }
 
       const currentState = stateRef.current;
       const playheadMs = transportController.getPlayheadMs();
@@ -170,6 +216,60 @@ export function MusicScore() {
     return () => cancelAnimationFrame(raf);
   }, []);
 
+  const onScorePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const current = transportController.getState();
+    if (current !== 'idle' && current !== 'paused' && current !== 'scrubbing') return;
+    inertiaRef.current = null;
+    if (!scrubController.isActive && !scrubController.begin()) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startClientX: event.clientX,
+      playhead0: transportController.getPlayheadMs(),
+      scroll0: scrollMsRef.current,
+      samples: [{ t: performance.now(), x: event.clientX }],
+    };
+  };
+
+  const onScorePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const pxPerMs = BASE_PX_PER_MS * zoomRef.current;
+    const dx = event.clientX - drag.startClientX;
+    scrubController.update(drag.playhead0 - dx / pxPerMs);
+    const clampedTime = transportController.getPlayheadMs();
+    scrollMsRef.current = Math.max(0, drag.scroll0 + (clampedTime - drag.playhead0));
+    drag.samples.push({ t: performance.now(), x: event.clientX });
+    if (drag.samples.length > 6) drag.samples.shift();
+  };
+
+  const onScorePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    if (!scrubController.isActive) return;
+    const first = drag.samples[0];
+    const last = drag.samples[drag.samples.length - 1];
+    let velocity = 0;
+    if (first && last && last.t > first.t && performance.now() - last.t < 120) {
+      const pxPerMs = BASE_PX_PER_MS * zoomRef.current;
+      velocity = -((last.x - first.x) / (last.t - first.t)) / pxPerMs;
+    }
+    if (Math.abs(velocity) > INERTIA_MIN_VELOCITY) {
+      inertiaRef.current = { velocity, lastT: performance.now() };
+    } else {
+      scrubController.end();
+    }
+  };
+
+  const onScorePointerCancel = (event: React.PointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    inertiaRef.current = null;
+    scrubController.end();
+  };
+
   const showEmptyHint = notes.length === 0 && state === 'idle';
 
   return (
@@ -179,6 +279,10 @@ export function MusicScore() {
         className="score__canvas"
         role="img"
         aria-label={`Grand staff score with ${notes.length} note${notes.length === 1 ? '' : 's'}`}
+        onPointerDown={onScorePointerDown}
+        onPointerMove={onScorePointerMove}
+        onPointerUp={onScorePointerUp}
+        onPointerCancel={onScorePointerCancel}
       />
       {lastNoteName ? (
         <div className="score__notename" aria-live="polite">
