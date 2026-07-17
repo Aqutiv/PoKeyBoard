@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies from lockfile
+        run: npm ci
+
+      - name: Formatting
+        run: npm run format:check
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Unit tests
+        run: npm run test
+
+      - name: Build
+        run: npm run build
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Browser smoke tests (production build)
+        run: npx playwright test
+
+      - name: Publish static site artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist
+          if-no-files-found: error
+
+  # Optional: deploy the artifact to GitHub Pages. Enable by setting the
+  # repository variable DEPLOY_PAGES=true (and Pages → Source: GitHub Actions).
+  # For a project page, build with POKEYBOARD_BASE=/<repo>/ instead.
+  deploy-pages:
+    if: github.ref == 'refs/heads/main' && vars.DEPLOY_PAGES == 'true'
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - id: deployment
+        uses: actions/deploy-pages@v4
