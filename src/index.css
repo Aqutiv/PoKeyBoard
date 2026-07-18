@@ -75,6 +75,26 @@ body {
   color: var(--text);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* Keep text editing conventional even though the surrounding app UI is
+   intentionally non-selectable. */
+input:not([type]),
+input[type='text'],
+input[type='search'],
+input[type='email'],
+input[type='url'],
+input[type='tel'],
+input[type='password'],
+input[type='number'],
+textarea,
+[contenteditable='true'] {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
 }
 
 button {
