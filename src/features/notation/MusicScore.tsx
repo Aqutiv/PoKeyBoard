@@ -7,7 +7,13 @@ import type { QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
 import { useTakeStore } from '@/state/useTakeStore';
 import { midiToNoteName } from '@/utils/midi';
 import { layoutScore, type ScoreLayout } from './notationLayout';
-import { drawScore, GUTTER, SCORE_MIN_HEIGHT, type ScoreView } from './scoreRenderer';
+import {
+  computeScoreGeometry,
+  drawScore,
+  GUTTER,
+  type ScoreGeometry,
+  type ScoreView,
+} from './scoreRenderer';
 import { scrubController } from './scrubController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import './notation.css';
@@ -28,6 +34,7 @@ interface LiveGhost {
 
 interface LayoutBox {
   layout: ScoreLayout;
+  geometry: ScoreGeometry;
   version: number;
 }
 
@@ -67,10 +74,11 @@ export function MusicScore() {
       }),
     [notes, tempo.bpm, tempo.timeSignature, quantization],
   );
+  const geometry = useMemo(() => computeScoreGeometry(layout.chords), [layout]);
 
   // Everything the rAF loop reads lives in refs, written from effects only.
   const sizeRef = useRef({ width: 0, height: 0, dpr: 1 });
-  const layoutBoxRef = useRef<LayoutBox>({ layout, version: 0 });
+  const layoutBoxRef = useRef<LayoutBox>({ layout, geometry, version: 0 });
   const stateRef = useRef<TransportState>(state);
   const tempoRef = useRef<TempoSettings>(tempo);
   const zoomRef = useRef(zoom);
@@ -86,8 +94,8 @@ export function MusicScore() {
   }, [durationMs]);
 
   useEffect(() => {
-    layoutBoxRef.current = { layout, version: layoutBoxRef.current.version + 1 };
-  }, [layout]);
+    layoutBoxRef.current = { layout, geometry, version: layoutBoxRef.current.version + 1 };
+  }, [layout, geometry]);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -201,6 +209,8 @@ export function MusicScore() {
         heightPx: height,
         pxPerMs,
         scrollMs: scrollMsRef.current,
+        trebleTop: box.geometry.trebleTop,
+        bassTop: box.geometry.bassTop,
       };
       drawScore(ctx, view, {
         layout: box.layout,
@@ -275,7 +285,7 @@ export function MusicScore() {
   const showEmptyHint = notes.length === 0 && state === 'idle';
 
   return (
-    <div ref={containerRef} className="score" style={{ minHeight: SCORE_MIN_HEIGHT }}>
+    <div ref={containerRef} className="score" style={{ minHeight: geometry.minHeight }}>
       <canvas
         ref={canvasRef}
         className="score__canvas"

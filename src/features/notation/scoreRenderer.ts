@@ -12,6 +12,47 @@ export const SCORE_MIN_HEIGHT = BASS_TOP + STAFF_H + 38;
 /** Fixed gutter: brace, clefs, and time signature; notes scroll beneath it. */
 export const GUTTER = 58;
 
+/** Clearance above/below an extreme note head: half-height plus padding. */
+const HEAD_CLEARANCE = GAP * 0.5 + 6;
+/** Bottom margin below the bass staff at the default geometry. */
+const BOTTOM_MARGIN = SCORE_MIN_HEIGHT - BASS_TOP - STAFF_H;
+
+export interface ScoreGeometry {
+  trebleTop: number;
+  bassTop: number;
+  /** Container min-height that fits every note head plus margins. */
+  minHeight: number;
+}
+
+/**
+ * Content-aware vertical geometry: the staves shift down and the view grows
+ * only when the take reaches far enough beyond the staves that the default
+ * margins would clip note heads. Stems point toward the staff on extreme
+ * notes, so heads and their ledger lines set the required clearance. Takes
+ * in the normal range get exactly the default constants.
+ */
+export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeometry {
+  let maxTrebleStep = Number.NEGATIVE_INFINITY;
+  let minBassStep = Number.POSITIVE_INFINITY;
+  for (const chord of chords) {
+    for (const note of chord.notes) {
+      if (note.staff === 'treble') maxTrebleStep = Math.max(maxTrebleStep, note.step);
+      else minBassStep = Math.min(minBassStep, note.step);
+    }
+  }
+  const topExtent =
+    maxTrebleStep === Number.NEGATIVE_INFINITY
+      ? 0
+      : (maxTrebleStep * GAP) / 2 - STAFF_H + HEAD_CLEARANCE;
+  const trebleTop = Math.max(TREBLE_TOP, Math.ceil(topExtent));
+  const bassTop = trebleTop + STAFF_H + STAFF_SPACING;
+  const bottomExtent =
+    minBassStep === Number.POSITIVE_INFINITY
+      ? BOTTOM_MARGIN
+      : Math.max(BOTTOM_MARGIN, Math.ceil((-minBassStep * GAP) / 2 + HEAD_CLEARANCE));
+  return { trebleTop, bassTop, minHeight: bassTop + STAFF_H + bottomExtent };
+}
+
 const THEME = {
   staffLine: '#57503f',
   barLine: '#6d6154',
@@ -32,6 +73,9 @@ export interface ScoreView {
   pxPerMs: number;
   /** Take time at the left edge of the scrolling region (after the gutter). */
   scrollMs: number;
+  /** Vertical staff origins, from computeScoreGeometry. */
+  trebleTop: number;
+  bassTop: number;
 }
 
 export interface GhostNote {
@@ -55,12 +99,12 @@ export interface ScoreRenderInput {
   ghosts: readonly GhostNote[];
 }
 
-function staffTopFor(staff: StaffKind): number {
-  return staff === 'treble' ? TREBLE_TOP : BASS_TOP;
+function staffTopFor(view: ScoreView, staff: StaffKind): number {
+  return staff === 'treble' ? view.trebleTop : view.bassTop;
 }
 
-function yForStep(staff: StaffKind, step: number): number {
-  return staffTopFor(staff) + STAFF_H - (step * GAP) / 2;
+function yForStep(view: ScoreView, staff: StaffKind, step: number): number {
+  return staffTopFor(view, staff) + STAFF_H - (step * GAP) / 2;
 }
 
 function xForMs(view: ScoreView, ms: number): number {
@@ -85,7 +129,7 @@ export function drawScore(
 function drawStaffLines(ctx: CanvasRenderingContext2D, view: ScoreView): void {
   ctx.strokeStyle = THEME.staffLine;
   ctx.lineWidth = 1;
-  for (const top of [TREBLE_TOP, BASS_TOP]) {
+  for (const top of [view.trebleTop, view.bassTop]) {
     for (let line = 0; line < 5; line += 1) {
       const y = top + line * GAP + 0.5;
       ctx.beginPath();
@@ -111,18 +155,18 @@ function drawMeasures(ctx: CanvasRenderingContext2D, view: ScoreView, layout: Sc
     if (x >= GUTTER - 8) {
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x, TREBLE_TOP);
-      ctx.lineTo(x, TREBLE_TOP + STAFF_H);
-      ctx.moveTo(x, BASS_TOP);
-      ctx.lineTo(x, BASS_TOP + STAFF_H);
+      ctx.moveTo(x, view.trebleTop);
+      ctx.lineTo(x, view.trebleTop + STAFF_H);
+      ctx.moveTo(x, view.bassTop);
+      ctx.lineTo(x, view.bassTop + STAFF_H);
       ctx.stroke();
-      ctx.fillText(String(measure.index + 1), x + 3, TREBLE_TOP - 8);
+      ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
     }
     if (measure.empty) {
       const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
       if (cx > GUTTER && cx < view.widthPx) {
         ctx.fillStyle = THEME.rest;
-        for (const top of [TREBLE_TOP, BASS_TOP]) {
+        for (const top of [view.trebleTop, view.bassTop]) {
           // Whole rest: a small block hanging from the second line.
           ctx.fillRect(cx - 6, top + GAP + 0.5, 12, GAP * 0.55);
         }
@@ -135,10 +179,10 @@ function drawMeasures(ctx: CanvasRenderingContext2D, view: ScoreView, layout: Sc
   if (endX > GUTTER && endX < view.widthPx + 4) {
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(endX, TREBLE_TOP);
-    ctx.lineTo(endX, TREBLE_TOP + STAFF_H);
-    ctx.moveTo(endX, BASS_TOP);
-    ctx.lineTo(endX, BASS_TOP + STAFF_H);
+    ctx.moveTo(endX, view.trebleTop);
+    ctx.lineTo(endX, view.trebleTop + STAFF_H);
+    ctx.moveTo(endX, view.bassTop);
+    ctx.lineTo(endX, view.bassTop + STAFF_H);
     ctx.stroke();
   }
 }
@@ -174,7 +218,7 @@ function drawChord(
   ctx.lineWidth = 1;
   for (const note of chord.notes) {
     for (const step of ledgerLineSteps(note.step)) {
-      const y = yForStep(note.staff, step) + 0.5;
+      const y = yForStep(view, note.staff, step) + 0.5;
       ctx.beginPath();
       ctx.moveTo(x - rx - 4, y);
       ctx.lineTo(x + rx + 4, y);
@@ -186,7 +230,7 @@ function drawChord(
   let maxY = Number.NEGATIVE_INFINITY;
 
   for (const note of chord.notes) {
-    const y = yForStep(note.staff, note.step);
+    const y = yForStep(view, note.staff, note.step);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
     const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
@@ -279,7 +323,7 @@ function drawOpenNotes(
   if (!recording || openNotes.length === 0) return;
   for (const open of openNotes) {
     const position = midiToStaffPosition(open.midi);
-    const y = yForStep(position.staff, position.step);
+    const y = yForStep(view, position.staff, position.step);
     const x = xForMs(view, open.startMs);
     const width = Math.max(6, open.durationMs * view.pxPerMs);
     // Extension bar shows the note is still held.
@@ -301,12 +345,12 @@ function drawGhosts(ctx: CanvasRenderingContext2D, view: ScoreView, input: Score
   const x = Math.max(GUTTER + 14, xForMs(view, input.playheadMs));
   for (const ghost of input.ghosts) {
     const position = midiToStaffPosition(ghost.midi);
-    const y = yForStep(position.staff, position.step);
+    const y = yForStep(view, position.staff, position.step);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, ghost.life));
     ctx.strokeStyle = THEME.staffLine;
     for (const step of ledgerLineSteps(position.step)) {
-      const ly = yForStep(position.staff, step) + 0.5;
+      const ly = yForStep(view, position.staff, step) + 0.5;
       ctx.beginPath();
       ctx.moveTo(x - GAP, ly);
       ctx.lineTo(x + GAP, ly);
@@ -328,14 +372,14 @@ function drawPlayhead(ctx: CanvasRenderingContext2D, view: ScoreView, playheadMs
   ctx.strokeStyle = THEME.playhead;
   ctx.lineWidth = 1.6;
   ctx.beginPath();
-  ctx.moveTo(x, TREBLE_TOP - 16);
-  ctx.lineTo(x, BASS_TOP + STAFF_H + 12);
+  ctx.moveTo(x, view.trebleTop - 16);
+  ctx.lineTo(x, view.bassTop + STAFF_H + 12);
   ctx.stroke();
   ctx.fillStyle = THEME.playhead;
   ctx.beginPath();
-  ctx.moveTo(x - 5, TREBLE_TOP - 22);
-  ctx.lineTo(x + 5, TREBLE_TOP - 22);
-  ctx.lineTo(x, TREBLE_TOP - 13);
+  ctx.moveTo(x - 5, view.trebleTop - 22);
+  ctx.lineTo(x + 5, view.trebleTop - 22);
+  ctx.lineTo(x, view.trebleTop - 13);
   ctx.closePath();
   ctx.fill();
 }
@@ -364,8 +408,8 @@ function drawGutter(
   ctx.lineWidth = 1.4;
   // System bar line joining the staffs at the left edge.
   ctx.beginPath();
-  ctx.moveTo(4.5, TREBLE_TOP);
-  ctx.lineTo(4.5, BASS_TOP + STAFF_H);
+  ctx.moveTo(4.5, view.trebleTop);
+  ctx.lineTo(4.5, view.bassTop + STAFF_H);
   ctx.stroke();
 
   const support = detectGlyphSupport(ctx);
@@ -376,23 +420,23 @@ function drawGutter(
   // Treble (G) clef.
   if (support.treble) {
     ctx.font = `${GAP * 4.1}px serif`;
-    ctx.fillText('\u{1D11E}', 8, TREBLE_TOP + STAFF_H - GAP + GAP * 1.4);
+    ctx.fillText('\u{1D11E}', 8, view.trebleTop + STAFF_H - GAP + GAP * 1.4);
   } else {
-    drawFallbackTrebleClef(ctx, 14, TREBLE_TOP);
+    drawFallbackTrebleClef(ctx, 14, view.trebleTop);
   }
   // Bass (F) clef.
   if (support.bass) {
     ctx.font = `${GAP * 3.2}px serif`;
-    ctx.fillText('\u{1D122}', 8, BASS_TOP + GAP * 3.1);
+    ctx.fillText('\u{1D122}', 8, view.bassTop + GAP * 3.1);
   } else {
-    drawFallbackBassClef(ctx, 14, BASS_TOP);
+    drawFallbackBassClef(ctx, 14, view.bassTop);
   }
 
   // Time signature on both staffs.
   ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;
   ctx.textAlign = 'center';
   const tsX = GUTTER - 14;
-  for (const top of [TREBLE_TOP, BASS_TOP]) {
+  for (const top of [view.trebleTop, view.bassTop]) {
     ctx.fillText(String(timeSignature.numerator), tsX, top + GAP * 1.8);
     ctx.fillText(String(timeSignature.denominator), tsX, top + GAP * 3.9);
   }
