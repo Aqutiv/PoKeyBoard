@@ -58,6 +58,53 @@ export function whiteKeyCount(lowMidi: number, highMidi: number): number {
   return count;
 }
 
+/** Sizing policy for the visible keyboard. */
+export const MIN_WHITE_KEY_PX = 38;
+// Low enough that a fullscreen 4K window (container ~3740px after the nav
+// sidebar and page padding) still fits all 52 whites: 51 * 72 = 3672 < 3740.
+export const MAX_WHITE_KEY_PX = 72;
+export const MIN_VISIBLE_WHITES = 7;
+/** Up to this count, keys stretch to fill the container (phone/tablet/laptop behavior). */
+export const STRETCH_MAX_WHITES = 21;
+/** Hard cap: every white key of the full A0..C8 piano. */
+export const MAX_VISIBLE_WHITES = whiteKeyCount(FULL_RANGE_LOW, FULL_RANGE_HIGH);
+/** Fallback while the container is unmeasured (first pre-effect paint). */
+export const DEFAULT_VISIBLE_WHITES = 14;
+
+/**
+ * How many white keys a container of `widthPx` shows. Narrow containers get
+ * as many keys as fit at MIN_WHITE_KEY_PX, stretched to fill; once keys
+ * would stretch past MAX_WHITE_KEY_PX more keys appear instead, up to the
+ * full piano.
+ */
+export function computeVisibleWhites(widthPx: number): number {
+  if (widthPx <= 0) return DEFAULT_VISIBLE_WHITES;
+  const fitAtMin = Math.floor(widthPx / MIN_WHITE_KEY_PX);
+  const neededAtMax = Math.ceil(widthPx / MAX_WHITE_KEY_PX);
+  const target = Math.min(fitAtMin, Math.max(STRETCH_MAX_WHITES, neededAtMax));
+  return Math.min(MAX_VISIBLE_WHITES, Math.max(MIN_VISIBLE_WHITES, target));
+}
+
+/**
+ * The midi reached by covering `count` white keys (inclusive of a white
+ * start) in `direction`. Clamps to the full range.
+ */
+export function stepWhites(startMidi: number, count: number, direction: 1 | -1): number {
+  let midi = startMidi;
+  let seen = 0;
+  while (seen < count && midi >= FULL_RANGE_LOW && midi <= FULL_RANGE_HIGH) {
+    if (isWhiteKey(midi)) seen += 1;
+    if (seen === count) break;
+    midi += direction;
+  }
+  return Math.min(FULL_RANGE_HIGH, Math.max(FULL_RANGE_LOW, midi));
+}
+
+/** Highest white-key low anchor from which `visibleWhites` whites still fit below C8. */
+export function maxLowMidiFor(visibleWhites: number): number {
+  return stepWhites(FULL_RANGE_HIGH, visibleWhites, -1);
+}
+
 /**
  * Lay out the keys of an inclusive midi range. Both ends are snapped to
  * white keys so the keyboard always starts and ends with a full white key.

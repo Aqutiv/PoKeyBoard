@@ -7,37 +7,24 @@ import { midiToNoteName } from '@/utils/midi';
 import { ComputerKeyboardInput } from './computerKeyboard';
 import {
   BLACK_KEY_HEIGHT,
+  computeVisibleWhites,
   FULL_RANGE_HIGH,
   FULL_RANGE_LOW,
   hitTestKey,
   isWhiteKey,
   layoutKeyboard,
+  maxLowMidiFor,
   snapToWhite,
+  stepWhites,
   touchVelocity,
   type KeyboardLayout,
 } from './keyboardGeometry';
 import { KeyboardPointerTracker } from './pointerTracker';
 import './keyboard.css';
 
-const MIN_WHITE_KEY_PX = 38;
-const MIN_VISIBLE_WHITES = 7;
-const MAX_VISIBLE_WHITES = 21;
-
 interface PianoKeyboardProps {
   /** Extra keys to light up (playback / scrub animation). */
   extraActiveMidis?: ReadonlySet<number>;
-}
-
-/** Walk `count` white keys upward from a white-key midi (inclusive start). */
-function midiAfterWhites(startMidi: number, count: number): number {
-  let midi = startMidi;
-  let seen = 0;
-  while (seen < count && midi <= FULL_RANGE_HIGH) {
-    if (isWhiteKey(midi)) seen += 1;
-    if (seen === count) break;
-    midi += 1;
-  }
-  return Math.min(midi, FULL_RANGE_HIGH);
 }
 
 export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
@@ -66,17 +53,13 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
     return () => observer.disconnect();
   }, []);
 
-  const visibleWhites = useMemo(() => {
-    if (containerWidth <= 0) return 14;
-    return Math.min(
-      MAX_VISIBLE_WHITES,
-      Math.max(MIN_VISIBLE_WHITES, Math.floor(containerWidth / MIN_WHITE_KEY_PX)),
-    );
-  }, [containerWidth]);
+  const visibleWhites = useMemo(() => computeVisibleWhites(containerWidth), [containerWidth]);
 
   const layout: KeyboardLayout = useMemo(() => {
-    const low = snapToWhite(Math.max(FULL_RANGE_LOW, Math.min(anchorMidi, FULL_RANGE_HIGH)), 1);
-    const high = midiAfterWhites(low, visibleWhites);
+    const anchor = snapToWhite(Math.max(FULL_RANGE_LOW, Math.min(anchorMidi, FULL_RANGE_HIGH)), 1);
+    // Clamp so the whole window fits below C8 — the view never shrinks/stretches.
+    const low = Math.min(anchor, maxLowMidiFor(visibleWhites));
+    const high = stepWhites(low, visibleWhites, 1);
     return layoutKeyboard(low, high);
   }, [anchorMidi, visibleWhites]);
 
@@ -153,10 +136,9 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
     (direction: 1 | -1) => {
       tracker.releaseAll();
       const next = layout.lowMidi + direction * 12;
-      const highestAnchor = snapToWhite(FULL_RANGE_HIGH - 12, -1);
-      setAnchorMidi(Math.min(highestAnchor, Math.max(FULL_RANGE_LOW, next)));
+      setAnchorMidi(Math.min(maxLowMidiFor(visibleWhites), Math.max(FULL_RANGE_LOW, next)));
     },
-    [layout.lowMidi, setAnchorMidi, tracker],
+    [layout.lowMidi, setAnchorMidi, tracker, visibleWhites],
   );
 
   const toggleSustain = useCallback(() => {
