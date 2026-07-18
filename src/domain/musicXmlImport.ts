@@ -206,15 +206,16 @@ function collectPart(
   };
 
   /**
-   * A <direction>'s <offset> shifts where its events sound, in divisions,
-   * without moving the note cursor. Per the MusicXML spec it only affects
-   * playback when sound="yes"; a display-only offset is ignored here.
+   * The quarter-note shift from an element's <offset> child, or null when it
+   * has none that sounds. A <direction> or a <sound> may carry one; per the
+   * MusicXML spec it only affects playback when sound="yes", and a <sound>'s
+   * own offset overrides its parent <direction>'s. The note cursor is unmoved.
    */
-  const directionOffsetQ = (direction: Element): number => {
-    const offset = childByTag(direction, 'offset');
-    if (offset === null || offset.getAttribute('sound') !== 'yes') return 0;
+  const soundingOffsetQ = (el: Element): number | null => {
+    const offset = childByTag(el, 'offset');
+    if (offset === null || offset.getAttribute('sound') !== 'yes') return null;
     const value = Number.parseFloat(offset.textContent?.trim() ?? '');
-    if (!Number.isFinite(value) || value === 0 || divisions === null || divisions <= 0) return 0;
+    if (!Number.isFinite(value) || divisions === null || divisions <= 0) return null;
     return value / divisions;
   };
 
@@ -311,9 +312,13 @@ function collectPart(
           break;
         }
         case 'direction': {
-          const directionQ = cursorQ + directionOffsetQ(el);
+          const directionQ = cursorQ + (soundingOffsetQ(el) ?? 0);
           const sound = childByTag(el, 'sound');
-          if (sound) applySound(sound, directionQ);
+          if (sound) {
+            // A <sound>'s own offset overrides the direction-level one.
+            const soundOwn = soundingOffsetQ(sound);
+            applySound(sound, soundOwn !== null ? cursorQ + soundOwn : directionQ);
+          }
           for (const directionType of el.children) {
             if (directionType.tagName !== 'direction-type') continue;
             const pedal = childByTag(directionType, 'pedal');

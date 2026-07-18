@@ -299,6 +299,30 @@ describe('tempo and dynamics', () => {
     // Tempo 60 takes effect at q2, so q0–q2 stay at 120 BPM (500 ms each).
     expect(take.notes.map((n) => n.startMs)).toEqual([0, 500, 1000, 2000]);
   });
+
+  it("lets a <sound>'s own offset override the direction offset", () => {
+    const tempo120 = '<direction><sound tempo="120"/></direction>';
+    // The direction offset says q3, but the sound's own offset (q2) wins.
+    const tempo60 =
+      '<direction><sound tempo="60"><offset sound="yes">1</offset></sound>' +
+      '<offset sound="yes">2</offset></direction>';
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            tempo120 +
+            note('C', 4, 1) +
+            tempo60 +
+            note('D', 4, 1) +
+            note('E', 4, 1) +
+            note('F', 4, 1),
+        ),
+      ),
+    );
+    // Tempo 60 takes effect at q2 (sound offset), so q0–q2 stay at 120 BPM.
+    expect(take.notes.map((n) => n.startMs)).toEqual([0, 500, 1000, 2000]);
+  });
 });
 
 describe('pedal, pitch spelling, and time signatures', () => {
