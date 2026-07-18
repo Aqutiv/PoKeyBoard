@@ -1,5 +1,6 @@
 import { audioEngine, type InputNoteEvent } from '@/audio/AudioEngine';
 import { MetronomeEngine } from '@/audio/MetronomeEngine';
+import { forkLibraryTake, isLibraryTakeId } from '@/domain/libraryTakes';
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent, PedalEvent } from '@/domain/takeTypes';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -223,6 +224,15 @@ export class TransportController {
   async record(mode: RecordMode = 'overdub'): Promise<void> {
     if (!canTransition(this.state, 'RECORD')) return;
     await audioEngine.unlockFromUserGesture();
+
+    // A library track is read-only: fork it into a fresh user take before
+    // any capture so the pass lands there. The fork starts clean (not
+    // dirty) — stopping during the count-in therefore saves nothing, and
+    // the pristine library take comes back on its next open.
+    const activeTake = useTakeStore.getState().take;
+    if (isLibraryTakeId(activeTake.id)) {
+      useTakeStore.getState().setTake(forkLibraryTake(activeTake), { dirty: false });
+    }
 
     const takeState = useTakeStore.getState();
     const tempo = takeState.take.tempo;

@@ -4,6 +4,7 @@ import type { Messages } from './types';
 export const fr: Messages = {
   nav: {
     play: 'Jouer',
+    library: 'Bibliothèque',
     takes: 'Prises',
     settings: 'Réglages',
     about: 'À propos',
@@ -111,6 +112,28 @@ export const fr: Messages = {
       `Sauvegarde restaurée : ${imported} prise(s)` +
       (skipped > 0 ? `, ${skipped} ignorée(s)` : '') +
       (settingsRestored ? ', réglages appliqués' : ''),
+  },
+  library: {
+    title: 'Bibliothèque',
+    hint: 'Des morceaux choisis à jouer, à apprendre et à réinventer.',
+    chip: 'Bibliothèque',
+    byline: ({ composer }) => `de ${composer}`,
+    openLabel: ({ title }) => `Ouvrir ${title}`,
+    meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,
+    forkHint:
+      'Les morceaux de la bibliothèque ne changent jamais — enregistrez par-dessus l’un d’eux et votre version sera sauvegardée comme une nouvelle prise.',
+    descriptions: {
+      aBeautifulDay:
+        'Une mélodie originale, chaleureuse et douce, qui tient entièrement sur les touches visibles — une première pièce facile à suivre.',
+      furElise: 'La bagatelle bien-aimée de Beethoven — le célèbre thème d’ouverture.',
+      gymnopedie1: 'Le classique rêveur de Satie — lent, doux et aérien. Écoutez, tout simplement.',
+      bluesInC:
+        'Une ligne de basse boogie entraînante. Lancez l’enregistrement et improvisez par-dessus — essayez la gamme blues de C : C, E♭, F, F♯, G, B♭.',
+      goodNight:
+        'Une tendre berceuse au clair de lune en 6/8, avec une mélodie chantante et des arpèges au doux balancement.',
+      moonlightSonata:
+        'L’Adagio sostenuto de Beethoven, complet : de lents triolets au clair de lune sous une mélodie qui chante à mi-voix.',
+    },
   },
   importDialog: {
     title: 'Importer une prise',

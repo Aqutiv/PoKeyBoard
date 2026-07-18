@@ -6,6 +6,7 @@ import type { Messages } from './types';
 export const en: Messages = {
   nav: {
     play: 'Play',
+    library: 'Library',
     takes: 'Takes',
     settings: 'Settings',
     about: 'About',
@@ -111,6 +112,29 @@ export const en: Messages = {
       `Backup restored: ${imported} take(s)` +
       (skipped > 0 ? `, ${skipped} skipped` : '') +
       (settingsRestored ? ', settings applied' : ''),
+  },
+  library: {
+    title: 'Library',
+    hint: 'Curated tracks to play, learn from, and build on.',
+    chip: 'Library',
+    byline: ({ composer }) => `by ${composer}`,
+    openLabel: ({ title }) => `Open ${title}`,
+    meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,
+    forkHint:
+      'Library tracks never change — record over one and your version is saved as a new take.',
+    descriptions: {
+      aBeautifulDay:
+        'A warm, gentle original tune that sits entirely on the visible keys — an easy first piece to follow.',
+      furElise: 'Beethoven’s beloved bagatelle — the famous opening theme.',
+      gymnopedie1:
+        'Satie’s dreamy classic — slow, soft, and spacious. Just listen, or drift along.',
+      bluesInC:
+        'A rolling boogie bass line. Hit record and improvise on top — try the C blues scale: C, E♭, F, F♯, G, B♭.',
+      goodNight:
+        'A tender moonlit lullaby in 6/8, with a singing melody and gently rocking arpeggios.',
+      moonlightSonata:
+        'Beethoven’s Adagio sostenuto, complete — slow moonlit triplets beneath a quiet singing melody.',
+    },
   },
   importDialog: {
     title: 'Import take',

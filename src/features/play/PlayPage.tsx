@@ -2,6 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { usePlaybackActiveMidis } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { lifecycleService } from '@/app/lifecycle';
+import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
@@ -25,6 +26,7 @@ export function PlayPage() {
 
   const title = useTakeStore((s) => s.take.title);
   const takeId = useTakeStore((s) => s.take.id);
+  const isLibrary = isLibraryTakeId(takeId);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
   const openExport = useExportUiStore((s) => s.openExport);
   const playbackActiveMidis = usePlaybackActiveMidis();
@@ -38,8 +40,9 @@ export function PlayPage() {
       <div className="play-layout">
         <header className="play-header">
           <h1 className="play-header__title">{title}</h1>
+          {isLibrary ? <span className="play-header__library">{m.library.chip}</span> : null}
           <span className="play-header__side">
-            <SaveStatusBadge />
+            {isLibrary ? null : <SaveStatusBadge />}
             <button
               type="button"
               className="play-header__export"

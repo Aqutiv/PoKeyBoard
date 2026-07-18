@@ -8,7 +8,7 @@ import { useTakeStore } from '@/state/useTakeStore';
 import type { CountInBars } from '@/domain/takeTypes';
 import './metronome.css';
 
-const TIME_SIGNATURES = ['2/4', '3/4', '4/4', '6/8'] as const;
+const TIME_SIGNATURES: readonly string[] = ['2/2', '2/4', '3/4', '3/8', '4/4', '6/8'];
 const MIN_BPM = 40;
 const MAX_BPM = 240;
 
@@ -101,6 +101,13 @@ export function MetronomeControls() {
 
   const beats = Array.from({ length: tempo.timeSignature.numerator }, (_, i) => i);
 
+  // The schema allows signatures beyond the presets (e.g. an imported 5/4
+  // take); include the active one so the select never falls back to "2/4".
+  const currentSignature = `${tempo.timeSignature.numerator}/${tempo.timeSignature.denominator}`;
+  const signatureOptions = TIME_SIGNATURES.includes(currentSignature)
+    ? TIME_SIGNATURES
+    : [...TIME_SIGNATURES, currentSignature];
+
   return (
     <div className="metronome" role="group" aria-label={m.metronome.groupLabel}>
       <button
@@ -149,10 +156,10 @@ export function MetronomeControls() {
 
       <select
         aria-label={m.metronome.timeSignatureLabel}
-        value={`${tempo.timeSignature.numerator}/${tempo.timeSignature.denominator}`}
+        value={currentSignature}
         onChange={(event) => onTimeSignature(event.target.value)}
       >
-        {TIME_SIGNATURES.map((ts) => (
+        {signatureOptions.map((ts) => (
           <option key={ts} value={ts}>
             {ts}
           </option>

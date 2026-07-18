@@ -59,6 +59,7 @@ export interface Repair {
 export interface Messages {
   nav: {
     play: string;
+    library: string;
     takes: string;
     settings: string;
     about: string;
@@ -159,6 +160,23 @@ export interface Messages {
     backupDownloaded: string;
     takeImported: string;
     backupRestored: (p: { imported: number; skipped: number; settingsRestored: boolean }) => string;
+  };
+  library: {
+    title: string;
+    hint: string;
+    chip: string;
+    byline: (p: { composer: string }) => string;
+    openLabel: (p: { title: string }) => string;
+    meta: (p: { notes: number; duration: string; bpm: number }) => string;
+    forkHint: string;
+    descriptions: {
+      aBeautifulDay: string;
+      furElise: string;
+      gymnopedie1: string;
+      bluesInC: string;
+      goodNight: string;
+      moonlightSonata: string;
+    };
   };
   importDialog: {
     title: string;

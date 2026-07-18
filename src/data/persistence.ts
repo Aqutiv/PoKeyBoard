@@ -1,4 +1,6 @@
 import { audioEngine } from '@/audio/AudioEngine';
+import { isLibraryTakeId } from '@/domain/libraryTakes';
+import { getLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -57,7 +59,9 @@ class PersistenceService {
     try {
       const lastId = await getMetadata<string>(META_LAST_OPEN_TAKE);
       if (lastId) {
-        const take = await getTake(lastId);
+        // Library takes have no stored row — rebuild pristine from the
+        // bundled catalog (in-session tweaks to them are ephemeral).
+        const take = isLibraryTakeId(lastId) ? getLibraryTake(lastId) : await getTake(lastId);
         if (take) {
           useTakeStore.getState().setTake(take);
           transportController.restorePlayhead(take.display.playheadMs);
@@ -109,6 +113,9 @@ class PersistenceService {
     }
     const { take, dirty, contentRevision } = useTakeStore.getState();
     if (!dirty) return;
+    // Library tracks are never persisted: scrubs and tempo tweaks on them
+    // are deliberately ephemeral, and recording forks to a fresh id first.
+    if (isLibraryTakeId(take.id)) return;
 
     this.setStatus('saving', null);
     try {

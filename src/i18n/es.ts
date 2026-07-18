@@ -4,6 +4,7 @@ import type { Messages } from './types';
 export const es: Messages = {
   nav: {
     play: 'Tocar',
+    library: 'Biblioteca',
     takes: 'Tomas',
     settings: 'Ajustes',
     about: 'Acerca de',
@@ -110,6 +111,29 @@ export const es: Messages = {
       `Respaldo restaurado: ${imported} toma(s)` +
       (skipped > 0 ? `, ${skipped} omitida(s)` : '') +
       (settingsRestored ? ', ajustes aplicados' : ''),
+  },
+  library: {
+    title: 'Biblioteca',
+    hint: 'Pistas seleccionadas para tocar, aprender y crear a partir de ellas.',
+    chip: 'Biblioteca',
+    byline: ({ composer }) => `de ${composer}`,
+    openLabel: ({ title }) => `Abrir ${title}`,
+    meta: ({ notes, duration, bpm }) => `${notes} notas · ${duration} · ${bpm} BPM`,
+    forkHint:
+      'Las pistas de la biblioteca nunca cambian — graba sobre una y tu versión se guardará como una toma nueva.',
+    descriptions: {
+      aBeautifulDay:
+        'Una melodía original cálida y suave que cabe entera en las teclas visibles — una primera pieza fácil de seguir.',
+      furElise: 'La querida bagatela de Beethoven — el famoso tema inicial.',
+      gymnopedie1:
+        'El clásico soñador de Satie — lento, suave y espacioso. Solo escucha, o déjate llevar.',
+      bluesInC:
+        'Una línea de bajo boogie envolvente. Pulsa grabar e improvisa encima — prueba la escala de blues de C: C, E♭, F, F♯, G, B♭.',
+      goodNight:
+        'Una tierna nana a la luz de la luna en 6/8, con una melodía cantabile y arpegios que se mecen suavemente.',
+      moonlightSonata:
+        'El Adagio sostenuto de Beethoven, completo: tresillos lentos a la luz de la luna bajo una melodía que canta en voz baja.',
+    },
   },
   importDialog: {
     title: 'Importar toma',
