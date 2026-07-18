@@ -276,6 +276,29 @@ describe('tempo and dynamics', () => {
     expect(take.notes[1]!.velocity).toBeCloseTo(0.8 * DEFAULT_VELOCITY, 5);
     expect(take.notes[2]!.velocity).toBeCloseTo(0.8 * DEFAULT_VELOCITY, 5);
   });
+
+  it('applies a sounding direction offset to a tempo change', () => {
+    // An explicit tempo at q0 keeps this independent of the first-mark back-fill.
+    const tempo120 = '<direction><sound tempo="120"/></direction>';
+    // Written at the q1 cursor, but its offset defers the change to q2.
+    const tempo60 = '<direction><sound tempo="60"/><offset sound="yes">1</offset></direction>';
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            tempo120 +
+            note('C', 4, 1) +
+            tempo60 +
+            note('D', 4, 1) +
+            note('E', 4, 1) +
+            note('F', 4, 1),
+        ),
+      ),
+    );
+    // Tempo 60 takes effect at q2, so q0–q2 stay at 120 BPM (500 ms each).
+    expect(take.notes.map((n) => n.startMs)).toEqual([0, 500, 1000, 2000]);
+  });
 });
 
 describe('pedal, pitch spelling, and time signatures', () => {
@@ -291,6 +314,23 @@ describe('pedal, pitch spelling, and time signatures', () => {
       { atMs: 0, down: true },
       { atMs: 500, down: false },
     ]);
+  });
+
+  it('defers a pedal event by a sounding direction offset', () => {
+    const pedalStart =
+      '<direction><direction-type><pedal type="start"/></direction-type>' +
+      '<offset sound="yes">2</offset></direction>';
+    const take = musicXmlToTake(scoreWith(measure(1, DIV1 + pedalStart + note('C', 4, 4))));
+    // q2 at 120 BPM = 1000 ms, versus atMs 0 without the offset.
+    expect(take.pedalEvents).toEqual([{ atMs: 1000, down: true }]);
+  });
+
+  it('ignores a display-only offset (sound not "yes")', () => {
+    const pedalStart =
+      '<direction><direction-type><pedal type="start"/></direction-type>' +
+      '<offset>2</offset></direction>';
+    const take = musicXmlToTake(scoreWith(measure(1, DIV1 + pedalStart + note('C', 4, 4))));
+    expect(take.pedalEvents).toEqual([{ atMs: 0, down: true }]);
   });
 
   it('applies alter values including double accidentals', () => {

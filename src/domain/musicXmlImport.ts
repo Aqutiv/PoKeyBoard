@@ -173,25 +173,27 @@ function collectPart(
     return duration / divisions;
   };
 
-  const applySound = (sound: Element): void => {
+  const applySound = (sound: Element, atQ: number): void => {
     const tempo = attrNumber(sound, 'tempo');
-    if (tempo !== null && tempo > 0) out.tempi.push({ atQ: cursorQ, bpm: tempo });
+    if (tempo !== null && tempo > 0) out.tempi.push({ atQ, bpm: tempo });
+    // Dynamics is a running state applied to later notes in document order, so
+    // a direction offset does not reposition it.
     const dynamics = attrNumber(sound, 'dynamics');
     if (dynamics !== null && dynamics >= 0) dynamicsPercent = dynamics;
   };
 
-  const applyPedal = (type: string | null): void => {
+  const applyPedal = (type: string | null, atQ: number): void => {
     if (type === 'start') {
-      out.pedals.push({ atQ: cursorQ, down: true });
+      out.pedals.push({ atQ, down: true });
     } else if (type === 'stop') {
-      out.pedals.push({ atQ: cursorQ, down: false });
+      out.pedals.push({ atQ, down: false });
     } else if (type === 'change') {
-      out.pedals.push({ atQ: cursorQ, down: false });
-      out.pedals.push({ atQ: cursorQ, down: true });
+      out.pedals.push({ atQ, down: false });
+      out.pedals.push({ atQ, down: true });
     }
   };
 
-  const applyMetronome = (metronome: Element): void => {
+  const applyMetronome = (metronome: Element, atQ: number): void => {
     const unit = textByTag(metronome, 'beat-unit');
     const perMinute = numberByTag(metronome, 'per-minute');
     if (unit === null || perMinute === null || perMinute <= 0) return;
@@ -200,7 +202,20 @@ function collectPart(
     for (const child of metronome.children) {
       if (child.tagName === 'beat-unit-dot') factor *= 1.5;
     }
-    out.tempi.push({ atQ: cursorQ, bpm: perMinute * factor });
+    out.tempi.push({ atQ, bpm: perMinute * factor });
+  };
+
+  /**
+   * A <direction>'s <offset> shifts where its events sound, in divisions,
+   * without moving the note cursor. Per the MusicXML spec it only affects
+   * playback when sound="yes"; a display-only offset is ignored here.
+   */
+  const directionOffsetQ = (direction: Element): number => {
+    const offset = childByTag(direction, 'offset');
+    if (offset === null || offset.getAttribute('sound') !== 'yes') return 0;
+    const value = Number.parseFloat(offset.textContent?.trim() ?? '');
+    if (!Number.isFinite(value) || value === 0 || divisions === null || divisions <= 0) return 0;
+    return value / divisions;
   };
 
   for (const measure of part.children) {
@@ -296,21 +311,22 @@ function collectPart(
           break;
         }
         case 'direction': {
+          const directionQ = cursorQ + directionOffsetQ(el);
           const sound = childByTag(el, 'sound');
-          if (sound) applySound(sound);
+          if (sound) applySound(sound, directionQ);
           for (const directionType of el.children) {
             if (directionType.tagName !== 'direction-type') continue;
             const pedal = childByTag(directionType, 'pedal');
-            if (pedal) applyPedal(pedal.getAttribute('type'));
+            if (pedal) applyPedal(pedal.getAttribute('type'), directionQ);
             if (sound === null || attrNumber(sound, 'tempo') === null) {
               const metronome = childByTag(directionType, 'metronome');
-              if (metronome) applyMetronome(metronome);
+              if (metronome) applyMetronome(metronome, directionQ);
             }
           }
           break;
         }
         case 'sound': {
-          applySound(el);
+          applySound(el, cursorQ);
           break;
         }
         default:
