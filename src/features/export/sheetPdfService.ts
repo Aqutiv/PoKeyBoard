@@ -111,8 +111,8 @@ export async function generateSheetPdf(
   throwIfAborted();
   const pdfDoc = await PDFDocument.create();
   pdfDoc.setTitle(take.title);
+  // Creator = authoring app; pdf-lib stamps itself as Producer at save time.
   pdfDoc.setCreator(SHEET_CREDIT);
-  pdfDoc.setProducer(SHEET_CREDIT);
 
   const scale = pageCount > LARGE_DOC_PAGE_COUNT ? RENDER_SCALE_LARGE_DOC : RENDER_SCALE;
   const metrics = layout.pages[0]!.metrics;

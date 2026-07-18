@@ -31,13 +31,13 @@ export const HEAD_RX_G = 0.64;
 /** Stem x offset from the head center (inset from the head edge). */
 export const STEM_X_G = HEAD_RX_G - 0.1;
 /** Extra lead reserved before a column that carries an accidental. */
-export const ACCIDENTAL_LEAD_G = 2;
+export const ACCIDENTAL_LEAD_G = 1.7;
 
 // Horizontal spacing (staff spaces).
 const START_PAD_G = 1.6;
-const EMPTY_MEASURE_W_G = 12;
-const MIN_ADV_G = 2.6;
-const MAX_ADV_G = 14;
+const EMPTY_MEASURE_W_G = 10;
+const MIN_ADV_G = 2.4;
+const MAX_ADV_G = 13;
 const LEAD_SILENCE_MAX_G = 8;
 const LAST_ADV_MIN_G = 3;
 /** The final (ragged-right) system may stretch at most this far. */
@@ -240,7 +240,7 @@ export function layoutSheet(score: ScoreLayout, options: SheetLayoutOptions): Sh
 
 /** Column advance for a time gap, in staff spaces (sub-linear in duration). */
 function advanceG(deltaMs: number, wholeMs: number): number {
-  return clamp(11 * Math.pow(Math.max(deltaMs, 0) / wholeMs, 0.47), MIN_ADV_G, MAX_ADV_G);
+  return clamp(10 * Math.pow(Math.max(deltaMs, 0) / wholeMs, 0.47), MIN_ADV_G, MAX_ADV_G);
 }
 
 function columnHasAccidental(column: WorkColumn): boolean {
