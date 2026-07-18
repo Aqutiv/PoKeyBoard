@@ -332,8 +332,43 @@ button {
   flex: 1;
 }
 
+.play-view-switch {
+  display: none;
+}
+
 @media (orientation: landscape) and (max-height: 500px) {
+  .play-view-switch {
+    display: flex;
+    align-self: center;
+    padding: 3px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    background: var(--surface-1);
+  }
+
+  .play-view-switch__option {
+    min-height: var(--touch-target);
+    padding: 0 18px;
+    border-radius: calc(var(--radius-m) - 3px);
+    color: var(--text-dim);
+    font-size: 13px;
+    font-weight: 600;
+  }
+
+  .play-view-switch__option.is-selected {
+    background: var(--accent);
+    color: var(--accent-contrast);
+  }
+
+  .play-layout[data-compact-view='notation'] > .metronome,
+  .play-layout[data-compact-view='notation'] > .play-layout__keyboard,
+  .play-layout[data-compact-view='keyboard'] > .play-layout__score {
+    display: none;
+  }
+
   .play-layout__keyboard {
-    height: clamp(130px, 46vh, 240px);
+    flex: 1 1 0;
+    height: auto;
+    min-height: 0;
   }
 }

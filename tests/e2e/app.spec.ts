@@ -55,3 +55,50 @@ test.describe('app shell and piano', () => {
     await context.setOffline(false);
   });
 });
+
+test.describe('compact landscape play view', () => {
+  test.use({ viewport: { width: 844, height: 390 } });
+
+  test('switches between notation and keyboard and remembers the selection on rotation', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
+
+    const viewSwitch = page.getByRole('group', { name: 'View' });
+    const score = page.getByRole('img', { name: /Grand staff score/ });
+    const keyboard = page.getByRole('button', { name: 'C4 key' });
+    const metronome = page.getByRole('group', { name: 'Metronome' });
+
+    await expect(viewSwitch).toBeVisible();
+    await expect(viewSwitch.getByRole('button', { name: 'Notation' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await expect(score).toBeVisible();
+    await expect(keyboard).toBeHidden();
+    await expect(metronome).toBeHidden();
+
+    await viewSwitch.getByRole('button', { name: 'Keyboard' }).click();
+    await expect(score).toBeHidden();
+    await expect(keyboard).toBeVisible();
+    await expect(metronome).toBeVisible();
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(viewSwitch).toBeHidden();
+    await expect(score).toBeVisible();
+    await expect(keyboard).toBeVisible();
+    await expect(metronome).toBeVisible();
+
+    await page.setViewportSize({ width: 844, height: 390 });
+    await expect(viewSwitch).toBeVisible();
+    await expect(score).toBeHidden();
+    await expect(keyboard).toBeVisible();
+    await expect(metronome).toBeVisible();
+
+    await viewSwitch.getByRole('button', { name: 'Notation' }).click();
+    await expect(score).toBeVisible();
+    await expect(keyboard).toBeHidden();
+    await expect(metronome).toBeHidden();
+  });
+});

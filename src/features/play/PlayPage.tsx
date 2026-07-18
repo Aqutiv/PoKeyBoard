@@ -1,4 +1,4 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import { usePlaybackActiveMidis } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { lifecycleService } from '@/app/lifecycle';
@@ -18,6 +18,7 @@ const getLifecycle = () => lifecycleService.getSnapshot();
 /** The main instrument view: transport, score, metronome, keyboard. */
 export function PlayPage() {
   const m = useMessages();
+  const [compactView, setCompactView] = useState<'notation' | 'keyboard'>('notation');
   const interruption = useSyncExternalStore(subscribeLifecycle, getLifecycle);
   const status = useEngineStatus();
   const progress = useSampleLoadProgress();
@@ -38,7 +39,7 @@ export function PlayPage() {
       aria-label={m.play.pageLabel}
       data-piano-ready={progress.phase === 'core-ready' ? 'true' : 'false'}
     >
-      <div className="play-layout">
+      <div className="play-layout" data-compact-view={compactView}>
         <header className="play-header">
           <h1 className="play-header__title">{title}</h1>
           {isLibrary ? <span className="play-header__library">{m.library.chip}</span> : null}
@@ -75,6 +76,24 @@ export function PlayPage() {
           </p>
         ) : null}
         <TransportControls />
+        <div className="play-view-switch" role="group" aria-label={m.play.viewLabel}>
+          <button
+            type="button"
+            className={`play-view-switch__option${compactView === 'notation' ? ' is-selected' : ''}`}
+            aria-pressed={compactView === 'notation'}
+            onClick={() => setCompactView('notation')}
+          >
+            {m.play.notationView}
+          </button>
+          <button
+            type="button"
+            className={`play-view-switch__option${compactView === 'keyboard' ? ' is-selected' : ''}`}
+            aria-pressed={compactView === 'keyboard'}
+            onClick={() => setCompactView('keyboard')}
+          >
+            {m.play.keyboardView}
+          </button>
+        </div>
         <div className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (
             <p className="page__hint" role="status">

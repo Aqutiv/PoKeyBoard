@@ -77,6 +77,9 @@ export interface Messages {
     pageLabel: string;
     shareAudio: string;
     shareSheet: string;
+    viewLabel: string;
+    notationView: string;
+    keyboardView: string;
     dismiss: string;
     loadingPiano: (p: { percent: number }) => string;
     audioUnavailable: string;
