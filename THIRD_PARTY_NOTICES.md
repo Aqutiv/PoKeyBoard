@@ -26,6 +26,13 @@ Attribution is also shown in the app's About view.
 - **Use:** client-side MP3 encoding of exported takes; the encoder runs
   locally in a Web Worker and is not modified.
 
+## pdf-lib
+
+- **Package:** `pdf-lib` (MIT license), <https://pdf-lib.js.org/>
+- **Use:** client-side assembly of the sheet-music PDF export; pages are
+  rendered locally to canvas and embedded as images. The library is loaded
+  on demand (code-split) and is not modified.
+
 ## Reverb impulse response
 
 The room reverb impulse response is generated procedurally at runtime

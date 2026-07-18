@@ -24,12 +24,14 @@ src/
     keyboard/   geometry, per-pointer tracker, computer keyboard, PianoKeyboard
     notation/   staffMapping, quantization, notationLayout, scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
-                scrubController
+                scrubController, sheetLayout (pure paginated engraving),
+                sheetRenderer (print-style page canvas)
     transport/  transportMachine (pure), transportClock, transportController,
                 sustainPedal, TransportControls
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportTakeDialog
-    export/     AudioExportDialog
+    export/     AudioExportDialog, SheetExportDialog, sheetPdfService
+                (pdf-lib, dynamic import — see SHEET_EXPORT.md)
     settings/   SettingsPage (offline pack, diagnostics, install, updates)
     play/       PlayPage, SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,

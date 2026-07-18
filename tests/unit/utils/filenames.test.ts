@@ -4,6 +4,7 @@ import {
   sanitizeFileNamePart,
   takeAudioFileName,
   takeJsonFileName,
+  takeSheetFileName,
 } from '@/utils/filenames';
 
 describe('sanitizeFileNamePart', () => {
@@ -45,6 +46,7 @@ describe('file name builders', () => {
   it('builds the spec-format names', () => {
     expect(takeJsonFileName('My Take')).toBe('PoKeyBoard - My Take.pokeyboard.json');
     expect(takeAudioFileName('My Take')).toBe('PoKeyBoard - My Take.mp3');
+    expect(takeSheetFileName('My<Take>')).toBe('PoKeyBoard - My Take.pdf');
     expect(backupFileName(new Date('2026-07-17T12:00:00Z'))).toBe(
       'PoKeyBoard Backup - 2026-07-17.json',
     );

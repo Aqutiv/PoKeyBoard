@@ -6,6 +6,7 @@ import {
   type QuantizationSetting,
 } from '@/domain/takeTypes';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
+import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
 
 export type VelocityMode = 'touch' | 'fixed';
@@ -21,6 +22,7 @@ export interface SettingsState {
   metronomeVolume: number;
   displayQuantization: QuantizationSetting;
   keyboardAnchorMidi: number;
+  sheetPaperSize: PaperSize;
 
   setLanguage(language: SupportedLanguage): void;
   setMasterVolume(value: number): void;
@@ -32,6 +34,7 @@ export interface SettingsState {
   setMetronomeVolume(value: number): void;
   setDisplayQuantization(value: QuantizationSetting): void;
   setKeyboardAnchorMidi(midi: number): void;
+  setSheetPaperSize(size: PaperSize): void;
   resetSettings(): void;
 }
 
@@ -46,6 +49,7 @@ export const SETTINGS_DEFAULTS = {
   metronomeVolume: 0.6,
   displayQuantization: '1/16' as QuantizationSetting,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
+  sheetPaperSize: 'a4' as PaperSize,
 };
 
 /**
@@ -72,6 +76,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setMetronomeVolume: (metronomeVolume) => set({ metronomeVolume }),
   setDisplayQuantization: (displayQuantization) => set({ displayQuantization }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),
+  setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),
   resetSettings: () => {
     audioEngine.setMasterVolume(SETTINGS_DEFAULTS.masterVolume);
     audioEngine.setReverbMix(SETTINGS_DEFAULTS.reverbMix);

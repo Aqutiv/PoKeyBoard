@@ -34,6 +34,10 @@ export function takeAudioFileName(title: string): string {
   return `PoKeyBoard - ${sanitizeFileNamePart(title)}.mp3`;
 }
 
+export function takeSheetFileName(title: string): string {
+  return `PoKeyBoard - ${sanitizeFileNamePart(title)}.pdf`;
+}
+
 export function backupFileName(date: Date): string {
   const iso = date.toISOString().slice(0, 10);
   return `PoKeyBoard Backup - ${iso}.json`;

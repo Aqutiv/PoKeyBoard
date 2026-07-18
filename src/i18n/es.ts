@@ -19,6 +19,7 @@ export const es: Messages = {
   play: {
     pageLabel: 'Tocar',
     shareAudio: 'Compartir audio',
+    shareSheet: 'Compartir partitura',
     dismiss: 'Descartar',
     loadingPiano: ({ percent }) => `Cargando piano… ${percent}%`,
     audioUnavailable: 'El audio no está disponible en este navegador.',
@@ -93,6 +94,7 @@ export const es: Messages = {
     exportJson: 'Exportar JSON',
     shareJson: 'Compartir JSON',
     shareAudio: 'Compartir audio',
+    shareSheet: 'Compartir partitura',
     clearNotes: 'Borrar notas',
     delete: 'Eliminar',
     backupAll: 'Respaldar todas las tomas',
@@ -179,6 +181,36 @@ export const es: Messages = {
     deliveredNoShare: 'Descargada (compartir no disponible).',
     errorCouldNotLoad: 'No se pudo cargar esta toma.',
     errorStopPlayback: 'Detén la reproducción o la grabación antes de exportar.',
+  },
+  sheetDialog: {
+    title: 'Exportar partitura',
+    summary: ({ title, measures }) =>
+      `${title} · ${measures} ${measures === 1 ? 'compás' : 'compases'}`,
+    paperSize: 'Tamaño de papel',
+    paperA4: 'A4',
+    paperLetter: 'Carta (EE. UU.)',
+    grid: 'Nota más pequeña',
+    grid8: 'Corcheas (1/8)',
+    grid16: 'Semicorcheas (1/16)',
+    gridHint:
+      'La interpretación libre se ajusta a esta cuadrícula en el papel. La reproducción no cambia.',
+    previewLabel: 'Vista previa de la página 1',
+    pageEstimate: ({ pages }) => `≈ ${pages} página${pages === 1 ? '' : 's'}`,
+    generate: 'Generar PDF',
+    workingLayout: 'Maquetando páginas…',
+    workingPage: ({ page, pages }) => `Renderizando página ${page} de ${pages}…`,
+    workingAssemble: 'Montando el PDF…',
+    ready: ({ pages, size }) => `PDF listo — ${pages} página${pages === 1 ? '' : 's'} · ${size}`,
+    downloadPdf: 'Descargar PDF',
+    sharePdf: 'Compartir PDF',
+    cancel: 'Cancelar',
+    close: 'Cerrar',
+    back: 'Atrás',
+    delivered: 'Compartido.',
+    deliveredNoShare: 'Descargado (compartir no disponible).',
+    errorCouldNotLoad: 'No se pudo cargar esta toma.',
+    tooManyPages: ({ pages, max }) =>
+      `Esta toma necesita ${pages} páginas — más que el límite de ${max}. Prueba con una toma más corta.`,
   },
   settings: {
     title: 'Ajustes',
@@ -282,6 +314,7 @@ export const es: Messages = {
       'Esta toma dura más de 20 minutos — la exportación se limita para proteger la memoria.',
     exportPianoLoading:
       'El piano todavía se está cargando — intenta exportar de nuevo en un momento.',
+    sheetExportFailed: 'Falló la exportación de la partitura.',
   },
   repairs: {
     takeId: 'Se asignó un nuevo id de toma.',

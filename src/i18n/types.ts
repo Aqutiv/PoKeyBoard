@@ -27,7 +27,8 @@ export type ErrorMessageKey =
   | 'exportEncodingInvalid'
   | 'exportEmpty'
   | 'exportTooLong'
-  | 'exportPianoLoading';
+  | 'exportPianoLoading'
+  | 'sheetExportFailed';
 
 /** A structured repair record produced by take import, translated for display. */
 export type RepairCode =
@@ -75,6 +76,7 @@ export interface Messages {
   play: {
     pageLabel: string;
     shareAudio: string;
+    shareSheet: string;
     dismiss: string;
     loadingPiano: (p: { percent: number }) => string;
     audioUnavailable: string;
@@ -146,6 +148,7 @@ export interface Messages {
     exportJson: string;
     shareJson: string;
     shareAudio: string;
+    shareSheet: string;
     clearNotes: string;
     delete: string;
     backupAll: string;
@@ -221,6 +224,33 @@ export interface Messages {
     deliveredNoShare: string;
     errorCouldNotLoad: string;
     errorStopPlayback: string;
+  };
+  sheetDialog: {
+    title: string;
+    summary: (p: { title: string; measures: number }) => string;
+    paperSize: string;
+    paperA4: string;
+    paperLetter: string;
+    grid: string;
+    grid8: string;
+    grid16: string;
+    gridHint: string;
+    previewLabel: string;
+    pageEstimate: (p: { pages: number }) => string;
+    generate: string;
+    workingLayout: string;
+    workingPage: (p: { page: number; pages: number }) => string;
+    workingAssemble: string;
+    ready: (p: { pages: number; size: string }) => string;
+    downloadPdf: string;
+    sharePdf: string;
+    cancel: string;
+    close: string;
+    back: string;
+    delivered: string;
+    deliveredNoShare: string;
+    errorCouldNotLoad: string;
+    tooManyPages: (p: { pages: number; max: number }) => string;
   };
   settings: {
     title: string;
