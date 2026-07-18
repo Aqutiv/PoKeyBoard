@@ -11,3 +11,5 @@ export async function setMetadata(key: string, value: unknown): Promise<void> {
 
 export const META_LAST_OPEN_TAKE = 'lastOpenTakeId';
 export const META_PERSIST_REQUESTED = 'persistentStorageRequested';
+/** Set once the user picks a language in Settings; until then the app follows the OS. */
+export const META_LANGUAGE_EXPLICIT = 'languageExplicitlyChosen';

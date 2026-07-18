@@ -4,6 +4,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { detectCapabilities, type AppCapabilities } from '@/audio/audioCapabilities';
 import { LANGUAGE_OPTIONS } from '@/i18n';
 import { useMessages } from '@/i18n/i18nContext';
+import { pinLanguage, unpinLanguage } from '@/i18n/languagePreference';
 import type { SupportedLanguage } from '@/i18n/types';
 import { installService } from '@/pwa/install';
 import { updateManager } from '@/pwa/updateManager';
@@ -161,7 +162,10 @@ export function SettingsPage() {
           <span>{m.settings.language}</span>
           <select
             value={settings.language}
-            onChange={(e) => settings.setLanguage(e.target.value as SupportedLanguage)}
+            onChange={(e) => {
+              settings.setLanguage(e.target.value as SupportedLanguage);
+              void pinLanguage();
+            }}
             aria-label={m.settings.language}
           >
             {LANGUAGE_OPTIONS.map((option) => (
@@ -374,6 +378,8 @@ export function SettingsPage() {
           onClick={() => {
             if (window.confirm(m.settings.resetConfirm)) {
               settings.resetSettings();
+              // Reset returns to default behavior: follow the OS language again.
+              void unpinLanguage();
             }
           }}
         >

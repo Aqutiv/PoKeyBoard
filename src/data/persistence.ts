@@ -2,6 +2,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { getLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
+import { applySystemLanguageIfUnpinned } from '@/i18n/languagePreference';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { QuotaExceededStorageError, toErrorMessageKey } from '@/utils/errors';
@@ -52,6 +53,10 @@ class PersistenceService {
       const settings = useSettingsStore.getState();
       audioEngine.setMasterVolume(settings.masterVolume);
       audioEngine.setReverbMix(settings.reverbMix);
+      // Default to the OS language unless the user has pinned one. Runs before
+      // the autosave subscription below so an unpinned language isn't written
+      // back — it stays re-derived from the OS on each launch.
+      await applySystemLanguageIfUnpinned();
     } catch (error) {
       console.error('Settings restore failed:', error);
     }

@@ -17,6 +17,7 @@ import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
 import { CURRENT_SCHEMA_VERSION, type Take } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
+import { pinLanguage } from '@/i18n/languagePreference';
 import { useTakeStore } from '@/state/useTakeStore';
 import { loadSettings } from '@/data/settingsRepository';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -241,6 +242,11 @@ export async function restoreBackupFile(file: File): Promise<RestoreResult> {
   if (backup.settings && typeof backup.settings === 'object') {
     await restoreSettingsFromBackup(backup.settings);
     useSettingsStore.setState(await loadSettings());
+    // A restored backup carries the user's chosen language; pin it so it
+    // sticks instead of being overwritten by OS detection on the next launch.
+    if (typeof (backup.settings as Record<string, unknown>).language === 'string') {
+      await pinLanguage();
+    }
     settingsRestored = true;
   }
   return { imported, skipped, settingsRestored };
