@@ -78,6 +78,7 @@ export const fr: Messages = {
     title: 'Prises',
     newTake: 'Nouvelle prise',
     importJson: 'Importer JSON',
+    importMxl: 'Importer MXL',
     loading: 'Chargement…',
     empty:
       'Aucune prise pour l’instant. Enregistrez quelque chose sur l’écran Jouer, ou importez un fichier JSON de prise.',
@@ -98,6 +99,7 @@ export const fr: Messages = {
     backupAll: 'Sauvegarder toutes les prises',
     restoreBackup: 'Restaurer une sauvegarde',
     importFileLabel: 'Importer un fichier JSON de prise',
+    importMxlFileLabel: 'Importer un fichier MusicXML',
     restoreFileLabel: 'Restaurer un fichier de sauvegarde',
     removeNotesConfirm: ({ title }) => `Supprimer toutes les notes de « ${title} » ?`,
     deleteConfirm: ({ title }) => `Supprimer « ${title} » ? Cette action est irréversible.`,
@@ -266,6 +268,7 @@ export const fr: Messages = {
   errors: {
     generic: 'Une erreur s’est produite.',
     notValidTake: 'Ce fichier n’est pas une prise PoKeyBoard valide.',
+    notValidScore: 'Ce fichier n’a pas pu être lu comme une partition MusicXML.',
     storageFailed:
       'L’enregistrement dans ce navigateur a échoué. Votre dernière modification peut ne pas être stockée.',
     storageFull: 'Le stockage est plein. Libérez de l’espace ou exportez vos prises en sauvegarde.',

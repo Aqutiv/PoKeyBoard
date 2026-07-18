@@ -77,6 +77,7 @@ export const es: Messages = {
     title: 'Tomas',
     newTake: 'Nueva toma',
     importJson: 'Importar JSON',
+    importMxl: 'Importar MXL',
     loading: 'Cargando…',
     empty:
       'Aún no hay tomas. Graba algo en la pantalla Tocar o importa un archivo JSON de una toma.',
@@ -97,6 +98,7 @@ export const es: Messages = {
     backupAll: 'Respaldar todas las tomas',
     restoreBackup: 'Restaurar respaldo',
     importFileLabel: 'Importar archivo JSON de toma',
+    importMxlFileLabel: 'Importar archivo MusicXML',
     restoreFileLabel: 'Restaurar archivo de respaldo',
     removeNotesConfirm: ({ title }) => `¿Eliminar todas las notas de “${title}”?`,
     deleteConfirm: ({ title }) => `¿Eliminar “${title}”? Esto no se puede deshacer.`,
@@ -267,6 +269,7 @@ export const es: Messages = {
   errors: {
     generic: 'Algo salió mal.',
     notValidTake: 'Este archivo no es una toma válida de PoKeyBoard.',
+    notValidScore: 'No se pudo leer este archivo como una partitura MusicXML.',
     storageFailed:
       'Falló el guardado en este navegador. Tu último cambio puede no haberse guardado.',
     storageFull: 'El almacenamiento está lleno. Libera espacio o exporta tus tomas como respaldo.',

@@ -35,6 +35,19 @@ export class ImportValidationError extends AppError {
   }
 }
 
+export class ScoreImportError extends AppError {
+  readonly issues: string[];
+
+  constructor(issues: string[]) {
+    super(
+      `MusicXML import failed: ${issues.join('; ')}`,
+      'This file could not be read as a MusicXML score.',
+      'notValidScore',
+    );
+    this.issues = issues;
+  }
+}
+
 export class StorageError extends AppError {
   constructor(message: string, options?: { cause?: unknown }) {
     super(

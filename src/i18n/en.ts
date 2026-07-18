@@ -79,6 +79,7 @@ export const en: Messages = {
     title: 'Takes',
     newTake: 'New take',
     importJson: 'Import JSON',
+    importMxl: 'Import MXL',
     loading: 'Loading…',
     empty: 'No takes yet. Record something on the Play screen, or import a take JSON file.',
     draft: 'Draft',
@@ -98,6 +99,7 @@ export const en: Messages = {
     backupAll: 'Backup all takes',
     restoreBackup: 'Restore backup',
     importFileLabel: 'Import take JSON file',
+    importMxlFileLabel: 'Import MusicXML file',
     restoreFileLabel: 'Restore backup file',
     removeNotesConfirm: ({ title }) => `Remove all notes from “${title}”?`,
     deleteConfirm: ({ title }) => `Delete “${title}”? This cannot be undone.`,
@@ -264,6 +266,7 @@ export const en: Messages = {
   errors: {
     generic: 'Something went wrong.',
     notValidTake: 'This file is not a valid PoKeyBoard take.',
+    notValidScore: 'This file could not be read as a MusicXML score.',
     storageFailed: 'Saving to this browser failed. Your latest change may not be stored.',
     storageFull: 'Storage is full. Free up space or export your takes as backup.',
     audioUnavailable: 'Audio could not be started in this browser.',

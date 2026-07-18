@@ -11,14 +11,16 @@ import {
   takeExists,
 } from '@/data/takeRepository';
 import { ensureNotLibraryTake } from '@/domain/libraryTakes';
+import { extractMusicXmlText } from '@/domain/mxlContainer';
+import { musicXmlToTake } from '@/domain/musicXmlImport';
 import { createEmptyTake } from '@/domain/noteEvents';
-import { parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
+import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
 import { CURRENT_SCHEMA_VERSION, type Take } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
 import { useTakeStore } from '@/state/useTakeStore';
 import { loadSettings } from '@/data/settingsRepository';
 import { useSettingsStore } from '@/state/useSettingsStore';
-import { ImportValidationError } from '@/utils/errors';
+import { ImportValidationError, ScoreImportError } from '@/utils/errors';
 import { backupFileName, takeJsonFileName } from '@/utils/filenames';
 import { newId } from '@/utils/ids';
 
@@ -133,6 +135,22 @@ export async function previewImportFile(file: File): Promise<ImportPreview> {
   const text = await file.text();
   const parsed = parseTakeJsonString(text);
   const collision = await takeExists(parsed.take.id);
+  return { parsed, collision, fileName: file.name };
+}
+
+/** Preview an MXL/MusicXML score file as a freshly converted take. */
+export async function previewImportScoreFile(file: File): Promise<ImportPreview> {
+  let parsed: ParsedTake;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const take = musicXmlToTake(extractMusicXmlText(bytes), file.name);
+    parsed = parseTakeJson(take); // defense-in-depth: the uniform import pipeline
+  } catch (error) {
+    if (error instanceof ScoreImportError) throw error;
+    if (error instanceof ImportValidationError) throw new ScoreImportError(error.issues);
+    throw new ScoreImportError([error instanceof Error ? error.message : String(error)]);
+  }
+  const collision = await takeExists(parsed.take.id); // fresh id — effectively always false
   return { parsed, collision, fileName: file.name };
 }
 
