@@ -1,3 +1,4 @@
+import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { parseTakeJsonString } from '@/domain/takeSchema';
 import type { Take } from '@/domain/takeTypes';
 import { UNTITLED_TAKE_TITLE } from '@/domain/noteEvents';
@@ -52,6 +53,11 @@ function rowFromTake(take: Take, revision: number): TakeRow {
 }
 
 export async function saveTake(take: Take): Promise<number> {
+  // Last line of defense: bundled library tracks must never gain a stored
+  // row. Every legitimate path forks or launders the id before saving.
+  if (isLibraryTakeId(take.id)) {
+    throw new StorageError(`Refusing to persist library take ${take.id}`);
+  }
   return withWriteRetry(() =>
     db.transaction('rw', db.takes, async () => {
       const existing = await db.takes.get(take.id);

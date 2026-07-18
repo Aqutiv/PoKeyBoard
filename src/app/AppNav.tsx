@@ -29,6 +29,16 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    route: 'library',
+    labelKey: 'library',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
+        <path d="M3 5.5C4.5 4.5 6.4 4 8 4c1.6 0 3 .5 4 1.5C13 4.5 14.4 4 16 4c1.6 0 3.5.5 5 1.5V18c-1.5-1-3.4-1.5-5-1.5-1.6 0-3 .5-4 1.5-1-1-2.4-1.5-4-1.5-1.6 0-3.5.5-5 1.5z" />
+        <path d="M12 5.5V18" />
+      </svg>
+    ),
+  },
+  {
     route: 'takes',
     labelKey: 'takes',
     icon: (

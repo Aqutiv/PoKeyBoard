@@ -10,6 +10,7 @@ import {
   saveTake,
   takeExists,
 } from '@/data/takeRepository';
+import { ensureNotLibraryTake } from '@/domain/libraryTakes';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
 import { CURRENT_SCHEMA_VERSION, type Take } from '@/domain/takeTypes';
@@ -39,6 +40,11 @@ async function activate(take: Take): Promise<void> {
 
 export async function createNewTake(): Promise<void> {
   await activate(createEmptyTake());
+}
+
+/** Make `take` the active take on the Play screen (the library open flow). */
+export async function activateTake(take: Take): Promise<void> {
+  await activate(take);
 }
 
 export async function openTake(id: string): Promise<boolean> {
@@ -142,6 +148,7 @@ export async function commitImport(
   if (preview.collision && strategy === 'copy') {
     take = { ...take, id: newId() };
   }
+  take = ensureNotLibraryTake(take);
   await saveTake(take);
   await activate(take);
   return take;
@@ -202,7 +209,9 @@ export async function restoreBackupFile(file: File): Promise<RestoreResult> {
   for (const entry of backup.takes) {
     try {
       const { take } = parseTakeJsonString(JSON.stringify(entry));
-      const finalTake = (await takeExists(take.id)) ? { ...take, id: newId() } : take;
+      const finalTake = ensureNotLibraryTake(
+        (await takeExists(take.id)) ? { ...take, id: newId() } : take,
+      );
       await saveTake(finalTake);
       imported += 1;
     } catch {

@@ -1,5 +1,6 @@
 import { AboutPage } from '@/features/about/AboutPage';
 import { AudioExportDialog } from '@/features/export/AudioExportDialog';
+import { LibraryPage } from '@/features/library/LibraryPage';
 import { PlayPage } from '@/features/play/PlayPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { TakesPage } from '@/features/takes/TakesPage';
@@ -12,6 +13,8 @@ function CurrentView() {
   switch (route) {
     case 'play':
       return <PlayPage />;
+    case 'library':
+      return <LibraryPage />;
     case 'takes':
       return <TakesPage />;
     case 'settings':

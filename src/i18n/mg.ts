@@ -5,6 +5,7 @@ import type { Messages } from './types';
 export const mg: Messages = {
   nav: {
     play: 'Mitendry',
+    library: 'Hira',
     takes: 'Rakitra',
     settings: 'Fandrindrana',
     about: 'Mombamomba',
@@ -112,6 +113,29 @@ export const mg: Messages = {
       `Tahiry voaverina: rakitra ${imported}` +
       (skipped > 0 ? `, ${skipped} nolavina` : '') +
       (settingsRestored ? ', voampihatra ny fandrindrana' : ''),
+  },
+  library: {
+    title: 'Hira',
+    hint: 'Hira voafantina: tendreo, ianaro, ary avadiho ho anao.',
+    chip: 'Hira',
+    byline: ({ composer }) => `nataon’i ${composer}`,
+    openLabel: ({ title }) => `Sokafy ${title}`,
+    meta: ({ notes, duration, bpm }) => `naoty ${notes} · ${duration} · ${bpm} BPM`,
+    forkHint:
+      'Tsy miova mihitsy ireto hira ireto — raketo eo amboniny dia ho voatahiry ho rakitra vaovao ny dikanao.',
+    descriptions: {
+      aBeautifulDay:
+        'Hira noforonina, mafana sy malefaka, mipetraka manontolo eo amin’ny kitendry hita — tsara hanombohana.',
+      furElise: 'Ilay bagatelle sarobidin’i Beethoven — ny lohahevitra fanokafana malaza.',
+      gymnopedie1:
+        'Ilay hira manonofin’i Satie — miadana, malefaka, ary malalaka. Mihainoa fotsiny.',
+      bluesInC:
+        'Feo bass boogie mikodiadia. Tsindrio ny fandraketana ary improvisezo eo ambony — andramo ny gamme blues C: C, E♭, F, F♯, G, B♭.',
+      goodNight:
+        'Hira fampatoriana malefaka eo ambanin’ny hazavan’ny volana amin’ny gadona 6/8, misy feonkira toy ny mihira sy arpège mihozongozona moramora.',
+      moonlightSonata:
+        'Ny Adagio sostenuto an’i Beethoven, feno — triolet miadana toy ny tara-bolana eo ambanin’ny feon-kira mitony.',
+    },
   },
   importDialog: {
     title: 'Ampidiro rakitra',
