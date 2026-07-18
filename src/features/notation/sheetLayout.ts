@@ -287,11 +287,17 @@ function buildWorkMeasures(score: ScoreLayout, bpm: number): WorkMeasure[] {
     }
     const columns = [...byTime.values()].sort((a, b) => a.timeMs - b.timeMs);
     if (columns.length === 0) {
-      return { index: measure.index, startMs: measure.startMs, columns, naturalWG: EMPTY_MEASURE_W_G };
+      return {
+        index: measure.index,
+        startMs: measure.startMs,
+        columns,
+        naturalWG: EMPTY_MEASURE_W_G,
+      };
     }
 
     const lead = columns[0]!.timeMs - measure.startMs;
-    let offset = START_PAD_G + (lead > 0 ? Math.min(advanceG(lead, wholeMs), LEAD_SILENCE_MAX_G) : 0);
+    let offset =
+      START_PAD_G + (lead > 0 ? Math.min(advanceG(lead, wholeMs), LEAD_SILENCE_MAX_G) : 0);
     for (let i = 0; i < columns.length; i += 1) {
       const column = columns[i]!;
       if (i > 0) offset += advanceG(column.timeMs - columns[i - 1]!.timeMs, wholeMs);
@@ -333,7 +339,8 @@ function packSystems(
   }
 
   return rows.map((row, systemIndex) => {
-    let x = metrics.marginLeftPt + metrics.clefAreaPt + (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
+    let x =
+      metrics.marginLeftPt + metrics.clefAreaPt + (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
     const measures: SheetMeasure[] = row.measures.map((wm) => {
       const widthPt = wm.naturalWG * row.stretch * G;
       const columns: SheetColumn[] = wm.columns.map((column) => ({
@@ -368,7 +375,9 @@ function packSystems(
 }
 
 function beamable(chord: SheetChord): boolean {
-  return !chord.symbol.dotted && (chord.symbol.base === 'eighth' || chord.symbol.base === 'sixteenth');
+  return (
+    !chord.symbol.dotted && (chord.symbol.base === 'eighth' || chord.symbol.base === 'sixteenth')
+  );
 }
 
 interface BeamMember {
@@ -381,7 +390,11 @@ interface BeamMember {
  * one staff. Compound meters (6/8, 9/8, …) group per dotted beat-unit trio.
  * Beam y values are staff-relative here; `paginate` shifts them to page space.
  */
-function buildBeams(measure: SheetMeasure, measureStartMs: number, options: SheetLayoutOptions): void {
+function buildBeams(
+  measure: SheetMeasure,
+  measureStartMs: number,
+  options: SheetLayoutOptions,
+): void {
   const { timeSignature, bpm } = options;
   const beatMs = beatDurationMs(bpm, timeSignature);
   const compound = timeSignature.numerator % 3 === 0 && timeSignature.denominator >= 8;
@@ -422,7 +435,9 @@ function emitBeam(measure: SheetMeasure, staff: StaffKind, run: BeamMember[]): v
 
   const xs = run.map((member) => stemXPt(member.column.xPt, stemDown));
   const anchors = run.map((member) => {
-    const note = stemDown ? member.chord.notes[0]! : member.chord.notes[member.chord.notes.length - 1]!;
+    const note = stemDown
+      ? member.chord.notes[0]!
+      : member.chord.notes[member.chord.notes.length - 1]!;
     return staffYRel(note.step);
   });
   const tipFirst = anchors[0]! + dir * STEM_LENGTH_G * G;

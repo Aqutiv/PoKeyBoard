@@ -69,7 +69,9 @@ function quarterMeasures(count: number): NoteEvent[] {
   const notes: NoteEvent[] = [];
   for (let m = 0; m < count; m += 1) {
     for (let b = 0; b < 4; b += 1) {
-      notes.push(note({ id: `m${m}b${b}`, midi: 76, startMs: m * 2000 + b * 500, durationMs: 500 }));
+      notes.push(
+        note({ id: `m${m}b${b}`, midi: 76, startMs: m * 2000 + b * 500, durationMs: 500 }),
+      );
     }
   }
   return notes;
@@ -245,7 +247,9 @@ describe('layoutSheet', () => {
     it('groups per dotted beat in compound 6/8 meter', () => {
       const timeSignature: TimeSignature = { numerator: 6, denominator: 8 };
       const result = sheet(
-        [0, 250, 500].map((startMs, i) => note({ id: `e${i}`, midi: 76, startMs, durationMs: 250 })),
+        [0, 250, 500].map((startMs, i) =>
+          note({ id: `e${i}`, midi: 76, startMs, durationMs: 250 }),
+        ),
         { timeSignature },
       );
       const measure = allMeasures(result)[0]!;

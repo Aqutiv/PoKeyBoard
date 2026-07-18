@@ -1,5 +1,6 @@
 import { AboutPage } from '@/features/about/AboutPage';
 import { AudioExportDialog } from '@/features/export/AudioExportDialog';
+import { SheetExportDialog } from '@/features/export/SheetExportDialog';
 import { LibraryPage } from '@/features/library/LibraryPage';
 import { PlayPage } from '@/features/play/PlayPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
@@ -32,6 +33,7 @@ function Shell() {
       </div>
       <AppNav />
       <AudioExportDialog />
+      <SheetExportDialog />
     </div>
   );
 }

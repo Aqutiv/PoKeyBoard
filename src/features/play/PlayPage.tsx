@@ -29,6 +29,7 @@ export function PlayPage() {
   const isLibrary = isLibraryTakeId(takeId);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
   const openExport = useExportUiStore((s) => s.openExport);
+  const openSheetExport = useExportUiStore((s) => s.openSheetExport);
   const playbackActiveMidis = usePlaybackActiveMidis();
 
   return (
@@ -50,6 +51,14 @@ export function PlayPage() {
               disabled={!hasNotes}
             >
               {m.play.shareAudio}
+            </button>
+            <button
+              type="button"
+              className="play-header__export"
+              onClick={() => openSheetExport(takeId)}
+              disabled={!hasNotes}
+            >
+              {m.play.shareSheet}
             </button>
           </span>
         </header>

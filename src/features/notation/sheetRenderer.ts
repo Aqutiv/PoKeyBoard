@@ -70,7 +70,11 @@ function drawTitleBlock(ctx: CanvasRenderingContext2D, page: SheetPage): void {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
   ctx.font = `700 21px ${SERIF}`;
-  ctx.fillText(ellipsize(ctx, block.title, metrics.contentWidthPt), centerX, metrics.marginTopPt + 30);
+  ctx.fillText(
+    ellipsize(ctx, block.title, metrics.contentWidthPt),
+    centerX,
+    metrics.marginTopPt + 30,
+  );
 
   if (block.subtitle) {
     ctx.font = `italic 10px ${SERIF}`;
@@ -91,7 +95,12 @@ function drawTitleBlock(ctx: CanvasRenderingContext2D, page: SheetPage): void {
 }
 
 /** "♩ = bpm" with a hand-drawn quarter note (no music-font dependency). */
-function drawTempoMark(ctx: CanvasRenderingContext2D, x: number, baseline: number, bpm: number): void {
+function drawTempoMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  baseline: number,
+  bpm: number,
+): void {
   const headX = x + 3;
   const headY = baseline - 2.5;
   ctx.save();
@@ -269,10 +278,7 @@ function drawChord(
   if (chord.beamId !== null) {
     const beam = beams[chord.beamId]!;
     const dx = beam.x2Pt - beam.x1Pt;
-    tipY =
-      dx === 0
-        ? beam.y1Pt
-        : beam.y1Pt + ((stemX - beam.x1Pt) / dx) * (beam.y2Pt - beam.y1Pt);
+    tipY = dx === 0 ? beam.y1Pt : beam.y1Pt + ((stemX - beam.x1Pt) / dx) * (beam.y2Pt - beam.y1Pt);
   } else {
     tipY = chord.stemDown ? bottomHeadY + STEM_LENGTH_G * G : topHeadY - STEM_LENGTH_G * G;
   }

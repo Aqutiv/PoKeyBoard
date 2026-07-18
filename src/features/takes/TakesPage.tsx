@@ -43,6 +43,7 @@ export function TakesPage() {
   const { locale } = useI18n();
   const activeTakeId = useTakeStore((s) => s.take.id);
   const openExport = useExportUiStore((s) => s.openExport);
+  const openSheetExport = useExportUiStore((s) => s.openSheetExport);
   const [summaries, setSummaries] = useState<TakeSummary[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
@@ -307,6 +308,14 @@ export function TakesPage() {
                       onClick={() => openExport(summary.id)}
                     >
                       {m.takes.shareAudio}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--small"
+                      disabled={summary.noteCount === 0}
+                      onClick={() => openSheetExport(summary.id)}
+                    >
+                      {m.takes.shareSheet}
                     </button>
                     <button
                       type="button"
