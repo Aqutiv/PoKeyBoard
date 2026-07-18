@@ -169,6 +169,7 @@ export interface SheetTitleBlock {
 export interface SheetPage {
   pageNumber: number;
   metrics: SheetPageMetrics;
+  timeSignature: TimeSignature;
   /** Present on page 1 only. */
   titleBlock: SheetTitleBlock | null;
   systems: SheetSystem[];
@@ -505,6 +506,7 @@ function paginate(
     pages.push({
       pageNumber,
       metrics,
+      timeSignature: options.timeSignature,
       titleBlock:
         pageNumber === 1
           ? {
