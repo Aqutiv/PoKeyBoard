@@ -102,6 +102,18 @@ export function TakesPage() {
     [startImport],
   );
 
+  const onScoreImportChosen = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      void previewImportScoreFile(file)
+        .then(setImportPreview)
+        .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
+    },
+    [m],
+  );
+
   const onRestoreChosen = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -373,12 +385,13 @@ export function TakesPage() {
         onChange={onImportChosen}
         aria-label={m.takes.importFileLabel}
       />
+      {/* Do not add accept: iOS Files greys out .mxl because its custom extension is
+          not consistently associated with the MusicXML MIME type. */}
       <input
         ref={scoreInputRef}
         type="file"
-        accept=".mxl,.musicxml,.xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
         className="visually-hidden"
-        onChange={onImportChosen}
+        onChange={onScoreImportChosen}
         aria-label={m.takes.importMxlFileLabel}
       />
       <input

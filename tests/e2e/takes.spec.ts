@@ -91,6 +91,15 @@ test.describe('takes library', () => {
     ).toBeVisible();
   });
 
+  test('does not apply a native file-type filter to the MusicXML picker', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    // iOS Files greys out .mxl files when this input has an accept filter,
+    // even when the extension and registered MusicXML MIME types are listed.
+    await expect(page.getByLabel('Import MusicXML file')).not.toHaveAttribute('accept');
+  });
+
   test('backs up all takes as a download', async ({ page }) => {
     await gotoAppReady(page);
     await recordShortTake(page);
