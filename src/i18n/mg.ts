@@ -79,6 +79,7 @@ export const mg: Messages = {
     title: 'Rakitra',
     newTake: 'Rakitra vaovao',
     importJson: 'Ampidiro JSON',
+    importMxl: 'Ampidiro MXL',
     loading: 'Am-pakàna…',
     empty:
       'Mbola tsy misy rakitra. Mandrakitra zavatra eo amin’ny efijery Mitendry, na ampidiro rakitra JSON.',
@@ -99,6 +100,7 @@ export const mg: Messages = {
     backupAll: 'Tahirizo ny rakitra rehetra',
     restoreBackup: 'Avereno ny tahiry',
     importFileLabel: 'Ampidiro rakitra JSON',
+    importMxlFileLabel: 'Ampidiro rakitra MusicXML',
     restoreFileLabel: 'Avereno ny rakitra tahiry',
     removeNotesConfirm: ({ title }) => `Fafana ny naoty rehetra ao amin’ny “${title}”?`,
     deleteConfirm: ({ title }) => `Fafana ny “${title}”? Tsy azo averina ity.`,
@@ -268,6 +270,7 @@ export const mg: Messages = {
   errors: {
     generic: 'Nisy tsy nety.',
     notValidTake: 'Tsy rakitra PoKeyBoard manan-kery ity rakitra ity.',
+    notValidScore: 'Tsy azo novakina ho partitiora MusicXML ity rakitra ity.',
     storageFailed:
       'Tsy nahomby ny fitehirizana amin’ity navigatera ity. Mety tsy voatahiry ny fanovana farany nataonao.',
     storageFull: 'Feno ny fitehirizana. Manalà toerana na avoahy ho tahiry ny rakitrao.',

@@ -18,6 +18,7 @@ export function isSupportedLanguage(value: unknown): value is SupportedLanguage 
 export type ErrorMessageKey =
   | 'generic'
   | 'notValidTake'
+  | 'notValidScore'
   | 'storageFailed'
   | 'storageFull'
   | 'audioUnavailable'
@@ -131,6 +132,7 @@ export interface Messages {
     title: string;
     newTake: string;
     importJson: string;
+    importMxl: string;
     loading: string;
     empty: string;
     draft: string;
@@ -149,6 +151,7 @@ export interface Messages {
     backupAll: string;
     restoreBackup: string;
     importFileLabel: string;
+    importMxlFileLabel: string;
     restoreFileLabel: string;
     removeNotesConfirm: (p: { title: string }) => string;
     deleteConfirm: (p: { title: string }) => string;

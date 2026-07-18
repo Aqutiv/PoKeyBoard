@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { listTakeSummaries, type TakeSummary } from '@/data/takeRepository';
+import { isScoreFileName } from '@/domain/mxlContainer';
 import { useI18n, useMessages } from '@/i18n/i18nContext';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -17,6 +18,7 @@ import {
   duplicateTake,
   openTake,
   previewImportFile,
+  previewImportScoreFile,
   renameTake,
   restoreBackupFile,
   takeJsonFile,
@@ -49,6 +51,7 @@ export function TakesPage() {
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
   const [dragOver, setDragOver] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
+  const scoreInputRef = useRef<HTMLInputElement | null>(null);
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(() => {
@@ -77,7 +80,11 @@ export function TakesPage() {
   const startImport = useCallback(
     async (file: File) => {
       try {
-        setImportPreview(await previewImportFile(file));
+        setImportPreview(
+          await (isScoreFileName(file.name)
+            ? previewImportScoreFile(file)
+            : previewImportFile(file)),
+        );
       } catch (error) {
         setMessage(m.errors[toErrorMessageKey(error)]);
       }
@@ -157,6 +164,9 @@ export function TakesPage() {
             }
           >
             {m.takes.newTake}
+          </button>
+          <button type="button" className="btn" onClick={() => scoreInputRef.current?.click()}>
+            {m.takes.importMxl}
           </button>
           <button type="button" className="btn" onClick={() => importInputRef.current?.click()}>
             {m.takes.importJson}
@@ -353,6 +363,14 @@ export function TakesPage() {
         className="visually-hidden"
         onChange={onImportChosen}
         aria-label={m.takes.importFileLabel}
+      />
+      <input
+        ref={scoreInputRef}
+        type="file"
+        accept=".mxl,.musicxml,.xml,application/vnd.recordare.musicxml,application/vnd.recordare.musicxml+xml"
+        className="visually-hidden"
+        onChange={onImportChosen}
+        aria-label={m.takes.importMxlFileLabel}
       />
       <input
         ref={restoreInputRef}
