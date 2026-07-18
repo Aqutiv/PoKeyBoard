@@ -8,6 +8,7 @@ import {
   SHEET_GAP_PT,
   layoutSheet,
   metricsFor,
+  normalizePaperSize,
   staffYRel,
   stemXPt,
   type SheetChord,
@@ -87,6 +88,16 @@ describe('metricsFor', () => {
     expect(letter.pageWidthPt).toBe(612);
     expect(letter.pageHeightPt).toBe(792);
     expect(letter.contentWidthPt).toBe(612 - 80);
+  });
+
+  it('falls back to A4 for an unknown or corrupt paper size', () => {
+    // A restored/corrupt setting can carry any string; it must not throw.
+    const metrics = metricsFor('legal' as unknown as 'a4');
+    expect(metrics.paper).toBe('a4');
+    expect(metrics.pageWidthPt).toBeCloseTo(595.28);
+    expect(normalizePaperSize('legal')).toBe('a4');
+    expect(normalizePaperSize(undefined)).toBe('a4');
+    expect(normalizePaperSize('letter')).toBe('letter');
   });
 });
 

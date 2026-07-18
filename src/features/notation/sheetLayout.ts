@@ -71,14 +71,22 @@ const PAPER_DIMS: Record<PaperSize, { w: number; h: number }> = {
   letter: { w: 612, h: 792 },
 };
 
+/** Coerce any value (e.g. a corrupt persisted setting) to a known paper size. */
+export function normalizePaperSize(value: unknown): PaperSize {
+  return value === 'letter' ? 'letter' : 'a4';
+}
+
 export function metricsFor(paper: PaperSize): SheetPageMetrics {
-  const { w, h } = PAPER_DIMS[paper];
+  // Never trust the incoming value blindly: a restored/corrupt setting could
+  // carry an unknown string, and an undefined dimension would throw here.
+  const safePaper = normalizePaperSize(paper);
+  const { w, h } = PAPER_DIMS[safePaper];
   const marginTopPt = 46;
   const marginRightPt = 40;
   const marginBottomPt = 46;
   const marginLeftPt = 40;
   return {
-    paper,
+    paper: safePaper,
     pageWidthPt: w,
     pageHeightPt: h,
     marginTopPt,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Take } from '@/domain/takeTypes';
-import type { SheetGrid } from '@/features/notation/sheetLayout';
+import { normalizePaperSize, type SheetGrid } from '@/features/notation/sheetLayout';
 import { drawSheetPage } from '@/features/notation/sheetRenderer';
 import { getTakeForExport } from '@/features/takes/takesService';
 import { useI18n } from '@/i18n/i18nContext';
@@ -51,7 +51,8 @@ export function SheetExportDialog() {
   const { m, locale } = useI18n();
   const requestedTakeId = useExportUiStore((s) => s.sheetRequestedTakeId);
   const closeSheetExport = useExportUiStore((s) => s.closeSheetExport);
-  const paper = useSettingsStore((s) => s.sheetPaperSize);
+  // Guard against a corrupt/restored setting so the radios and layout agree.
+  const paper = normalizePaperSize(useSettingsStore((s) => s.sheetPaperSize));
   const setSheetPaperSize = useSettingsStore((s) => s.setSheetPaperSize);
 
   const [phase, setPhase] = useState<Phase | null>(null);
