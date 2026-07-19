@@ -3,6 +3,7 @@ import type { Take } from '@/domain/takeTypes';
 import { normalizePaperSize, type SheetGrid } from '@/features/notation/sheetLayout';
 import { drawSheetPage } from '@/features/notation/sheetRenderer';
 import { getTakeForExport } from '@/features/takes/takesService';
+import { transportController } from '@/features/transport/transportController';
 import { useI18n } from '@/i18n/i18nContext';
 import type { Messages } from '@/i18n/types';
 import { useExportUiStore } from '@/state/useExportUiStore';
@@ -86,6 +87,7 @@ export function SheetExportDialog() {
 
   const close = useCallback(() => {
     if (phase?.kind === 'working') return; // must cancel first
+    transportController.releaseExport();
     closeSheetExport();
   }, [phase, closeSheetExport]);
 
@@ -151,6 +153,10 @@ export function SheetExportDialog() {
 
   const startGenerate = useCallback(
     (take: Take) => {
+      if (!transportController.sendSheetExportEvent('SHEET_EXPORT_START')) {
+        setPhase({ kind: 'error', take, message: m.exportDialog.errorStopPlayback });
+        return;
+      }
       const controller = new AbortController();
       abortRef.current = controller;
       setPhase({ kind: 'working', take, progress: { stage: 'layout', fraction: -1 } });
@@ -162,8 +168,14 @@ export function SheetExportDialog() {
         },
         controller.signal,
       )
-        .then((result) => setPhase({ kind: 'ready', take, result, deliveredHow: null }))
+        .then((result) => {
+          abortRef.current = null;
+          transportController.sendSheetExportEvent('SHEET_EXPORT_DONE');
+          setPhase({ kind: 'ready', take, result, deliveredHow: null });
+        })
         .catch((error: unknown) => {
+          abortRef.current = null;
+          transportController.sendSheetExportEvent('SHEET_EXPORT_CANCEL');
           if (error instanceof SheetCancelledError) {
             setPhase({ kind: 'options', take });
           } else if (error instanceof SheetTooManyPagesError) {
@@ -343,13 +355,14 @@ export function SheetExportDialog() {
                   const file = new File([phase.result.blob], phase.result.fileName, {
                     type: 'application/pdf',
                   });
-                  void shareOrDownloadFile(file).then((how) =>
+                  void shareOrDownloadFile(file).then((how) => {
+                    if (how === 'cancelled') return;
                     setPhase({
                       ...phase,
                       deliveredHow:
                         how === 'shared' ? m.sheetDialog.delivered : m.sheetDialog.deliveredNoShare,
-                    }),
-                  );
+                    });
+                  });
                 }}
               >
                 {m.sheetDialog.sharePdf}

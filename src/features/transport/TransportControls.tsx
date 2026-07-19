@@ -5,6 +5,7 @@ import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
 import { canTransition } from './transportMachine';
 import { transportController, type RecordMode } from './transportController';
+import { effectivePlaybackDurationMs } from './sustainPedal';
 import './transport.css';
 
 const strokeProps = {
@@ -16,9 +17,12 @@ export function TransportControls() {
   const m = useMessages();
   const state = useTransportState();
   const playheadMs = usePlayheadMs();
-  const durationMs = useTakeStore((s) => s.take.durationMs);
+  const take = useTakeStore((s) => s.take);
+  const durationMs = effectivePlaybackDurationMs(take);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
-  const canUndoPass = useTakeStore((s) => s.lastPassNoteIds.length > 0);
+  const canUndoPass = useTakeStore(
+    (s) => s.lastPassNoteIds.length > 0 || s.lastPassPedalEvents.length > 0,
+  );
   const undoLastPass = useTakeStore((s) => s.undoLastPass);
   const [recordMode, setRecordMode] = useState<RecordMode>('overdub');
 
@@ -58,6 +62,11 @@ export function TransportControls() {
   );
 
   const seekDisabled = recording || durationMs === 0;
+
+  const onUndoLastPass = useCallback(() => {
+    undoLastPass();
+    transportController.clampPlayheadToTake();
+  }, [undoLastPass]);
 
   return (
     <div className="transport" role="group" aria-label={m.transport.groupLabel}>
@@ -120,7 +129,7 @@ export function TransportControls() {
           <button
             type="button"
             className="transport__undo"
-            onClick={() => undoLastPass()}
+            onClick={onUndoLastPass}
             aria-label={m.transport.undoLastPass}
           >
             {m.transport.undoPass}

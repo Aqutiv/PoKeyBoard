@@ -73,6 +73,7 @@ export interface ExportHashInput {
   exporterVersion: number;
   bitrateKbps: number;
   includeMetronome: boolean;
+  metronomeVolume: number;
 }
 
 /**
@@ -85,6 +86,7 @@ export async function computeExportHash(input: ExportHashInput): Promise<string>
       exporterVersion: input.exporterVersion,
       bitrateKbps: input.bitrateKbps,
       includeMetronome: input.includeMetronome,
+      metronomeVolume: input.includeMetronome ? input.metronomeVolume : null,
       content: canonicalAudioContent(input.take),
     }),
   );

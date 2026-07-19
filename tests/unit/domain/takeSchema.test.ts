@@ -50,6 +50,13 @@ describe('parseTakeJson', () => {
     expect(() => parseTakeJson(raw)).toThrow(ImportValidationError);
   });
 
+  it('rejects notes whose end crosses the six-hour timeline boundary', () => {
+    const raw = specExampleTake();
+    (raw.notes as Record<string, unknown>[])[0]!.startMs = 21_599_999;
+    (raw.notes as Record<string, unknown>[])[0]!.durationMs = 2;
+    expect(() => parseTakeJson(raw)).toThrow(ImportValidationError);
+  });
+
   it('rejects NaN and infinite numbers', () => {
     const raw = specExampleTake();
     (raw.notes as Record<string, unknown>[])[0]!.velocity = Number.NaN;

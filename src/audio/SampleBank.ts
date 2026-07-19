@@ -106,6 +106,7 @@ export class SampleBank {
    */
   async loadCorePack(context: BaseAudioContext): Promise<void> {
     const manifest = await this.loadManifest();
+    this.lastError = undefined;
     this.setPhase('loading-core');
     const core = manifest.files
       .filter((entry) => entry.pack === 'core')
@@ -114,8 +115,17 @@ export class SampleBank {
           Math.abs(a.midi - LOAD_CENTER_MIDI) - Math.abs(b.midi - LOAD_CENTER_MIDI) ||
           Math.abs(a.layer - 1) - Math.abs(b.layer - 1),
       );
-    await this.loadEntries(context, core);
-    this.setPhase(this.isCoreReady() ? 'core-ready' : 'error');
+    try {
+      await this.loadEntries(context, core);
+      if (!this.isCoreReady()) throw new Error('Core sample pack is incomplete.');
+      this.lastError = undefined;
+      this.setPhase('core-ready');
+    } catch (error) {
+      this.fail(
+        error instanceof Error ? error.message : 'The core piano samples could not be loaded.',
+      );
+      throw error;
+    }
   }
 
   /**
@@ -137,8 +147,16 @@ export class SampleBank {
     );
     if (needed.length === 0) return;
     if (this.phase === 'core-ready') this.setPhase('loading-extra');
-    await this.loadEntries(context, needed);
-    if (this.isCoreReady()) this.setPhase('core-ready');
+    try {
+      await this.loadEntries(context, needed);
+      if (this.isCoreReady()) {
+        this.lastError = undefined;
+        this.setPhase('core-ready');
+      }
+    } catch (error) {
+      this.fail(error instanceof Error ? error.message : 'Piano samples could not be loaded.');
+      throw error;
+    }
   }
 
   isCoreReady(): boolean {
@@ -214,14 +232,25 @@ export class SampleBank {
     entries: SamplePackFileEntry[],
   ): Promise<void> {
     const queue = [...entries];
+    const failures: unknown[] = [];
     const workers = Array.from({ length: FETCH_CONCURRENCY }, async () => {
       for (;;) {
         const entry = queue.shift();
         if (!entry) return;
-        await this.loadEntry(context, entry);
+        try {
+          await this.loadEntry(context, entry);
+        } catch (error) {
+          failures.push(error);
+        }
       }
     });
     await Promise.all(workers);
+    if (failures.length > 0) {
+      throw new Error(
+        `${failures.length} piano sample${failures.length === 1 ? '' : 's'} could not be loaded.`,
+        { cause: failures[0] },
+      );
+    }
   }
 
   private loadEntry(context: BaseAudioContext, entry: SamplePackFileEntry): Promise<void> {
@@ -232,6 +261,7 @@ export class SampleBank {
       .catch((error: unknown) => {
         this.lastError = `Could not load piano sample ${entry.file}.`;
         console.error('Sample load failed:', entry.file, error);
+        throw error;
       })
       .finally(() => this.inFlight.delete(entry.file));
     this.inFlight.set(entry.file, task);

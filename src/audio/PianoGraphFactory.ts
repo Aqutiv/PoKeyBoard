@@ -34,13 +34,20 @@ export function generateReverbImpulse(
   const rate = context.sampleRate;
   const length = Math.max(1, Math.floor(seconds * rate));
   const buffer = context.createBuffer(2, length, rate);
+  let seed = (0x9e3779b9 ^ rate ^ length) >>> 0;
+  const random = () => {
+    seed ^= seed << 13;
+    seed ^= seed >>> 17;
+    seed ^= seed << 5;
+    return (seed >>> 0) / 0x1_0000_0000;
+  };
   for (let channel = 0; channel < 2; channel += 1) {
     const data = buffer.getChannelData(channel);
     let smoothed = 0;
     let peak = 0;
     for (let i = 0; i < length; i += 1) {
       const envelope = Math.pow(1 - i / length, decayPower);
-      const noise = (Math.random() * 2 - 1) * envelope;
+      const noise = (random() * 2 - 1) * envelope;
       smoothed += 0.35 * (noise - smoothed);
       data[i] = smoothed;
       const magnitude = Math.abs(smoothed);

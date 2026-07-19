@@ -1,12 +1,15 @@
 import { useState, useSyncExternalStore } from 'react';
+import { useTransportState } from '@/app/hooks/useTransport';
 import { usePlaybackActiveMidis } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { lifecycleService } from '@/app/lifecycle';
+import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
+import { isBusyState } from '@/features/transport/transportMachine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -18,6 +21,7 @@ const getLifecycle = () => lifecycleService.getSnapshot();
 /** The main instrument view: transport, score, metronome, keyboard. */
 export function PlayPage() {
   const m = useMessages();
+  const transportState = useTransportState();
   const [compactView, setCompactView] = useState<'notation' | 'keyboard'>('notation');
   const interruption = useSyncExternalStore(subscribeLifecycle, getLifecycle);
   const status = useEngineStatus();
@@ -49,7 +53,7 @@ export function PlayPage() {
               type="button"
               className="play-header__export"
               onClick={() => openExport(takeId)}
-              disabled={!hasNotes}
+              disabled={!hasNotes || isBusyState(transportState)}
             >
               {m.play.shareAudio}
             </button>
@@ -57,7 +61,7 @@ export function PlayPage() {
               type="button"
               className="play-header__export"
               onClick={() => openSheetExport(takeId)}
-              disabled={!hasNotes}
+              disabled={!hasNotes || isBusyState(transportState)}
             >
               {m.play.shareSheet}
             </button>
@@ -101,9 +105,16 @@ export function PlayPage() {
             </p>
           ) : null}
           {progress.error ? (
-            <p className="page__hint" role="alert">
-              {progress.error}
-            </p>
+            <div className="page__hint" role="alert">
+              <p>{progress.error}</p>
+              <button
+                type="button"
+                className="btn btn--small"
+                onClick={() => void audioEngine.loadCoreSamples()}
+              >
+                {m.settings.tryAgain}
+              </button>
+            </div>
           ) : null}
           {status === 'error' ? (
             <p className="page__hint" role="alert">

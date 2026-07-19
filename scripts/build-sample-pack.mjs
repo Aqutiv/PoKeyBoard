@@ -8,10 +8,10 @@
  * every file (midi root, layer, pack membership, size).
  *
  * Idempotent: existing staged FLACs and converted MP3s are reused.
- * Requires: Node >= 20 (global fetch) and ffmpeg with libmp3lame on PATH.
+ * Requires: Node 20.19+ or 22.12+ and ffmpeg with libmp3lame on PATH.
  */
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
@@ -90,7 +90,12 @@ async function download(name, attempt = 1) {
   if (bytes.length < 10_000) {
     throw new Error(`Suspiciously small download for ${name} (${bytes.length} bytes)`);
   }
-  await writeFile(target, bytes);
+  const temporary = `${target}.partial`;
+  await writeFile(temporary, bytes);
+  if ((await fileSize(temporary)) !== bytes.length) {
+    throw new Error(`Incomplete temporary download for ${name}`);
+  }
+  await rename(temporary, target);
   return { name, bytes: bytes.length };
 }
 
@@ -115,6 +120,7 @@ async function convert(name, midi) {
   if ((await fileSize(output)) > 0) return { output, skipped: true };
   const trim = trimSecondsFor(midi);
   const fadeStart = trim - 1.5;
+  const temporary = output.replace(/\.mp3$/i, '.partial.mp3');
   // Mono keeps decoded AudioBuffer memory phone-friendly; the app's stereo
   // reverb restores a sense of space.
   await runFfmpeg([
@@ -133,8 +139,12 @@ async function convert(name, midi) {
     'libmp3lame',
     '-b:a',
     '128k',
-    output,
+    temporary,
   ]);
+  if ((await fileSize(temporary)) === 0) {
+    throw new Error(`ffmpeg produced an empty temporary file for ${name}`);
+  }
+  await rename(temporary, output);
   return { output };
 }
 

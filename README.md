@@ -8,7 +8,7 @@ No account. No backend. No microphone — "recording" captures the notes you pla
 
 ## Quick start
 
-Requires Node 20+ (Node 24 used in development) and npm.
+Requires Node 20.19+ or 22.12+ (Node 24 used in development) and npm.
 
 ```bash
 npm install

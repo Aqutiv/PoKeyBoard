@@ -40,6 +40,13 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
   const setAnchorMidi = useSettingsStore((s) => s.setKeyboardAnchorMidi);
   const [sustainOn, setSustainOn] = useState(false);
 
+  useEffect(
+    () => () => {
+      audioEngine.setSustain(false, 'ui-pedal');
+    },
+    [],
+  );
+
   useEffect(() => {
     const element = keysRef.current;
     if (!element) return;
@@ -51,6 +58,16 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
     });
     observer.observe(element);
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    const element = keysRef.current;
+    if (!element) return;
+    // iPadOS WebKit can still show its loupe over non-selectable content.
+    // The key bed already owns this gesture, so cancel touchstart natively.
+    const preventLoupe = (event: TouchEvent) => event.preventDefault();
+    element.addEventListener('touchstart', preventLoupe, { passive: false });
+    return () => element.removeEventListener('touchstart', preventLoupe);
   }, []);
 
   const visibleWhites = useMemo(() => computeVisibleWhites(containerWidth), [containerWidth]);
@@ -65,7 +82,9 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
 
   // Load any sample roots the visible range needs (range shift beyond core).
   useEffect(() => {
-    void audioEngine.ensurePlayableRange(layout.lowMidi, layout.highMidi);
+    void audioEngine.ensurePlayableRange(layout.lowMidi, layout.highMidi).catch(() => {
+      // The shared load-progress state exposes the retryable error.
+    });
   }, [layout.lowMidi, layout.highMidi]);
 
   const [tracker] = useState(

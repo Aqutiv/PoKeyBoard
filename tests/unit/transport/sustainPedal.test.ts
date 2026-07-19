@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { applySustainToNotes } from '@/features/transport/sustainPedal';
+import {
+  applySustainToNotes,
+  effectivePlaybackDurationMs,
+} from '@/features/transport/sustainPedal';
+import { createEmptyTake } from '@/domain/noteEvents';
 import { MAX_NOTE_DURATION_MS, type NoteEvent, type PedalEvent } from '@/domain/takeTypes';
 
 function note(partial: Partial<NoteEvent>): NoteEvent {
@@ -62,5 +66,28 @@ describe('applySustainToNotes', () => {
     expect(result[0]!.durationMs).toBe(400);
     expect(result[1]!.durationMs).toBe(50);
     expect(result[2]!.durationMs).toBe(500);
+  });
+
+  it('derives an audible duration that includes a sustained tail', () => {
+    const take = createEmptyTake({
+      durationMs: 200,
+      notes: [note({ startMs: 0, durationMs: 200 })],
+      pedalEvents: [
+        { atMs: 100, down: true },
+        { atMs: 1_000, down: false },
+      ],
+    });
+    expect(effectivePlaybackDurationMs(take)).toBe(1_000);
+  });
+
+  it('handles the maximum event count without quadratic rescanning', () => {
+    const notes = Array.from({ length: 50_000 }, (_, index) =>
+      note({ id: `n-${index}`, startMs: index * 2, durationMs: 1 }),
+    );
+    const pedals = Array.from({ length: 1_000 }, (_, index) => ({
+      atMs: index * 100,
+      down: index % 2 === 0,
+    }));
+    expect(applySustainToNotes(notes, pedals)).toHaveLength(notes.length);
   });
 });

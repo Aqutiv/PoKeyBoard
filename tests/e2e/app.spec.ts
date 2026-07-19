@@ -26,6 +26,16 @@ test.describe('app shell and piano', () => {
     await expect(key).toHaveAttribute('aria-pressed', 'false');
   });
 
+  test('suppresses the native touch gesture on the piano key bed', async ({ page }) => {
+    await gotoAppReady(page);
+    const defaultPrevented = await page.locator('.piano__keys').evaluate((element) => {
+      const event = new Event('touchstart', { bubbles: true, cancelable: true });
+      element.dispatchEvent(event);
+      return event.defaultPrevented;
+    });
+    expect(defaultPrevented).toBe(true);
+  });
+
   test('computer keyboard plays notes', async ({ page }) => {
     await gotoAppReady(page);
     const c4 = page.getByRole('button', { name: 'C4 key' });

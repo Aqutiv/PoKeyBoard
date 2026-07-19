@@ -1,3 +1,4 @@
+import { audioEngine } from '@/audio/AudioEngine';
 import { persistenceService } from '@/data/persistence';
 import { META_LAST_OPEN_TAKE, setMetadata } from '@/data/metadataRepository';
 import { getAllSettingsForBackup, restoreSettingsFromBackup } from '@/data/settingsRepository';
@@ -17,6 +18,7 @@ import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
 import { CURRENT_SCHEMA_VERSION, type Take } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
+import { scrubController } from '@/features/notation/scrubController';
 import { pinLanguage } from '@/i18n/languagePreference';
 import { useTakeStore } from '@/state/useTakeStore';
 import { loadSettings } from '@/data/settingsRepository';
@@ -25,24 +27,56 @@ import { ImportValidationError, ScoreImportError } from '@/utils/errors';
 import { backupFileName, takeJsonFileName } from '@/utils/filenames';
 import { newId } from '@/utils/ids';
 
-/** Stop any transport activity before swapping the active take. */
-function settleTransport(): void {
-  const state = transportController.getState();
-  if (state === 'recording' || state === 'countIn' || state === 'playing') {
-    transportController.stop();
+const MAX_TAKE_IMPORT_BYTES = 10 * 1024 * 1024;
+const MAX_SCORE_IMPORT_BYTES = 50 * 1024 * 1024;
+const MAX_BACKUP_IMPORT_BYTES = 100 * 1024 * 1024;
+
+function rejectOversizedFile(file: File, maximumBytes: number, kind: string): void {
+  if (file.size > maximumBytes) {
+    throw new ImportValidationError([
+      `${kind} is too large (${Math.ceil(file.size / 1_048_576)} MB; maximum ${Math.floor(maximumBytes / 1_048_576)} MB).`,
+    ]);
   }
 }
 
-async function activate(take: Take): Promise<void> {
+/** Stop any transport activity before swapping the active take. */
+function settleTransport(): void {
+  if (scrubController.isActive) scrubController.end();
+  transportController.handleInterruption();
+  audioEngine.allNotesOff();
+}
+
+function emptyTakeWithDefaults(): Take {
+  const settings = useSettingsStore.getState();
+  return createEmptyTake({
+    instrument: {
+      id: useTakeStore.getState().take.instrument.id,
+      masterVolume: settings.masterVolume,
+      reverbMix: settings.reverbMix,
+    },
+  });
+}
+
+async function prepareActiveOperation(): Promise<void> {
   settleTransport();
-  await persistenceService.flushSave();
+  await persistenceService.flushSaveOrThrow();
+}
+
+async function activatePrepared(take: Take): Promise<void> {
   useTakeStore.getState().setTake(take);
+  audioEngine.setMasterVolume(take.instrument.masterVolume);
+  audioEngine.setReverbMix(take.instrument.reverbMix);
   transportController.restorePlayhead(take.display.playheadMs);
   await setMetadata(META_LAST_OPEN_TAKE, take.id);
 }
 
+async function activate(take: Take): Promise<void> {
+  await prepareActiveOperation();
+  await activatePrepared(take);
+}
+
 export async function createNewTake(): Promise<void> {
-  await activate(createEmptyTake());
+  await activate(emptyTakeWithDefaults());
 }
 
 /** Make `take` the active take on the Play screen (the library open flow). */
@@ -51,19 +85,24 @@ export async function activateTake(take: Take): Promise<void> {
 }
 
 export async function openTake(id: string): Promise<boolean> {
+  if (useTakeStore.getState().take.id === id) {
+    await prepareActiveOperation();
+    return true;
+  }
+  await prepareActiveOperation();
   const take = await getTake(id);
   if (!take) return false;
-  await activate(take);
+  await activatePrepared(take);
   return true;
 }
 
 export async function renameTake(id: string, title: string): Promise<void> {
-  const trimmed = title.trim();
+  const trimmed = title.trim().slice(0, 200);
   if (trimmed.length === 0) return;
   const active = useTakeStore.getState().take;
   if (active.id === id) {
     useTakeStore.getState().setTitle(trimmed);
-    await persistenceService.flushSave();
+    await persistenceService.flushSaveOrThrow();
     return;
   }
   await repoRenameTake(id, trimmed);
@@ -71,23 +110,25 @@ export async function renameTake(id: string, title: string): Promise<void> {
 
 export async function duplicateTake(id: string): Promise<void> {
   if (useTakeStore.getState().take.id === id) {
-    await persistenceService.flushSave();
+    await prepareActiveOperation();
   }
   await repoDuplicateTake(id);
 }
 
 export async function deleteTake(id: string): Promise<void> {
+  const active = useTakeStore.getState().take.id === id;
+  if (active) await prepareActiveOperation();
   await repoDeleteTake(id);
-  if (useTakeStore.getState().take.id === id) {
-    await activate(createEmptyTake());
-  }
+  if (active) await activatePrepared(emptyTakeWithDefaults());
 }
 
 /** Remove all notes/pedals from a take, keeping the take itself. */
 export async function clearTakeNotes(id: string): Promise<void> {
   if (useTakeStore.getState().take.id === id) {
+    await prepareActiveOperation();
     useTakeStore.getState().clearNotes();
-    await persistenceService.flushSave();
+    transportController.restorePlayhead(0);
+    await persistenceService.flushSaveOrThrow();
     return;
   }
   const take = await getTake(id);
@@ -97,6 +138,7 @@ export async function clearTakeNotes(id: string): Promise<void> {
     notes: [],
     pedalEvents: [],
     durationMs: 0,
+    display: { ...take.display, playheadMs: 0 },
     updatedAt: new Date().toISOString(),
   });
 }
@@ -105,7 +147,7 @@ export async function clearTakeNotes(id: string): Promise<void> {
 async function resolveTake(id: string): Promise<Take | null> {
   const active = useTakeStore.getState().take;
   if (active.id === id) {
-    await persistenceService.flushSave();
+    await prepareActiveOperation();
     return useTakeStore.getState().take;
   }
   return getTake(id);
@@ -133,6 +175,7 @@ export interface ImportPreview {
 }
 
 export async function previewImportFile(file: File): Promise<ImportPreview> {
+  rejectOversizedFile(file, MAX_TAKE_IMPORT_BYTES, 'The take file');
   const text = await file.text();
   const parsed = parseTakeJsonString(text);
   const collision = await takeExists(parsed.take.id);
@@ -143,6 +186,7 @@ export async function previewImportFile(file: File): Promise<ImportPreview> {
 export async function previewImportScoreFile(file: File): Promise<ImportPreview> {
   let parsed: ParsedTake;
   try {
+    rejectOversizedFile(file, MAX_SCORE_IMPORT_BYTES, 'The score file');
     const bytes = new Uint8Array(await file.arrayBuffer());
     const take = musicXmlToTake(extractMusicXmlText(bytes), file.name);
     parsed = parseTakeJson(take); // defense-in-depth: the uniform import pipeline
@@ -163,13 +207,14 @@ export async function commitImport(
   preview: ImportPreview,
   strategy: 'copy' | 'replace',
 ): Promise<Take> {
+  await prepareActiveOperation();
   let take = preview.parsed.take;
   if (preview.collision && strategy === 'copy') {
     take = { ...take, id: newId() };
   }
   take = ensureNotLibraryTake(take);
   await saveTake(take);
-  await activate(take);
+  await activatePrepared(take);
   return take;
 }
 
@@ -184,7 +229,7 @@ interface BackupFileShape {
 }
 
 export async function backupAllFile(): Promise<File> {
-  await persistenceService.flushSave();
+  await persistenceService.flushSaveOrThrow();
   const takes = await getAllTakesForBackup();
   const settings = await getAllSettingsForBackup();
   const backup: BackupFileShape = {
@@ -207,6 +252,7 @@ export interface RestoreResult {
 
 /** Restore a full backup; colliding take ids get fresh local ids. */
 export async function restoreBackupFile(file: File): Promise<RestoreResult> {
+  rejectOversizedFile(file, MAX_BACKUP_IMPORT_BYTES, 'The backup file');
   let raw: unknown;
   try {
     raw = JSON.parse(await file.text());
@@ -244,7 +290,11 @@ export async function restoreBackupFile(file: File): Promise<RestoreResult> {
     useSettingsStore.setState(await loadSettings());
     // A restored backup carries the user's chosen language; pin it so it
     // sticks instead of being overwritten by OS detection on the next launch.
-    if (typeof (backup.settings as Record<string, unknown>).language === 'string') {
+    if (
+      ['en', 'es', 'fr', 'mg'].includes(
+        String((backup.settings as Record<string, unknown>).language),
+      )
+    ) {
       await pinLanguage();
     }
     settingsRestored = true;

@@ -27,18 +27,23 @@ describe('settingsRepository', () => {
       { key: 'notARealSetting', value: 123 },
       { key: 'metronomeVolume', value: 'loud' }, // wrong type
       { key: 'fixedVelocity', value: 0.5 },
+      { key: 'masterVolume', value: 2 },
+      { key: 'language', value: 'not-a-language' },
     ]);
     const loaded = await loadSettings();
     expect('notARealSetting' in loaded).toBe(false);
     expect(loaded.metronomeVolume).toBeUndefined();
     expect(loaded.fixedVelocity).toBe(0.5);
+    expect(loaded.masterVolume).toBeUndefined();
+    expect(loaded.language).toBeUndefined();
   });
 
   it('restores only known keys from a backup blob', async () => {
-    await restoreSettingsFromBackup({ fixedVelocity: 0.9, evil: 'x' });
+    await restoreSettingsFromBackup({ fixedVelocity: 0.9, metronomeVolume: -1, evil: 'x' });
     const loaded = await loadSettings();
     expect(loaded.fixedVelocity).toBe(0.9);
     expect(Object.keys(loaded)).not.toContain('evil');
+    expect(loaded.metronomeVolume).toBeUndefined();
   });
 });
 

@@ -12,7 +12,12 @@ function takeWithNotes(): Take {
   });
 }
 
-const baseInput = { exporterVersion: 1, bitrateKbps: 128, includeMetronome: false };
+const baseInput = {
+  exporterVersion: 1,
+  bitrateKbps: 128,
+  includeMetronome: false,
+  metronomeVolume: 0.6,
+};
 
 describe('stableStringify', () => {
   it('is independent of key insertion order', () => {
@@ -74,6 +79,28 @@ describe('computeExportHash', () => {
     expect(await computeExportHash({ ...baseInput, take, exporterVersion: 2 })).not.toBe(base);
     const wetter: Take = { ...take, instrument: { ...take.instrument, reverbMix: 0.5 } };
     expect(await computeExportHash({ ...baseInput, take: wetter })).not.toBe(base);
+  });
+
+  it('changes with click volume only when the metronome is included', async () => {
+    const take = takeWithNotes();
+    const withoutClicks = await computeExportHash({ ...baseInput, take });
+    expect(await computeExportHash({ ...baseInput, take, metronomeVolume: 0.2 })).toBe(
+      withoutClicks,
+    );
+
+    const withClicks = await computeExportHash({
+      ...baseInput,
+      take,
+      includeMetronome: true,
+    });
+    expect(
+      await computeExportHash({
+        ...baseInput,
+        take,
+        includeMetronome: true,
+        metronomeVolume: 0.2,
+      }),
+    ).not.toBe(withClicks);
   });
 
   it('is independent of note array order', async () => {

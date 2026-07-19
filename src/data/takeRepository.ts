@@ -1,5 +1,5 @@
 import { isLibraryTakeId } from '@/domain/libraryTakes';
-import { parseTakeJsonString } from '@/domain/takeSchema';
+import { parseTakeJsonString, takeSchema } from '@/domain/takeSchema';
 import type { Take } from '@/domain/takeTypes';
 import { UNTITLED_TAKE_TITLE } from '@/domain/noteEvents';
 import { QuotaExceededStorageError, StorageError } from '@/utils/errors';
@@ -58,6 +58,13 @@ export async function saveTake(take: Take): Promise<number> {
   if (isLibraryTakeId(take.id)) {
     throw new StorageError(`Refusing to persist library take ${take.id}`);
   }
+  const validation = takeSchema.safeParse(take);
+  if (!validation.success) {
+    const firstIssue = validation.error.issues[0];
+    throw new StorageError(
+      `Refusing to persist invalid take${firstIssue ? `: ${firstIssue.path.join('.')} ${firstIssue.message}` : ''}`,
+    );
+  }
   return withWriteRetry(() =>
     db.transaction('rw', db.takes, async () => {
       const existing = await db.takes.get(take.id);
@@ -102,7 +109,11 @@ export async function deleteTake(id: string): Promise<void> {
 export async function renameTake(id: string, title: string): Promise<Take | null> {
   const take = await getTake(id);
   if (!take) return null;
-  const renamed: Take = { ...take, title, updatedAt: new Date().toISOString() };
+  const renamed: Take = {
+    ...take,
+    title: title.slice(0, 200),
+    updatedAt: new Date().toISOString(),
+  };
   await saveTake(renamed);
   return renamed;
 }
@@ -111,10 +122,11 @@ export async function duplicateTake(id: string): Promise<Take | null> {
   const take = await getTake(id);
   if (!take) return null;
   const now = new Date().toISOString();
+  const suffix = ' copy';
   const copy: Take = {
     ...take,
     id: newId(),
-    title: `${take.title} copy`,
+    title: `${take.title.slice(0, 200 - suffix.length).trimEnd()}${suffix}`,
     createdAt: now,
     updatedAt: now,
   };

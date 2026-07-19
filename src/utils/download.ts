@@ -16,7 +16,9 @@ export function downloadBlob(blob: Blob, fileName: string): void {
  * otherwise download it. MUST be called directly from a user click so the
  * share call still holds user activation. Returns how it was delivered.
  */
-export async function shareOrDownloadFile(file: File): Promise<'shared' | 'downloaded'> {
+export async function shareOrDownloadFile(
+  file: File,
+): Promise<'shared' | 'downloaded' | 'cancelled'> {
   if (
     typeof navigator.share === 'function' &&
     typeof navigator.canShare === 'function' &&
@@ -27,7 +29,7 @@ export async function shareOrDownloadFile(file: File): Promise<'shared' | 'downl
       return 'shared';
     } catch (error) {
       // AbortError = user closed the sheet; anything else falls back.
-      if (error instanceof Error && error.name === 'AbortError') return 'shared';
+      if (error instanceof Error && error.name === 'AbortError') return 'cancelled';
     }
   }
   downloadBlob(file, file.name);

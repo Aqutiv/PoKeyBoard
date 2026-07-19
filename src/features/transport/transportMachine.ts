@@ -9,6 +9,7 @@ export type TransportState =
   | 'playing'
   | 'paused'
   | 'scrubbing'
+  | 'renderingSheet'
   | 'renderingAudio'
   | 'encodingAudio'
   | 'audioReady'
@@ -22,6 +23,9 @@ export type TransportEvent =
   | 'STOP'
   | 'SCRUB_START'
   | 'SCRUB_END'
+  | 'SHEET_EXPORT_START'
+  | 'SHEET_EXPORT_DONE'
+  | 'SHEET_EXPORT_CANCEL'
   | 'EXPORT_START'
   | 'RENDER_DONE'
   | 'ENCODE_DONE'
@@ -35,6 +39,7 @@ const TRANSITIONS: Record<TransportState, Partial<Record<TransportEvent, Transpo
     RECORD: 'countIn',
     PLAY: 'playing',
     SCRUB_START: 'scrubbing',
+    SHEET_EXPORT_START: 'renderingSheet',
     EXPORT_START: 'renderingAudio',
     FAIL: 'error',
   },
@@ -57,12 +62,18 @@ const TRANSITIONS: Record<TransportState, Partial<Record<TransportEvent, Transpo
     RECORD: 'countIn',
     STOP: 'idle',
     SCRUB_START: 'scrubbing',
+    SHEET_EXPORT_START: 'renderingSheet',
     EXPORT_START: 'renderingAudio',
     FAIL: 'error',
   },
   scrubbing: {
     SCRUB_END: 'paused',
     STOP: 'idle',
+    FAIL: 'error',
+  },
+  renderingSheet: {
+    SHEET_EXPORT_DONE: 'idle',
+    SHEET_EXPORT_CANCEL: 'idle',
     FAIL: 'error',
   },
   renderingAudio: {
@@ -100,6 +111,7 @@ export function isBusyState(state: TransportState): boolean {
     state === 'recording' ||
     state === 'playing' ||
     state === 'scrubbing' ||
+    state === 'renderingSheet' ||
     state === 'renderingAudio' ||
     state === 'encodingAudio'
   );

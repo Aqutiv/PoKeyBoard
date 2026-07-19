@@ -315,15 +315,16 @@ export function AudioExportDialog() {
                   const file = new File([phase.result.blob], phase.result.fileName, {
                     type: 'audio/mpeg',
                   });
-                  void shareOrDownloadFile(file).then((how) =>
+                  void shareOrDownloadFile(file).then((how) => {
+                    if (how === 'cancelled') return;
                     setPhase({
                       ...phase,
                       deliveredHow:
                         how === 'shared'
                           ? m.exportDialog.delivered
                           : m.exportDialog.deliveredNoShare,
-                    }),
-                  );
+                    });
+                  });
                 }}
               >
                 {m.exportDialog.shareAudio}
