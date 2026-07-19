@@ -38,8 +38,11 @@ export function TransportControls() {
     if (recordMode === 'replace') {
       const { take } = useTakeStore.getState();
       const playhead = transportController.getPlayheadMs();
-      const willRemove = take.notes.some((note) => note.startMs >= playhead);
-      if (willRemove) {
+      // Replace also truncates notes that start before the playhead but ring
+      // past it, so flag any note whose end crosses the playhead — matching the
+      // trim in transportController.record().
+      const willModify = take.notes.some((note) => note.startMs + note.durationMs > playhead);
+      if (willModify) {
         const ok = window.confirm(m.transport.replaceConfirm);
         if (!ok) return;
       }

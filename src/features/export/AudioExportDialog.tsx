@@ -70,14 +70,21 @@ export function AudioExportDialog() {
   useEffect(() => {
     if (!requestedTakeId) return;
     let alive = true;
-    void getTakeForExport(requestedTakeId).then((take) => {
-      if (!alive) return;
-      if (!take) {
-        setPhase({ kind: 'error', take: null, message: m.exportDialog.errorCouldNotLoad });
-      } else {
-        setPhase({ kind: 'options', take });
-      }
-    });
+    void getTakeForExport(requestedTakeId)
+      .then((take) => {
+        if (!alive) return;
+        if (!take) {
+          setPhase({ kind: 'error', take: null, message: m.exportDialog.errorCouldNotLoad });
+        } else {
+          setPhase({ kind: 'options', take });
+        }
+      })
+      .catch(() => {
+        // Flushing the active take before export can reject (e.g. quota full);
+        // surface it instead of leaving the dialog stuck on the loading phase.
+        if (alive)
+          setPhase({ kind: 'error', take: null, message: m.exportDialog.errorCouldNotLoad });
+      });
     return () => {
       alive = false;
     };

@@ -62,6 +62,17 @@ async function prepareActiveOperation(): Promise<void> {
   await persistenceService.flushSaveOrThrow();
 }
 
+/**
+ * Prep for a destructive/storage-recovery edit (delete, clear). Settles the
+ * transport and cancels the pending autosave, but — unlike prepareActiveOperation
+ * — never throws: a failing write (e.g. quota exceeded) must not block the very
+ * action that would free storage.
+ */
+async function settleForDestructiveEdit(): Promise<void> {
+  settleTransport();
+  await persistenceService.flushSave();
+}
+
 async function activatePrepared(take: Take): Promise<void> {
   useTakeStore.getState().setTake(take);
   audioEngine.setMasterVolume(take.instrument.masterVolume);
@@ -117,7 +128,7 @@ export async function duplicateTake(id: string): Promise<void> {
 
 export async function deleteTake(id: string): Promise<void> {
   const active = useTakeStore.getState().take.id === id;
-  if (active) await prepareActiveOperation();
+  if (active) await settleForDestructiveEdit();
   await repoDeleteTake(id);
   if (active) await activatePrepared(emptyTakeWithDefaults());
 }
@@ -125,7 +136,7 @@ export async function deleteTake(id: string): Promise<void> {
 /** Remove all notes/pedals from a take, keeping the take itself. */
 export async function clearTakeNotes(id: string): Promise<void> {
   if (useTakeStore.getState().take.id === id) {
-    await prepareActiveOperation();
+    await settleForDestructiveEdit();
     useTakeStore.getState().clearNotes();
     transportController.restorePlayhead(0);
     await persistenceService.flushSaveOrThrow();
