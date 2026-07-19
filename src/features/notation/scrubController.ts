@@ -2,6 +2,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
+import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { clamp } from '@/utils/timing';
@@ -48,7 +49,7 @@ class ScrubController {
   /** Move the scrub position; auditions whatever the playhead crossed. */
   update(nextTimeMsRaw: number): void {
     if (!this.active) return;
-    const durationMs = useTakeStore.getState().take.durationMs;
+    const durationMs = effectivePlaybackDurationMs(useTakeStore.getState().take);
     const nextTimeMs = clamp(nextTimeMsRaw, 0, Math.max(durationMs, 0));
     const previous = this.currentTimeMs;
     if (Math.abs(nextTimeMs - previous) < HYSTERESIS_MS) return;

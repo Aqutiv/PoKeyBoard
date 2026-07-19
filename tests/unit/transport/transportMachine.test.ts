@@ -36,6 +36,14 @@ describe('transport state machine', () => {
     expect(transition('renderingAudio', 'EXPORT_CANCEL')).toBe('idle');
   });
 
+  it('coordinates sheet rendering as a busy transport state', () => {
+    expect(transition('idle', 'SHEET_EXPORT_START')).toBe('renderingSheet');
+    expect(transition('renderingSheet', 'SHEET_EXPORT_DONE')).toBe('idle');
+    expect(transition('paused', 'SHEET_EXPORT_START')).toBe('renderingSheet');
+    expect(transition('renderingSheet', 'SHEET_EXPORT_CANCEL')).toBe('idle');
+    expect(isBusyState('renderingSheet')).toBe(true);
+  });
+
   it('prevents invalid transitions', () => {
     expect(transition('idle', 'PAUSE')).toBeNull();
     expect(transition('recording', 'PLAY')).toBeNull();

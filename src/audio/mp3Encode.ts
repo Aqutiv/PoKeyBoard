@@ -20,22 +20,27 @@ export async function encodePcmToMp3(
   left: Float32Array,
   right: Float32Array,
   onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
 ): Promise<Uint8Array> {
+  signal?.throwIfAborted();
   const encoder = await createMp3Encoder();
+  signal?.throwIfAborted();
   encoder.configure({ sampleRate, channels: 2, bitrate: bitrateKbps });
 
   const total = left.length;
   const parts: Uint8Array[] = [];
 
   for (let offset = 0; offset < total; offset += CHUNK_SAMPLES) {
+    signal?.throwIfAborted();
     const end = Math.min(total, offset + CHUNK_SAMPLES);
     const chunk = encoder.encode([left.subarray(offset, end), right.subarray(offset, end)]);
     if (chunk.length > 0) parts.push(chunk.slice());
     onProgress?.(total === 0 ? 1 : end / total);
     // Yield so progress paints and the main-thread fallback stays responsive.
-    await Promise.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
   }
 
+  signal?.throwIfAborted();
   const final = encoder.finalize();
   if (final.length > 0) parts.push(final.slice());
 

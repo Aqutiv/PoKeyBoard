@@ -7,8 +7,9 @@ import { takeAudioFileName } from '@/utils/filenames';
 import type { EncoderResponse } from '@/workers/mp3Encoder.worker';
 import { encodePcmToMp3, type ExportBitrateKbps } from './mp3Encode';
 import { renderTakeToBuffer } from './OfflineTakeRenderer';
+import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 
-export const AUDIO_EXPORTER_VERSION = 1;
+export const AUDIO_EXPORTER_VERSION = 2;
 
 export type ExportQuality = 'share' | 'high';
 
@@ -46,100 +47,160 @@ export class ExportCancelledError extends ExportError {
   }
 }
 
+interface ActiveExportJob {
+  cancelled: boolean;
+  controller: AbortController;
+  cancellation: Promise<never>;
+  rejectCancellation: ((error: ExportCancelledError) => void) | null;
+  worker: Worker | null;
+  rejectWorker: ((error: ExportCancelledError) => void) | null;
+}
+
 /**
  * The full export pipeline: snapshot+save → offline render → worker MP3
  * encode → validate → cache under a deterministic hash. Cached results are
  * reused only while the hash still matches.
  */
 class AudioExportService {
-  private worker: Worker | null = null;
-  private cancelled = false;
+  private activeJob: ActiveExportJob | null = null;
 
   async exportTake(
     take: Take,
     options: ExportOptions,
     onProgress: (progress: ExportProgress) => void,
   ): Promise<ExportResult> {
-    this.cancelled = false;
-    const bitrateKbps = QUALITY_BITRATE[options.quality];
-    const hash = await computeExportHash({
-      take,
-      exporterVersion: AUDIO_EXPORTER_VERSION,
-      bitrateKbps,
-      includeMetronome: options.includeMetronome,
-    });
-    const fileName = takeAudioFileName(take.title);
-
-    const cached = await getCachedAudio(take.id);
-    if (cached && cached.hash === hash) {
-      return {
-        blob: cached.blob,
-        fileName,
-        hash,
-        durationMs: take.durationMs,
-        sizeBytes: cached.blob.size,
-        fromCache: true,
-      };
-    }
-
-    onProgress({ stage: 'saving', fraction: -1 });
-    await persistenceService.flushSave();
-    this.throwIfCancelled();
-
-    onProgress({ stage: 'rendering', fraction: -1 });
-    const buffer = await renderTakeToBuffer(take, {
-      includeMetronome: options.includeMetronome,
-      metronomeVolume: options.metronomeVolume,
-    });
-    this.throwIfCancelled();
-
-    onProgress({ stage: 'encoding', fraction: 0 });
-    const mp3 = await this.encode(buffer, bitrateKbps, (fraction) =>
-      onProgress({ stage: 'encoding', fraction }),
-    );
-    this.throwIfCancelled();
-
-    const blob = new Blob([mp3], { type: 'audio/mpeg' });
-    const minimumPlausible = Math.max(2_000, (buffer.duration * bitrateKbps * 1000 * 0.3) / 8);
-    if (blob.size < minimumPlausible) {
+    if (this.activeJob) {
       throw new ExportError(
-        `Encoded MP3 implausibly small (${blob.size} bytes)`,
-        'Encoding produced an invalid file. Please try again.',
-        'exportEncodingInvalid',
+        'An audio export is already running',
+        'Wait for the current export to finish or cancel it first.',
+        'exportFailed',
       );
     }
+    const job = this.createJob();
+    this.activeJob = job;
+    try {
+      const bitrateKbps = QUALITY_BITRATE[options.quality];
+      const hash = await this.awaitJob(
+        job,
+        computeExportHash({
+          take,
+          exporterVersion: AUDIO_EXPORTER_VERSION,
+          bitrateKbps,
+          includeMetronome: options.includeMetronome,
+          metronomeVolume: options.metronomeVolume,
+        }),
+      );
+      const fileName = takeAudioFileName(take.title);
 
-    await putCachedAudio({
-      takeId: take.id,
-      hash,
-      blob,
-      mimeType: 'audio/mpeg',
-      fileName,
-      createdAt: new Date().toISOString(),
-    });
+      const cached = await this.awaitJob(job, getCachedAudio(take.id));
+      if (cached && cached.hash === hash) {
+        return {
+          blob: cached.blob,
+          fileName,
+          hash,
+          durationMs: effectivePlaybackDurationMs(take),
+          sizeBytes: cached.blob.size,
+          fromCache: true,
+        };
+      }
 
-    return {
-      blob,
-      fileName,
-      hash,
-      durationMs: take.durationMs,
-      sizeBytes: blob.size,
-      fromCache: false,
-    };
+      onProgress({ stage: 'saving', fraction: -1 });
+      await this.awaitJob(job, persistenceService.flushSaveOrThrow());
+
+      onProgress({ stage: 'rendering', fraction: -1 });
+      const buffer = await this.awaitJob(
+        job,
+        renderTakeToBuffer(take, {
+          includeMetronome: options.includeMetronome,
+          metronomeVolume: options.metronomeVolume,
+        }),
+      );
+
+      onProgress({ stage: 'encoding', fraction: 0 });
+      const mp3 = await this.awaitJob(
+        job,
+        this.encode(job, buffer, bitrateKbps, (fraction) =>
+          onProgress({ stage: 'encoding', fraction }),
+        ),
+      );
+
+      const blob = new Blob([mp3], { type: 'audio/mpeg' });
+      const minimumPlausible = Math.max(2_000, (buffer.duration * bitrateKbps * 1000 * 0.3) / 8);
+      if (blob.size < minimumPlausible) {
+        throw new ExportError(
+          `Encoded MP3 implausibly small (${blob.size} bytes)`,
+          'Encoding produced an invalid file. Please try again.',
+          'exportEncodingInvalid',
+        );
+      }
+
+      await this.awaitJob(
+        job,
+        putCachedAudio({
+          takeId: take.id,
+          hash,
+          blob,
+          mimeType: 'audio/mpeg',
+          fileName,
+          createdAt: new Date().toISOString(),
+        }),
+      );
+
+      return {
+        blob,
+        fileName,
+        hash,
+        durationMs: effectivePlaybackDurationMs(take),
+        sizeBytes: blob.size,
+        fromCache: false,
+      };
+    } finally {
+      if (this.activeJob === job) this.activeJob = null;
+      job.rejectCancellation = null;
+      job.rejectWorker = null;
+      job.worker?.terminate();
+      job.worker = null;
+    }
   }
 
   cancel(): void {
-    this.cancelled = true;
-    this.worker?.terminate();
-    this.worker = null;
+    const job = this.activeJob;
+    if (!job || job.cancelled) return;
+    job.cancelled = true;
+    job.controller.abort();
+    const error = new ExportCancelledError();
+    const rejectCancellation = job.rejectCancellation;
+    job.rejectCancellation = null;
+    rejectCancellation?.(error);
+    const rejectWorker = job.rejectWorker;
+    job.rejectWorker = null;
+    rejectWorker?.(error);
+    job.worker?.terminate();
+    job.worker = null;
   }
 
   async deleteCachedExport(takeId: string): Promise<void> {
     await invalidateCachedAudio(takeId);
   }
 
-  private throwIfCancelled(): void {
-    if (this.cancelled) throw new ExportCancelledError();
+  private createJob(): ActiveExportJob {
+    let rejectCancellation: ((error: ExportCancelledError) => void) | null = null;
+    const cancellation = new Promise<never>((_resolve, reject) => {
+      rejectCancellation = reject;
+    });
+    return {
+      cancelled: false,
+      controller: new AbortController(),
+      cancellation,
+      rejectCancellation,
+      worker: null,
+      rejectWorker: null,
+    };
+  }
+
+  private async awaitJob<T>(job: ActiveExportJob, operation: Promise<T>): Promise<T> {
+    if (job.cancelled) throw new ExportCancelledError();
+    return Promise.race([operation, job.cancellation]);
   }
 
   /**
@@ -151,21 +212,30 @@ class AudioExportService {
    * a requirement, so export never dies just because the worker did.
    */
   private async encode(
+    job: ActiveExportJob,
     buffer: AudioBuffer,
     bitrateKbps: ExportBitrateKbps,
     onFraction: (fraction: number) => void,
   ): Promise<ArrayBuffer> {
     try {
-      return await this.encodeViaWorker(buffer, bitrateKbps, onFraction);
+      return await this.encodeViaWorker(job, buffer, bitrateKbps, onFraction);
     } catch (workerError) {
-      if (this.cancelled) throw new ExportCancelledError();
+      if (job.cancelled) throw new ExportCancelledError();
       console.error('[export] MP3 worker failed, falling back to main thread:', workerError);
       try {
         // Worker transfers detach the PCM buffers; re-extract from the buffer.
         const { left, right } = extractStereoPcm(buffer);
-        const out = await encodePcmToMp3(buffer.sampleRate, bitrateKbps, left, right, onFraction);
+        const out = await encodePcmToMp3(
+          buffer.sampleRate,
+          bitrateKbps,
+          left,
+          right,
+          onFraction,
+          job.controller.signal,
+        );
         return out.buffer as ArrayBuffer;
       } catch (fallbackError) {
+        if (job.cancelled || job.controller.signal.aborted) throw new ExportCancelledError();
         const reason =
           fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
         throw new ExportError(
@@ -180,6 +250,7 @@ class AudioExportService {
 
   /** Encode via the Web Worker; rejects on construction, crash, or error. */
   private encodeViaWorker(
+    job: ActiveExportJob,
     buffer: AudioBuffer,
     bitrateKbps: ExportBitrateKbps,
     onFraction: (fraction: number) => void,
@@ -203,12 +274,21 @@ class AudioExportService {
         );
         return;
       }
-      this.worker = worker;
+      job.worker = worker;
+      let cleaned = false;
       const cleanup = () => {
+        if (cleaned) return;
+        cleaned = true;
         worker.terminate();
-        if (this.worker === worker) this.worker = null;
+        if (job.worker === worker) job.worker = null;
+        job.rejectWorker = null;
+      };
+      job.rejectWorker = (error) => {
+        cleanup();
+        reject(error);
       };
       worker.onmessage = (event: MessageEvent<EncoderResponse>) => {
+        if (job.cancelled || job.worker !== worker) return;
         const message = event.data;
         if (message.type === 'progress') {
           onFraction(message.fraction);
@@ -221,6 +301,7 @@ class AudioExportService {
         }
       };
       worker.onerror = (event) => {
+        if (job.cancelled || job.worker !== worker) return;
         cleanup();
         reject(new Error(`MP3 worker crashed: ${event.message || 'unknown error'}`));
       };

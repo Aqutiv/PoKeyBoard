@@ -61,20 +61,32 @@ export const displaySchema = z.object({
  * Loose object: unknown forward-compatible top-level keys survive parsing so
  * exports from newer minor versions round-trip without data loss.
  */
-export const takeSchema = z.looseObject({
-  schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
-  id: z.string().min(1).max(128),
-  title: z.string().min(1).max(200),
-  createdAt: z.iso.datetime({ offset: true }),
-  updatedAt: z.iso.datetime({ offset: true }),
-  durationMs: timelineMs,
-  samplePackVersion: z.string().min(1).max(64),
-  tempo: tempoSchema,
-  instrument: instrumentSchema,
-  notes: z.array(noteEventSchema).max(MAX_NOTE_COUNT),
-  pedalEvents: z.array(pedalEventSchema).max(MAX_NOTE_COUNT),
-  display: displaySchema,
-});
+export const takeSchema = z
+  .looseObject({
+    schemaVersion: z.literal(CURRENT_SCHEMA_VERSION),
+    id: z.string().min(1).max(128),
+    title: z.string().min(1).max(200),
+    createdAt: z.iso.datetime({ offset: true }),
+    updatedAt: z.iso.datetime({ offset: true }),
+    durationMs: timelineMs,
+    samplePackVersion: z.string().min(1).max(64),
+    tempo: tempoSchema,
+    instrument: instrumentSchema,
+    notes: z.array(noteEventSchema).max(MAX_NOTE_COUNT),
+    pedalEvents: z.array(pedalEventSchema).max(MAX_NOTE_COUNT),
+    display: displaySchema,
+  })
+  .superRefine((take, context) => {
+    take.notes.forEach((note, index) => {
+      if (note.startMs + note.durationMs > MAX_TAKE_MS) {
+        context.addIssue({
+          code: 'custom',
+          path: ['notes', index, 'durationMs'],
+          message: 'Note end must not exceed the six-hour timeline limit',
+        });
+      }
+    });
+  });
 
 const EPSILON = 1e-6;
 

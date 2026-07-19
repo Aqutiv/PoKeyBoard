@@ -1,5 +1,6 @@
 import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
+import { createEmptyTake } from '@/domain/noteEvents';
 import { getLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
 import { applySystemLanguageIfUnpinned } from '@/i18n/languagePreference';
@@ -39,13 +40,18 @@ class PersistenceService {
   private readonly listeners = new Set<() => void>();
   private saveTimer: ReturnType<typeof setTimeout> | null = null;
   private settingsTimer: ReturnType<typeof setTimeout> | null = null;
-  private lastSavedContentRevision = 0;
+  private readonly lastSavedContentRevisionByTake = new Map<string, number>();
+  private flushPromise: Promise<void> | null = null;
   private persistRequestDone = false;
-  private initialized = false;
+  private initPromise: Promise<void> | null = null;
 
   async init(): Promise<void> {
-    if (this.initialized) return;
-    this.initialized = true;
+    if (!this.initPromise) this.initPromise = this.initialize();
+    return this.initPromise;
+  }
+
+  private async initialize(): Promise<void> {
+    let restoredTake = false;
 
     try {
       const stored = await loadSettings();
@@ -70,11 +76,27 @@ class PersistenceService {
         if (take) {
           useTakeStore.getState().setTake(take);
           transportController.restorePlayhead(take.display.playheadMs);
-          this.lastSavedContentRevision = useTakeStore.getState().contentRevision;
+          audioEngine.setMasterVolume(take.instrument.masterVolume);
+          audioEngine.setReverbMix(take.instrument.reverbMix);
+          this.lastSavedContentRevisionByTake.set(take.id, useTakeStore.getState().contentRevision);
+          restoredTake = true;
         }
       }
     } catch (error) {
       console.error('Take restore failed:', error);
+    }
+
+    if (!restoredTake) {
+      const settings = useSettingsStore.getState();
+      const take = createEmptyTake({
+        instrument: {
+          id: useTakeStore.getState().take.instrument.id,
+          masterVolume: settings.masterVolume,
+          reverbMix: settings.reverbMix,
+        },
+      });
+      useTakeStore.getState().setTake(take);
+      transportController.restorePlayhead(0);
     }
 
     useTakeStore.subscribe((state, previous) => {
@@ -86,10 +108,14 @@ class PersistenceService {
     });
 
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'hidden') void this.flushSave();
+      if (document.visibilityState === 'hidden') {
+        void this.flushSave();
+        void this.flushSettingsSave();
+      }
     });
     window.addEventListener('pagehide', () => {
       void this.flushSave();
+      void this.flushSettingsSave();
     });
   }
 
@@ -112,31 +138,65 @@ class PersistenceService {
 
   /** Save now (recording stop, page hide, export start, retry button). */
   async flushSave(): Promise<void> {
+    try {
+      await this.ensureFlush();
+    } catch {
+      // Autosave callers surface the error through SaveStatus. Operations
+      // that must not continue after a failed write use flushSaveOrThrow().
+    }
+  }
+
+  /** Flush the active take and reject if its write failed. */
+  async flushSaveOrThrow(): Promise<void> {
+    await this.ensureFlush();
+  }
+
+  private ensureFlush(): Promise<void> {
     if (this.saveTimer !== null) {
       clearTimeout(this.saveTimer);
       this.saveTimer = null;
     }
-    const { take, dirty, contentRevision } = useTakeStore.getState();
-    if (!dirty) return;
-    // Library tracks are never persisted: scrubs and tempo tweaks on them
-    // are deliberately ephemeral, and recording forks to a fresh id first.
-    if (isLibraryTakeId(take.id)) return;
+    if (!this.flushPromise) {
+      const pending = this.drainSaveQueue();
+      this.flushPromise = pending;
+      pending.then(
+        () => {
+          if (this.flushPromise === pending) this.flushPromise = null;
+        },
+        () => {
+          if (this.flushPromise === pending) this.flushPromise = null;
+        },
+      );
+    }
+    return this.flushPromise;
+  }
 
-    this.setStatus('saving', null);
-    try {
-      await saveTake(take);
-      await setMetadata(META_LAST_OPEN_TAKE, take.id);
-      if (contentRevision !== this.lastSavedContentRevision) {
-        await invalidateCachedAudio(take.id);
-        this.lastSavedContentRevision = contentRevision;
+  private async drainSaveQueue(): Promise<void> {
+    for (;;) {
+      const { take, dirty, contentRevision, mutationGeneration } = useTakeStore.getState();
+      if (!dirty || isLibraryTakeId(take.id)) return;
+
+      this.setStatus('saving', null);
+      try {
+        await saveTake(take);
+        await setMetadata(META_LAST_OPEN_TAKE, take.id);
+        if (contentRevision !== this.lastSavedContentRevisionByTake.get(take.id)) {
+          await invalidateCachedAudio(take.id);
+          this.lastSavedContentRevisionByTake.set(take.id, contentRevision);
+        }
+        useTakeStore.getState().markSaved(take.id, mutationGeneration);
+        void this.maybeRequestPersistentStorage(take.notes.length);
+      } catch (error) {
+        const messageKey: ErrorMessageKey =
+          error instanceof QuotaExceededStorageError ? 'storageFull' : toErrorMessageKey(error);
+        this.setStatus('error', messageKey);
+        throw error;
       }
-      useTakeStore.getState().markSaved();
+
+      const current = useTakeStore.getState();
+      if (current.dirty && !isLibraryTakeId(current.take.id)) continue;
       this.setStatus('saved', null);
-      void this.maybeRequestPersistentStorage(take.notes.length);
-    } catch (error) {
-      const messageKey: ErrorMessageKey =
-        error instanceof QuotaExceededStorageError ? 'storageFull' : toErrorMessageKey(error);
-      this.setStatus('error', messageKey);
+      return;
     }
   }
 
@@ -148,10 +208,20 @@ class PersistenceService {
     if (this.settingsTimer !== null) clearTimeout(this.settingsTimer);
     this.settingsTimer = setTimeout(() => {
       this.settingsTimer = null;
-      saveSettings(useSettingsStore.getState()).catch((error: unknown) => {
-        console.error('Settings save failed:', error);
-      });
+      void this.flushSettingsSave();
     }, SETTINGS_DEBOUNCE_MS);
+  }
+
+  private async flushSettingsSave(): Promise<void> {
+    if (this.settingsTimer !== null) {
+      clearTimeout(this.settingsTimer);
+      this.settingsTimer = null;
+    }
+    try {
+      await saveSettings(useSettingsStore.getState());
+    } catch (error) {
+      console.error('Settings save failed:', error);
+    }
   }
 
   /** Spec §9: after the first meaningful take, ask to persist storage. */

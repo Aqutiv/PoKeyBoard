@@ -46,6 +46,7 @@ export function TakesPage() {
   const openSheetExport = useExportUiStore((s) => s.openSheetExport);
   const [summaries, setSummaries] = useState<TakeSummary[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [preparedShare, setPreparedShare] = useState<{ id: string; file: File } | null>(null);
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -64,6 +65,24 @@ export function TakesPage() {
   useEffect(() => {
     refresh();
   }, [refresh]);
+
+  // File preparation can touch IndexedDB, so do it when the action row is
+  // opened. The later Share click can call navigator.share synchronously and
+  // retain user activation.
+  useEffect(() => {
+    if (!expandedId) return;
+    let alive = true;
+    void takeJsonFile(expandedId)
+      .then((file) => {
+        if (alive && file) setPreparedShare({ id: expandedId, file });
+      })
+      .catch((error: unknown) => {
+        if (alive) setMessage(m.errors[toErrorMessageKey(error)]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [expandedId, summaries, m]);
 
   const act = useCallback(
     async (work: () => Promise<void>, doneMessage?: string) => {
@@ -301,15 +320,15 @@ export function TakesPage() {
                     <button
                       type="button"
                       className="btn btn--small"
-                      onClick={() =>
-                        void act(async () => {
-                          const file = await takeJsonFile(summary.id);
-                          if (file) {
-                            const how = await shareOrDownloadFile(file);
+                      disabled={preparedShare?.id !== summary.id}
+                      onClick={() => {
+                        if (preparedShare?.id !== summary.id) return;
+                        void shareOrDownloadFile(preparedShare.file).then((how) => {
+                          if (how !== 'cancelled') {
                             setMessage(how === 'shared' ? m.takes.shared : m.takes.downloaded);
                           }
-                        })
-                      }
+                        });
+                      }}
                     >
                       {m.takes.shareJson}
                     </button>

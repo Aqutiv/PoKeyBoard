@@ -77,4 +77,13 @@ describe('extractMusicXmlText', () => {
     const garbage = new Uint8Array([0x50, 0x4b, 0x03, 0x04, 1, 2, 3, 4, 5, 6, 7, 8]);
     expect(() => extractMusicXmlText(garbage)).toThrow(ScoreImportError);
   });
+
+  it('rejects archives with an excessive entry count before extraction', () => {
+    const entries: Record<string, Uint8Array> = {};
+    for (let index = 0; index < 257; index += 1) {
+      entries[`entry-${index}.txt`] = strToU8('x');
+    }
+    entries['score.xml'] = strToU8(SCORE_XML);
+    expect(() => extractMusicXmlText(zipSync(entries))).toThrow(/256 entries/);
+  });
 });

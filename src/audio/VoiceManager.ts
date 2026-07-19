@@ -136,6 +136,7 @@ export class VoiceManager {
   /** Fast-fade everything; the guarantee behind "never a stuck note". */
   allNotesOff(): void {
     const now = this.context.currentTime;
+    this.sustainSources.clear();
     let changed = false;
     for (const voice of this.voices) {
       if (voice.uiActive) {

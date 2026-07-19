@@ -1,13 +1,18 @@
 import { audioEngine, type InputNoteEvent } from '@/audio/AudioEngine';
 import { MetronomeEngine } from '@/audio/MetronomeEngine';
 import { forkLibraryTake, isLibraryTakeId } from '@/domain/libraryTakes';
-import { sortNotes } from '@/domain/noteEvents';
-import type { NoteEvent, PedalEvent } from '@/domain/takeTypes';
+import { computeTakeDurationMs, sortNotes } from '@/domain/noteEvents';
+import {
+  MAX_NOTE_DURATION_MS,
+  MAX_TAKE_MS,
+  type NoteEvent,
+  type PedalEvent,
+} from '@/domain/takeTypes';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { newId } from '@/utils/ids';
 import { clamp, countInDurationMs } from '@/utils/timing';
-import { applySustainToNotes } from './sustainPedal';
+import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
 import { TransportClock } from './transportClock';
 import {
   canTransition,
@@ -60,6 +65,7 @@ export class TransportController {
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
   private playNotes: NoteEvent[] = [];
   private playCursor = 0;
+  private playDurationMs = 0;
 
   /** Callbacks fired when a recording pass has been finalized (autosave). */
   readonly onRecordingFinalized = new Set<() => void>();
@@ -97,6 +103,16 @@ export class TransportController {
     return this.send(event);
   }
 
+  /** Sheet/PDF export flow drives these transitions. */
+  sendSheetExportEvent(
+    event: Extract<
+      TransportEvent,
+      'SHEET_EXPORT_START' | 'SHEET_EXPORT_DONE' | 'SHEET_EXPORT_CANCEL'
+    >,
+  ): boolean {
+    return this.send(event);
+  }
+
   /**
    * Drive the transport out of any export state back to idle. Safe to call
    * from anywhere the export dialog closes — a no-op unless an export is in
@@ -107,6 +123,9 @@ export class TransportController {
       case 'renderingAudio':
       case 'encodingAudio':
         this.send('EXPORT_CANCEL');
+        return;
+      case 'renderingSheet':
+        this.send('SHEET_EXPORT_CANCEL');
         return;
       case 'audioReady':
         this.send('DISMISS_AUDIO');
@@ -153,13 +172,13 @@ export class TransportController {
 
   setScrubTime(takeMs: number): void {
     if (this.state !== 'scrubbing') return;
-    this.scrubTimeMs = Math.max(0, takeMs);
+    this.scrubTimeMs = clamp(takeMs, 0, this.takeDurationMs());
   }
 
   /** Leave scrubbing; normal playback resumes from this position. */
   endScrub(finalTakeMs: number): void {
     if (this.state !== 'scrubbing') return;
-    const duration = useTakeStore.getState().take.durationMs;
+    const duration = this.takeDurationMs();
     this.pausedPlayheadMs = clamp(Math.round(finalTakeMs), 0, duration);
     this.clock.seek(this.pausedPlayheadMs);
     useTakeStore.getState().setPlayheadMs(this.pausedPlayheadMs);
@@ -168,7 +187,7 @@ export class TransportController {
 
   seek(takeMs: number): void {
     if (this.state === 'playing' || this.state === 'recording' || this.state === 'countIn') return;
-    const duration = useTakeStore.getState().take.durationMs;
+    const duration = this.takeDurationMs();
     this.pausedPlayheadMs = clamp(Math.round(takeMs), 0, duration);
     this.clock.seek(this.pausedPlayheadMs);
     useTakeStore.getState().setPlayheadMs(this.pausedPlayheadMs);
@@ -236,12 +255,33 @@ export class TransportController {
 
     const takeState = useTakeStore.getState();
     const tempo = takeState.take.tempo;
-    const startPlayheadMs = this.pausedPlayheadMs;
+    const startPlayheadMs = clamp(this.pausedPlayheadMs, 0, MAX_TAKE_MS - 1);
 
     if (mode === 'replace') {
       takeState.updateTake((take) => {
-        const notes = take.notes.filter((note) => note.startMs < startPlayheadMs);
-        return { ...take, notes };
+        const notes = take.notes.flatMap((note) => {
+          if (note.startMs >= startPlayheadMs) return [];
+          const endMs = note.startMs + note.durationMs;
+          return endMs > startPlayheadMs
+            ? [{ ...note, durationMs: Math.max(1, startPlayheadMs - note.startMs) }]
+            : [note];
+        });
+        const earlierPedals = take.pedalEvents.filter((event) => event.atMs < startPlayheadMs);
+        let pedalDown = false;
+        for (const event of [...earlierPedals].sort((a, b) => a.atMs - b.atMs)) {
+          pedalDown = event.down;
+        }
+        const pedalEvents = pedalDown
+          ? [...earlierPedals, { atMs: startPlayheadMs, down: false }]
+          : earlierPedals;
+        const durationMs = computeTakeDurationMs(notes);
+        return {
+          ...take,
+          notes,
+          pedalEvents,
+          durationMs,
+          display: { ...take.display, playheadMs: Math.min(startPlayheadMs, durationMs) },
+        };
       });
     }
 
@@ -265,7 +305,7 @@ export class TransportController {
     // the playhead, so nothing schedules forward — a natural no-op.
     const current = useTakeStore.getState().take;
     const backing = sortNotes(applySustainToNotes(current.notes, current.pedalEvents));
-    if (backing.length > 0) this.beginPlaybackScheduler(backing, startPlayheadMs);
+    this.beginPlaybackScheduler(backing, startPlayheadMs);
 
     const begin = () => {
       if (this.state !== 'countIn') return; // stopped during count-in
@@ -287,6 +327,7 @@ export class TransportController {
     this.openNotes.clear();
     this.recordedPedals = [];
     this.passNoteIds = [];
+    useTakeStore.getState().beginRecordingPass();
     this.inputUnsub = audioEngine.subscribeInput((event) => this.onInput(event));
   }
 
@@ -297,7 +338,11 @@ export class TransportController {
     // anchor is a real performance note — clamp it to the start instead of
     // dropping it, or the first eager note after tapping record is lost.
     const rawMs = this.recordStartMs + (event.audioTime - this.recordAnchorAudioTime) * 1000;
-    const takeMs = Math.max(this.recordStartMs, Math.round(rawMs));
+    if (rawMs >= MAX_TAKE_MS) {
+      this.stop();
+      return;
+    }
+    const takeMs = clamp(Math.round(rawMs), this.recordStartMs, MAX_TAKE_MS - 1);
 
     if (event.type === 'on') {
       const key = `${event.sourceId}:${event.midi}`;
@@ -321,11 +366,16 @@ export class TransportController {
   }
 
   private commitNote(open: OpenNote, endMs: number): void {
+    const boundedEndMs = Math.min(
+      MAX_TAKE_MS,
+      open.startMs + MAX_NOTE_DURATION_MS,
+      Math.max(open.startMs + 1, endMs),
+    );
     const note: NoteEvent = {
       id: open.id,
       midi: open.midi,
       startMs: open.startMs,
-      durationMs: Math.max(1, endMs - open.startMs),
+      durationMs: boundedEndMs - open.startMs,
       velocity: open.velocity,
     };
     this.passNoteIds = [...this.passNoteIds, note.id];
@@ -340,11 +390,11 @@ export class TransportController {
     velocity: number;
   }> {
     if (this.state !== 'recording') return [];
-    const nowMs = this.clock.currentTakeMs();
+    const nowMs = Math.min(MAX_TAKE_MS, this.clock.currentTakeMs());
     return [...this.openNotes.values()].map((open) => ({
       midi: open.midi,
       startMs: open.startMs,
-      durationMs: Math.max(1, Math.round(nowMs - open.startMs)),
+      durationMs: Math.min(MAX_NOTE_DURATION_MS, Math.max(1, Math.round(nowMs - open.startMs))),
       velocity: open.velocity,
     }));
   }
@@ -357,6 +407,7 @@ export class TransportController {
 
     const take = useTakeStore.getState().take;
     const notes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
+    this.playDurationMs = effectivePlaybackDurationMs(take);
 
     const fromMs = this.pausedPlayheadMs;
     this.clock.start(fromMs, audioEngine.currentTime + START_SLACK_S);
@@ -387,6 +438,10 @@ export class TransportController {
     if (this.state !== 'playing' && this.state !== 'recording' && this.state !== 'countIn') {
       return;
     }
+    if (this.state === 'recording' && this.clock.currentTakeMs() >= MAX_TAKE_MS) {
+      this.stop();
+      return;
+    }
     const horizonMs = this.clock.currentTakeMs() + SCHEDULE_AHEAD_MS;
     while (this.playCursor < this.playNotes.length) {
       const note = this.playNotes[this.playCursor] as NoteEvent;
@@ -401,7 +456,7 @@ export class TransportController {
     // Auto-pause at the end applies to normal playback only; an overdub pass
     // keeps recording past the end of the existing take.
     if (this.state === 'playing') {
-      const durationMs = useTakeStore.getState().take.durationMs;
+      const durationMs = this.playDurationMs;
       if (this.playCursor >= this.playNotes.length && this.clock.currentTakeMs() >= durationMs) {
         this.pauseInternal(durationMs);
       }
@@ -418,7 +473,7 @@ export class TransportController {
     this.metronome.stop();
     audioEngine.allNotesOff();
     this.clock.pause();
-    const duration = useTakeStore.getState().take.durationMs;
+    const duration = this.takeDurationMs();
     this.pausedPlayheadMs = clamp(atMs, 0, duration);
     useTakeStore.getState().setPlayheadMs(this.pausedPlayheadMs);
     this.send('PAUSE');
@@ -435,7 +490,9 @@ export class TransportController {
         this.metronome.stop();
         audioEngine.allNotesOff();
         this.clock.pause();
-        this.pausedPlayheadMs = this.recordStartMs;
+        this.pausedPlayheadMs = clamp(this.recordStartMs, 0, this.takeDurationMs());
+        this.clock.seek(this.pausedPlayheadMs);
+        useTakeStore.getState().setPlayheadMs(this.pausedPlayheadMs);
         this.send('STOP');
         return;
       }
@@ -457,7 +514,7 @@ export class TransportController {
   }
 
   private finalizeRecording(): void {
-    const endMs = Math.max(this.recordStartMs, Math.round(this.clock.currentTakeMs()));
+    const endMs = clamp(Math.round(this.clock.currentTakeMs()), this.recordStartMs, MAX_TAKE_MS);
     this.clearScheduler();
     this.inputUnsub?.();
     this.inputUnsub = null;
@@ -514,9 +571,22 @@ export class TransportController {
 
   /** Restore a playhead position (e.g. when a take is loaded). */
   restorePlayhead(takeMs: number): void {
-    this.pausedPlayheadMs = Math.max(0, takeMs);
+    this.pausedPlayheadMs = clamp(Math.round(takeMs), 0, this.takeDurationMs());
     this.clock.seek(this.pausedPlayheadMs);
     for (const listener of this.stateListeners) listener();
+  }
+
+  /** Clamp both controller and stored playheads after destructive edits. */
+  clampPlayheadToTake(): void {
+    const duration = this.takeDurationMs();
+    this.pausedPlayheadMs = clamp(this.pausedPlayheadMs, 0, duration);
+    this.clock.seek(this.pausedPlayheadMs);
+    useTakeStore.getState().setPlayheadMs(this.pausedPlayheadMs);
+    for (const listener of this.stateListeners) listener();
+  }
+
+  private takeDurationMs(): number {
+    return effectivePlaybackDurationMs(useTakeStore.getState().take);
   }
 }
 

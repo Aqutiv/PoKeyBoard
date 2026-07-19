@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import { persistenceService } from '@/data/persistence';
 import { I18nProvider } from '@/i18n/I18nProvider';
@@ -11,9 +11,14 @@ import { RouterProvider } from './router';
  * first user gesture anywhere unlocks audio output.
  */
 export function AppProviders({ children }: { children: ReactNode }) {
+  const [restored, setRestored] = useState(false);
+
   useEffect(() => {
+    let mounted = true;
     audioEngine.initialize();
-    void persistenceService.init();
+    void persistenceService.init().finally(() => {
+      if (mounted) setRestored(true);
+    });
     lifecycleService.init();
 
     const unlock = () => {
@@ -22,6 +27,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
     window.addEventListener('pointerdown', unlock, { once: true, capture: true });
     window.addEventListener('keydown', unlock, { once: true, capture: true });
     return () => {
+      mounted = false;
       window.removeEventListener('pointerdown', unlock, { capture: true });
       window.removeEventListener('keydown', unlock, { capture: true });
     };
@@ -29,7 +35,13 @@ export function AppProviders({ children }: { children: ReactNode }) {
 
   return (
     <I18nProvider>
-      <RouterProvider>{children}</RouterProvider>
+      {restored ? (
+        <RouterProvider>{children}</RouterProvider>
+      ) : (
+        <div className="app-boot" role="status" aria-live="polite">
+          Loading PoKeyBoard…
+        </div>
+      )}
     </I18nProvider>
   );
 }

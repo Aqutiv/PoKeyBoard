@@ -8,6 +8,8 @@ export function isScoreFileName(name: string): boolean {
 
 /** Per-entry decompressed cap; anything larger is treated as hostile. */
 const MAX_ENTRY_BYTES = 50 * 1024 * 1024;
+const MAX_ARCHIVE_ENTRIES = 256;
+const MAX_TOTAL_DECOMPRESSED_BYTES = 50 * 1024 * 1024;
 
 /** Decode score bytes as text, honoring a UTF-16 BOM (old Finale exports). */
 function decodeText(bytes: Uint8Array): string {
@@ -41,15 +43,37 @@ function resolveRootPath(entries: Record<string, Uint8Array>): string | null {
  * passes raw XML through. Throws ScoreImportError when no score is found.
  */
 export function extractMusicXmlText(bytes: Uint8Array): string {
-  if (!isZip(bytes)) return decodeText(bytes);
+  if (!isZip(bytes)) {
+    if (bytes.byteLength > MAX_TOTAL_DECOMPRESSED_BYTES) {
+      throw new ScoreImportError(['The MusicXML file is too large.']);
+    }
+    return decodeText(bytes);
+  }
   let entries: Record<string, Uint8Array>;
+  let entryCount = 0;
+  let cumulativeBytes = 0;
+  let limitError: string | null = null;
   try {
-    entries = unzipSync(bytes, { filter: (file) => file.originalSize <= MAX_ENTRY_BYTES });
+    entries = unzipSync(bytes, {
+      filter: (file) => {
+        entryCount += 1;
+        cumulativeBytes += file.originalSize;
+        if (entryCount > MAX_ARCHIVE_ENTRIES) {
+          limitError = `The archive contains more than ${MAX_ARCHIVE_ENTRIES} entries.`;
+        } else if (file.originalSize > MAX_ENTRY_BYTES) {
+          limitError = 'An archive entry is too large.';
+        } else if (cumulativeBytes > MAX_TOTAL_DECOMPRESSED_BYTES) {
+          limitError = 'The archive expands beyond the safe size limit.';
+        }
+        return limitError === null;
+      },
+    });
   } catch (error) {
     throw new ScoreImportError([
       `The archive could not be unpacked${error instanceof Error ? `: ${error.message}` : ''}.`,
     ]);
   }
+  if (limitError !== null) throw new ScoreImportError([limitError]);
   const rootPath = resolveRootPath(entries);
   const entry = rootPath === null ? undefined : entries[rootPath];
   if (!entry) {

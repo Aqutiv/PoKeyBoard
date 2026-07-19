@@ -1,6 +1,9 @@
 import { sortNotes } from '@/domain/noteEvents';
 import type { Take } from '@/domain/takeTypes';
-import { applySustainToNotes } from '@/features/transport/sustainPedal';
+import {
+  applySustainToNotes,
+  effectivePlaybackDurationMs,
+} from '@/features/transport/sustainPedal';
 import { ExportError } from '@/utils/errors';
 import { audioEngine } from './AudioEngine';
 import { scheduleClicksForRange } from './MetronomeEngine';
@@ -21,7 +24,7 @@ export interface OfflineRenderOptions {
 }
 
 export function estimateRenderSeconds(take: Take): number {
-  return take.durationMs / 1000 + TAIL_S;
+  return effectivePlaybackDurationMs(take) / 1000 + TAIL_S;
 }
 
 /** Rough working-set estimate (render buffer + PCM copy for encoding). */
@@ -116,7 +119,7 @@ export async function renderTakeToBuffer(
         volume: options.metronomeVolume,
       },
       0,
-      take.durationMs,
+      effectivePlaybackDurationMs(take),
     );
   }
 

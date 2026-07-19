@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
-import { velocityGain, velocityToLayer, VELOCITY_LAYER_THRESHOLDS } from '@/audio/SampleBank';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  SampleBank,
+  velocityGain,
+  velocityToLayer,
+  VELOCITY_LAYER_THRESHOLDS,
+} from '@/audio/SampleBank';
+
+afterEach(() => {
+  vi.useRealTimers();
+  vi.unstubAllGlobals();
+});
 
 describe('velocityToLayer', () => {
   it('maps velocity bands to the three layers', () => {
@@ -43,5 +53,45 @@ describe('velocityGain', () => {
       expect(above / below).toBeGreaterThan(0.5);
       expect(above / below).toBeLessThan(2);
     }
+  });
+});
+
+describe('SampleBank retries', () => {
+  it('rejects an incomplete core load and can retry while retaining progress', async () => {
+    vi.useFakeTimers();
+    const manifest = {
+      version: 'test',
+      source: 'test',
+      license: 'test',
+      sourceUrl: 'test',
+      format: 'test',
+      velocityLayers: [{ index: 0, sourceLayer: 1, label: 'test' }],
+      coreBytes: 100,
+      totalBytes: 100,
+      files: [{ file: 'c4.mp3', midi: 60, layer: 0, pack: 'core' as const, bytes: 100 }],
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => manifest })
+      .mockResolvedValue({ ok: false, status: 503 });
+    vi.stubGlobal('fetch', fetchMock);
+    const context = {
+      decodeAudioData: vi.fn(async () => ({ duration: 1 }) as AudioBuffer),
+    } as unknown as BaseAudioContext;
+    const bank = new SampleBank('/samples/');
+
+    const failed = bank.loadCorePack(context);
+    const failedAssertion = expect(failed).rejects.toThrow(/could not be loaded/);
+    await vi.runAllTimersAsync();
+    await failedAssertion;
+    expect(bank.getProgress().phase).toBe('error');
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      arrayBuffer: async () => new ArrayBuffer(16),
+    });
+    await bank.loadCorePack(context);
+    expect(bank.isCoreReady()).toBe(true);
+    expect(bank.getProgress().phase).toBe('core-ready');
   });
 });
