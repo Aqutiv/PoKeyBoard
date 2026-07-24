@@ -59,4 +59,9 @@ takes seconds and never touches the audio engine.
   accidentals repeat on every occurrence.
 - Whole-measure rests only; no partial rests, ties, dynamics, pedal or
   tuplet marks. Notes longer than a whole note render as a whole note.
+- Because there are no ties, a final chord that rings past its bar line is
+  drawn only where it is struck. The layout prints up to the last measure
+  that starts a note and closes there, so neither that ring-out nor the
+  spare bar the on-screen score keeps for recording reaches the page; rest
+  bars inside the piece are untouched.
 - Staff split is fixed at middle C (MIDI 60), like the live score.
