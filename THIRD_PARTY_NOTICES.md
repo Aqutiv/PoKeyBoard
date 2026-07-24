@@ -36,6 +36,16 @@ Attribution is also shown in the app's About view.
   rendered locally to canvas and embedded as images. The library is loaded
   on demand (code-split) and is not modified.
 
+## Fraunces (display typeface)
+
+- **Author:** Undercase Type (Phaedra Charles, Flavia Zimbardi)
+- **License:** SIL Open Font License 1.1 (OFL),
+  <https://openfontlicense.org/>
+- **Source:** <https://github.com/undercasetype/Fraunces>, bundled via the
+  `@fontsource/fraunces` npm package (latin 600 subset only)
+- **Use:** display headings and titles; served self-hosted and precached by
+  the service worker for offline use. The font is not modified.
+
 ## Reverb impulse response
 
 The room reverb impulse response is generated procedurally at runtime

@@ -219,6 +219,11 @@ export const en: Messages = {
   settings: {
     title: 'Settings',
     language: 'Language',
+    appearance: 'Appearance',
+    theme: 'Theme',
+    themeDark: 'Conservatory — dark',
+    themeLight: 'Ivory recital — light',
+    themeSystem: 'Follow system',
     sound: 'Sound',
     playing: 'Playing',
     offlinePiano: 'Offline piano',

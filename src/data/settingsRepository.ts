@@ -6,6 +6,7 @@ type PersistableSettings = typeof SETTINGS_DEFAULTS;
 const SETTING_KEYS = Object.keys(SETTINGS_DEFAULTS) as Array<keyof PersistableSettings>;
 const SETTING_SCHEMAS = {
   language: z.enum(['en', 'es', 'fr', 'mg']),
+  theme: z.enum(['dark', 'light', 'system']),
   masterVolume: z.number().min(0).max(1),
   reverbMix: z.number().min(0).max(1),
   velocityMode: z.enum(['touch', 'fixed']),

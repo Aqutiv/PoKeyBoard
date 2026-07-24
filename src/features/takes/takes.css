@@ -45,6 +45,7 @@
 }
 
 .take-item__title {
+  font-family: var(--font-display);
   font-weight: 600;
   display: flex;
   align-items: center;

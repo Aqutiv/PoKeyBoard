@@ -180,6 +180,42 @@ export function SettingsPage() {
           </select>
         </label>
 
+        <h2 className="settings__section">{m.settings.appearance}</h2>
+        <div
+          className="setting-row setting-row--stack"
+          role="radiogroup"
+          aria-label={m.settings.theme}
+        >
+          <span>{m.settings.theme}</span>
+          <label>
+            <input
+              type="radio"
+              name="theme-preference"
+              checked={settings.theme === 'dark'}
+              onChange={() => settings.setTheme('dark')}
+            />
+            {m.settings.themeDark}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="theme-preference"
+              checked={settings.theme === 'light'}
+              onChange={() => settings.setTheme('light')}
+            />
+            {m.settings.themeLight}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="theme-preference"
+              checked={settings.theme === 'system'}
+              onChange={() => settings.setTheme('system')}
+            />
+            {m.settings.themeSystem}
+          </label>
+        </div>
+
         <h2 className="settings__section">{m.settings.sound}</h2>
         <label className="setting-row">
           <span>{m.settings.pianoVolume}</span>

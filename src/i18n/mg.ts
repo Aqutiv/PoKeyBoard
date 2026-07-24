@@ -221,6 +221,11 @@ export const mg: Messages = {
   settings: {
     title: 'Fandrindrana',
     language: 'Fiteny',
+    appearance: 'Endrika',
+    theme: 'Endrika loko',
+    themeDark: 'Conservatory — maizina',
+    themeLight: 'Ivory recital — mazava',
+    themeSystem: 'Araka ny rafitra',
     sound: 'Feo',
     playing: 'Fitendrena',
     offlinePiano: 'Piano tsy an-tserasera',

@@ -67,6 +67,10 @@ Dexie v1: `takes` (denormalized summary columns + full JSON — lists never pars
 
 Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/instrument/pack + bitrate + metronome + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames and playhead changes never rerender audio.
 
+## Theming
+
+Two named themes share one token vocabulary in `src/themes.css`: Conservatory (dark) is the default on `:root`, Ivory recital (light) overrides colors under `html[data-theme='light']`; `color-scheme` flips with them so native controls follow. The preference (`dark | light | system`, default dark) is an ordinary setting (store + zod schema + Dexie row). `src/app/theme.ts` resolves preference × `prefers-color-scheme`, stamps `html[data-theme]`, updates the `theme-color` meta, and mirrors the preference to `localStorage['pokeyboard.theme']`; a tiny inline script in `index.html` reads that mirror **before first paint** so a light-theme user never flashes dark while Dexie loads (the controller deliberately applies nothing at init — the first store emit after hydration reconciles mirror vs Dexie truth, Dexie winning). The live score canvas can't read CSS variables at draw time, so `SCORE_PALETTES` in `scoreRenderer.ts` duplicates both palettes (kept in sync by comment convention) and the theme joins `MusicScore`'s redraw signature; sheet/PDF engraving stays print-monochrome and is untouched by theming. Display type is a self-hosted Fraunces 600 latin subset (`@fontsource/fraunces`), precached by the existing `woff2` glob.
+
 ## MP3 encoding
 
 The export service copies the rendered buffer's channels, **transfers** them to a Worker running LAME (wasm-media-encoders), streams progress per ~2 s chunk, validates plausibility (size vs duration·bitrate), stores the blob in `audioCache`, and hands the UI a `File` for `navigator.share` — called only from a fresh click, with download as the universal fallback.

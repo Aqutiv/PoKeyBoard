@@ -4,6 +4,7 @@ import { persistenceService } from '@/data/persistence';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { lifecycleService } from './lifecycle';
 import { RouterProvider } from './router';
+import { themeController } from './theme';
 
 /**
  * App-level providers plus one-time service wiring: the audio engine
@@ -20,6 +21,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (mounted) setRestored(true);
     });
     lifecycleService.init();
+    themeController.init();
 
     const unlock = () => {
       void audioEngine.unlockFromUserGesture();
@@ -39,7 +41,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
         <RouterProvider>{children}</RouterProvider>
       ) : (
         <div className="app-boot" role="status" aria-live="polite">
-          Loading PoKeyBoard…
+          <span className="app-boot__wordmark" aria-hidden="true">
+            PoKeyBoard
+          </span>
+          Loading…
         </div>
       )}
     </I18nProvider>

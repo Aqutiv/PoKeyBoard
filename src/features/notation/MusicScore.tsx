@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
+import { themeController } from '@/app/theme';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { transportController } from '@/features/transport/transportController';
@@ -11,6 +12,7 @@ import {
   computeScoreGeometry,
   drawScore,
   GUTTER,
+  SCORE_PALETTES,
   type ScoreGeometry,
   type ScoreView,
 } from './scoreRenderer';
@@ -189,6 +191,7 @@ export function MusicScore() {
       }
 
       const box = layoutBoxRef.current;
+      const theme = themeController.getResolved();
       const signature = [
         currentState,
         playheadMs.toFixed(1),
@@ -198,6 +201,7 @@ export function MusicScore() {
         height,
         ghosts.length,
         openNotes.length,
+        theme,
       ].join('|');
       const animating = ghosts.length > 0 || openNotes.length > 0;
       if (signature === lastSignatureRef.current && !animating) return;
@@ -212,17 +216,22 @@ export function MusicScore() {
         trebleTop: box.geometry.trebleTop,
         bassTop: box.geometry.bassTop,
       };
-      drawScore(ctx, view, {
-        layout: box.layout,
-        timeSignature: tempoRef.current.timeSignature,
-        playheadMs,
-        recording: currentState === 'recording',
-        openNotes,
-        ghosts: ghosts.map((g) => ({
-          midi: g.midi,
-          life: 1 - (now - g.bornAt) / GHOST_LIFE_MS,
-        })),
-      });
+      drawScore(
+        ctx,
+        view,
+        {
+          layout: box.layout,
+          timeSignature: tempoRef.current.timeSignature,
+          playheadMs,
+          recording: currentState === 'recording',
+          openNotes,
+          ghosts: ghosts.map((g) => ({
+            midi: g.midi,
+            life: 1 - (now - g.bornAt) / GHOST_LIFE_MS,
+          })),
+        },
+        SCORE_PALETTES[theme],
+      );
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);

@@ -260,6 +260,11 @@ export interface Messages {
   settings: {
     title: string;
     language: string;
+    appearance: string;
+    theme: string;
+    themeDark: string;
+    themeLight: string;
+    themeSystem: string;
     sound: string;
     playing: string;
     offlinePiano: string;
