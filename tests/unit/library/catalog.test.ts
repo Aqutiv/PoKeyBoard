@@ -43,8 +43,11 @@ describe('library catalog', () => {
       { atMs: 127_783, bpm: 60 },
       { atMs: 143_783, bpm: 52 },
     ]);
-    // Melody and left hand both stay on keys the default view shows (C3–B5
-    // plus the bass octave below it), so nothing sounds off screen.
+    // The melody tops out exactly at B5, the highest key the default C3–B5
+    // view shows, so its climax is always on screen. The left hand reaches an
+    // octave below that view — the keyboard does not follow a take's range, so
+    // the bass has to be shifted down to watch, as it does for every library
+    // track except A Beautiful Day.
     const midis = take?.notes.map((note) => note.midi) ?? [];
     expect(Math.min(...midis)).toBe(36); // C2
     expect(Math.max(...midis)).toBe(83); // B5
