@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLiveActiveNotes } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
@@ -25,9 +25,11 @@ import './keyboard.css';
 interface PianoKeyboardProps {
   /** Extra keys to light up (playback / scrub animation). */
   extraActiveMidis?: ReadonlySet<number>;
+  /** Extra controls rendered between the range shifter and Sustain. */
+  controlsExtra?: ReactNode;
 }
 
-export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
+export function PianoKeyboard({ extraActiveMidis, controlsExtra }: PianoKeyboardProps) {
   const m = useMessages();
   const keysRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -199,6 +201,7 @@ export function PianoKeyboard({ extraActiveMidis }: PianoKeyboardProps) {
         >
           ›
         </button>
+        {controlsExtra}
         <button
           type="button"
           className={`piano__sustain${sustainOn ? ' is-on' : ''}`}

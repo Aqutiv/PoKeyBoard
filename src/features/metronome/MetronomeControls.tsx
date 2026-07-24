@@ -30,7 +30,17 @@ function useActiveBeat(running: boolean, numerator: number): number {
   });
 }
 
-export function MetronomeControls() {
+interface MetronomeControlsProps {
+  /**
+   * Compact subset (toggle, BPM stepper, tap, beat dots) for embedding in
+   * the short-landscape piano controls row. Only one instance — full or
+   * compact — may be in the DOM at a time (duplicate group labels and beat
+   * dots would break assistive tech and the e2e locators).
+   */
+  compact?: boolean;
+}
+
+export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
   const m = useMessages();
   const metronomeOn = useMetronomeOn();
   const state = useTransportState();
@@ -109,7 +119,11 @@ export function MetronomeControls() {
     : [...TIME_SIGNATURES, currentSignature];
 
   return (
-    <div className="metronome" role="group" aria-label={m.metronome.groupLabel}>
+    <div
+      className={`metronome${compact ? ' metronome--compact' : ''}`}
+      role="group"
+      aria-label={m.metronome.groupLabel}
+    >
       <button
         type="button"
         className={`metronome__toggle${metronomeOn ? ' is-on' : ''}`}
@@ -154,41 +168,45 @@ export function MetronomeControls() {
         {m.metronome.tap}
       </button>
 
-      <select
-        aria-label={m.metronome.timeSignatureLabel}
-        value={currentSignature}
-        onChange={(event) => onTimeSignature(event.target.value)}
-      >
-        {signatureOptions.map((ts) => (
-          <option key={ts} value={ts}>
-            {ts}
-          </option>
-        ))}
-      </select>
+      {compact ? null : (
+        <>
+          <select
+            aria-label={m.metronome.timeSignatureLabel}
+            value={currentSignature}
+            onChange={(event) => onTimeSignature(event.target.value)}
+          >
+            {signatureOptions.map((ts) => (
+              <option key={ts} value={ts}>
+                {ts}
+              </option>
+            ))}
+          </select>
 
-      <select
-        aria-label={m.metronome.countInLabel}
-        value={String(tempo.countInBars)}
-        onChange={(event) => onCountIn(event.target.value)}
-      >
-        <option value="0">{m.metronome.noCountIn}</option>
-        <option value="1">{m.metronome.oneBar}</option>
-        <option value="2">{m.metronome.twoBars}</option>
-      </select>
+          <select
+            aria-label={m.metronome.countInLabel}
+            value={String(tempo.countInBars)}
+            onChange={(event) => onCountIn(event.target.value)}
+          >
+            <option value="0">{m.metronome.noCountIn}</option>
+            <option value="1">{m.metronome.oneBar}</option>
+            <option value="2">{m.metronome.twoBars}</option>
+          </select>
 
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.05}
-        value={metronomeVolume}
-        onChange={(event) => {
-          setMetronomeVolume(Number(event.target.value));
-          transportController.refreshMetronomeConfig();
-        }}
-        aria-label={m.metronome.volumeLabel}
-        className="metronome__volume"
-      />
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.05}
+            value={metronomeVolume}
+            onChange={(event) => {
+              setMetronomeVolume(Number(event.target.value));
+              transportController.refreshMetronomeConfig();
+            }}
+            aria-label={m.metronome.volumeLabel}
+            className="metronome__volume"
+          />
+        </>
+      )}
 
       <div className="metronome__beats" aria-hidden="true">
         {beats.map((beat) => (

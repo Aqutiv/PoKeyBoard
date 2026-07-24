@@ -106,3 +106,9 @@
 .metronome__dot.is-active {
   background: var(--accent-strong);
 }
+
+/* Compact subset embedded in the piano controls row (short landscape). */
+.metronome--compact {
+  flex-wrap: nowrap;
+  margin-left: auto; /* balances against Sustain's auto margin */
+}
