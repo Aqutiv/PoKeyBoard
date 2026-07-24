@@ -8,7 +8,7 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
-import { PIANO_SAMPLE_CACHE } from './cacheNames';
+import { PIANO_SAMPLE_CACHE, STALE_PIANO_SAMPLE_CACHES } from './cacheNames';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>;
@@ -31,6 +31,12 @@ registerRoute(
     plugins: [new ExpirationPlugin({ maxEntries: 256, purgeOnQuotaError: true })],
   }),
 );
+
+// cleanupOutdatedCaches() only covers workbox precaches, so superseded sample
+// caches (keyed by the old .mp3 URLs) are dropped explicitly.
+self.addEventListener('activate', (event: ExtendableEvent) => {
+  event.waitUntil(Promise.all(STALE_PIANO_SAMPLE_CACHES.map((name) => caches.delete(name))));
+});
 
 // Updates activate only when the user applies them at a safe moment
 // (updateManager sends SKIP_WAITING); never mid-recording.

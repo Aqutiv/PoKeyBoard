@@ -3,6 +3,7 @@
 *.jpg binary
 *.woff2 binary
 *.mp3 binary
+*.sample binary
 *.m4a binary
 *.flac binary
 *.wasm binary

@@ -9,7 +9,8 @@ PoKeyBoard bundles the following third-party assets and libraries.
   <https://creativecommons.org/licenses/by/3.0/>
 - **Source:** <https://github.com/sfzinstruments/SalamanderGrandPiano>
   (original distribution: <https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html>)
-- **Files:** `public/piano/salamander-grand-v1/*.mp3`
+- **Files:** `public/piano/salamander-grand-v1/*.sample` (MP3 audio; the
+  neutral extension keeps download managers from intercepting sample fetches)
 - **Modifications:** subset of the original 16 velocity layers (layers 5, 10,
   and 15) across the 30 minor-third root pitches; converted from 48 kHz/24-bit
   FLAC to 48 kHz mono MP3 at 128 kbps; trimmed to 7–12 seconds with a fade-out

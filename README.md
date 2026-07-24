@@ -18,7 +18,7 @@ npm run dev        # http://localhost:5173
 The piano sample pack ships in `public/piano/` (committed). To regenerate it from the Salamander Grand Piano sources you need `ffmpeg` on PATH:
 
 ```bash
-node scripts/build-sample-pack.mjs   # downloads FLAC subset + converts to MP3
+node scripts/build-sample-pack.mjs   # downloads FLAC subset + converts to MP3 (.sample files)
 node scripts/build-icons.mjs         # regenerates PWA icons from assets/branding
 ```
 

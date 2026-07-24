@@ -15,7 +15,7 @@ PoKeyBoard deploys to **any static HTTPS host** (no backend). The reference CI i
 - [ ] HTTPS with a valid certificate (service worker + share + install all require it)
 - [ ] SPA-friendly: unknown paths can 404 — navigation uses hash routes, but `/index.html` must be served at the base path
 - [ ] Caching headers per the table in [PWA_AND_OFFLINE.md](PWA_AND_OFFLINE.md) — critically: `service-worker.js` and `index.html` **no-cache**; hashed `assets/*` and `piano/*` **immutable**
-- [ ] Correct MIME types: `.webmanifest` → `application/manifest+json`, `.wasm` → `application/wasm`, `.mp3` → `audio/mpeg`
+- [ ] Correct MIME types: `.webmanifest` → `application/manifest+json`, `.wasm` → `application/wasm`. Piano samples use a `.sample` extension on purpose so download managers (IDM etc.) never intercept them — any MIME (typically `application/octet-stream`) is fine, since the app decodes them from bytes, never from Content-Type
 
 ## Post-deploy verification
 
