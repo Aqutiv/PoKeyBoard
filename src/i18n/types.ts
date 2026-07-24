@@ -185,6 +185,7 @@ export interface Messages {
     forkHint: string;
     descriptions: {
       aBeautifulDay: string;
+      eveningTide: string;
       forwardGently: string;
       furElise: string;
       gymnopedie1: string;

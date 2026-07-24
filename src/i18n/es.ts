@@ -134,6 +134,8 @@ export const es: Messages = {
     descriptions: {
       aBeautifulDay:
         'Una melodía original cálida y suave que cabe entera en las teclas visibles — una primera pieza fácil de seguir.',
+      eveningTide:
+        'Un nocturno original en E menor: una marea de la mano izquierda bajo una melodía cantabile que crece hacia la luz y vuelve a apagarse al anochecer.',
       forwardGently:
         'Una obra original para violín, piano y violonchelo llevada al teclado: empieza con calidez, crece hasta un clímax radiante y termina en calma.',
       furElise: 'La querida bagatela de Beethoven — el famoso tema inicial.',

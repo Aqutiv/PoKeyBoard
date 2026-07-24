@@ -135,6 +135,8 @@ export const en: Messages = {
     descriptions: {
       aBeautifulDay:
         'A warm, gentle original tune that sits entirely on the visible keys — an easy first piece to follow.',
+      eveningTide:
+        'An original nocturne in E minor — a rolling left-hand tide beneath a singing melody that swells into the light, then settles back at dusk.',
       forwardGently:
         'An original for violin, piano, and cello brought to the keyboard — it opens warmly, builds to a radiant climax, and settles into calm.',
       furElise: 'Beethoven’s beloved bagatelle — the famous opening theme.',
