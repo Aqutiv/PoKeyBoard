@@ -1,4 +1,5 @@
 import { useState, useSyncExternalStore } from 'react';
+import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { usePlaybackActiveMidis } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
@@ -34,6 +35,10 @@ export function PlayPage() {
   const isLibrary = isLibraryTakeId(takeId);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
   const playbackActiveMidis = usePlaybackActiveMidis();
+  // In short landscape the metronome row does not fit; a compact subset is
+  // embedded in the piano controls row instead. Render one or the other,
+  // never both (duplicate groups would confuse assistive tech).
+  const compactLandscape = useMediaQuery(COMPACT_LANDSCAPE_QUERY);
 
   return (
     <section
@@ -45,6 +50,24 @@ export function PlayPage() {
         <header className="play-header">
           <h1 className="play-header__title">{title}</h1>
           {isLibrary ? <span className="play-header__library">{m.library.chip}</span> : null}
+          <div className="play-view-switch" role="group" aria-label={m.play.viewLabel}>
+            <button
+              type="button"
+              className={`play-view-switch__option${compactView === 'notation' ? ' is-selected' : ''}`}
+              aria-pressed={compactView === 'notation'}
+              onClick={() => setCompactView('notation')}
+            >
+              {m.play.notationView}
+            </button>
+            <button
+              type="button"
+              className={`play-view-switch__option${compactView === 'keyboard' ? ' is-selected' : ''}`}
+              aria-pressed={compactView === 'keyboard'}
+              onClick={() => setCompactView('keyboard')}
+            >
+              {m.play.keyboardView}
+            </button>
+          </div>
           <span className="play-header__side">
             {isLibrary ? null : <SaveStatusBadge />}
             <ShareMenu
@@ -68,24 +91,6 @@ export function PlayPage() {
           </p>
         ) : null}
         <TransportControls />
-        <div className="play-view-switch" role="group" aria-label={m.play.viewLabel}>
-          <button
-            type="button"
-            className={`play-view-switch__option${compactView === 'notation' ? ' is-selected' : ''}`}
-            aria-pressed={compactView === 'notation'}
-            onClick={() => setCompactView('notation')}
-          >
-            {m.play.notationView}
-          </button>
-          <button
-            type="button"
-            className={`play-view-switch__option${compactView === 'keyboard' ? ' is-selected' : ''}`}
-            aria-pressed={compactView === 'keyboard'}
-            onClick={() => setCompactView('keyboard')}
-          >
-            {m.play.keyboardView}
-          </button>
-        </div>
         <div className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (
             <p className="page__hint" role="status">
@@ -111,9 +116,12 @@ export function PlayPage() {
           ) : null}
           <MusicScore />
         </div>
-        <MetronomeControls />
+        {compactLandscape ? null : <MetronomeControls />}
         <div className="play-layout__keyboard">
-          <PianoKeyboard extraActiveMidis={playbackActiveMidis} />
+          <PianoKeyboard
+            extraActiveMidis={playbackActiveMidis}
+            controlsExtra={compactLandscape ? <MetronomeControls compact /> : null}
+          />
         </div>
       </div>
     </section>

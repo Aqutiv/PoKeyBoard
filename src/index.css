@@ -439,21 +439,27 @@ button {
 }
 
 @media (orientation: landscape) and (max-height: 500px) {
+  /* Buttons in the header row need center alignment (base is baseline). */
+  .play-header {
+    align-items: center;
+  }
+
+  /* Compact segmented switch, sized to sit beside the Share button. */
   .play-view-switch {
     display: flex;
-    align-self: center;
-    padding: 3px;
+    flex-shrink: 0;
+    padding: 2px;
     border: 1px solid var(--border);
     border-radius: var(--radius-m);
     background: var(--surface-1);
   }
 
   .play-view-switch__option {
-    min-height: var(--touch-target);
-    padding: 0 18px;
-    border-radius: calc(var(--radius-m) - 3px);
+    min-height: 30px;
+    padding: 0 12px;
+    border-radius: calc(var(--radius-m) - 2px);
     color: var(--text-dim);
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
   }
 
@@ -462,7 +468,9 @@ button {
     color: var(--accent-contrast);
   }
 
-  .play-layout[data-compact-view='notation'] > .metronome,
+  /* The metronome row never fits in short landscape; the score and
+     keyboard alternate via the header switch. */
+  .play-layout > .metronome,
   .play-layout[data-compact-view='notation'] > .play-layout__keyboard,
   .play-layout[data-compact-view='keyboard'] > .play-layout__score {
     display: none;

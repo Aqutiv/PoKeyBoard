@@ -127,3 +127,22 @@
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Short landscape: seek slider joins the buttons row to save a line. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .transport {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+
+  .transport__seek {
+    flex: 1;
+    width: auto;
+    min-width: 120px;
+  }
+
+  .transport__status {
+    flex-basis: 100%;
+  }
+}
