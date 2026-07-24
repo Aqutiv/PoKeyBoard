@@ -190,8 +190,9 @@ button {
 }
 
 .page__title {
-  font-size: 20px;
-  font-weight: 650;
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
   letter-spacing: 0.01em;
   margin: 0;
 }
@@ -273,7 +274,9 @@ button {
 
 .modal__title {
   margin: 0 0 12px;
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
 }
 
 .modal__actions {
@@ -293,6 +296,7 @@ button {
 
 .play-header__title {
   margin: 0;
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
   white-space: nowrap;

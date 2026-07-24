@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import '@fontsource/fraunces/latin-600.css';
 import './index.css';
 import App from './app/App';
 import { installService } from './pwa/install';
