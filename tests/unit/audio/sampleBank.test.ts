@@ -68,7 +68,7 @@ describe('SampleBank retries', () => {
       velocityLayers: [{ index: 0, sourceLayer: 1, label: 'test' }],
       coreBytes: 100,
       totalBytes: 100,
-      files: [{ file: 'c4.mp3', midi: 60, layer: 0, pack: 'core' as const, bytes: 100 }],
+      files: [{ file: 'c4.sample', midi: 60, layer: 0, pack: 'core' as const, bytes: 100 }],
     };
     const fetchMock = vi
       .fn()

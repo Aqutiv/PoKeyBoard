@@ -4,8 +4,9 @@
  *
  * Downloads a 3-velocity-layer, minor-third-root subset of the 48kHz/24bit
  * FLACs into samples-staging/, converts each to a trimmed, faded 128kbps MP3
- * in public/piano/salamander-grand-v1/, and writes a manifest.json describing
- * every file (midi root, layer, pack membership, size).
+ * in public/piano/salamander-grand-v2/ (the .sample extension keeps download
+ * managers from intercepting fetches; the payload is still MP3), and writes a
+ * manifest.json describing every file (midi root, layer, pack membership, size).
  *
  * Idempotent: existing staged FLACs and converted MP3s are reused.
  * Requires: Node 20.19+ or 22.12+ and ffmpeg with libmp3lame on PATH.
@@ -18,7 +19,7 @@ import process from 'node:process';
 
 const RAW_BASE =
   'https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples';
-const PACK_VERSION = 'salamander-grand-v1';
+const PACK_VERSION = 'salamander-grand-v2';
 const STAGING_DIR = 'samples-staging';
 const OUT_DIR = path.join('public', 'piano', PACK_VERSION);
 
@@ -116,11 +117,14 @@ function runFfmpeg(args) {
 
 async function convert(name, midi) {
   const input = path.join(STAGING_DIR, `${safeName(name)}.flac`);
-  const output = path.join(OUT_DIR, `${safeName(name)}.mp3`);
+  // The .sample extension keeps download managers (IDM etc.) from intercepting
+  // the app's sample fetches; the payload is still MP3 and decodes by content.
+  const output = path.join(OUT_DIR, `${safeName(name)}.sample`);
   if ((await fileSize(output)) > 0) return { output, skipped: true };
   const trim = trimSecondsFor(midi);
   const fadeStart = trim - 1.5;
-  const temporary = output.replace(/\.mp3$/i, '.partial.mp3');
+  // ffmpeg picks the muxer from the extension, so encode to .mp3 and rename.
+  const temporary = output.replace(/\.sample$/i, '.partial.mp3');
   // Mono keeps decoded AudioBuffer memory phone-friendly; the app's stereo
   // reverb restores a sense of space.
   await runFfmpeg([
@@ -197,7 +201,7 @@ async function main() {
   let coreBytes = 0;
   let totalBytes = 0;
   for (const job of jobs) {
-    const file = `${safeName(job.name)}.mp3`;
+    const file = `${safeName(job.name)}.sample`;
     const bytes = await fileSize(path.join(OUT_DIR, file));
     if (bytes === 0) throw new Error(`Missing converted file ${file}`);
     const pack = job.midi >= CORE_ROOT_MIN && job.midi <= CORE_ROOT_MAX ? 'core' : 'full';
