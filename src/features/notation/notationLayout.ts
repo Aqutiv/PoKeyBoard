@@ -6,7 +6,7 @@ import type {
   TimeSignature,
 } from '@/domain/takeTypes';
 import { barDurationMs } from '@/utils/timing';
-import { durationToSymbol, quantizeGridBeats, type DurationSymbol } from './quantization';
+import { quantizeGridBeats, symbolForBeats, type DurationSymbol } from './quantization';
 import { ledgerLineSteps, midiToStaffPosition, stemGoesDown, type StaffKind } from './staffMapping';
 
 export interface LaidOutNote {
@@ -83,11 +83,13 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     return Math.round(tempoMap.msAtBeat(beat));
   };
 
+  const { denominator } = options.timeSignature;
+  /** A note's written length: beats between its endpoints, tempo map and all. */
+  const beatsHeld = (note: NoteEvent): number =>
+    tempoMap.beatAtMs(note.startMs + note.durationMs) - tempoMap.beatAtMs(note.startMs);
+
   const laidOut: LaidOutNote[] = notes.map((note) => {
     const position = midiToStaffPosition(note.midi);
-    // The note value follows the tempo the note starts in, so a bar after a
-    // tempo change still reads as the eighths and quarters it is.
-    const bpm = tempoMap.bpmAt(note.startMs);
     return {
       id: note.id,
       midi: note.midi,
@@ -97,7 +99,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       staff: position.staff,
       step: position.step,
       accidental: position.accidental,
-      symbol: durationToSymbol(note.durationMs, bpm),
+      symbol: symbolForBeats(beatsHeld(note), denominator),
       ledger: ledgerLineSteps(position.step),
     };
   });

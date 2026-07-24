@@ -121,6 +121,18 @@ describe('layoutScore', () => {
     expect(symbols.get('fast')).toEqual({ base: 'quarter', dotted: false });
   });
 
+  it('keeps the written value of a note held across a tempo change', () => {
+    // 120 bpm halves to 60 at bar 2 (2000 ms). A half note on beat 3 runs from
+    // beat 3 to beat 5, so it crosses the change and sounds for 1500 ms — which
+    // read against the starting tempo alone would draw a dotted half.
+    const layout = layoutScore([note({ id: 'held', startMs: 1500, durationMs: 1500 })], {
+      ...OPTS,
+      tempoChanges: [{ atMs: 2000, bpm: 60 }],
+      minMeasures: 1,
+    });
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
+  });
+
   it('quantizes onto the grid the tempo change starts, not one anchored at zero', () => {
     // 4/4 at 100 bpm gives 2400 ms bars, so bar 5 starts at 9600 ms. The new
     // tempo's 1/16 grid does not divide 9600, so an absolute grid would push

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { durationToSymbol, quantizeGridBeats } from '@/features/notation/quantization';
+import { quantizeGridBeats, symbolForBeats } from '@/features/notation/quantization';
 
-// At 120 BPM a whole note is 2000ms.
-const BPM = 120;
+/** In 4/4 a whole note spans four beats. */
+const FOUR = 4;
 
 describe('quantizeGridBeats', () => {
   it('derives the grid from the whole note, in beats', () => {
@@ -20,25 +20,35 @@ describe('quantizeGridBeats', () => {
   });
 });
 
-describe('durationToSymbol', () => {
-  it('maps standard durations', () => {
-    expect(durationToSymbol(2000, BPM)).toEqual({ base: 'whole', dotted: false });
-    expect(durationToSymbol(1000, BPM)).toEqual({ base: 'half', dotted: false });
-    expect(durationToSymbol(500, BPM)).toEqual({ base: 'quarter', dotted: false });
-    expect(durationToSymbol(250, BPM)).toEqual({ base: 'eighth', dotted: false });
-    expect(durationToSymbol(125, BPM)).toEqual({ base: 'sixteenth', dotted: false });
+describe('symbolForBeats', () => {
+  it('maps standard lengths', () => {
+    expect(symbolForBeats(4, FOUR)).toEqual({ base: 'whole', dotted: false });
+    expect(symbolForBeats(2, FOUR)).toEqual({ base: 'half', dotted: false });
+    expect(symbolForBeats(1, FOUR)).toEqual({ base: 'quarter', dotted: false });
+    expect(symbolForBeats(0.5, FOUR)).toEqual({ base: 'eighth', dotted: false });
+    expect(symbolForBeats(0.25, FOUR)).toEqual({ base: 'sixteenth', dotted: false });
   });
 
-  it('maps dotted durations', () => {
-    expect(durationToSymbol(1500, BPM)).toEqual({ base: 'half', dotted: true });
-    expect(durationToSymbol(750, BPM)).toEqual({ base: 'quarter', dotted: true });
-    expect(durationToSymbol(375, BPM)).toEqual({ base: 'eighth', dotted: true });
+  it('maps dotted lengths', () => {
+    expect(symbolForBeats(3, FOUR)).toEqual({ base: 'half', dotted: true });
+    expect(symbolForBeats(1.5, FOUR)).toEqual({ base: 'quarter', dotted: true });
+    expect(symbolForBeats(0.75, FOUR)).toEqual({ base: 'eighth', dotted: true });
   });
 
-  it('picks the nearest symbol for messy performed durations', () => {
-    expect(durationToSymbol(520, BPM)).toEqual({ base: 'quarter', dotted: false });
-    expect(durationToSymbol(230, BPM)).toEqual({ base: 'eighth', dotted: false });
-    expect(durationToSymbol(60, BPM)).toEqual({ base: 'sixteenth', dotted: false });
-    expect(durationToSymbol(30_000, BPM)).toEqual({ base: 'whole', dotted: false });
+  it('picks the nearest symbol for messy performed lengths', () => {
+    expect(symbolForBeats(1.04, FOUR)).toEqual({ base: 'quarter', dotted: false });
+    expect(symbolForBeats(0.46, FOUR)).toEqual({ base: 'eighth', dotted: false });
+    expect(symbolForBeats(0.12, FOUR)).toEqual({ base: 'sixteenth', dotted: false });
+    expect(symbolForBeats(60, FOUR)).toEqual({ base: 'whole', dotted: false });
+    expect(symbolForBeats(0, FOUR)).toEqual({ base: 'sixteenth', dotted: false });
+  });
+
+  it('reads the whole note off the time signature', () => {
+    // 6/8 counts eighths: one beat is an eighth note, six of them a whole plus.
+    expect(symbolForBeats(1, 8)).toEqual({ base: 'eighth', dotted: false });
+    expect(symbolForBeats(3, 8)).toEqual({ base: 'quarter', dotted: true });
+    // 2/2 counts halves.
+    expect(symbolForBeats(1, 2)).toEqual({ base: 'half', dotted: false });
+    expect(symbolForBeats(2, 2)).toEqual({ base: 'whole', dotted: false });
   });
 });

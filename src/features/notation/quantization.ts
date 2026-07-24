@@ -1,5 +1,4 @@
 import type { QuantizationSetting } from '@/domain/takeTypes';
-import { wholeNoteDurationMs } from '@/utils/timing';
 
 /**
  * Visual quantization only: raw performance timing is never modified, these
@@ -37,10 +36,15 @@ export function quantizeGridBeats(
   return denominator / (setting === '1/8' ? 8 : 16);
 }
 
-/** Closest standard symbol for a sounded duration (log-distance nearest). */
-export function durationToSymbol(durationMs: number, bpm: number): DurationSymbol {
-  const whole = wholeNoteDurationMs(bpm);
-  const fraction = Math.max(durationMs / whole, 0.0001);
+/**
+ * Closest standard symbol for a length in time-signature beats (log-distance
+ * nearest). Beats, not milliseconds: a note held across a tempo change is as
+ * long as it is *written*, so it keeps the value it was played as instead of
+ * gaining a dot from the slower tempo it ends in. A whole note spans
+ * `denominator` beats.
+ */
+export function symbolForBeats(beats: number, denominator: number): DurationSymbol {
+  const fraction = Math.max(beats / denominator, 0.0001);
   let best = SYMBOLS[SYMBOLS.length - 1]!.symbol;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const { fraction: f, symbol } of SYMBOLS) {
