@@ -3,6 +3,7 @@ import type { Take } from '@/domain/takeTypes';
 import { buildLibraryTake, type LibraryTrackDef } from './trackBuilder';
 import { A_BEAUTIFUL_DAY } from './tracks/aBeautifulDay';
 import { BLUES_IN_C } from './tracks/bluesInC';
+import { FORWARD_GENTLY } from './tracks/forwardGently';
 import { FUR_ELISE } from './tracks/furElise';
 import { GOOD_NIGHT } from './tracks/goodNight';
 import { GYMNOPEDIE_1 } from './tracks/gymnopedie1';
@@ -15,6 +16,7 @@ import { MOONLIGHT_SONATA } from './tracks/moonlightSonata';
  */
 export const LIBRARY_TRACKS: readonly LibraryTrackDef[] = [
   A_BEAUTIFUL_DAY,
+  FORWARD_GENTLY,
   FUR_ELISE,
   GYMNOPEDIE_1,
   BLUES_IN_C,

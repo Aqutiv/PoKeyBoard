@@ -39,6 +39,7 @@ export type RepairCode =
   | 'tempoDefaulted'
   | 'bpmClamped'
   | 'countInClamped'
+  | 'tempoChangesRepaired'
   | 'instrumentDefaulted'
   | 'noteTimingRounded'
   | 'noteIdsAssigned'
@@ -122,6 +123,8 @@ export interface Messages {
     oneBar: string;
     twoBars: string;
     volumeLabel: string;
+    /** Shown when the tempo field will change the tempo from a bar onward. */
+    tempoFromBar: (p: { bar: number }) => string;
   };
   piano: {
     shiftDown: string;
@@ -182,6 +185,7 @@ export interface Messages {
     forkHint: string;
     descriptions: {
       aBeautifulDay: string;
+      forwardGently: string;
       furElise: string;
       gymnopedie1: string;
       bluesInC: string;
@@ -346,6 +350,7 @@ export interface Messages {
     tempoDefaulted: string;
     bpmClamped: string;
     countInClamped: string;
+    tempoChangesRepaired: string;
     instrumentDefaulted: string;
     noteTimingRounded: string;
     noteIdsAssigned: (p: { count: number }) => string;

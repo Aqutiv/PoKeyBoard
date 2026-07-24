@@ -13,6 +13,7 @@ describe('library catalog', () => {
   it('ships the library tracks in display order', () => {
     expect(LIBRARY_TRACKS.map((def) => def.trackId)).toEqual([
       'a-beautiful-day',
+      'forward-gently',
       'fur-elise',
       'gymnopedie-1',
       'blues-in-c',
@@ -27,6 +28,22 @@ describe('library catalog', () => {
       title: 'Good Night',
       composer: 'GPT 5.6 Sol Ultra',
     });
+  });
+
+  it('keeps the tempo marks of the score Forward, Gently came from', () => {
+    const take = getLibraryTake(libraryTakeId('forward-gently'));
+    expect(take?.tempo.bpm).toBe(96);
+    // Bars 25, 29, 31 and 32: radiant, calm, rit., serene.
+    expect(take?.tempo.changes).toEqual([
+      { atMs: 60_000, bpm: 104 },
+      { atMs: 69_231, bpm: 96 },
+      { atMs: 74_231, bpm: 84 },
+      { atMs: 77_088, bpm: 76 },
+    ]);
+    // The last bar is played slowest, so it is the longest in milliseconds.
+    const finalChord = take?.notes.filter((note) => note.startMs >= 77_088) ?? [];
+    expect(finalChord.length).toBeGreaterThan(4);
+    expect(finalChord.every((note) => note.durationMs === 3158)).toBe(true);
   });
 
   it('summaries mirror the built takes', () => {

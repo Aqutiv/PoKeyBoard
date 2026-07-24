@@ -17,7 +17,8 @@ src/
                 iosAudioSession
   workers/      mp3Encoder.worker (LAME wasm, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
-                takeMigrations, noteEvents, takeHash (export cache key)
+                takeMigrations, noteEvents, takeHash (export cache key),
+                tempoMap (piecewise beats↔ms; shared by import, library, score)
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
@@ -43,6 +44,8 @@ src/
 ## Audio clock ownership
 
 `TransportClock` maps audio seconds ↔ take milliseconds with an anchor pair. Recording anchors beat zero slightly ahead on the audio clock (count-in aligned); input events carry `AudioContext.currentTime` and are converted through the anchor, so UI latency never skews recorded timing. Playback schedules notes 150 ms ahead on a 25 ms tick; the metronome schedules clicks the same way. Nothing audible is driven by `setTimeout` timestamps.
+
+Clicks come from a `ClickGrid`, not from one bpm: while the transport moves, the grid puts beat _n_ where the take's tempo map puts it, so clicks land on the same bar lines the score draws and follow every tempo change; stopped, it is a steady grid at the tempo in force under the playhead; a count-in is a steady grid at the tempo recording will start in, whose last click lands on the record anchor. The exported click track (`scheduleClicksForRange`) walks the same map. The BPM field edits the tempo _at the playhead_: at the start it is the take's tempo, and stopped further in — the record-a-part, change-tempo, record-again flow — it writes a tempo change on the nearest bar line and parks the playhead there.
 
 ## Transport state machine
 

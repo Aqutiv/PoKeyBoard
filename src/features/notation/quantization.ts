@@ -1,5 +1,4 @@
 import type { QuantizationSetting } from '@/domain/takeTypes';
-import { wholeNoteDurationMs } from '@/utils/timing';
 
 /**
  * Visual quantization only: raw performance timing is never modified, these
@@ -22,28 +21,30 @@ const SYMBOLS: Array<{ fraction: number; symbol: DurationSymbol }> = [
   { fraction: 0.0625, symbol: { base: 'sixteenth', dotted: false } },
 ];
 
-/** Grid size in ms for a quantization setting; null when off. */
-export function quantizeGridMs(setting: QuantizationSetting, bpm: number): number | null {
-  if (setting === 'off') return null;
-  const whole = wholeNoteDurationMs(bpm);
-  return setting === '1/8' ? whole / 8 : whole / 16;
-}
-
-/** Snap a start time to the visual grid (identity when quantization is off). */
-export function quantizeStartMs(
-  startMs: number,
+/**
+ * Grid size in time-signature beats; null when off. The grid lives in beat
+ * space so that it stays anchored to the music — bar lines and the tempo
+ * changes that start on them included. An absolute millisecond grid only lines
+ * up while one tempo runs the whole way. A whole note spans `denominator`
+ * beats (four in 4/4, eight in 6/8).
+ */
+export function quantizeGridBeats(
   setting: QuantizationSetting,
-  bpm: number,
-): number {
-  const grid = quantizeGridMs(setting, bpm);
-  if (grid === null) return startMs;
-  return Math.round(startMs / grid) * grid;
+  denominator: number,
+): number | null {
+  if (setting === 'off') return null;
+  return denominator / (setting === '1/8' ? 8 : 16);
 }
 
-/** Closest standard symbol for a sounded duration (log-distance nearest). */
-export function durationToSymbol(durationMs: number, bpm: number): DurationSymbol {
-  const whole = wholeNoteDurationMs(bpm);
-  const fraction = Math.max(durationMs / whole, 0.0001);
+/**
+ * Closest standard symbol for a length in time-signature beats (log-distance
+ * nearest). Beats, not milliseconds: a note held across a tempo change is as
+ * long as it is *written*, so it keeps the value it was played as instead of
+ * gaining a dot from the slower tempo it ends in. A whole note spans
+ * `denominator` beats.
+ */
+export function symbolForBeats(beats: number, denominator: number): DurationSymbol {
+  const fraction = Math.max(beats / denominator, 0.0001);
   let best = SYMBOLS[SYMBOLS.length - 1]!.symbol;
   let bestDistance = Number.POSITIVE_INFINITY;
   for (const { fraction: f, symbol } of SYMBOLS) {

@@ -68,6 +68,7 @@ export const en: Messages = {
     oneBar: '1 bar',
     twoBars: '2 bars',
     volumeLabel: 'Metronome volume',
+    tempoFromBar: ({ bar }) => `from bar ${bar}`,
   },
   piano: {
     shiftDown: 'Shift keyboard range down one octave',
@@ -134,6 +135,8 @@ export const en: Messages = {
     descriptions: {
       aBeautifulDay:
         'A warm, gentle original tune that sits entirely on the visible keys — an easy first piece to follow.',
+      forwardGently:
+        'An original for violin, piano, and cello brought to the keyboard — it opens warmly, builds to a radiant climax, and settles into calm.',
       furElise: 'Beethoven’s beloved bagatelle — the famous opening theme.',
       gymnopedie1:
         'Satie’s dreamy classic — slow, soft, and spacious. Just listen, or drift along.',
@@ -326,6 +329,7 @@ export const en: Messages = {
     tempoDefaulted: 'Defaulted missing tempo settings.',
     bpmClamped: 'Clamped BPM into the 40–240 range.',
     countInClamped: 'Clamped count-in length.',
+    tempoChangesRepaired: 'Cleaned up the tempo changes.',
     instrumentDefaulted: 'Defaulted missing instrument settings.',
     noteTimingRounded: 'Rounded fractional note timing to whole milliseconds.',
     noteIdsAssigned: ({ count }) => `Assigned ids to ${count} note(s).`,

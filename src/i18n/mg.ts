@@ -68,6 +68,7 @@ export const mg: Messages = {
     oneBar: '1 mizana',
     twoBars: '2 mizana',
     volumeLabel: 'Feon’ny metronoma',
+    tempoFromBar: ({ bar }) => `manomboka amin’ny mizana ${bar}`,
   },
   piano: {
     shiftDown: 'Ampidino iray oktava ny elanelan’ny klavie',
@@ -135,6 +136,8 @@ export const mg: Messages = {
     descriptions: {
       aBeautifulDay:
         'Hira noforonina, mafana sy malefaka, mipetraka manontolo eo amin’ny kitendry hita — tsara hanombohana.',
+      forwardGently:
+        'Hira noforonina ho an’ny lokanga, piano ary violonselo, natao eto amin’ny kitendry — manomboka mafana, mitombo hatramin’ny fara tampony mamiratra, ary mifarana am-pilaminana.',
       furElise: 'Ilay bagatelle sarobidin’i Beethoven — ny lohahevitra fanokafana malaza.',
       gymnopedie1:
         'Ilay hira manonofin’i Satie — miadana, malefaka, ary malalaka. Mihainoa fotsiny.',
@@ -333,6 +336,7 @@ export const mg: Messages = {
     tempoDefaulted: 'Nampiasaina fandrindrana tempo mahazatra noho ny tsy fisiany.',
     bpmClamped: 'Naverina tao anatin’ny elanelana 40–240 ny BPM.',
     countInClamped: 'Nohitsina ny halavan’ny fanisana mialoha.',
+    tempoChangesRepaired: 'Nodiovina ny fiovan’ny tempo.',
     instrumentDefaulted: 'Nampiasaina fandrindrana zavamaneno mahazatra noho ny tsy fisiany.',
     noteTimingRounded: 'Naboribory ho milisegondra feno ny fotoanan’ny naoty ampahany.',
     noteIdsAssigned: ({ count }) => `Nomena id ny naoty ${count}.`,

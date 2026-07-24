@@ -72,9 +72,10 @@ export function MusicScore() {
       layoutScore(notes, {
         bpm: tempo.bpm,
         timeSignature: tempo.timeSignature,
+        tempoChanges: tempo.changes,
         quantization,
       }),
-    [notes, tempo.bpm, tempo.timeSignature, quantization],
+    [notes, tempo.bpm, tempo.timeSignature, tempo.changes, quantization],
   );
   const geometry = useMemo(() => computeScoreGeometry(layout.chords), [layout]);
 

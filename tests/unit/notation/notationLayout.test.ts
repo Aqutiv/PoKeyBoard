@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent } from '@/domain/takeTypes';
-import { firstChordIndexAt, layoutScore } from '@/features/notation/notationLayout';
+import { firstChordIndexAt, layoutScore, measureIndexAt } from '@/features/notation/notationLayout';
 
 const OPTS = {
   bpm: 120,
@@ -84,6 +84,79 @@ describe('layoutScore', () => {
     );
     expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
     expect(layout.chords[0]!.stemDown).toBe(true); // high notes → stems down
+  });
+
+  it('sizes measures from the tempo in force and reports it', () => {
+    // Two bars at 120, then twice as fast from bar 3.
+    const layout = layoutScore([note({ id: 'a', startMs: 4000, durationMs: 500 })], {
+      ...OPTS,
+      tempoChanges: [{ atMs: 4000, bpm: 240 }],
+      minMeasures: 1,
+    });
+    expect(layout.measures.map((m) => [m.startMs, m.endMs])).toEqual([
+      [0, 2000],
+      [2000, 4000],
+      [4000, 5000], // four beats at 240 bpm
+    ]);
+    expect(layout.measures.map((m) => m.bpm)).toEqual([120, 120, 240]);
+    // barMs stays the first measure's length; totalMs is the real extent.
+    expect(layout.barMs).toBe(2000);
+    expect(layout.totalMs).toBe(5000);
+    expect(layout.measures[2]!.empty).toBe(false);
+  });
+
+  it('reads note values at the local tempo', () => {
+    const slow = note({ id: 'slow', startMs: 0, durationMs: 500 });
+    const fast = note({ id: 'fast', startMs: 4000, durationMs: 250 });
+    const layout = layoutScore([slow, fast], {
+      ...OPTS,
+      tempoChanges: [{ atMs: 4000, bpm: 240 }],
+      minMeasures: 1,
+    });
+    const symbols = new Map(
+      layout.chords.map((chord) => [chord.notes[0]!.id, chord.notes[0]!.symbol]),
+    );
+    // Both are quarter notes: 500 ms at 120 bpm, 250 ms at 240 bpm.
+    expect(symbols.get('slow')).toEqual({ base: 'quarter', dotted: false });
+    expect(symbols.get('fast')).toEqual({ base: 'quarter', dotted: false });
+  });
+
+  it('keeps the written value of a note held across a tempo change', () => {
+    // 120 bpm halves to 60 at bar 2 (2000 ms). A half note on beat 3 runs from
+    // beat 3 to beat 5, so it crosses the change and sounds for 1500 ms — which
+    // read against the starting tempo alone would draw a dotted half.
+    const layout = layoutScore([note({ id: 'held', startMs: 1500, durationMs: 1500 })], {
+      ...OPTS,
+      tempoChanges: [{ atMs: 2000, bpm: 60 }],
+      minMeasures: 1,
+    });
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
+  });
+
+  it('quantizes onto the grid the tempo change starts, not one anchored at zero', () => {
+    // 4/4 at 100 bpm gives 2400 ms bars, so bar 5 starts at 9600 ms. The new
+    // tempo's 1/16 grid does not divide 9600, so an absolute grid would push
+    // this downbeat to ~9635 ms — visibly after the bar line it belongs on.
+    const layout = layoutScore([note({ id: 'downbeat', startMs: 9600, durationMs: 400 })], {
+      ...OPTS,
+      bpm: 100,
+      tempoChanges: [{ atMs: 9600, bpm: 137 }],
+      minMeasures: 1,
+    });
+    expect(layout.measures[4]!.startMs).toBe(9600);
+    expect(layout.chords[0]!.displayStartMs).toBe(9600);
+    expect(measureIndexAt(layout.measures, layout.chords[0]!.displayStartMs)).toBe(4);
+  });
+
+  it('finds the measure containing a time, and nothing outside the layout', () => {
+    const layout = layoutScore([], { ...OPTS, minMeasures: 3 });
+    expect(measureIndexAt(layout.measures, 0)).toBe(0);
+    expect(measureIndexAt(layout.measures, 1999)).toBe(0);
+    expect(measureIndexAt(layout.measures, 2000)).toBe(1);
+    expect(measureIndexAt(layout.measures, 5999)).toBe(2);
+    expect(measureIndexAt(layout.measures, 6000)).toBeNull();
+    expect(measureIndexAt(layout.measures, -1)).toBeNull();
+    expect(measureIndexAt([], 0)).toBeNull();
   });
 
   it('handles 2000 notes without excessive layout output', () => {

@@ -239,6 +239,16 @@ describe('tempo and dynamics', () => {
     );
     expect(take.notes.map((n) => n.startMs)).toEqual([0, 500, 1000, 2000]);
     expect(take.tempo.bpm).toBe(120);
+    // The change rides along so the notation can draw bar 1's new tempo.
+    expect(take.tempo.changes).toEqual([{ atMs: 1000, bpm: 60 }]);
+  });
+
+  it('leaves a single-tempo score without a tempo map', () => {
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + '<sound tempo="90"/>' + note('C', 4, 1))),
+    );
+    expect(take.tempo.bpm).toBe(90);
+    expect(take.tempo.changes).toBeUndefined();
   });
 
   it('reads sound tempo as a direct measure child', () => {

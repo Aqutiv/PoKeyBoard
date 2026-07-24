@@ -1,5 +1,6 @@
 import { libraryTakeId } from '@/domain/libraryTakes';
 import { computeTakeDurationMs, createEmptyTake, sortNotes } from '@/domain/noteEvents';
+import { createBeatTempoMap, tempoChangesFrom, type TempoMap } from '@/domain/tempoMap';
 import type {
   CountInBars,
   NoteEvent,
@@ -10,7 +11,6 @@ import type {
 } from '@/domain/takeTypes';
 import type { Messages } from '@/i18n/types';
 import { noteNameToMidi } from '@/utils/midi';
-import { barDurationMs, beatDurationMs } from '@/utils/timing';
 
 /**
  * One authored event: `[beat, note(s), durationBeats, velocity?]`.
@@ -36,6 +36,12 @@ export interface LibraryTrackDef {
   quantization?: QuantizationSetting;
   /** 'bar' lays a sustain-pedal cycle under every bar (lifting just before the next). */
   pedal?: 'bar' | 'none';
+  /**
+   * Tempo marks after the opening one, as `[beat, bpm]` — the beat is in the
+   * same units as the events. Event beats stay musical; only the milliseconds
+   * they land on change.
+   */
+  tempoChanges?: readonly (readonly [beat: number, bpm: number])[];
   events: TrackEvent[];
 }
 
@@ -44,13 +50,16 @@ const DEFAULT_VELOCITY = 0.7;
 /** Pedal lifts this long before the next bar line so harmonies stay clean. */
 const PEDAL_LIFT_MS = 40;
 
-function barPedalEvents(def: LibraryTrackDef, durationMs: number): PedalEvent[] {
-  const barMs = barDurationMs(def.bpm, def.timeSignature);
-  const bars = Math.ceil(durationMs / barMs);
+function barPedalEvents(def: LibraryTrackDef, map: TempoMap, durationMs: number): PedalEvent[] {
+  const { numerator } = def.timeSignature;
+  const bars = Math.ceil(map.beatAtMs(durationMs) / numerator);
   const events: PedalEvent[] = [];
   for (let bar = 0; bar < bars; bar += 1) {
-    const downMs = Math.round(bar * barMs);
-    const upMs = Math.min(durationMs, Math.round((bar + 1) * barMs) - PEDAL_LIFT_MS);
+    const downMs = Math.round(map.msAtBeat(bar * numerator));
+    const upMs = Math.min(
+      durationMs,
+      Math.round(map.msAtBeat((bar + 1) * numerator)) - PEDAL_LIFT_MS,
+    );
     if (upMs <= downMs) continue;
     events.push({ atMs: downMs, down: true }, { atMs: upMs, down: false });
   }
@@ -63,14 +72,16 @@ function barPedalEvents(def: LibraryTrackDef, durationMs: number): PedalEvent[] 
  * so rebuilding the catalog always yields identical content.
  */
 export function buildLibraryTake(def: LibraryTrackDef): Take {
-  const beatMs = beatDurationMs(def.bpm, def.timeSignature);
+  const map = createBeatTempoMap(def.bpm, def.timeSignature, def.tempoChanges);
   const notes: NoteEvent[] = [];
 
   def.events.forEach((event, index) => {
     const [beat, noteOrChord, durationBeats, velocity] = event;
     const names = Array.isArray(noteOrChord) ? noteOrChord : [noteOrChord];
-    const startMs = Math.round(beat * beatMs);
-    const durationMs = Math.max(1, Math.round(durationBeats * beatMs));
+    // Endpoints, not durations, go through the map: a note held across a tempo
+    // change then sounds exactly as long as it is written.
+    const startMs = Math.round(map.msAtBeat(beat));
+    const durationMs = Math.max(1, Math.round(map.msAtBeat(beat + durationBeats)) - startMs);
     names.forEach((name, chordIndex) => {
       const midi = noteNameToMidi(name);
       if (midi === null) {
@@ -88,6 +99,7 @@ export function buildLibraryTake(def: LibraryTrackDef): Take {
 
   const sorted = sortNotes(notes);
   const durationMs = computeTakeDurationMs(sorted);
+  const changes = tempoChangesFrom(map);
 
   return createEmptyTake({
     id: libraryTakeId(def.trackId),
@@ -99,9 +111,10 @@ export function buildLibraryTake(def: LibraryTrackDef): Take {
       bpm: def.bpm,
       timeSignature: def.timeSignature,
       countInBars: def.countInBars ?? 1,
+      ...(changes.length > 0 ? { changes } : {}),
     },
     notes: sorted,
-    pedalEvents: def.pedal === 'bar' ? barPedalEvents(def, durationMs) : [],
+    pedalEvents: def.pedal === 'bar' ? barPedalEvents(def, map, durationMs) : [],
     display: { quantization: def.quantization ?? '1/16', zoom: 1, playheadMs: 0 },
   });
 }

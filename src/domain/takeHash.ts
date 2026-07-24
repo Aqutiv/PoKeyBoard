@@ -55,6 +55,8 @@ export function canonicalAudioContent(take: Take): Record<string, unknown> {
     tempo: {
       bpm: take.tempo.bpm,
       timeSignature: take.tempo.timeSignature,
+      // Exported metronome clicks follow the tempo map, so it is audible.
+      changes: take.tempo.changes ?? [],
     },
     instrument: {
       id: take.instrument.id,
