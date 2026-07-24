@@ -257,10 +257,26 @@ interface WorkSystem {
 
 export function layoutSheet(score: ScoreLayout, options: SheetLayoutOptions): SheetLayoutResult {
   const metrics = metricsFor(options.paper);
-  const workMeasures = buildWorkMeasures(score);
+  const workMeasures = trimTrailingEmpty(buildWorkMeasures(score));
   const systems = packSystems(workMeasures, metrics, options);
   const pages = paginate(systems, metrics, options);
-  return { pages, measureCount: score.measures.length, systemCount: systems.length };
+  return { pages, measureCount: workMeasures.length, systemCount: systems.length };
+}
+
+/**
+ * Drop the measures after the last one that has a note in it. The score on
+ * screen deliberately keeps blank bars past the end — they are the space you
+ * record into, and a take ending exactly on a bar line gets one more on top of
+ * that — but printed before the final barline they read as an engraving
+ * mistake. Rest bars *inside* the piece are real music and always survive.
+ *
+ * A score with no notes at all keeps its scaffold, so the export preview of an
+ * empty take still shows staves rather than nothing.
+ */
+function trimTrailingEmpty(measures: WorkMeasure[]): WorkMeasure[] {
+  let last = measures.length - 1;
+  while (last >= 0 && measures[last]!.columns.length === 0) last -= 1;
+  return last < 0 ? measures : measures.slice(0, last + 1);
 }
 
 /** Column advance for a time gap, in staff spaces (sub-linear in duration). */

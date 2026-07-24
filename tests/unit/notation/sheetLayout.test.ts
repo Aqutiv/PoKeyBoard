@@ -361,4 +361,52 @@ describe('layoutSheet', () => {
       expect(staffChords(measure, 'treble')).toHaveLength(8);
     });
   });
+
+  describe('the end of the piece', () => {
+    /** The last measure the layout actually printed. */
+    function lastMeasure(result: SheetLayoutResult): SheetMeasure {
+      const measures = allMeasures(result);
+      return measures[measures.length - 1]!;
+    }
+
+    it('closes on the last measure with notes when the take ends on a bar line', () => {
+      // Two full 4/4 bars at 120 bpm; the score keeps a third to record into.
+      const result = sheet([
+        note({ id: 'a', startMs: 0, durationMs: 2000 }),
+        note({ id: 'b', startMs: 2000, durationMs: 2000 }),
+      ]);
+      expect(result.measureCount).toBe(2);
+      expect(allMeasures(result)).toHaveLength(2);
+      expect(lastMeasure(result).empty).toBe(false);
+    });
+
+    it('drops the bar a final chord only rings into', () => {
+      // The chord starts in bar 1 and rings halfway through bar 2. With no
+      // ties yet, bar 2 owns no onset and would otherwise print as rests.
+      const result = sheet([note({ startMs: 0, durationMs: 3000 })]);
+      expect(result.measureCount).toBe(1);
+      expect(allMeasures(result)).toHaveLength(1);
+      expect(lastMeasure(result).empty).toBe(false);
+    });
+
+    it('keeps a rest bar that falls inside the piece', () => {
+      const result = sheet([
+        note({ id: 'a', startMs: 0, durationMs: 500 }),
+        note({ id: 'b', startMs: 4000, durationMs: 500 }),
+      ]);
+      expect(allMeasures(result).map((measure) => measure.empty)).toEqual([false, true, false]);
+    });
+
+    it('keeps the scaffold of a take with no notes at all', () => {
+      const score = layoutScore([], {
+        bpm: SHEET_OPTS.bpm,
+        timeSignature: SHEET_OPTS.timeSignature,
+        quantization: '1/16',
+        minMeasures: 4,
+      });
+      const result = layoutSheet(score, SHEET_OPTS);
+      expect(result.measureCount).toBe(4);
+      expect(allMeasures(result).every((measure) => measure.empty)).toBe(true);
+    });
+  });
 });
