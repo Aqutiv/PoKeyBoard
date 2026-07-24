@@ -4,10 +4,11 @@ import { gotoAppReady, nav, recordShortTake } from './helpers';
 test.describe('Sheet music export', () => {
   test('exports a recorded take to a valid one-page PDF', async ({ page }) => {
     await gotoAppReady(page);
-    await expect(page.getByRole('button', { name: 'Share sheet', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Share', exact: true })).toBeDisabled();
     await recordShortTake(page);
 
-    await page.getByRole('button', { name: 'Share sheet', exact: true }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Sheet music (PDF)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Export sheet music' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByText(/≈ 1 page/)).toBeVisible();
@@ -38,7 +39,8 @@ test.describe('Sheet music export', () => {
     await nav(page).getByRole('button', { name: 'Takes' }).click();
 
     await page.getByRole('button', { name: /More actions for/ }).click();
-    await page.getByRole('button', { name: 'Share sheet music' }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Sheet music (PDF)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Export sheet music' });
     await expect(dialog).toBeVisible();
     await expect(dialog.getByRole('button', { name: 'Generate PDF' })).toBeEnabled();
@@ -52,7 +54,8 @@ test.describe('Sheet music export', () => {
     await page.getByRole('button', { name: 'Open Moonlight Sonata (1st Movement)' }).click();
     await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
 
-    await page.getByRole('button', { name: 'Share sheet', exact: true }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Sheet music (PDF)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Export sheet music' });
     await dialog.getByRole('button', { name: 'Generate PDF' }).click();
     await expect(dialog.getByText(/PDF ready/)).toBeVisible({ timeout: 60_000 });

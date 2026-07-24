@@ -18,8 +18,6 @@ export const fr: Messages = {
   },
   play: {
     pageLabel: 'Jouer',
-    shareAudio: 'Partager l’audio',
-    shareSheet: 'Partager la partition',
     viewLabel: 'Affichage',
     notationView: 'Partition',
     keyboardView: 'Clavier',
@@ -28,6 +26,12 @@ export const fr: Messages = {
     audioUnavailable: 'L’audio n’est pas disponible dans ce navigateur.',
     recordingInterrupted:
       'L’enregistrement a été arrêté et sauvegardé quand l’application est passée en arrière-plan.',
+  },
+  share: {
+    trigger: 'Partager',
+    menuLabel: 'Options de partage',
+    audio: 'Audio (MP3)',
+    sheet: 'Partition (PDF)',
   },
   transport: {
     groupLabel: 'Transport',
@@ -97,8 +101,6 @@ export const fr: Messages = {
     duplicate: 'Dupliquer',
     exportJson: 'Exporter JSON',
     shareJson: 'Partager JSON',
-    shareAudio: 'Partager l’audio',
-    shareSheet: 'Partager la partition',
     clearNotes: 'Effacer les notes',
     delete: 'Supprimer',
     backupAll: 'Sauvegarder toutes les prises',

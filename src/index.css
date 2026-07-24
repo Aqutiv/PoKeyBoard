@@ -392,3 +392,11 @@ button {
     min-height: 0;
   }
 }
+
+/* Portrait phones: shorter keys so the score area gets more room. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .play-layout__keyboard {
+    height: clamp(180px, 27vh, 240px);
+    height: clamp(180px, 27svh, 240px); /* iOS: size against the small viewport */
+  }
+}

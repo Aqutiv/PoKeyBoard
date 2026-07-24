@@ -5,13 +5,13 @@ import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngi
 import { lifecycleService } from '@/app/lifecycle';
 import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
+import { ShareMenu } from '@/features/export/ShareMenu';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useMessages } from '@/i18n/i18nContext';
-import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { SaveStatusBadge } from './SaveStatusBadge';
 
@@ -33,8 +33,6 @@ export function PlayPage() {
   const takeId = useTakeStore((s) => s.take.id);
   const isLibrary = isLibraryTakeId(takeId);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
-  const openExport = useExportUiStore((s) => s.openExport);
-  const openSheetExport = useExportUiStore((s) => s.openSheetExport);
   const playbackActiveMidis = usePlaybackActiveMidis();
 
   return (
@@ -49,22 +47,12 @@ export function PlayPage() {
           {isLibrary ? <span className="play-header__library">{m.library.chip}</span> : null}
           <span className="play-header__side">
             {isLibrary ? null : <SaveStatusBadge />}
-            <button
-              type="button"
-              className="play-header__export"
-              onClick={() => openExport(takeId)}
+            <ShareMenu
+              takeId={takeId}
               disabled={!hasNotes || isBusyState(transportState)}
-            >
-              {m.play.shareAudio}
-            </button>
-            <button
-              type="button"
-              className="play-header__export"
-              onClick={() => openSheetExport(takeId)}
-              disabled={!hasNotes || isBusyState(transportState)}
-            >
-              {m.play.shareSheet}
-            </button>
+              triggerClassName="play-header__export"
+              align="right"
+            />
           </span>
         </header>
         {interruption.message ? (

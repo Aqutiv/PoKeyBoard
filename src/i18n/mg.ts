@@ -19,8 +19,6 @@ export const mg: Messages = {
   },
   play: {
     pageLabel: 'Mitendry',
-    shareAudio: 'Zarao ny feo',
-    shareSheet: 'Zarao ny partitiora',
     viewLabel: 'Fijery',
     notationView: 'Partitiora',
     keyboardView: 'Kitendry',
@@ -29,6 +27,12 @@ export const mg: Messages = {
     audioUnavailable: 'Tsy misy feo azo ampiasaina amin’ity navigatera ity.',
     recordingInterrupted:
       'Najanona sy voatahiry ny fandraketana rehefa lasa ambadika ny rindrambaiko.',
+  },
+  share: {
+    trigger: 'Zarao',
+    menuLabel: 'Safidy fizarana',
+    audio: 'Feo (MP3)',
+    sheet: 'Partitiora (PDF)',
   },
   transport: {
     groupLabel: 'Fitaterana',
@@ -98,8 +102,6 @@ export const mg: Messages = {
     duplicate: 'Adikao',
     exportJson: 'Havoahy JSON',
     shareJson: 'Zarao JSON',
-    shareAudio: 'Zarao ny feo',
-    shareSheet: 'Zarao ny partitiora',
     clearNotes: 'Fafao ny naoty',
     delete: 'Fafao',
     backupAll: 'Tahirizo ny rakitra rehetra',

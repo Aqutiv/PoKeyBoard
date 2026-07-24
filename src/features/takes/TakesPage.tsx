@@ -2,8 +2,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { listTakeSummaries, type TakeSummary } from '@/data/takeRepository';
 import { isScoreFileName } from '@/domain/mxlContainer';
+import { ShareMenu } from '@/features/export/ShareMenu';
 import { useI18n, useMessages } from '@/i18n/i18nContext';
-import { useExportUiStore } from '@/state/useExportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { shareOrDownloadFile, downloadBlob } from '@/utils/download';
 import { toErrorMessageKey } from '@/utils/errors';
@@ -42,8 +42,6 @@ export function TakesPage() {
   const m = useMessages();
   const { locale } = useI18n();
   const activeTakeId = useTakeStore((s) => s.take.id);
-  const openExport = useExportUiStore((s) => s.openExport);
-  const openSheetExport = useExportUiStore((s) => s.openSheetExport);
   const [summaries, setSummaries] = useState<TakeSummary[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [preparedShare, setPreparedShare] = useState<{ id: string; file: File } | null>(null);
@@ -332,22 +330,12 @@ export function TakesPage() {
                     >
                       {m.takes.shareJson}
                     </button>
-                    <button
-                      type="button"
-                      className="btn btn--small"
+                    <ShareMenu
+                      takeId={summary.id}
                       disabled={summary.noteCount === 0}
-                      onClick={() => openExport(summary.id)}
-                    >
-                      {m.takes.shareAudio}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      disabled={summary.noteCount === 0}
-                      onClick={() => openSheetExport(summary.id)}
-                    >
-                      {m.takes.shareSheet}
-                    </button>
+                      triggerClassName="btn btn--small"
+                      align="left"
+                    />
                     <button
                       type="button"
                       className="btn btn--small"

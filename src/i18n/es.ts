@@ -18,8 +18,6 @@ export const es: Messages = {
   },
   play: {
     pageLabel: 'Tocar',
-    shareAudio: 'Compartir audio',
-    shareSheet: 'Compartir partitura',
     viewLabel: 'Vista',
     notationView: 'Partitura',
     keyboardView: 'Teclado',
@@ -27,6 +25,12 @@ export const es: Messages = {
     loadingPiano: ({ percent }) => `Cargando piano… ${percent}%`,
     audioUnavailable: 'El audio no está disponible en este navegador.',
     recordingInterrupted: 'La grabación se detuvo y se guardó cuando la app pasó a segundo plano.',
+  },
+  share: {
+    trigger: 'Compartir',
+    menuLabel: 'Opciones para compartir',
+    audio: 'Audio (MP3)',
+    sheet: 'Partitura (PDF)',
   },
   transport: {
     groupLabel: 'Transporte',
@@ -96,8 +100,6 @@ export const es: Messages = {
     duplicate: 'Duplicar',
     exportJson: 'Exportar JSON',
     shareJson: 'Compartir JSON',
-    shareAudio: 'Compartir audio',
-    shareSheet: 'Compartir partitura',
     clearNotes: 'Borrar notas',
     delete: 'Eliminar',
     backupAll: 'Respaldar todas las tomas',
