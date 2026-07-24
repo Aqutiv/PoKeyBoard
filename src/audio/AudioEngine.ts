@@ -11,7 +11,10 @@ import { createPianoGraph, type PianoGraph } from './PianoGraphFactory';
 import { SampleBank } from './SampleBank';
 import { VoiceManager } from './VoiceManager';
 
-export const SAMPLE_PACK_PATH = 'piano/salamander-grand-v1/';
+// v2 delivers the same Salamander audio under a .sample extension so download
+// managers (IDM etc.) stop intercepting sample fetches. v1 (*.mp3) is retained
+// on disk untouched so already-published URLs never 404 for un-updated clients.
+export const SAMPLE_PACK_PATH = 'piano/salamander-grand-v2/';
 
 /** Live input events with audio-clock timestamps (the recorder subscribes). */
 export type InputNoteEvent =

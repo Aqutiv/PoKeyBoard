@@ -1,7 +1,7 @@
 export const CURRENT_SCHEMA_VERSION = 1;
 
 /** Sample-pack identifier stored in every take so exports stay reproducible. */
-export const DEFAULT_SAMPLE_PACK_VERSION = 'salamander-grand-v1';
+export const DEFAULT_SAMPLE_PACK_VERSION = 'salamander-grand-v2';
 
 export const DEFAULT_INSTRUMENT_ID = 'grand-piano';
 export const DEFAULT_MASTER_VOLUME = 0.85;
