@@ -9,7 +9,7 @@ export const THEME_STORAGE_KEY = 'pokeyboard.theme';
 /** Browser-chrome color per resolved theme. Keep in sync with --surface-0
  * in src/themes.css and the pre-paint script in index.html. */
 const THEME_COLORS: Record<ResolvedTheme, string> = {
-  dark: '#171412',
+  dark: '#141110',
   light: '#f7f3ea',
 };
 

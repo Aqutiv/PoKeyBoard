@@ -54,7 +54,7 @@ describe('themeController', () => {
     themeColorMeta()?.remove();
     const meta = document.createElement('meta');
     meta.setAttribute('name', 'theme-color');
-    meta.setAttribute('content', '#171412');
+    meta.setAttribute('content', '#141110');
     document.head.append(meta);
     localStorage.clear();
     themeController.init(); // singleton: only the first call wires listeners
@@ -64,7 +64,7 @@ describe('themeController', () => {
   it('applies the dark default once the store emits', () => {
     expect(document.documentElement.dataset.theme).toBe('dark');
     expect(themeController.getResolved()).toBe('dark');
-    expect(themeColorMeta()?.getAttribute('content')).toBe('#171412');
+    expect(themeColorMeta()?.getAttribute('content')).toBe('#141110');
   });
 
   it('switching the preference updates attribute, meta, and mirror', () => {

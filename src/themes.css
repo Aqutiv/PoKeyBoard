@@ -28,14 +28,14 @@
   --font-display: 'Fraunces', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
 
   /* Conservatory: warm charcoal surfaces, ivory keys, amber accents. */
-  --surface-0: #171412; /* page background */
-  --surface-1: #1f1b18; /* panels */
-  --surface-2: #2a2521; /* raised elements */
+  --surface-0: #141110; /* page background */
+  --surface-1: #1d1916; /* panels */
+  --surface-2: #282320; /* raised elements */
   --surface-3: #363029; /* hover / pressed */
-  --border: #3d362e;
+  --border: #322c25;
   --border-strong: #4a4238;
 
-  --text: #f0e9dc;
+  --text: #f2ecdf;
   --text-dim: #b3a996;
   --text-faint: #7d7466;
 
@@ -50,22 +50,22 @@
   --record-pulse: rgba(229, 72, 77, 0.55);
   --success: #6fbf73;
 
-  --backdrop: rgba(10, 8, 6, 0.62);
-  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+  --backdrop: rgba(8, 6, 4, 0.66);
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.45);
+  --shadow-2: 0 6px 18px rgba(0, 0, 0, 0.5);
 
   /* Piano keys. */
-  --keybed: #0d0b0a;
-  --key-white-top: #efe8d8;
+  --keybed: #0b0908;
+  --key-white-top: #f8f3e7;
   --ivory: #f5efe2; /* white key body */
-  --ivory-shadow: #d8d0bf;
-  --key-white-border: #b9b1a0;
+  --ivory-shadow: #d5ccb9;
+  --key-white-border: #a89f8c;
   --key-white-active-1: #e8cf96;
   --key-white-active-2: #f2dfae;
   --key-white-active-3: #eed9a2;
-  --key-black-top: #33302c;
+  --key-black-top: #3a3631;
   --key-black: #201d1a;
-  --key-black-edge: #0d0b0a;
+  --key-black-edge: #0b0908;
   --key-black-active-1: #8c6b25;
   --key-black-active-2: #6f5417;
   --key-black-active-3: #52400f;

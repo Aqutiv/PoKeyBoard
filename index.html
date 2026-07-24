@@ -7,7 +7,7 @@
       name="description"
       content="PoKeyBoard — play, record, and share piano performances from your browser."
     />
-    <meta name="theme-color" content="#171412" />
+    <meta name="theme-color" content="#141110" />
     <script>
       // Pre-paint theme from the localStorage mirror, so a light-theme user
       // never flashes dark while Dexie settings load. Keep in sync with
@@ -20,7 +20,7 @@
             (pref === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
           document.documentElement.dataset.theme = light ? 'light' : 'dark';
           var meta = document.querySelector('meta[name="theme-color"]');
-          if (meta) meta.setAttribute('content', light ? '#f7f3ea' : '#171412');
+          if (meta) meta.setAttribute('content', light ? '#f7f3ea' : '#141110');
         } catch (error) {
           // Storage unavailable — stay with the default dark theme.
         }

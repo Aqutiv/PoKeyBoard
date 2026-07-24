@@ -41,7 +41,10 @@ export function AppProviders({ children }: { children: ReactNode }) {
         <RouterProvider>{children}</RouterProvider>
       ) : (
         <div className="app-boot" role="status" aria-live="polite">
-          Loading PoKeyBoard…
+          <span className="app-boot__wordmark" aria-hidden="true">
+            PoKeyBoard
+          </span>
+          Loading…
         </div>
       )}
     </I18nProvider>

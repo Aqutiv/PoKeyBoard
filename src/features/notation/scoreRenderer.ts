@@ -73,16 +73,16 @@ export interface ScorePalette {
 
 export const SCORE_PALETTES: Record<'dark' | 'light', ScorePalette> = {
   dark: {
-    staffLine: '#57503f',
+    staffLine: '#544d3d',
     barLine: '#6d6154',
-    note: '#f0e9dc',
+    note: '#f2ecdf',
     noteDim: '#b3a996',
     highlight: '#f0b954',
     record: '#e5484d',
     recordWash: 'rgba(229, 72, 77, 0.28)',
-    ghost: 'rgba(240, 233, 220, 0.4)',
+    ghost: 'rgba(242, 236, 223, 0.4)',
     playhead: '#f0b954',
-    gutterBg: 'rgba(31, 27, 24, 0.96)',
+    gutterBg: 'rgba(29, 25, 22, 0.96)',
     measureNumber: '#7d7466',
     rest: '#9c9280',
   },
