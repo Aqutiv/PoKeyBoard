@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteEvent, TimeSignature } from '@/domain/takeTypes';
+import type { NoteEvent, TempoChange, TimeSignature } from '@/domain/takeTypes';
 import { layoutScore } from '@/features/notation/notationLayout';
 import {
   ACCIDENTAL_LEAD_G,
@@ -34,11 +34,16 @@ function note(partial: Partial<NoteEvent>): NoteEvent {
   return { id: 'n', midi: 60, startMs: 0, durationMs: 500, velocity: 0.5, ...partial };
 }
 
-function sheet(notes: NoteEvent[], overrides: Partial<SheetLayoutOptions> = {}): SheetLayoutResult {
+function sheet(
+  notes: NoteEvent[],
+  overrides: Partial<SheetLayoutOptions> = {},
+  tempoChanges?: readonly TempoChange[],
+): SheetLayoutResult {
   const options = { ...SHEET_OPTS, ...overrides };
   const score = layoutScore(notes, {
     bpm: options.bpm,
     timeSignature: options.timeSignature,
+    tempoChanges,
     quantization: '1/16',
     minMeasures: 1,
   });
@@ -314,5 +319,46 @@ describe('layoutSheet', () => {
   it('is deterministic for identical input', () => {
     const notes = quarterMeasures(12);
     expect(sheet(notes)).toEqual(sheet(notes));
+  });
+
+  describe('tempo changes', () => {
+    const CHANGES: TempoChange[] = [{ atMs: 2000, bpm: 240 }];
+
+    it('marks the tempo once, on the measure where it takes over', () => {
+      const result = sheet(
+        [
+          note({ id: 'a', startMs: 0, durationMs: 1900 }),
+          note({ id: 'b', startMs: 2000, durationMs: 900 }),
+        ],
+        {},
+        CHANGES,
+      );
+      const measures = allMeasures(result);
+      expect(measures.map((measure) => measure.bpm)).toEqual([120, 240]);
+      expect(measures.map((measure) => measure.tempoMarkBpm)).toEqual([null, 240]);
+    });
+
+    it('leaves the tempo unmarked when it never changes', () => {
+      const measures = allMeasures(sheet(quarterMeasures(3)));
+      expect(measures.every((measure) => measure.tempoMarkBpm === null)).toBe(true);
+      expect(measures.every((measure) => measure.bpm === 120)).toBe(true);
+    });
+
+    it('reserves room above a system carrying a tempo mark', () => {
+      const plain = sheet([note({ startMs: 2000, durationMs: 900 })]);
+      const marked = sheet([note({ startMs: 2000, durationMs: 900 })], {}, CHANGES);
+      expect(allSystems(marked)[0]!.trebleTopPt).toBeGreaterThan(allSystems(plain)[0]!.trebleTopPt);
+    });
+
+    it('beams by the local beat, not the opening one', () => {
+      // Eight eighths filling the 240 bpm bar: 125 ms each, four beats of two.
+      const notes: NoteEvent[] = [];
+      for (let i = 0; i < 8; i += 1) {
+        notes.push(note({ id: `e${i}`, startMs: 2000 + i * 125, durationMs: 125 }));
+      }
+      const measure = allMeasures(sheet(notes, {}, CHANGES))[1]!;
+      expect(measure.beams).toHaveLength(4);
+      expect(staffChords(measure, 'treble')).toHaveLength(8);
+    });
   });
 });

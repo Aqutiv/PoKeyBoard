@@ -7,7 +7,7 @@ white) — one PDF per take, shared or downloaded exactly like the MP3 export.
 
 ```
 getTakeForExport(id)
-  → layoutScore(notes, { bpm, timeSignature, quantization: grid, minMeasures: 1 })
+  → layoutScore(notes, { bpm, timeSignature, tempoChanges, quantization: grid, minMeasures: 1 })
   → layoutSheet(score, { paper, title, subtitle, bpm, … })   src/features/notation/sheetLayout.ts
   → drawSheetPage(ctx, page) per page                        src/features/notation/sheetRenderer.ts
   → canvas.toBlob(PNG) → pdf-lib embedPng (one image/page)   src/features/export/sheetPdfService.ts
@@ -18,6 +18,9 @@ getTakeForExport(id)
   roughly proportionally to duration, measures packed greedily into justified
   systems, systems flowed down pages, per-beat beaming (compound meters like
   6/8 group per dotted beat), and dynamic vertical room for ledger notes.
+  Spacing, note values, and beam grouping all follow the tempo in force in
+  each measure, so a take whose tempo changes still engraves correctly and
+  gets a "♩ = n" mark where the new tempo takes over.
   All positions are in PDF points; `SHEET_GAP_PT` (staff space) scales the
   engraving.
 - `sheetRenderer.ts` draws a page onto a canvas whose ctx is scaled so

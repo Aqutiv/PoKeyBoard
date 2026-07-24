@@ -73,6 +73,7 @@ export function layoutTakeSheet(
   const score = layoutScore(take.notes, {
     bpm: take.tempo.bpm,
     timeSignature: take.tempo.timeSignature,
+    tempoChanges: take.tempo.changes,
     quantization: grid,
     minMeasures: 1,
   });

@@ -1,4 +1,10 @@
-import type { NoteEvent, QuantizationSetting, TimeSignature } from '@/domain/takeTypes';
+import { createTakeTempoMap } from '@/domain/tempoMap';
+import type {
+  NoteEvent,
+  QuantizationSetting,
+  TempoChange,
+  TimeSignature,
+} from '@/domain/takeTypes';
 import { barDurationMs } from '@/utils/timing';
 import { durationToSymbol, quantizeStartMs, type DurationSymbol } from './quantization';
 import { ledgerLineSteps, midiToStaffPosition, stemGoesDown, type StaffKind } from './staffMapping';
@@ -32,6 +38,8 @@ export interface MeasureInfo {
   index: number;
   startMs: number;
   endMs: number;
+  /** The tempo in force here; equal to `bpm` unless the piece changes tempo. */
+  bpm: number;
   /** True when no chord starts inside the measure (draws a whole rest). */
   empty: boolean;
 }
@@ -39,6 +47,7 @@ export interface MeasureInfo {
 export interface ScoreLayout {
   chords: ChordGroup[];
   measures: MeasureInfo[];
+  /** The FIRST measure's length; later measures can differ (tempo changes). */
   barMs: number;
   /** Layout extent in ms — always whole measures. */
   totalMs: number;
@@ -48,6 +57,8 @@ export interface LayoutOptions {
   bpm: number;
   timeSignature: TimeSignature;
   quantization: QuantizationSetting;
+  /** Tempo marks after the first, from the take (`tempo.changes`). */
+  tempoChanges?: readonly TempoChange[];
   /** Never lay out fewer measures than this (empty-score scaffold). */
   minMeasures?: number;
 }
@@ -55,19 +66,27 @@ export interface LayoutOptions {
 export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
   const barMs = barDurationMs(options.bpm, options.timeSignature);
   const minMeasures = options.minMeasures ?? 4;
+  const tempoMap = createTakeTempoMap({
+    bpm: options.bpm,
+    timeSignature: options.timeSignature,
+    changes: options.tempoChanges,
+  });
 
   const laidOut: LaidOutNote[] = notes.map((note) => {
     const position = midiToStaffPosition(note.midi);
+    // Grid and note value follow the tempo the note is played at, so a bar
+    // after a tempo change still reads as the eighths and quarters it is.
+    const bpm = tempoMap.bpmAt(note.startMs);
     return {
       id: note.id,
       midi: note.midi,
       startMs: note.startMs,
       durationMs: note.durationMs,
-      displayStartMs: quantizeStartMs(note.startMs, options.quantization, options.bpm),
+      displayStartMs: quantizeStartMs(note.startMs, options.quantization, bpm),
       staff: position.staff,
       step: position.step,
       accidental: position.accidental,
-      symbol: durationToSymbol(note.durationMs, options.bpm),
+      symbol: durationToSymbol(note.durationMs, bpm),
       ledger: ledgerLineSteps(position.step),
     };
   });
@@ -102,22 +121,47 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     const end = Math.max(note.displayStartMs, note.startMs) + note.durationMs;
     if (end > maxEndMs) maxEndMs = end;
   }
-  const measureCount = Math.max(minMeasures, Math.ceil((maxEndMs + 1) / barMs));
+  const spans = tempoMap.measureSpans(maxEndMs, minMeasures);
 
-  const measureHasChord = new Array<boolean>(measureCount).fill(false);
+  const measureHasChord = new Array<boolean>(spans.length).fill(false);
   for (const chord of chords) {
-    const index = Math.floor(chord.displayStartMs / barMs);
-    if (index >= 0 && index < measureCount) measureHasChord[index] = true;
+    const index = measureIndexAt(spans, chord.displayStartMs);
+    if (index !== null) measureHasChord[index] = true;
   }
 
-  const measures: MeasureInfo[] = Array.from({ length: measureCount }, (_, index) => ({
-    index,
-    startMs: index * barMs,
-    endMs: (index + 1) * barMs,
-    empty: !measureHasChord[index],
+  const measures: MeasureInfo[] = spans.map((span) => ({
+    index: span.index,
+    startMs: span.startMs,
+    endMs: span.endMs,
+    bpm: span.bpm,
+    empty: !measureHasChord[span.index],
   }));
 
-  return { chords, measures, barMs, totalMs: measureCount * barMs };
+  const last = measures[measures.length - 1];
+  return { chords, measures, barMs, totalMs: last ? last.endMs : 0 };
+}
+
+/**
+ * Index of the measure containing `ms`, or null when it falls outside the
+ * layout. Measures can differ in length, so this searches boundaries rather
+ * than dividing by a bar duration.
+ */
+export function measureIndexAt(
+  measures: readonly { startMs: number; endMs: number }[],
+  ms: number,
+): number | null {
+  if (measures.length === 0) return null;
+  const first = measures[0] as { startMs: number };
+  const last = measures[measures.length - 1] as { endMs: number };
+  if (ms < first.startMs || ms >= last.endMs) return null;
+  let low = 0;
+  let high = measures.length - 1;
+  while (low < high) {
+    const mid = (low + high + 1) >> 1;
+    if ((measures[mid] as { startMs: number }).startMs <= ms) low = mid;
+    else high = mid - 1;
+  }
+  return low;
 }
 
 /** First chord index with displayStartMs >= fromMs (binary search). */

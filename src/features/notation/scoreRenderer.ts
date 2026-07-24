@@ -206,6 +206,12 @@ function drawMeasures(
       ctx.lineTo(x, view.bassTop + STAFF_H);
       ctx.stroke();
       ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
+      // A new tempo is announced where it takes over, as on paper.
+      const previous = layout.measures[measure.index - 1];
+      if (previous && previous.bpm !== measure.bpm) {
+        drawTempoMark(ctx, x + 16, view.trebleTop - 20, measure.bpm, palette);
+        ctx.strokeStyle = palette.barLine;
+      }
     }
     if (measure.empty) {
       const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
@@ -230,6 +236,34 @@ function drawMeasures(
     ctx.lineTo(endX, view.bassTop + STAFF_H);
     ctx.stroke();
   }
+}
+
+/**
+ * "♩ = bpm" where the tempo changes. The quarter note is drawn rather than
+ * typeset: the score canvas uses no music font.
+ */
+function drawTempoMark(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  baseline: number,
+  bpm: number,
+  palette: ScorePalette,
+): void {
+  ctx.fillStyle = palette.measureNumber;
+  ctx.strokeStyle = palette.measureNumber;
+  ctx.save();
+  ctx.translate(x, baseline - 2.5);
+  ctx.rotate(-0.32);
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 2.8, 2.1, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(x + 2.6, baseline - 3.2);
+  ctx.lineTo(x + 2.6, baseline - 11);
+  ctx.stroke();
+  ctx.fillText(`= ${Math.round(bpm)}`, x + 6, baseline);
 }
 
 function drawChords(

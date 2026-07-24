@@ -1,6 +1,11 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import { beatDurationMs, clamp, wholeNoteDurationMs } from '@/utils/timing';
-import type { ChordGroup, ScoreLayout } from './notationLayout';
+import {
+  measureIndexAt,
+  type ChordGroup,
+  type MeasureInfo,
+  type ScoreLayout,
+} from './notationLayout';
 import type { DurationSymbol } from './quantization';
 import type { StaffKind } from './staffMapping';
 
@@ -32,6 +37,10 @@ export const HEAD_RX_G = 0.64;
 export const STEM_X_G = HEAD_RX_G - 0.1;
 /** Extra lead reserved before a column that carries an accidental. */
 export const ACCIDENTAL_LEAD_G = 1.7;
+/** Band a system reserves above the music for a mid-score tempo mark (pt). */
+export const TEMPO_MARK_SPACE_PT = 20;
+/** The mark's baseline inside that band, measured from the band's top. */
+export const TEMPO_MARK_BASELINE_PT = 12;
 
 // Horizontal spacing (staff spaces).
 const START_PAD_G = 1.6;
@@ -150,12 +159,18 @@ export interface SheetMeasure {
   empty: boolean;
   columns: SheetColumn[];
   beams: SheetBeam[];
+  /** The tempo this measure is played at. */
+  bpm: number;
+  /** Set on the first measure of a new tempo — engrave a "♩ = n" mark. */
+  tempoMarkBpm: number | null;
 }
 
 export interface SheetSystem {
   xPt: number;
   /** Staff-line extent from xPt (clef area + measures). */
   widthPt: number;
+  /** Baseline for this system's tempo marks, above everything else it draws. */
+  tempoMarkBaselinePt: number;
   trebleTopPt: number;
   bassTopPt: number;
   measures: SheetMeasure[];
@@ -228,6 +243,8 @@ interface WorkMeasure {
   startMs: number;
   columns: WorkColumn[];
   naturalWG: number;
+  bpm: number;
+  tempoMarkBpm: number | null;
 }
 
 interface WorkSystem {
@@ -240,7 +257,7 @@ interface WorkSystem {
 
 export function layoutSheet(score: ScoreLayout, options: SheetLayoutOptions): SheetLayoutResult {
   const metrics = metricsFor(options.paper);
-  const workMeasures = buildWorkMeasures(score, options.bpm);
+  const workMeasures = buildWorkMeasures(score);
   const systems = packSystems(workMeasures, metrics, options);
   const pages = paginate(systems, metrics, options);
   return { pages, measureCount: score.measures.length, systemCount: systems.length };
@@ -274,15 +291,19 @@ function toSheetChord(chord: ChordGroup): SheetChord {
 }
 
 /** Group chords into per-measure columns and compute natural spacing. */
-function buildWorkMeasures(score: ScoreLayout, bpm: number): WorkMeasure[] {
-  const wholeMs = wholeNoteDurationMs(bpm);
+function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
   const chordsByMeasure: ChordGroup[][] = score.measures.map(() => []);
   for (const chord of score.chords) {
-    const index = Math.floor(chord.displayStartMs / score.barMs);
-    if (index >= 0 && index < chordsByMeasure.length) chordsByMeasure[index]!.push(chord);
+    const index = measureIndexAt(score.measures, chord.displayStartMs);
+    if (index !== null) chordsByMeasure[index]!.push(chord);
   }
 
-  return score.measures.map((measure) => {
+  return score.measures.map((measure, position) => {
+    // Spacing is relative to the local whole note, so bars either side of a
+    // tempo change engrave the same rhythms at the same widths.
+    const wholeMs = wholeNoteDurationMs(measure.bpm);
+    const previousBpm = position === 0 ? null : (score.measures[position - 1] as MeasureInfo).bpm;
+    const tempoMarkBpm = previousBpm !== null && previousBpm !== measure.bpm ? measure.bpm : null;
     const byTime = new Map<number, WorkColumn>();
     for (const chord of chordsByMeasure[measure.index]!) {
       let column = byTime.get(chord.displayStartMs);
@@ -300,6 +321,8 @@ function buildWorkMeasures(score: ScoreLayout, bpm: number): WorkMeasure[] {
         startMs: measure.startMs,
         columns,
         naturalWG: EMPTY_MEASURE_W_G,
+        bpm: measure.bpm,
+        tempoMarkBpm,
       };
     }
 
@@ -314,7 +337,14 @@ function buildWorkMeasures(score: ScoreLayout, bpm: number): WorkMeasure[] {
     }
     const tailMs = measure.endMs - columns[columns.length - 1]!.timeMs;
     const naturalWG = offset + clamp(advanceG(tailMs, wholeMs), LAST_ADV_MIN_G, MAX_ADV_G);
-    return { index: measure.index, startMs: measure.startMs, columns, naturalWG };
+    return {
+      index: measure.index,
+      startMs: measure.startMs,
+      columns,
+      naturalWG,
+      bpm: measure.bpm,
+      tempoMarkBpm,
+    };
   });
 }
 
@@ -364,6 +394,8 @@ function packSystems(
         empty: columns.length === 0,
         columns,
         beams: [],
+        bpm: wm.bpm,
+        tempoMarkBpm: wm.tempoMarkBpm,
       };
       x += widthPt;
       return measure;
@@ -403,8 +435,8 @@ function buildBeams(
   measureStartMs: number,
   options: SheetLayoutOptions,
 ): void {
-  const { timeSignature, bpm } = options;
-  const beatMs = beatDurationMs(bpm, timeSignature);
+  const { timeSignature } = options;
+  const beatMs = beatDurationMs(measure.bpm, timeSignature);
   const compound = timeSignature.numerator % 3 === 0 && timeSignature.denominator >= 8;
   const groupMs = compound ? beatMs * 3 : beatMs;
 
@@ -509,6 +541,11 @@ function systemExtents(measures: SheetMeasure[]): { abovePt: number; belowPt: nu
       }
     }
   }
+  // A tempo mark goes in a band of its own on top of everything the music
+  // needs, so it can never land on a high note or its ledger lines.
+  if (measures.some((measure) => measure.tempoMarkBpm !== null)) {
+    abovePt += TEMPO_MARK_SPACE_PT;
+  }
   return { abovePt, belowPt };
 }
 
@@ -562,6 +599,7 @@ function paginate(
     currentSystems.push({
       xPt: metrics.marginLeftPt,
       widthPt: system.widthPt,
+      tempoMarkBaselinePt: trebleTopPt - system.abovePt + TEMPO_MARK_BASELINE_PT,
       trebleTopPt,
       bassTopPt,
       measures: system.measures,

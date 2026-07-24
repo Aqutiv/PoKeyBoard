@@ -182,6 +182,10 @@ function drawMeasure(
   const bassBottom = system.bassTopPt + 4 * G;
   const endX = measure.xPt + measure.widthPt;
 
+  if (measure.tempoMarkBpm !== null) {
+    drawTempoMark(ctx, measure.xPt + 1, system.tempoMarkBaselinePt, measure.tempoMarkBpm);
+  }
+
   if (isFinal) {
     // Final barline: thin line then a thick terminal stroke.
     ctx.lineWidth = 1;
