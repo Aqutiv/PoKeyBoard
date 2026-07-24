@@ -1,0 +1,136 @@
+/* ------------------------------------------------------------------ */
+/* PoKeyBoard themes.                                                  */
+/*                                                                     */
+/* Two named themes share one token vocabulary:                        */
+/*   Conservatory  — dark, the default (defined on :root)              */
+/*   Ivory recital — light (html[data-theme='light'] overrides)        */
+/*                                                                     */
+/* Keep in sync when theme colors change:                              */
+/*   - the pre-paint script + theme-color meta in index.html           */
+/*   - THEME_COLORS in src/app/theme.ts                                */
+/*   - SCORE_PALETTES in src/features/notation/scoreRenderer.ts        */
+/* ------------------------------------------------------------------ */
+
+:root {
+  /* Structural tokens (theme-invariant). */
+  --radius-s: 6px;
+  --radius-m: 10px;
+  --radius-l: 16px;
+
+  --nav-size: 60px;
+  --touch-target: 46px;
+
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+
+  --font-display: 'Fraunces', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+
+  /* Conservatory: warm charcoal surfaces, ivory keys, amber accents. */
+  --surface-0: #171412; /* page background */
+  --surface-1: #1f1b18; /* panels */
+  --surface-2: #2a2521; /* raised elements */
+  --surface-3: #363029; /* hover / pressed */
+  --border: #3d362e;
+  --border-strong: #4a4238;
+
+  --text: #f0e9dc;
+  --text-dim: #b3a996;
+  --text-faint: #7d7466;
+
+  --accent: #d9a441; /* restrained amber */
+  --accent-strong: #f0b954; /* accent as text/outline on surfaces */
+  --accent-contrast: #241c0e; /* text on accent fills */
+
+  --record: #e5484d; /* clear recording red */
+  --record-contrast: #fff;
+  --record-tint-bg: rgba(229, 72, 77, 0.12);
+  --record-tint-border: rgba(229, 72, 77, 0.45);
+  --record-pulse: rgba(229, 72, 77, 0.55);
+  --success: #6fbf73;
+
+  --backdrop: rgba(10, 8, 6, 0.62);
+  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
+
+  /* Piano keys. */
+  --keybed: #0d0b0a;
+  --key-white-top: #efe8d8;
+  --ivory: #f5efe2; /* white key body */
+  --ivory-shadow: #d8d0bf;
+  --key-white-border: #b9b1a0;
+  --key-white-active-1: #e8cf96;
+  --key-white-active-2: #f2dfae;
+  --key-white-active-3: #eed9a2;
+  --key-black-top: #33302c;
+  --key-black: #201d1a;
+  --key-black-edge: #0d0b0a;
+  --key-black-active-1: #8c6b25;
+  --key-black-active-2: #6f5417;
+  --key-black-active-3: #52400f;
+  --key-label: #8d846f;
+
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%23b3a996' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  color-scheme: dark;
+}
+
+/* Ivory recital: warm paper, ink text, bronze accents. */
+html[data-theme='light'] {
+  --surface-0: #f7f3ea;
+  --surface-1: #fffdf8;
+  --surface-2: #f1ebdd;
+  --surface-3: #e7dfcd;
+  --border: #e3dbc9;
+  --border-strong: #cfc5ae;
+
+  --text: #211d15;
+  --text-dim: #6b6353;
+  --text-faint: #99917e;
+
+  --accent: #8a6410; /* deep bronze */
+  --accent-strong: #7f5c10;
+  --accent-contrast: #fdf9ee;
+
+  --record: #c73e3e;
+  --record-contrast: #fff;
+  --record-tint-bg: rgba(199, 62, 62, 0.1);
+  --record-tint-border: rgba(199, 62, 62, 0.4);
+  --record-pulse: rgba(199, 62, 62, 0.5);
+  --success: #37703f;
+
+  --backdrop: rgba(33, 29, 21, 0.4);
+  --shadow-1: 0 1px 2px rgba(64, 54, 38, 0.14);
+  --shadow-2: 0 6px 18px rgba(64, 54, 38, 0.18);
+
+  /* Keys sit in a dark walnut keybed so they keep their relief on paper. */
+  --keybed: #2e2822;
+  --key-white-top: #fffef9;
+  --ivory: #fbf7ec;
+  --ivory-shadow: #e4dcc8;
+  --key-white-border: #c9c0aa;
+  --key-white-active-1: #ecd49a;
+  --key-white-active-2: #f4e3b4;
+  --key-white-active-3: #eeda9f;
+  --key-black-top: #453e36;
+  --key-black: #26221e;
+  --key-black-edge: #14110e;
+  --key-black-active-1: #9a7a33;
+  --key-black-active-2: #7d6122;
+  --key-black-active-3: #5f4a16;
+  --key-label: #8a8171;
+
+  --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%236b6353' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+
+  color-scheme: light;
+}
+
+::selection {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+html {
+  scrollbar-color: var(--text-faint) transparent;
+}

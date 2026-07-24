@@ -11,8 +11,12 @@ import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
 
 export type VelocityMode = 'touch' | 'fixed';
 
+/** UI theme preference; resolved to dark/light by src/app/theme.ts. */
+export type ThemePreference = 'dark' | 'light' | 'system';
+
 export interface SettingsState {
   language: SupportedLanguage;
+  theme: ThemePreference;
   masterVolume: number;
   reverbMix: number;
   velocityMode: VelocityMode;
@@ -25,6 +29,7 @@ export interface SettingsState {
   sheetPaperSize: PaperSize;
 
   setLanguage(language: SupportedLanguage): void;
+  setTheme(theme: ThemePreference): void;
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
   setVelocityMode(mode: VelocityMode): void;
@@ -40,6 +45,7 @@ export interface SettingsState {
 
 export const SETTINGS_DEFAULTS = {
   language: DEFAULT_LANGUAGE as SupportedLanguage,
+  theme: 'dark' as ThemePreference,
   masterVolume: DEFAULT_MASTER_VOLUME,
   reverbMix: DEFAULT_REVERB_MIX,
   velocityMode: 'touch' as VelocityMode,
@@ -61,6 +67,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   ...SETTINGS_DEFAULTS,
 
   setLanguage: (language) => set({ language }),
+  setTheme: (theme) => set({ theme }),
   setMasterVolume: (value) => {
     audioEngine.setMasterVolume(value);
     set({ masterVolume: value });

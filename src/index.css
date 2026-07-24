@@ -1,46 +1,5 @@
-/* ------------------------------------------------------------------ */
-/* PoKeyBoard theme: warm charcoal surfaces, ivory keys, amber accents */
-/* ------------------------------------------------------------------ */
-
-:root {
-  --surface-0: #171412; /* page background */
-  --surface-1: #1f1b18; /* panels */
-  --surface-2: #2a2521; /* raised elements */
-  --surface-3: #363029; /* hover / pressed */
-  --border: #3d362e;
-
-  --text: #f0e9dc;
-  --text-dim: #b3a996;
-  --text-faint: #7d7466;
-
-  --accent: #d9a441; /* restrained amber */
-  --accent-strong: #f0b954;
-  --accent-contrast: #241c0e;
-  --record: #e5484d; /* clear recording red */
-  --success: #6fbf73;
-
-  --ivory: #f5efe2; /* white keys */
-  --ivory-shadow: #d8d0bf;
-  --key-black: #201d1a;
-  --key-black-edge: #0d0b0a;
-
-  --radius-s: 6px;
-  --radius-m: 10px;
-  --radius-l: 16px;
-
-  --shadow-1: 0 1px 3px rgba(0, 0, 0, 0.4);
-  --shadow-2: 0 4px 14px rgba(0, 0, 0, 0.45);
-
-  --nav-size: 60px;
-  --touch-target: 46px;
-
-  --safe-top: env(safe-area-inset-top, 0px);
-  --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --safe-left: env(safe-area-inset-left, 0px);
-  --safe-right: env(safe-area-inset-right, 0px);
-
-  color-scheme: dark;
-}
+/* Theme tokens: Conservatory (dark, default) + Ivory recital (light). */
+@import './themes.css';
 
 *,
 *::before,
@@ -285,7 +244,7 @@ button {
 
 .btn--danger {
   color: var(--record);
-  border-color: rgba(229, 72, 77, 0.4);
+  border-color: var(--record-tint-border);
 }
 
 /* Shared modal styling (import dialog, export dialogs). Global for the
@@ -293,7 +252,7 @@ button {
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(10, 8, 6, 0.62);
+  background: var(--backdrop);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -357,8 +316,8 @@ button {
 .play-interruption {
   margin: 0;
   padding: 8px 12px;
-  background: rgba(229, 72, 77, 0.12);
-  border: 1px solid rgba(229, 72, 77, 0.45);
+  background: var(--record-tint-bg);
+  border: 1px solid var(--record-tint-border);
   border-radius: var(--radius-m);
   color: var(--text);
   font-size: 13px;

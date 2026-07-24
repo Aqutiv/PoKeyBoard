@@ -7,7 +7,25 @@
       name="description"
       content="PoKeyBoard — play, record, and share piano performances from your browser."
     />
-    <meta name="theme-color" content="#1d1a17" />
+    <meta name="theme-color" content="#171412" />
+    <script>
+      // Pre-paint theme from the localStorage mirror, so a light-theme user
+      // never flashes dark while Dexie settings load. Keep in sync with
+      // resolveTheme/THEME_COLORS in src/app/theme.ts and src/themes.css.
+      (function () {
+        try {
+          var pref = localStorage.getItem('pokeyboard.theme');
+          var light =
+            pref === 'light' ||
+            (pref === 'system' && matchMedia('(prefers-color-scheme: light)').matches);
+          document.documentElement.dataset.theme = light ? 'light' : 'dark';
+          var meta = document.querySelector('meta[name="theme-color"]');
+          if (meta) meta.setAttribute('content', light ? '#f7f3ea' : '#171412');
+        } catch (error) {
+          // Storage unavailable — stay with the default dark theme.
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" sizes="32x32" href="%BASE_URL%icons/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="64x64" href="%BASE_URL%icons/favicon-64.png" />
     <link rel="apple-touch-icon" href="%BASE_URL%icons/apple-touch-icon.png" />

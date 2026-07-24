@@ -63,7 +63,7 @@
   -webkit-user-select: none;
   -webkit-touch-callout: none;
   border-radius: var(--radius-s) var(--radius-s) var(--radius-m) var(--radius-m);
-  background: var(--key-black-edge);
+  background: var(--keybed);
   overflow: hidden;
 }
 
@@ -76,12 +76,12 @@
   height: 100%;
   background: linear-gradient(
     to bottom,
-    #efe8d8 0%,
+    var(--key-white-top) 0%,
     var(--ivory) 12%,
     var(--ivory) 82%,
     var(--ivory-shadow) 100%
   );
-  border: 1px solid #b9b1a0;
+  border: 1px solid var(--key-white-border);
   border-top: none;
   border-radius: 0 0 5px 5px;
   box-shadow: inset 0 -3px 5px rgba(0, 0, 0, 0.12);
@@ -89,7 +89,12 @@
 }
 
 .piano-key--white.is-active {
-  background: linear-gradient(to bottom, #e8cf96 0%, #f2dfae 20%, #eed9a2 100%);
+  background: linear-gradient(
+    to bottom,
+    var(--key-white-active-1) 0%,
+    var(--key-white-active-2) 20%,
+    var(--key-white-active-3) 100%
+  );
   box-shadow: inset 0 3px 7px rgba(0, 0, 0, 0.22);
 }
 
@@ -97,7 +102,7 @@
   height: 62%;
   background: linear-gradient(
     to bottom,
-    #33302c 0%,
+    var(--key-black-top) 0%,
     var(--key-black) 20%,
     var(--key-black-edge) 100%
   );
@@ -111,7 +116,12 @@
 }
 
 .piano-key--black.is-active {
-  background: linear-gradient(to bottom, #8c6b25 0%, #6f5417 60%, #52400f 100%);
+  background: linear-gradient(
+    to bottom,
+    var(--key-black-active-1) 0%,
+    var(--key-black-active-2) 60%,
+    var(--key-black-active-3) 100%
+  );
   box-shadow: inset 0 3px 6px rgba(0, 0, 0, 0.45);
 }
 
@@ -122,6 +132,6 @@
   right: 0;
   text-align: center;
   font-size: 10px;
-  color: #8d846f;
+  color: var(--key-label);
   pointer-events: none;
 }

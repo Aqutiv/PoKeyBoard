@@ -220,6 +220,11 @@ export const es: Messages = {
   settings: {
     title: 'Ajustes',
     language: 'Idioma',
+    appearance: 'Apariencia',
+    theme: 'Tema',
+    themeDark: 'Conservatory — oscuro',
+    themeLight: 'Ivory recital — claro',
+    themeSystem: 'Según el sistema',
     sound: 'Sonido',
     playing: 'Interpretación',
     offlinePiano: 'Piano sin conexión',
