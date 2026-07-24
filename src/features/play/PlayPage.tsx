@@ -45,6 +45,24 @@ export function PlayPage() {
         <header className="play-header">
           <h1 className="play-header__title">{title}</h1>
           {isLibrary ? <span className="play-header__library">{m.library.chip}</span> : null}
+          <div className="play-view-switch" role="group" aria-label={m.play.viewLabel}>
+            <button
+              type="button"
+              className={`play-view-switch__option${compactView === 'notation' ? ' is-selected' : ''}`}
+              aria-pressed={compactView === 'notation'}
+              onClick={() => setCompactView('notation')}
+            >
+              {m.play.notationView}
+            </button>
+            <button
+              type="button"
+              className={`play-view-switch__option${compactView === 'keyboard' ? ' is-selected' : ''}`}
+              aria-pressed={compactView === 'keyboard'}
+              onClick={() => setCompactView('keyboard')}
+            >
+              {m.play.keyboardView}
+            </button>
+          </div>
           <span className="play-header__side">
             {isLibrary ? null : <SaveStatusBadge />}
             <ShareMenu
@@ -68,24 +86,6 @@ export function PlayPage() {
           </p>
         ) : null}
         <TransportControls />
-        <div className="play-view-switch" role="group" aria-label={m.play.viewLabel}>
-          <button
-            type="button"
-            className={`play-view-switch__option${compactView === 'notation' ? ' is-selected' : ''}`}
-            aria-pressed={compactView === 'notation'}
-            onClick={() => setCompactView('notation')}
-          >
-            {m.play.notationView}
-          </button>
-          <button
-            type="button"
-            className={`play-view-switch__option${compactView === 'keyboard' ? ' is-selected' : ''}`}
-            aria-pressed={compactView === 'keyboard'}
-            onClick={() => setCompactView('keyboard')}
-          >
-            {m.play.keyboardView}
-          </button>
-        </div>
         <div className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (
             <p className="page__hint" role="status">

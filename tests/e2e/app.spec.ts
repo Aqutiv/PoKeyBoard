@@ -92,7 +92,7 @@ test.describe('compact landscape play view', () => {
     await viewSwitch.getByRole('button', { name: 'Keyboard' }).click();
     await expect(score).toBeHidden();
     await expect(keyboard).toBeVisible();
-    await expect(metronome).toBeVisible();
+    await expect(metronome).toBeHidden();
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(viewSwitch).toBeHidden();
@@ -104,7 +104,7 @@ test.describe('compact landscape play view', () => {
     await expect(viewSwitch).toBeVisible();
     await expect(score).toBeHidden();
     await expect(keyboard).toBeVisible();
-    await expect(metronome).toBeVisible();
+    await expect(metronome).toBeHidden();
 
     await viewSwitch.getByRole('button', { name: 'Notation' }).click();
     await expect(score).toBeVisible();
