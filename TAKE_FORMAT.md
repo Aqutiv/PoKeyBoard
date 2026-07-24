@@ -14,7 +14,8 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   "tempo": {
     "bpm": 120,
     "timeSignature": { "numerator": 4, "denominator": 4 },
-    "countInBars": 1
+    "countInBars": 1,
+    "changes": [{ "atMs": 60000, "bpm": 104 }]
   },
   "instrument": { "id": "grand-piano", "masterVolume": 0.85, "reverbMix": 0.18 },
   "notes": [{ "id": "uuid", "midi": 60, "startMs": 0, "durationMs": 420, "velocity": 0.78 }],
@@ -30,6 +31,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 
 - `midi` 0–127 integer; `velocity` 0–1; `startMs ≥ 0`; `durationMs ≥ 1` (≤ 2 min per note); take timeline capped at 6 h; ≤ 50 000 notes. `NaN`/`Infinity` anywhere is rejected.
 - `bpm` 40–240; `countInBars` 0|1|2; denominator 2|4|8|16.
+- `tempo.changes` is **optional** (absent means one tempo throughout): sorted, `atMs ≥ 1`, `bpm` 40–240, ≤ 1024 entries. Note timing is always absolute ms, so a tempo map never moves a note — it tells the notation where bar lines fall and which note values to draw. Added without a schema bump: older takes parse untouched, and an older build drops the field.
 - `quantization` `off | 1/8 | 1/16` — **display only**; raw performance timing is never quantized.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 
@@ -38,7 +40,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 `migrate → repair → validate → normalize`:
 
 1. **Migrate:** `schemaVersion` above the app's is rejected with an "update PoKeyBoard" message; older versions run registered migrations (registry in `takeMigrations.ts`; empty at v1). Missing version is treated as v1.
-2. **Repair (only clearly recoverable):** round fractional ms; bump zero durations to 1 ms; clamp float-precision drift on 0–1 fields; generate missing ids; default missing title/timestamps/display/pedalEvents; clamp out-of-range bpm/count-in. Every repair is reported in the import preview.
+2. **Repair (only clearly recoverable):** round fractional ms; bump zero durations to 1 ms; clamp float-precision drift on 0–1 fields; generate missing ids; default missing title/timestamps/display/pedalEvents; clamp out-of-range bpm/count-in; sort, round, clamp and de-duplicate tempo changes (dropping unsalvageable ones). Every repair is reported in the import preview.
 3. **Validate:** Zod schema; failures list human-readable `path: message` issues.
 4. **Normalize:** notes sorted by `(startMs, midi, id)`, pedals by time, `durationMs` recomputed from note ends, playhead clamped.
 

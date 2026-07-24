@@ -3,10 +3,12 @@ import { newId } from '@/utils/ids';
 import { isValidMidi } from '@/utils/midi';
 import { createEmptyTake, UNTITLED_TAKE_TITLE } from './noteEvents';
 import { normalizeTake } from './takeSchema';
+import { createQuarterTempoMap, tempoChangesFrom } from './tempoMap';
 import {
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
   MAX_TAKE_MS,
+  MAX_TEMPO_CHANGES,
   type NoteEvent,
   type PedalEvent,
   type Take,
@@ -375,53 +377,6 @@ function collectScore(root: Element): CollectedScore {
   return out;
 }
 
-interface TempoMap {
-  msAt: (q: number) => number;
-  firstBpm: number;
-}
-
-/**
- * Piecewise-constant tempo integration. Entries are collected part by part,
- * so they must be re-sorted by position; duplicates at one position collapse
- * to the last one seen.
- */
-function createTempoMap(entries: readonly TempoEntry[]): TempoMap {
-  const sorted = entries
-    .filter((entry) => Number.isFinite(entry.bpm) && entry.bpm > 0 && entry.atQ >= 0)
-    .sort((a, b) => a.atQ - b.atQ);
-  const segments: TempoEntry[] = [];
-  for (const entry of sorted) {
-    const last = segments[segments.length - 1];
-    if (last && entry.atQ - last.atQ < 1e-9) last.bpm = entry.bpm;
-    else segments.push({ ...entry });
-  }
-  const first = segments[0];
-  if (first === undefined) segments.push({ atQ: 0, bpm: 120 });
-  else if (first.atQ > 0) segments.unshift({ atQ: 0, bpm: first.bpm });
-
-  const startMs: number[] = [0];
-  for (let i = 1; i < segments.length; i += 1) {
-    const prev = segments[i - 1] as TempoEntry;
-    const current = segments[i] as TempoEntry;
-    startMs.push((startMs[i - 1] as number) + ((current.atQ - prev.atQ) * 60000) / prev.bpm);
-  }
-
-  const msAt = (q: number): number => {
-    const target = Math.max(0, q);
-    let lo = 0;
-    let hi = segments.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if ((segments[mid] as TempoEntry).atQ <= target) lo = mid;
-      else hi = mid - 1;
-    }
-    const segment = segments[lo] as TempoEntry;
-    return (startMs[lo] as number) + ((target - segment.atQ) * 60000) / segment.bpm;
-  };
-
-  return { msAt, firstBpm: (segments[0] as TempoEntry).bpm };
-}
-
 function fileTitle(fileName: string | undefined): string | null {
   if (!fileName) return null;
   const base = fileName.replace(/\.[^.]*$/, '').trim();
@@ -457,7 +412,11 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
     ]);
   }
 
-  const { msAt, firstBpm } = createTempoMap(collected.tempi);
+  // Quarter-note positions become milliseconds through the score's tempo map;
+  // its changes ride along on the take so the notation can draw them.
+  const tempoMap = createQuarterTempoMap(collected.tempi);
+  const msAt = (q: number): number => tempoMap.msAtBeat(q);
+  const firstBpm = tempoMap.baseBpm;
   // Rounding endpoints (not durations) keeps adjacent notes seamless.
   const notes: NoteEvent[] = collected.notes.map((note) => {
     const startMs = Math.round(msAt(note.onsetQ));
@@ -493,10 +452,20 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
     (collected.title ?? fileTitle(fileName) ?? UNTITLED_TAKE_TITLE).trim().slice(0, 200) ||
     UNTITLED_TAKE_TITLE;
 
+  const tempoChanges = tempoChangesFrom(tempoMap)
+    .filter((change) => change.atMs <= MAX_TAKE_MS)
+    .slice(0, MAX_TEMPO_CHANGES)
+    .map((change) => ({ ...change, bpm: clamp(change.bpm, 40, 240) }));
+
   return normalizeTake(
     createEmptyTake({
       title,
-      tempo: { bpm: clamp(firstBpm, 40, 240), timeSignature, countInBars: 1 },
+      tempo: {
+        bpm: clamp(firstBpm, 40, 240),
+        timeSignature,
+        countInBars: 1,
+        ...(tempoChanges.length > 0 ? { changes: tempoChanges } : {}),
+      },
       notes,
       pedalEvents,
     }),

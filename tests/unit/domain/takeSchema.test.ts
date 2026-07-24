@@ -168,6 +168,51 @@ describe('repairRawTake', () => {
     });
     expect((data.notes as Record<string, unknown>[])[0]!.durationMs).toBe(1);
   });
+
+  it('sorts, rounds, and clamps a tempo map', () => {
+    const { data, repairs } = repairRawTake({
+      tempo: {
+        bpm: 96,
+        timeSignature: { numerator: 4, denominator: 4 },
+        countInBars: 1,
+        changes: [
+          { atMs: 4000.4, bpm: 300 },
+          { atMs: 2000, bpm: 104 },
+        ],
+      },
+    });
+    expect((data.tempo as Record<string, unknown>).changes).toEqual([
+      { atMs: 2000, bpm: 104 },
+      { atMs: 4000, bpm: 240 },
+    ]);
+    expect(repairs).toContainEqual({ code: 'tempoChangesRepaired' });
+  });
+
+  it('drops tempo changes that cannot be salvaged', () => {
+    const { data } = repairRawTake({
+      tempo: {
+        bpm: 96,
+        timeSignature: { numerator: 4, denominator: 4 },
+        countInBars: 1,
+        changes: [
+          { atMs: 0, bpm: 104 }, // the tempo at zero is tempo.bpm
+          { atMs: 1000, bpm: 'fast' },
+          null,
+          { atMs: 3000, bpm: 104 },
+          { atMs: 3000, bpm: 88 }, // later mark at one position wins
+        ],
+      },
+    });
+    expect((data.tempo as Record<string, unknown>).changes).toEqual([{ atMs: 3000, bpm: 88 }]);
+  });
+
+  it('keeps a valid tempo map untouched and repair-free', () => {
+    const raw = specExampleTake();
+    (raw.tempo as Record<string, unknown>).changes = [{ atMs: 2000, bpm: 104 }];
+    const { take, repairs } = parseTakeJson(raw);
+    expect(take.tempo.changes).toEqual([{ atMs: 2000, bpm: 104 }]);
+    expect(repairs).toEqual([]);
+  });
 });
 
 describe('normalizeTake', () => {

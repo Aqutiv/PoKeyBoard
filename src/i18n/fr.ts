@@ -134,6 +134,8 @@ export const fr: Messages = {
     descriptions: {
       aBeautifulDay:
         'Une mélodie originale, chaleureuse et douce, qui tient entièrement sur les touches visibles — une première pièce facile à suivre.',
+      forwardGently:
+        'Une pièce originale pour violon, piano et violoncelle portée au clavier : elle s’ouvre avec chaleur, monte vers un sommet radieux et s’achève dans le calme.',
       furElise: 'La bagatelle bien-aimée de Beethoven — le célèbre thème d’ouverture.',
       gymnopedie1: 'Le classique rêveur de Satie — lent, doux et aérien. Écoutez, tout simplement.',
       bluesInC:
@@ -331,6 +333,7 @@ export const fr: Messages = {
     tempoDefaulted: 'Des réglages de tempo par défaut ont été appliqués car ils manquaient.',
     bpmClamped: 'Les BPM ont été ramenés dans la plage 40–240.',
     countInClamped: 'La durée du décompte a été ajustée.',
+    tempoChangesRepaired: 'Les changements de tempo ont été nettoyés.',
     instrumentDefaulted:
       'Des réglages d’instrument par défaut ont été appliqués car ils manquaient.',
     noteTimingRounded:

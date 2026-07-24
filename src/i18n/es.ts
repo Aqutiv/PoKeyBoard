@@ -133,6 +133,8 @@ export const es: Messages = {
     descriptions: {
       aBeautifulDay:
         'Una melodía original cálida y suave que cabe entera en las teclas visibles — una primera pieza fácil de seguir.',
+      forwardGently:
+        'Una obra original para violín, piano y violonchelo llevada al teclado: empieza con calidez, crece hasta un clímax radiante y termina en calma.',
       furElise: 'La querida bagatela de Beethoven — el famoso tema inicial.',
       gymnopedie1:
         'El clásico soñador de Satie — lento, suave y espacioso. Solo escucha, o déjate llevar.',
@@ -335,6 +337,7 @@ export const es: Messages = {
     tempoDefaulted: 'Se aplicaron ajustes de tempo predeterminados por faltar.',
     bpmClamped: 'Se ajustaron las BPM al rango de 40 a 240.',
     countInClamped: 'Se ajustó la duración de la cuenta atrás.',
+    tempoChangesRepaired: 'Se depuraron los cambios de tempo.',
     instrumentDefaulted: 'Se aplicaron ajustes de instrumento predeterminados por faltar.',
     noteTimingRounded: 'Se redondeó el tiempo fraccionario de las notas a milisegundos enteros.',
     noteIdsAssigned: ({ count }) => `Se asignaron ids a ${count} nota(s).`,

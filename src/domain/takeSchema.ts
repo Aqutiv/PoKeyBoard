@@ -18,6 +18,7 @@ import {
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
   MAX_TAKE_MS,
+  MAX_TEMPO_CHANGES,
   type Take,
 } from './takeTypes';
 
@@ -36,6 +37,11 @@ export const pedalEventSchema = z.object({
   down: z.boolean(),
 });
 
+export const tempoChangeSchema = z.object({
+  atMs: z.number().int().min(1).max(MAX_TAKE_MS),
+  bpm: z.number().min(40).max(240),
+});
+
 export const tempoSchema = z.object({
   bpm: z.number().min(40).max(240),
   timeSignature: z.object({
@@ -43,6 +49,10 @@ export const tempoSchema = z.object({
     denominator: z.union([z.literal(2), z.literal(4), z.literal(8), z.literal(16)]),
   }),
   countInBars: z.union([z.literal(0), z.literal(1), z.literal(2)]),
+  // Additive and optional, so takes written before tempo maps existed still
+  // parse untouched and no schema version bump is needed. Older builds parse a
+  // take that has one and silently drop the field (zod strips unknown keys).
+  changes: z.array(tempoChangeSchema).max(MAX_TEMPO_CHANGES).optional(),
 });
 
 export const instrumentSchema = z.object({
@@ -105,6 +115,40 @@ function clampWithinEpsilon(value: number, min: number, max: number): number {
 }
 
 /**
+ * A tempo map only means anything sorted, at whole milliseconds, and past the
+ * start (the tempo at 0 is `tempo.bpm`). Entries that cannot be salvaged are
+ * dropped rather than failing the whole import — the notes still play.
+ */
+function repairTempoChanges(input: readonly unknown[]): {
+  changes: Array<{ atMs: number; bpm: number }>;
+  dropped: boolean;
+} {
+  const kept = new Map<number, number>();
+  let dropped = input.length > MAX_TEMPO_CHANGES;
+  for (const entry of input.slice(0, MAX_TEMPO_CHANGES)) {
+    if (typeof entry !== 'object' || entry === null) {
+      dropped = true;
+      continue;
+    }
+    const { atMs, bpm } = entry as { atMs?: unknown; bpm?: unknown };
+    const at = roundMs(atMs);
+    if (at === undefined || at < 1 || at > MAX_TAKE_MS || !isFiniteNumber(bpm)) {
+      dropped = true;
+      continue;
+    }
+    const clamped = Math.min(240, Math.max(40, bpm));
+    if (clamped !== bpm || at !== atMs) dropped = true;
+    // A later mark at the same millisecond wins, as it does during playback.
+    kept.set(at, clamped);
+  }
+  const changes = [...kept.entries()]
+    .map(([atMs, bpm]) => ({ atMs, bpm }))
+    .sort((a, b) => a.atMs - b.atMs);
+  if (changes.length !== input.length) dropped = true;
+  return { changes, dropped };
+}
+
+/**
  * Repair only clearly recoverable problems before validation: rounding
  * fractional milliseconds, filling defaulted containers, generating missing
  * ids, and clamping float-precision drift. Anything genuinely invalid is left
@@ -150,6 +194,14 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
     ) {
       tempo.countInBars = Math.min(2, Math.max(0, tempo.countInBars));
       repairs.push({ code: 'countInClamped' });
+    }
+    if (Array.isArray(tempo.changes)) {
+      const { changes, dropped } = repairTempoChanges(tempo.changes);
+      tempo.changes = changes;
+      if (dropped) repairs.push({ code: 'tempoChangesRepaired' });
+    } else if (tempo.changes !== undefined) {
+      delete tempo.changes;
+      repairs.push({ code: 'tempoChangesRepaired' });
     }
     data.tempo = tempo;
   }

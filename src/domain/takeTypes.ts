@@ -12,6 +12,8 @@ export const MAX_TAKE_MS = 6 * 60 * 60 * 1000;
 /** Upper bound for a single held note (2 minutes). */
 export const MAX_NOTE_DURATION_MS = 2 * 60 * 1000;
 export const MAX_NOTE_COUNT = 50_000;
+/** Upper bound on a take's tempo map; scores rarely mark more than a few. */
+export const MAX_TEMPO_CHANGES = 1_024;
 
 export type QuantizationSetting = 'off' | '1/8' | '1/16';
 
@@ -22,10 +24,22 @@ export interface TimeSignature {
   denominator: number;
 }
 
+/**
+ * A tempo that takes over partway through a take. Note timing is always
+ * absolute milliseconds, so changes never move a note — they tell the notation
+ * where bar lines fall and which note values to draw.
+ */
+export interface TempoChange {
+  atMs: number;
+  bpm: number;
+}
+
 export interface TempoSettings {
   bpm: number;
   timeSignature: TimeSignature;
   countInBars: CountInBars;
+  /** Sorted, all `atMs > 0`; absent (or empty) means one tempo throughout. */
+  changes?: readonly TempoChange[];
 }
 
 export interface InstrumentSettings {

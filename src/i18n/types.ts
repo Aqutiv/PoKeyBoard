@@ -39,6 +39,7 @@ export type RepairCode =
   | 'tempoDefaulted'
   | 'bpmClamped'
   | 'countInClamped'
+  | 'tempoChangesRepaired'
   | 'instrumentDefaulted'
   | 'noteTimingRounded'
   | 'noteIdsAssigned'
@@ -182,6 +183,7 @@ export interface Messages {
     forkHint: string;
     descriptions: {
       aBeautifulDay: string;
+      forwardGently: string;
       furElise: string;
       gymnopedie1: string;
       bluesInC: string;
@@ -346,6 +348,7 @@ export interface Messages {
     tempoDefaulted: string;
     bpmClamped: string;
     countInClamped: string;
+    tempoChangesRepaired: string;
     instrumentDefaulted: string;
     noteTimingRounded: string;
     noteIdsAssigned: (p: { count: number }) => string;

@@ -17,7 +17,8 @@ src/
                 iosAudioSession
   workers/      mp3Encoder.worker (LAME wasm, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
-                takeMigrations, noteEvents, takeHash (export cache key)
+                takeMigrations, noteEvents, takeHash (export cache key),
+                tempoMap (piecewise beats↔ms; shared by import, library, score)
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
