@@ -136,6 +136,8 @@ export const mg: Messages = {
     descriptions: {
       aBeautifulDay:
         'Hira noforonina, mafana sy malefaka, mipetraka manontolo eo amin’ny kitendry hita — tsara hanombohana.',
+      eveningTide:
+        'Hira noforonina malefaka — onjan-drano ataon’ny tanana havia eo ambanin’ny feonkira mihira, miakatra mankany amin’ny hazavana, ary mitony indray rehefa takariva.',
       forwardGently:
         'Hira noforonina ho an’ny lokanga, piano ary violonselo, natao eto amin’ny kitendry — manomboka mafana, mitombo hatramin’ny fara tampony mamiratra, ary mifarana am-pilaminana.',
       furElise: 'Ilay bagatelle sarobidin’i Beethoven — ny lohahevitra fanokafana malaza.',

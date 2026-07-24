@@ -135,6 +135,8 @@ export const fr: Messages = {
     descriptions: {
       aBeautifulDay:
         'Une mélodie originale, chaleureuse et douce, qui tient entièrement sur les touches visibles — une première pièce facile à suivre.',
+      eveningTide:
+        'Un nocturne original en E mineur : une marée de la main gauche sous une mélodie chantante qui monte vers la lumière, puis retombe au crépuscule.',
       forwardGently:
         'Une pièce originale pour violon, piano et violoncelle portée au clavier : elle s’ouvre avec chaleur, monte vers un sommet radieux et s’achève dans le calme.',
       furElise: 'La bagatelle bien-aimée de Beethoven — le célèbre thème d’ouverture.',
