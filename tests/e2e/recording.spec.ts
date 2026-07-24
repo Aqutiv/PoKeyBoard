@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   gotoAppReady,
+  nav,
   recordShortTake,
   totalDurationText,
   transport,
@@ -60,5 +61,30 @@ test.describe('recording and playback', () => {
     await expect(page.locator('.metronome__dot.is-active')).toHaveCount(1, { timeout: 5_000 });
     await toggle.click();
     await expect(toggle).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('tempo follows the playhead through a library track’s tempo changes', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Library' }).click();
+    await page.getByRole('button', { name: 'Open Forward, Gently' }).click();
+
+    const bpm = page.getByLabel('Beats per minute');
+    await expect(bpm).toHaveValue('96');
+
+    // Bar 25 ("Open and radiant") is marked 104 and starts at 60 s.
+    await page.getByLabel('Seek position').fill('61000');
+    await expect(bpm).toHaveValue('104');
+    // The field edits that section, not the opening tempo.
+    await expect(page.getByText('from bar 25')).toBeVisible();
+
+    // The closing bar is the slowest.
+    await page.getByLabel('Seek position').fill('78000');
+    await expect(bpm).toHaveValue('76');
+    await expect(page.getByText('from bar 32')).toBeVisible();
+
+    // Back at the start it reads — and edits — the take's own tempo.
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    await expect(bpm).toHaveValue('96');
+    await expect(page.getByText(/from bar/)).toHaveCount(0);
   });
 });

@@ -68,6 +68,7 @@ export const mg: Messages = {
     oneBar: '1 mizana',
     twoBars: '2 mizana',
     volumeLabel: 'Feon’ny metronoma',
+    tempoFromBar: ({ bar }) => `manomboka amin’ny mizana ${bar}`,
   },
   piano: {
     shiftDown: 'Ampidino iray oktava ny elanelan’ny klavie',

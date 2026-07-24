@@ -66,6 +66,7 @@ export const es: Messages = {
     oneBar: '1 compás',
     twoBars: '2 compases',
     volumeLabel: 'Volumen del metrónomo',
+    tempoFromBar: ({ bar }) => `desde el compás ${bar}`,
   },
   piano: {
     shiftDown: 'Bajar el rango del teclado una octava',

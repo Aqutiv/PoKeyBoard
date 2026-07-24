@@ -123,6 +123,8 @@ export interface Messages {
     oneBar: string;
     twoBars: string;
     volumeLabel: string;
+    /** Shown when the tempo field will change the tempo from a bar onward. */
+    tempoFromBar: (p: { bar: number }) => string;
   };
   piano: {
     shiftDown: string;

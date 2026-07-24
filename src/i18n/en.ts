@@ -68,6 +68,7 @@ export const en: Messages = {
     oneBar: '1 bar',
     twoBars: '2 bars',
     volumeLabel: 'Metronome volume',
+    tempoFromBar: ({ bar }) => `from bar ${bar}`,
   },
   piano: {
     shiftDown: 'Shift keyboard range down one octave',

@@ -67,6 +67,7 @@ export const fr: Messages = {
     oneBar: '1 mesure',
     twoBars: '2 mesures',
     volumeLabel: 'Volume du métronome',
+    tempoFromBar: ({ bar }) => `à partir de la mesure ${bar}`,
   },
   piano: {
     shiftDown: 'Descendre la tessiture du clavier d’une octave',

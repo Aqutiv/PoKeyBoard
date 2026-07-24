@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState, useSyncExternalStore } from 'react';
-import { useMetronomeOn, useTransportState } from '@/app/hooks/useTransport';
+import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useMetronomeOn, usePlayheadMs, useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import type { CountInBars } from '@/domain/takeTypes';
+import { barLineNearMs, createTakeTempoMap, withTempoAt } from '@/domain/tempoMap';
 import './metronome.css';
 
 const TIME_SIGNATURES: readonly string[] = ['2/2', '2/4', '3/4', '3/8', '4/4', '6/8'];
@@ -13,7 +14,7 @@ const MIN_BPM = 40;
 const MAX_BPM = 240;
 
 /** Poll the current beat while clicks are audible; -1 when silent. */
-function useActiveBeat(running: boolean, numerator: number): number {
+function useActiveBeat(running: boolean): number {
   const subscribeBeat = useCallback(
     (onStoreChange: () => void) => {
       const timer = running ? setInterval(onStoreChange, 60) : null;
@@ -25,8 +26,7 @@ function useActiveBeat(running: boolean, numerator: number): number {
   );
   return useSyncExternalStore(subscribeBeat, () => {
     if (!running) return -1;
-    const beat = transportController.metronome.beatAt(audioEngine.currentTime);
-    return beat < 0 ? -1 : Math.floor(beat) % numerator;
+    return transportController.metronome.beatInBarAt(audioEngine.currentTime);
   });
 }
 
@@ -46,35 +46,62 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
   const state = useTransportState();
   const tempo = useTakeStore((s) => s.take.tempo);
   const setTempo = useTakeStore((s) => s.setTempo);
+  const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
+  const playheadMs = usePlayheadMs();
   const metronomeVolume = useSettingsStore((s) => s.metronomeVolume);
   const setMetronomeVolume = useSettingsStore((s) => s.setMetronomeVolume);
-  const [bpmText, setBpmText] = useState(String(tempo.bpm));
-  const [lastBpm, setLastBpm] = useState(tempo.bpm);
   const tapTimesRef = useRef<number[]>([]);
 
+  const tempoMap = useMemo(() => createTakeTempoMap(tempo), [tempo]);
+
+  /**
+   * Stopped partway into a take that already has notes, the tempo field edits
+   * the tempo *from here* — the record-a-part, change tempo, record-the-next
+   * flow — landing the change on the nearest bar line so the next part starts
+   * on a downbeat. At the very start, and while the transport is moving, it
+   * edits the take's tempo as a whole.
+   */
+  const stopped = state === 'idle' || state === 'paused';
+  const barLineMs = stopped ? barLineNearMs(tempoMap, tempo.timeSignature, playheadMs) : 0;
+  const positioned = stopped && hasNotes && barLineMs > 0;
+  const targetMs = positioned ? barLineMs : playheadMs;
+  const shownBpm = Math.round(tempoMap.bpmAt(targetMs));
+  const targetBar = positioned
+    ? Math.round(tempoMap.beatAtMs(barLineMs) / tempo.timeSignature.numerator) + 1
+    : 0;
+
+  const [bpmText, setBpmText] = useState(String(shownBpm));
+  const [lastBpm, setLastBpm] = useState(shownBpm);
+
   // Adjust-during-render pattern: reflect external BPM changes in the field.
-  if (tempo.bpm !== lastBpm) {
-    setLastBpm(tempo.bpm);
-    setBpmText(String(Math.round(tempo.bpm)));
+  if (shownBpm !== lastBpm) {
+    setLastBpm(shownBpm);
+    setBpmText(String(shownBpm));
   }
 
   const clicksAudible = metronomeOn || state === 'countIn';
-  const activeBeat = useActiveBeat(clicksAudible, tempo.timeSignature.numerator);
+  const activeBeat = useActiveBeat(clicksAudible);
 
   const applyBpm = useCallback(
     (bpm: number) => {
       const clamped = Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(bpm)));
-      setTempo({ ...tempo, bpm: clamped });
+      if (positioned) {
+        setTempo(withTempoAt(tempo, barLineMs, clamped));
+        // Park the playhead on the bar line the change starts at.
+        transportController.seek(barLineMs);
+      } else {
+        setTempo({ ...tempo, bpm: clamped });
+      }
       transportController.refreshMetronomeConfig();
     },
-    [tempo, setTempo],
+    [tempo, setTempo, positioned, barLineMs],
   );
 
   const onBpmCommit = useCallback(() => {
     const parsed = Number(bpmText);
     if (Number.isFinite(parsed)) applyBpm(parsed);
-    else setBpmText(String(Math.round(tempo.bpm)));
-  }, [bpmText, applyBpm, tempo.bpm]);
+    else setBpmText(String(shownBpm));
+  }, [bpmText, applyBpm, shownBpm]);
 
   const onTap = useCallback(() => {
     const now = performance.now();
@@ -128,7 +155,7 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
         type="button"
         className={`metronome__toggle${metronomeOn ? ' is-on' : ''}`}
         aria-pressed={metronomeOn}
-        aria-label={metronomeOn ? m.metronome.on({ bpm: Math.round(tempo.bpm) }) : m.metronome.off}
+        aria-label={metronomeOn ? m.metronome.on({ bpm: shownBpm }) : m.metronome.off}
         onClick={() => transportController.setMetronomeOn(!metronomeOn)}
       >
         ♩
@@ -139,7 +166,7 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
           type="button"
           className="metronome__step"
           aria-label={m.metronome.decreaseTempo}
-          onClick={() => applyBpm(tempo.bpm - 1)}
+          onClick={() => applyBpm(shownBpm - 1)}
         >
           −
         </button>
@@ -158,11 +185,15 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
           type="button"
           className="metronome__step"
           aria-label={m.metronome.increaseTempo}
-          onClick={() => applyBpm(tempo.bpm + 1)}
+          onClick={() => applyBpm(shownBpm + 1)}
         >
           +
         </button>
       </div>
+
+      {positioned ? (
+        <span className="metronome__from-bar">{m.metronome.tempoFromBar({ bar: targetBar })}</span>
+      ) : null}
 
       <button type="button" className="metronome__tap" onClick={onTap}>
         {m.metronome.tap}
