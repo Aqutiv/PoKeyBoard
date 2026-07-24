@@ -6,7 +6,8 @@ test.describe('MP3 export', () => {
     await gotoAppReady(page);
     await recordShortTake(page);
 
-    await page.getByRole('button', { name: 'Share audio' }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Audio (MP3)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Export audio' });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Render audio' }).click();
@@ -35,14 +36,16 @@ test.describe('MP3 export', () => {
     await recordShortTake(page);
 
     // First export.
-    await page.getByRole('button', { name: 'Share audio' }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Audio (MP3)' }).click();
     const dialog = page.getByRole('dialog', { name: 'Export audio' });
     await dialog.getByRole('button', { name: 'Render audio' }).click();
     await expect(dialog.getByText(/Audio ready/)).toBeVisible({ timeout: 30_000 });
     await dialog.getByRole('button', { name: 'Close' }).click();
 
     // Second export of the identical take hits the cache.
-    await page.getByRole('button', { name: 'Share audio' }).click();
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Audio (MP3)' }).click();
     await dialog.getByRole('button', { name: 'Render audio' }).click();
     await expect(dialog.getByText(/reused cached export/)).toBeVisible({ timeout: 15_000 });
   });

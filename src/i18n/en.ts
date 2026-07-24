@@ -20,8 +20,6 @@ export const en: Messages = {
   },
   play: {
     pageLabel: 'Play',
-    shareAudio: 'Share audio',
-    shareSheet: 'Share sheet',
     viewLabel: 'View',
     notationView: 'Notation',
     keyboardView: 'Keyboard',
@@ -29,6 +27,12 @@ export const en: Messages = {
     loadingPiano: ({ percent }) => `Loading piano… ${percent}%`,
     audioUnavailable: 'Audio is unavailable in this browser.',
     recordingInterrupted: 'Recording stopped and saved when the app went to the background.',
+  },
+  share: {
+    trigger: 'Share',
+    menuLabel: 'Share options',
+    audio: 'Audio (MP3)',
+    sheet: 'Sheet music (PDF)',
   },
   transport: {
     groupLabel: 'Transport',
@@ -97,8 +101,6 @@ export const en: Messages = {
     duplicate: 'Duplicate',
     exportJson: 'Export JSON',
     shareJson: 'Share JSON',
-    shareAudio: 'Share audio',
-    shareSheet: 'Share sheet music',
     clearNotes: 'Clear notes',
     delete: 'Delete',
     backupAll: 'Backup all takes',

@@ -75,8 +75,6 @@ export interface Messages {
   };
   play: {
     pageLabel: string;
-    shareAudio: string;
-    shareSheet: string;
     viewLabel: string;
     notationView: string;
     keyboardView: string;
@@ -84,6 +82,12 @@ export interface Messages {
     loadingPiano: (p: { percent: number }) => string;
     audioUnavailable: string;
     recordingInterrupted: string;
+  };
+  share: {
+    trigger: string;
+    menuLabel: string;
+    audio: string;
+    sheet: string;
   };
   transport: {
     groupLabel: string;
@@ -150,8 +154,6 @@ export interface Messages {
     duplicate: string;
     exportJson: string;
     shareJson: string;
-    shareAudio: string;
-    shareSheet: string;
     clearNotes: string;
     delete: string;
     backupAll: string;
