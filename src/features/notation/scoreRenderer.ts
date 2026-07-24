@@ -53,18 +53,53 @@ export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeomet
   return { trebleTop, bassTop, minHeight: bassTop + STAFF_H + bottomExtent };
 }
 
-const THEME = {
-  staffLine: '#57503f',
-  barLine: '#6d6154',
-  note: '#f0e9dc',
-  noteDim: '#b3a996',
-  highlight: '#f0b954',
-  record: '#e5484d',
-  ghost: 'rgba(240, 233, 220, 0.4)',
-  playhead: '#f0b954',
-  gutterBg: 'rgba(31, 27, 24, 0.96)',
-  measureNumber: '#7d7466',
-  rest: '#9c9280',
+/** Colors for the live score canvas. The canvas can't read CSS custom
+ * properties at draw time, so each theme's palette is duplicated here —
+ * keep in sync with src/themes.css (gutterBg tracks --surface-1). */
+export interface ScorePalette {
+  staffLine: string;
+  barLine: string;
+  note: string;
+  noteDim: string;
+  highlight: string;
+  record: string;
+  recordWash: string;
+  ghost: string;
+  playhead: string;
+  gutterBg: string;
+  measureNumber: string;
+  rest: string;
+}
+
+export const SCORE_PALETTES: Record<'dark' | 'light', ScorePalette> = {
+  dark: {
+    staffLine: '#57503f',
+    barLine: '#6d6154',
+    note: '#f0e9dc',
+    noteDim: '#b3a996',
+    highlight: '#f0b954',
+    record: '#e5484d',
+    recordWash: 'rgba(229, 72, 77, 0.28)',
+    ghost: 'rgba(240, 233, 220, 0.4)',
+    playhead: '#f0b954',
+    gutterBg: 'rgba(31, 27, 24, 0.96)',
+    measureNumber: '#7d7466',
+    rest: '#9c9280',
+  },
+  light: {
+    staffLine: '#b5a98e',
+    barLine: '#8f8468',
+    note: '#211d15',
+    noteDim: '#6b6353',
+    highlight: '#8a6410',
+    record: '#c73e3e',
+    recordWash: 'rgba(199, 62, 62, 0.22)',
+    ghost: 'rgba(33, 29, 21, 0.35)',
+    playhead: '#8a6410',
+    gutterBg: 'rgba(255, 253, 248, 0.96)',
+    measureNumber: '#99917e',
+    rest: '#857c68',
+  },
 };
 
 export interface ScoreView {
@@ -115,19 +150,24 @@ export function drawScore(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
   input: ScoreRenderInput,
+  palette: ScorePalette,
 ): void {
   ctx.clearRect(0, 0, view.widthPx, view.heightPx);
-  drawStaffLines(ctx, view);
-  drawMeasures(ctx, view, input.layout);
-  drawChords(ctx, view, input);
-  drawOpenNotes(ctx, view, input.openNotes, input.recording);
-  drawGhosts(ctx, view, input);
-  drawPlayhead(ctx, view, input.playheadMs);
-  drawGutter(ctx, view, input.timeSignature);
+  drawStaffLines(ctx, view, palette);
+  drawMeasures(ctx, view, input.layout, palette);
+  drawChords(ctx, view, input, palette);
+  drawOpenNotes(ctx, view, input.openNotes, input.recording, palette);
+  drawGhosts(ctx, view, input, palette);
+  drawPlayhead(ctx, view, input.playheadMs, palette);
+  drawGutter(ctx, view, input.timeSignature, palette);
 }
 
-function drawStaffLines(ctx: CanvasRenderingContext2D, view: ScoreView): void {
-  ctx.strokeStyle = THEME.staffLine;
+function drawStaffLines(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  palette: ScorePalette,
+): void {
+  ctx.strokeStyle = palette.staffLine;
   ctx.lineWidth = 1;
   for (const top of [view.trebleTop, view.bassTop]) {
     for (let line = 0; line < 5; line += 1) {
@@ -140,11 +180,16 @@ function drawStaffLines(ctx: CanvasRenderingContext2D, view: ScoreView): void {
   }
 }
 
-function drawMeasures(ctx: CanvasRenderingContext2D, view: ScoreView, layout: ScoreLayout): void {
+function drawMeasures(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  layout: ScoreLayout,
+  palette: ScorePalette,
+): void {
   const fromMs = view.scrollMs - 200;
   const toMs = view.scrollMs + (view.widthPx - GUTTER) / view.pxPerMs + 200;
-  ctx.strokeStyle = THEME.barLine;
-  ctx.fillStyle = THEME.measureNumber;
+  ctx.strokeStyle = palette.barLine;
+  ctx.fillStyle = palette.measureNumber;
   ctx.font = '10px system-ui, sans-serif';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
@@ -165,12 +210,12 @@ function drawMeasures(ctx: CanvasRenderingContext2D, view: ScoreView, layout: Sc
     if (measure.empty) {
       const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
       if (cx > GUTTER && cx < view.widthPx) {
-        ctx.fillStyle = THEME.rest;
+        ctx.fillStyle = palette.rest;
         for (const top of [view.trebleTop, view.bassTop]) {
           // Whole rest: a small block hanging from the second line.
           ctx.fillRect(cx - 6, top + GAP + 0.5, 12, GAP * 0.55);
         }
-        ctx.fillStyle = THEME.measureNumber;
+        ctx.fillStyle = palette.measureNumber;
       }
     }
   }
@@ -187,7 +232,12 @@ function drawMeasures(ctx: CanvasRenderingContext2D, view: ScoreView, layout: Sc
   }
 }
 
-function drawChords(ctx: CanvasRenderingContext2D, view: ScoreView, input: ScoreRenderInput): void {
+function drawChords(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  input: ScoreRenderInput,
+  palette: ScorePalette,
+): void {
   const { layout, playheadMs } = input;
   const fromMs = view.scrollMs - 2000;
   const toMs = view.scrollMs + (view.widthPx - GUTTER) / view.pxPerMs + 400;
@@ -196,7 +246,7 @@ function drawChords(ctx: CanvasRenderingContext2D, view: ScoreView, input: Score
   for (let i = start; i < layout.chords.length; i += 1) {
     const chord = layout.chords[i] as ChordGroup;
     if (chord.displayStartMs > toMs) break;
-    drawChord(ctx, view, chord, playheadMs);
+    drawChord(ctx, view, chord, playheadMs, palette);
   }
 }
 
@@ -205,6 +255,7 @@ function drawChord(
   view: ScoreView,
   chord: ChordGroup,
   playheadMs: number,
+  palette: ScorePalette,
 ): void {
   const x = xForMs(view, chord.displayStartMs);
   if (x < GUTTER - 40) return;
@@ -214,7 +265,7 @@ function drawChord(
   const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
 
   // Ledger lines first, behind heads.
-  ctx.strokeStyle = THEME.staffLine;
+  ctx.strokeStyle = palette.staffLine;
   ctx.lineWidth = 1;
   for (const note of chord.notes) {
     for (const step of ledgerLineSteps(note.step)) {
@@ -234,7 +285,7 @@ function drawChord(
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
     const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
-    const color = sounding ? THEME.highlight : THEME.note;
+    const color = sounding ? palette.highlight : palette.note;
 
     ctx.save();
     ctx.translate(x, y);
@@ -269,7 +320,7 @@ function drawChord(
   // Stem and flags (whole notes have neither).
   if (chord.symbol.base !== 'whole') {
     const stemLength = GAP * 3.4;
-    ctx.strokeStyle = THEME.note;
+    ctx.strokeStyle = palette.note;
     ctx.lineWidth = 1.6;
     ctx.beginPath();
     if (chord.stemDown) {
@@ -277,13 +328,13 @@ function drawChord(
       ctx.moveTo(sx, minY);
       ctx.lineTo(sx, maxY + stemLength);
       ctx.stroke();
-      drawFlags(ctx, chord, sx, maxY + stemLength, 1);
+      drawFlags(ctx, chord, sx, maxY + stemLength, 1, palette);
     } else {
       const sx = x + rx - 0.8;
       ctx.moveTo(sx, maxY);
       ctx.lineTo(sx, minY - stemLength);
       ctx.stroke();
-      drawFlags(ctx, chord, sx, minY - stemLength, -1);
+      drawFlags(ctx, chord, sx, minY - stemLength, -1, palette);
     }
   }
 }
@@ -294,9 +345,10 @@ function drawFlags(
   x: number,
   stemEndY: number,
   direction: 1 | -1,
+  palette: ScorePalette,
 ): void {
   const flags = chord.symbol.base === 'eighth' ? 1 : chord.symbol.base === 'sixteenth' ? 2 : 0;
-  ctx.strokeStyle = THEME.note;
+  ctx.strokeStyle = palette.note;
   ctx.lineWidth = 1.6;
   for (let i = 0; i < flags; i += 1) {
     const y = stemEndY + direction * i * (GAP * 0.7);
@@ -319,6 +371,7 @@ function drawOpenNotes(
   view: ScoreView,
   openNotes: readonly OpenRecordingNote[],
   recording: boolean,
+  palette: ScorePalette,
 ): void {
   if (!recording || openNotes.length === 0) return;
   for (const open of openNotes) {
@@ -327,20 +380,25 @@ function drawOpenNotes(
     const x = xForMs(view, open.startMs);
     const width = Math.max(6, open.durationMs * view.pxPerMs);
     // Extension bar shows the note is still held.
-    ctx.fillStyle = 'rgba(229, 72, 77, 0.28)';
+    ctx.fillStyle = palette.recordWash;
     ctx.fillRect(x, y - 3, width, 6);
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(-0.32);
     ctx.beginPath();
     ctx.ellipse(0, 0, GAP * 0.64, GAP * 0.5, 0, 0, Math.PI * 2);
-    ctx.fillStyle = THEME.record;
+    ctx.fillStyle = palette.record;
     ctx.fill();
     ctx.restore();
   }
 }
 
-function drawGhosts(ctx: CanvasRenderingContext2D, view: ScoreView, input: ScoreRenderInput): void {
+function drawGhosts(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  input: ScoreRenderInput,
+  palette: ScorePalette,
+): void {
   if (input.ghosts.length === 0) return;
   const x = Math.max(GUTTER + 14, xForMs(view, input.playheadMs));
   for (const ghost of input.ghosts) {
@@ -348,7 +406,7 @@ function drawGhosts(ctx: CanvasRenderingContext2D, view: ScoreView, input: Score
     const y = yForStep(view, position.staff, position.step);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, ghost.life));
-    ctx.strokeStyle = THEME.staffLine;
+    ctx.strokeStyle = palette.staffLine;
     for (const step of ledgerLineSteps(position.step)) {
       const ly = yForStep(view, position.staff, step) + 0.5;
       ctx.beginPath();
@@ -360,22 +418,27 @@ function drawGhosts(ctx: CanvasRenderingContext2D, view: ScoreView, input: Score
     ctx.rotate(-0.32);
     ctx.beginPath();
     ctx.ellipse(0, 0, GAP * 0.64, GAP * 0.5, 0, 0, Math.PI * 2);
-    ctx.fillStyle = THEME.ghost;
+    ctx.fillStyle = palette.ghost;
     ctx.fill();
     ctx.restore();
   }
 }
 
-function drawPlayhead(ctx: CanvasRenderingContext2D, view: ScoreView, playheadMs: number): void {
+function drawPlayhead(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  playheadMs: number,
+  palette: ScorePalette,
+): void {
   const x = xForMs(view, playheadMs);
   if (x < GUTTER - 2 || x > view.widthPx + 2) return;
-  ctx.strokeStyle = THEME.playhead;
+  ctx.strokeStyle = palette.playhead;
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   ctx.moveTo(x, view.trebleTop - 16);
   ctx.lineTo(x, view.bassTop + STAFF_H + 12);
   ctx.stroke();
-  ctx.fillStyle = THEME.playhead;
+  ctx.fillStyle = palette.playhead;
   ctx.beginPath();
   ctx.moveTo(x - 5, view.trebleTop - 22);
   ctx.lineTo(x + 5, view.trebleTop - 22);
@@ -401,10 +464,11 @@ function drawGutter(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
   timeSignature: TimeSignature,
+  palette: ScorePalette,
 ): void {
-  ctx.fillStyle = THEME.gutterBg;
+  ctx.fillStyle = palette.gutterBg;
   ctx.fillRect(0, 0, GUTTER, view.heightPx);
-  ctx.strokeStyle = THEME.barLine;
+  ctx.strokeStyle = palette.barLine;
   ctx.lineWidth = 1.4;
   // System bar line joining the staffs at the left edge.
   ctx.beginPath();
@@ -413,7 +477,7 @@ function drawGutter(
   ctx.stroke();
 
   const support = detectGlyphSupport(ctx);
-  ctx.fillStyle = THEME.noteDim;
+  ctx.fillStyle = palette.noteDim;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
@@ -422,14 +486,14 @@ function drawGutter(
     ctx.font = `${GAP * 4.1}px serif`;
     ctx.fillText('\u{1D11E}', 8, view.trebleTop + STAFF_H - GAP + GAP * 1.4);
   } else {
-    drawFallbackTrebleClef(ctx, 14, view.trebleTop);
+    drawFallbackTrebleClef(ctx, 14, view.trebleTop, palette);
   }
   // Bass (F) clef.
   if (support.bass) {
     ctx.font = `${GAP * 3.2}px serif`;
     ctx.fillText('\u{1D122}', 8, view.bassTop + GAP * 3.1);
   } else {
-    drawFallbackBassClef(ctx, 14, view.bassTop);
+    drawFallbackBassClef(ctx, 14, view.bassTop, palette);
   }
 
   // Time signature on both staffs.
@@ -444,9 +508,14 @@ function drawGutter(
 }
 
 /** Stylized G clef: spiral around the G line plus a tall flourish. */
-function drawFallbackTrebleClef(ctx: CanvasRenderingContext2D, x: number, staffTop: number): void {
+function drawFallbackTrebleClef(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  staffTop: number,
+  palette: ScorePalette,
+): void {
   const gy = staffTop + STAFF_H - GAP; // G4 line
-  ctx.strokeStyle = THEME.noteDim;
+  ctx.strokeStyle = palette.noteDim;
   ctx.lineWidth = 1.8;
   ctx.beginPath();
   ctx.arc(x, gy, GAP * 0.75, 0, Math.PI * 2);
@@ -462,10 +531,15 @@ function drawFallbackTrebleClef(ctx: CanvasRenderingContext2D, x: number, staffT
 }
 
 /** Stylized F clef: comma curve with the two dots around the F line. */
-function drawFallbackBassClef(ctx: CanvasRenderingContext2D, x: number, staffTop: number): void {
+function drawFallbackBassClef(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  staffTop: number,
+  palette: ScorePalette,
+): void {
   const fy = staffTop + GAP; // F3 line
-  ctx.strokeStyle = THEME.noteDim;
-  ctx.fillStyle = THEME.noteDim;
+  ctx.strokeStyle = palette.noteDim;
+  ctx.fillStyle = palette.noteDim;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(x - 2, fy, GAP * 0.42, 0, Math.PI * 2);
