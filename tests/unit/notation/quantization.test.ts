@@ -1,31 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import {
-  durationToSymbol,
-  quantizeGridMs,
-  quantizeStartMs,
-} from '@/features/notation/quantization';
+import { durationToSymbol, quantizeGridBeats } from '@/features/notation/quantization';
 
 // At 120 BPM a whole note is 2000ms.
 const BPM = 120;
 
-describe('quantizeGridMs', () => {
-  it('derives the grid from the whole note', () => {
-    expect(quantizeGridMs('1/8', BPM)).toBe(250);
-    expect(quantizeGridMs('1/16', BPM)).toBe(125);
-    expect(quantizeGridMs('off', BPM)).toBeNull();
-  });
-});
-
-describe('quantizeStartMs', () => {
-  it('snaps to the nearest grid point', () => {
-    expect(quantizeStartMs(130, '1/16', BPM)).toBe(125);
-    expect(quantizeStartMs(190, '1/16', BPM)).toBe(250); // 190 → nearest of 125/250
-    expect(quantizeStartMs(310, '1/8', BPM)).toBe(250);
-    expect(quantizeStartMs(380, '1/8', BPM)).toBe(500);
+describe('quantizeGridBeats', () => {
+  it('derives the grid from the whole note, in beats', () => {
+    expect(quantizeGridBeats('1/8', 4)).toBe(0.5); // 4/4: an eighth is half a beat
+    expect(quantizeGridBeats('1/16', 4)).toBe(0.25);
+    expect(quantizeGridBeats('off', 4)).toBeNull();
   });
 
-  it('is the identity when off', () => {
-    expect(quantizeStartMs(137, 'off', BPM)).toBe(137);
+  it('counts the time signature’s own beat', () => {
+    // In 6/8 the beat is an eighth, so a sixteenth is half of one.
+    expect(quantizeGridBeats('1/16', 8)).toBe(0.5);
+    expect(quantizeGridBeats('1/8', 8)).toBe(1);
+    // Alla breve counts halves: a sixteenth is an eighth of a beat.
+    expect(quantizeGridBeats('1/16', 2)).toBe(0.125);
   });
 });
 

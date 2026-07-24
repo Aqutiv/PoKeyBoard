@@ -121,6 +121,21 @@ describe('layoutScore', () => {
     expect(symbols.get('fast')).toEqual({ base: 'quarter', dotted: false });
   });
 
+  it('quantizes onto the grid the tempo change starts, not one anchored at zero', () => {
+    // 4/4 at 100 bpm gives 2400 ms bars, so bar 5 starts at 9600 ms. The new
+    // tempo's 1/16 grid does not divide 9600, so an absolute grid would push
+    // this downbeat to ~9635 ms — visibly after the bar line it belongs on.
+    const layout = layoutScore([note({ id: 'downbeat', startMs: 9600, durationMs: 400 })], {
+      ...OPTS,
+      bpm: 100,
+      tempoChanges: [{ atMs: 9600, bpm: 137 }],
+      minMeasures: 1,
+    });
+    expect(layout.measures[4]!.startMs).toBe(9600);
+    expect(layout.chords[0]!.displayStartMs).toBe(9600);
+    expect(measureIndexAt(layout.measures, layout.chords[0]!.displayStartMs)).toBe(4);
+  });
+
   it('finds the measure containing a time, and nothing outside the layout', () => {
     const layout = layoutScore([], { ...OPTS, minMeasures: 3 });
     expect(measureIndexAt(layout.measures, 0)).toBe(0);

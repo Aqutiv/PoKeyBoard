@@ -6,7 +6,7 @@ import type {
   TimeSignature,
 } from '@/domain/takeTypes';
 import { barDurationMs } from '@/utils/timing';
-import { durationToSymbol, quantizeStartMs, type DurationSymbol } from './quantization';
+import { durationToSymbol, quantizeGridBeats, type DurationSymbol } from './quantization';
 import { ledgerLineSteps, midiToStaffPosition, stemGoesDown, type StaffKind } from './staffMapping';
 
 export interface LaidOutNote {
@@ -72,17 +72,28 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     changes: options.tempoChanges,
   });
 
+  // The grid lives in beat space, so it stays anchored to bar lines and to the
+  // tempo changes that start on them. An absolute millisecond grid at the new
+  // tempo would only line up when the change happens to fall on one of its
+  // multiples, and would otherwise drag a downbeat off its own bar line.
+  const gridBeats = quantizeGridBeats(options.quantization, options.timeSignature.denominator);
+  const snapToGrid = (startMs: number): number => {
+    if (gridBeats === null) return startMs;
+    const beat = Math.round(tempoMap.beatAtMs(startMs) / gridBeats) * gridBeats;
+    return Math.round(tempoMap.msAtBeat(beat));
+  };
+
   const laidOut: LaidOutNote[] = notes.map((note) => {
     const position = midiToStaffPosition(note.midi);
-    // Grid and note value follow the tempo the note is played at, so a bar
-    // after a tempo change still reads as the eighths and quarters it is.
+    // The note value follows the tempo the note starts in, so a bar after a
+    // tempo change still reads as the eighths and quarters it is.
     const bpm = tempoMap.bpmAt(note.startMs);
     return {
       id: note.id,
       midi: note.midi,
       startMs: note.startMs,
       durationMs: note.durationMs,
-      displayStartMs: quantizeStartMs(note.startMs, options.quantization, bpm),
+      displayStartMs: snapToGrid(note.startMs),
       staff: position.staff,
       step: position.step,
       accidental: position.accidental,
