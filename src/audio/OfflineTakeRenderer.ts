@@ -113,11 +113,8 @@ export async function renderTakeToBuffer(
     scheduleClicksForRange(
       context,
       context.destination,
-      {
-        bpm: take.tempo.bpm,
-        timeSignature: take.tempo.timeSignature,
-        volume: options.metronomeVolume,
-      },
+      take.tempo,
+      options.metronomeVolume,
       0,
       effectivePlaybackDurationMs(take),
     );

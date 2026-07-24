@@ -1,5 +1,10 @@
 import { audioEngine, type InputNoteEvent } from '@/audio/AudioEngine';
-import { MetronomeEngine } from '@/audio/MetronomeEngine';
+import {
+  constantClickGrid,
+  gridForTake,
+  MetronomeEngine,
+  type ClickGrid,
+} from '@/audio/MetronomeEngine';
 import { forkLibraryTake, isLibraryTakeId } from '@/domain/libraryTakes';
 import { computeTakeDurationMs, sortNotes } from '@/domain/noteEvents';
 import {
@@ -8,10 +13,11 @@ import {
   type NoteEvent,
   type PedalEvent,
 } from '@/domain/takeTypes';
+import { countInMsAt, createTakeTempoMap } from '@/domain/tempoMap';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { newId } from '@/utils/ids';
-import { clamp, countInDurationMs } from '@/utils/timing';
+import { beatDurationMs, clamp } from '@/utils/timing';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
 import { TransportClock } from './transportClock';
 import {
@@ -26,6 +32,8 @@ export type RecordMode = 'overdub' | 'replace';
 const SCHEDULER_INTERVAL_MS = 25;
 const SCHEDULE_AHEAD_MS = 150;
 const START_SLACK_S = 0.06;
+/** Lead-in before the first practice click, so it is never scheduled late. */
+const PRACTICE_CLICK_LEAD_S = 0.05;
 
 interface OpenNote {
   id: string;
@@ -213,10 +221,9 @@ export class TransportController {
     } else if (on) {
       this.configureMetronome();
       if (this.state === 'playing' || this.state === 'recording') {
-        // Align clicks to the take's beat grid.
-        this.metronome.start(this.clock.audioTimeForTakeMs(0));
+        this.metronome.start(this.takeGrid());
       } else if (this.state === 'idle' || this.state === 'paused') {
-        this.metronome.start();
+        this.metronome.start(this.practiceGrid());
       }
     }
     for (const listener of this.stateListeners) listener();
@@ -225,17 +232,45 @@ export class TransportController {
   private configureMetronome(): void {
     const context = audioEngine.getAudioContext();
     if (context) this.metronome.attach(context);
+    this.metronome.configure({ volume: useSettingsStore.getState().metronomeVolume });
+  }
+
+  /**
+   * The take's own beat grid, tied to the running transport clock: clicks land
+   * where the notation draws its beats, tempo changes and all.
+   */
+  private takeGrid(): ClickGrid {
+    return gridForTake(useTakeStore.getState().take.tempo, this.clock);
+  }
+
+  /**
+   * A steady click for practising while stopped, at the tempo in force where
+   * the playhead sits — parked in a slower closing bar, that is what you hear.
+   */
+  private practiceGrid(): ClickGrid {
     const tempo = useTakeStore.getState().take.tempo;
-    this.metronome.configure({
-      bpm: tempo.bpm,
-      timeSignature: tempo.timeSignature,
-      volume: useSettingsStore.getState().metronomeVolume,
-    });
+    const map = createTakeTempoMap(tempo);
+    const bpm = map.bpmAt(this.getPlayheadMs());
+    const startAudioTime = audioEngine.currentTime + PRACTICE_CLICK_LEAD_S;
+    return constantClickGrid(
+      startAudioTime,
+      beatDurationMs(bpm, tempo.timeSignature),
+      tempo.timeSignature.numerator,
+    );
   }
 
   /** Re-apply tempo/volume changes while running. */
   refreshMetronomeConfig(): void {
     this.configureMetronome();
+    if (!this.metronome.isRunning) return;
+    // The count-in's grid is fixed once it starts; everything else re-reads
+    // the take so an edit is heard on the next click.
+    if (this.state === 'countIn') return;
+    if (this.state === 'playing' || this.state === 'recording') {
+      this.metronome.setGrid(this.takeGrid());
+    } else {
+      this.metronome.setGrid(this.practiceGrid());
+    }
   }
 
   // ------------------------------------------------------- recording --
@@ -286,14 +321,27 @@ export class TransportController {
     }
 
     this.configureMetronome();
-    const countMs = countInDurationMs(tempo);
+    // The count-in beats at the tempo the recording will start in, so the
+    // player is counted in at the speed they are about to play.
+    const map = createTakeTempoMap(tempo);
+    const countMs = countInMsAt(map, tempo.timeSignature, tempo.countInBars, startPlayheadMs);
     const beat0 = audioEngine.currentTime + START_SLACK_S;
     this.recordStartMs = startPlayheadMs;
     this.recordAnchorAudioTime = beat0 + countMs / 1000;
     this.clock.start(startPlayheadMs, this.recordAnchorAudioTime);
 
     if (countMs > 0 || this.metronomeOn) {
-      this.metronome.start(beat0);
+      // Count-in clicks are steady and end exactly on the record anchor; the
+      // take's own grid takes over from there.
+      this.metronome.start(
+        countMs > 0
+          ? constantClickGrid(
+              beat0,
+              beatDurationMs(map.bpmAt(startPlayheadMs), tempo.timeSignature),
+              tempo.timeSignature.numerator,
+            )
+          : this.takeGrid(),
+      );
     }
 
     this.send('RECORD');
@@ -309,7 +357,8 @@ export class TransportController {
 
     const begin = () => {
       if (this.state !== 'countIn') return; // stopped during count-in
-      if (!this.metronomeOn) this.metronome.stop();
+      if (this.metronomeOn) this.metronome.setGrid(this.takeGrid());
+      else this.metronome.stop();
       this.beginCapture();
       this.send('COUNT_IN_DONE');
     };
@@ -413,7 +462,7 @@ export class TransportController {
     this.clock.start(fromMs, audioEngine.currentTime + START_SLACK_S);
     if (this.metronomeOn) {
       this.configureMetronome();
-      this.metronome.start(this.clock.audioTimeForTakeMs(0));
+      this.metronome.start(this.takeGrid());
     }
     this.send('PLAY');
     this.beginPlaybackScheduler(notes, fromMs);

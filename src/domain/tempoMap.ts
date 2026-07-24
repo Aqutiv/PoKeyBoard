@@ -1,4 +1,4 @@
-import { beatDurationMs } from '@/utils/timing';
+import { barDurationMs, beatDurationMs } from '@/utils/timing';
 import type { TempoChange, TempoSettings, TimeSignature } from './takeTypes';
 
 /**
@@ -219,6 +219,46 @@ export function createTakeTempoMap(tempo: TempoMapInput): TempoMap {
     );
   }
   return fromSegments(segments, tempo.timeSignature);
+}
+
+/**
+ * The bar line closest to `ms`. A tempo change belongs on one: the new tempo
+ * then starts a bar, as it does in printed music, and the next recorded part
+ * begins on a downbeat.
+ */
+export function barLineNearMs(map: TempoMap, timeSignature: TimeSignature, ms: number): number {
+  const { numerator } = timeSignature;
+  const bar = Math.max(0, Math.round(map.beatAtMs(ms) / numerator));
+  return Math.round(map.msAtBeat(bar * numerator));
+}
+
+/** How long a count-in lasts when it precedes `atMs`, at the tempo in force there. */
+export function countInMsAt(
+  map: TempoMap,
+  timeSignature: TimeSignature,
+  countInBars: number,
+  atMs: number,
+): number {
+  return barDurationMs(map.bpmAt(atMs), timeSignature) * countInBars;
+}
+
+/**
+ * The take's tempo with `bpm` in force from `atMs` onward: the base tempo when
+ * that is the start, otherwise a change there. A tempo that already matches
+ * what is in force just before `atMs` removes the mark instead of adding a
+ * redundant one, so setting a value back undoes it.
+ */
+export function withTempoAt(tempo: TempoSettings, atMs: number, bpm: number): TempoSettings {
+  const at = Math.round(atMs);
+  const others = (tempo.changes ?? []).filter((change) => change.atMs !== at);
+  if (at <= 0) {
+    return { ...tempo, bpm, changes: others.length > 0 ? others : undefined };
+  }
+  // What the tempo would be here without a mark of its own.
+  const inherited = createTakeTempoMap({ ...tempo, changes: others }).bpmAt(at - 1);
+  const changes =
+    bpm === inherited ? others : [...others, { atMs: at, bpm }].sort((a, b) => a.atMs - b.atMs);
+  return { ...tempo, changes: changes.length > 0 ? changes : undefined };
 }
 
 /** Tempo changes as a take stores them: millisecond positions, first one dropped. */
