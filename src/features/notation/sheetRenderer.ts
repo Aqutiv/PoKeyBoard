@@ -10,6 +10,7 @@ import {
   type SheetBeam,
   type SheetChord,
   type SheetMeasure,
+  type SheetNote,
   type SheetPage,
   type SheetPageMetrics,
   type SheetSystem,
@@ -227,32 +228,45 @@ function drawChord(
   staffTop: number,
   beams: SheetBeam[],
 ): void {
-  const rx = HEAD_RX_G * G;
+  const rx = (chord.symbol.base === 'whole' ? 1.25 : 1) * HEAD_RX_G * G;
   const ry = 0.5 * G;
   const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
+  /** Where a note's head sits, once any collision shift is applied. */
+  const headX = (note: SheetNote): number => x + note.headShift * 2 * rx;
 
-  // Ledger lines behind the heads.
+  // Ledger lines behind the heads, each long enough to carry every head on its
+  // step — a displaced head needs the line to reach out to it.
   ctx.lineWidth = STAFF_LINE_W;
-  const drawnLedgers = new Set<number>();
+  const ledgerSpans = new Map<number, { left: number; right: number }>();
   for (const note of chord.notes) {
     for (const step of note.ledger) {
-      if (drawnLedgers.has(step)) continue;
-      drawnLedgers.add(step);
-      const y = staffTop + staffYRel(step);
-      ctx.beginPath();
-      ctx.moveTo(x - rx - 0.28 * G, y);
-      ctx.lineTo(x + rx + 0.28 * G, y);
-      ctx.stroke();
+      const span = ledgerSpans.get(step);
+      const left = headX(note) - rx - 0.28 * G;
+      const right = headX(note) + rx + 0.28 * G;
+      if (span) {
+        span.left = Math.min(span.left, left);
+        span.right = Math.max(span.right, right);
+      } else {
+        ledgerSpans.set(step, { left, right });
+      }
     }
+  }
+  for (const [step, span] of ledgerSpans) {
+    const y = staffTop + staffYRel(step);
+    ctx.beginPath();
+    ctx.moveTo(span.left, y);
+    ctx.lineTo(span.right, y);
+    ctx.stroke();
   }
 
   for (const note of chord.notes) {
     const y = staffTop + staffYRel(note.step);
+    const hx = headX(note);
     ctx.save();
-    ctx.translate(x, y);
+    ctx.translate(hx, y);
     ctx.rotate(-0.32);
     ctx.beginPath();
-    ctx.ellipse(0, 0, chord.symbol.base === 'whole' ? rx * 1.25 : rx, ry, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
     if (hollow) {
       ctx.lineWidth = chord.symbol.base === 'whole' ? 1.3 : 1.1;
       ctx.stroke();
@@ -261,12 +275,12 @@ function drawChord(
     }
     ctx.restore();
 
-    if (note.accidental) drawSharp(ctx, x - 1.5 * G, y);
+    if (note.accidental) drawSharp(ctx, hx - 1.5 * G, y);
     if (chord.symbol.dotted) {
       // Dots sit in a space: shift line-notes up half a space.
       const dotY = y - (note.step % 2 === 0 ? G / 2 : 0);
       ctx.beginPath();
-      ctx.arc(x + 1.3 * G, dotY, 0.22 * G, 0, Math.PI * 2);
+      ctx.arc(hx + 1.3 * G, dotY, 0.22 * G, 0, Math.PI * 2);
       ctx.fill();
     }
   }

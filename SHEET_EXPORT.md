@@ -75,3 +75,8 @@ takes seconds and never touches the audio engine.
   voices beam continuously; where a take has none, voices are derived from
   the written note values per column, and a beam breaks where a second voice
   joins or leaves.
+- Heads that would collide are displaced a head-width clear of the column —
+  the far side of the stem for a second inside a chord, and the up-stem voice
+  for a unison between two. Stems never move with them, so beams are
+  unaffected. Only one displacement is available, so a cluster alternates on
+  and off the column rather than fanning out.

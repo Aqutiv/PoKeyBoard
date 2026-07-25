@@ -9,6 +9,13 @@ import { barDurationMs } from '@/utils/timing';
 import { quantizeGridBeats, symbolForBeats, type DurationSymbol } from './quantization';
 import { ledgerLineSteps, midiToStaffPosition, stemGoesDown, type StaffKind } from './staffMapping';
 
+/**
+ * Whether a notehead is drawn on its chord's column (0) or one head-width to
+ * the left (-1) or right (+1) of it, to clear a head it would otherwise
+ * collide with. The stem never moves with it.
+ */
+export type HeadShift = -1 | 0 | 1;
+
 export interface LaidOutNote {
   id: string;
   midi: number;
@@ -24,6 +31,7 @@ export interface LaidOutNote {
   accidental: '#' | null;
   symbol: DurationSymbol;
   ledger: number[];
+  headShift: HeadShift;
 }
 
 /** Notes of one voice on one staff whose quantized starts coincide. */
@@ -155,6 +163,63 @@ function settleVoiceStems(chords: ChordGroup[], votes: Map<string, number>): voi
   }
 }
 
+/**
+ * Two noteheads a step apart cannot share a column: at best they touch, and on
+ * the same step a filled head hides a hollow one entirely. Engraving moves one
+ * of them a head-width clear, and that is all this does — the stem stays on
+ * the chord's own column, so beams and flags are untouched.
+ */
+function displaceCollidingHeads(voices: ChordGroup[]): void {
+  for (const chord of voices) displaceSeconds(chord);
+  if (voices.length > 1) displaceUnisons(voices);
+}
+
+/**
+ * Inside one chord, the note that resolves a second is the one on the far side
+ * of the stem: reading up the chord when the stem points up, down it when the
+ * stem points down. A displaced head clears the column for the note after it,
+ * so a cluster alternates instead of marching off the staff.
+ */
+function displaceSeconds(chord: ChordGroup): void {
+  // notes are sorted by step ascending; the stem decides which end leads.
+  const order = chord.stemDown ? [...chord.notes].reverse() : chord.notes;
+  const shift: HeadShift = chord.stemDown ? -1 : 1;
+  let previous: LaidOutNote | null = null;
+  for (const note of order) {
+    if (previous !== null && previous.headShift === 0 && Math.abs(note.step - previous.step) <= 1) {
+      note.headShift = shift;
+    }
+    previous = note;
+  }
+}
+
+/**
+ * Across voices, a shared step is a unison. One head keeps the column and the
+ * others move right of it; the one that stays is the down-stem voice, so the
+ * pair reads the way an engraver writes it — down-stem head left, up-stem head
+ * right, both stems clear of each other.
+ */
+function displaceUnisons(voices: ChordGroup[]): void {
+  const byStep = new Map<number, { chord: ChordGroup; note: LaidOutNote }[]>();
+  for (const chord of voices) {
+    for (const note of chord.notes) {
+      const sharing = byStep.get(note.step);
+      if (sharing) sharing.push({ chord, note });
+      else byStep.set(note.step, [{ chord, note }]);
+    }
+  }
+  for (const sharing of byStep.values()) {
+    if (sharing.length < 2) continue;
+    const stays =
+      sharing.find((entry) => entry.chord.stemDown) ?? (sharing[0] as (typeof sharing)[0]);
+    for (const entry of sharing) {
+      // A head already moved to resolve a second inside its own chord is where
+      // it needs to be; moving it again would only trade one clash for another.
+      if (entry !== stays && entry.note.headShift === 0) entry.note.headShift = 1;
+    }
+  }
+}
+
 export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
   const barMs = barDurationMs(options.bpm, options.timeSignature);
   const minMeasures = options.minMeasures ?? 4;
@@ -194,6 +259,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       accidental: position.accidental,
       symbol: symbolForBeats(beatsHeld(note), denominator),
       ledger: ledgerLineSteps(position.step),
+      headShift: 0,
     };
   });
 
@@ -210,12 +276,17 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
 
   const chords: ChordGroup[] = [];
   const stemVotes = new Map<string, number>();
+  const byStack: ChordGroup[][] = [];
   for (const stack of stacks.values()) {
     const voices = chordsInStack(stack);
     if (voices.length > 1) collectStemVotes(voices, stemVotes);
+    byStack.push(voices);
     chords.push(...voices);
   }
   settleVoiceStems(chords, stemVotes);
+  // Which way a head moves depends on where its stem points, so this has to
+  // wait until the stems have settled.
+  for (const voices of byStack) displaceCollidingHeads(voices);
   chords.sort((a, b) => a.displayStartMs - b.displayStartMs);
 
   let maxEndMs = 0;

@@ -80,6 +80,88 @@ describe('layoutScore', () => {
     expect(lower.stemDown).toBe(true); // bottom voice stems down
   });
 
+  describe('colliding noteheads', () => {
+    it('leaves a chord of thirds on the column', () => {
+      const layout = layoutScore(
+        [
+          note({ id: 'a', midi: 60, startMs: 0 }),
+          note({ id: 'b', midi: 64, startMs: 0 }),
+          note({ id: 'c', midi: 67, startMs: 0 }),
+        ],
+        OPTS,
+      );
+      expect(layout.chords[0]!.notes.map((n) => n.headShift)).toEqual([0, 0, 0]);
+    });
+
+    it('moves the upper note of a second when the stem points up', () => {
+      // C4 + D4: low enough that the chord stems up, so the second resolves
+      // upward, to the right of the stem.
+      const layout = layoutScore(
+        [note({ id: 'a', midi: 60, startMs: 0 }), note({ id: 'b', midi: 62, startMs: 0 })],
+        OPTS,
+      );
+      const chord = layout.chords[0]!;
+      expect(chord.stemDown).toBe(false);
+      expect(chord.notes.map((n) => [n.midi, n.headShift])).toEqual([
+        [60, 0],
+        [62, 1],
+      ]);
+    });
+
+    it('moves the lower note of a second when the stem points down', () => {
+      const layout = layoutScore(
+        [note({ id: 'a', midi: 81, startMs: 0 }), note({ id: 'b', midi: 83, startMs: 0 })],
+        OPTS,
+      );
+      const chord = layout.chords[0]!;
+      expect(chord.stemDown).toBe(true);
+      expect(chord.notes.map((n) => [n.midi, n.headShift])).toEqual([
+        [81, -1],
+        [83, 0],
+      ]);
+    });
+
+    it('alternates through a cluster instead of marching off the staff', () => {
+      const layout = layoutScore(
+        [60, 62, 64, 65].map((midi, i) => note({ id: `n${i}`, midi, startMs: 0 })),
+        OPTS,
+      );
+      // Each displaced head clears the column for the one above it.
+      expect(layout.chords[0]!.notes.map((n) => n.headShift)).toEqual([0, 1, 0, 1]);
+    });
+
+    it('moves the up-stem voice off a unison with the down-stem voice', () => {
+      const layout = layoutScore(
+        [
+          note({ id: 'held', midi: 72, startMs: 0, durationMs: 1000, voice: 0 }),
+          note({ id: 'run', midi: 72, startMs: 0, durationMs: 250, voice: 1 }),
+        ],
+        OPTS,
+      );
+      expect(layout.chords).toHaveLength(2);
+      const [upper, lower] = layout.chords as [
+        (typeof layout.chords)[0],
+        (typeof layout.chords)[0],
+      ];
+      expect(upper.stemDown).toBe(false);
+      expect(lower.stemDown).toBe(true);
+      // The down-stem head keeps the column; the up-stem head clears it.
+      expect(lower.notes[0]!.headShift).toBe(0);
+      expect(upper.notes[0]!.headShift).toBe(1);
+    });
+
+    it('leaves voices that do not share a step alone', () => {
+      const layout = layoutScore(
+        [
+          note({ id: 'held', midi: 79, startMs: 0, durationMs: 1000, voice: 0 }),
+          note({ id: 'run', midi: 64, startMs: 0, durationMs: 250, voice: 1 }),
+        ],
+        OPTS,
+      );
+      expect(layout.chords.map((c) => c.notes[0]!.headShift)).toEqual([0, 0]);
+    });
+  });
+
   it('numbers voices from the source when it has them, else by pitch', () => {
     const imported = layoutScore(
       [

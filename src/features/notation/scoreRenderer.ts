@@ -1,5 +1,10 @@
 import type { TimeSignature } from '@/domain/takeTypes';
-import { firstChordIndexAt, type ChordGroup, type ScoreLayout } from './notationLayout';
+import {
+  firstChordIndexAt,
+  type ChordGroup,
+  type LaidOutNote,
+  type ScoreLayout,
+} from './notationLayout';
 import { ledgerLineSteps, midiToStaffPosition, type StaffKind } from './staffMapping';
 
 /** Staff geometry (CSS pixels; the canvas is DPR-scaled by the component). */
@@ -297,16 +302,18 @@ function drawChord(
   const rx = GAP * 0.64;
   const ry = GAP * 0.5;
   const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
+  /** Where a note's head sits, once any collision shift is applied. */
+  const headX = (note: LaidOutNote): number => x + note.headShift * 2 * rx;
 
-  // Ledger lines first, behind heads.
+  // Ledger lines first, behind heads, reaching out to any displaced head.
   ctx.strokeStyle = palette.staffLine;
   ctx.lineWidth = 1;
   for (const note of chord.notes) {
     for (const step of ledgerLineSteps(note.step)) {
       const y = yForStep(view, note.staff, step) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(x - rx - 4, y);
-      ctx.lineTo(x + rx + 4, y);
+      ctx.moveTo(headX(note) - rx - 4, y);
+      ctx.lineTo(headX(note) + rx + 4, y);
       ctx.stroke();
     }
   }
@@ -316,13 +323,14 @@ function drawChord(
 
   for (const note of chord.notes) {
     const y = yForStep(view, note.staff, note.step);
+    const hx = headX(note);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
     const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
     const color = sounding ? palette.highlight : palette.note;
 
     ctx.save();
-    ctx.translate(x, y);
+    ctx.translate(hx, y);
     ctx.rotate(-0.32);
     ctx.beginPath();
     ctx.ellipse(0, 0, chord.symbol.base === 'whole' ? rx * 1.25 : rx, ry, 0, 0, Math.PI * 2);
@@ -341,12 +349,12 @@ function drawChord(
       ctx.font = `${GAP * 1.5}px system-ui, sans-serif`;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText('#', x - rx - 3, y);
+      ctx.fillText('#', hx - rx - 3, y);
     }
     if (chord.symbol.dotted) {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(x + rx + 5, y - (note.step % 2 === 0 ? GAP / 2 : 0), 2, 0, Math.PI * 2);
+      ctx.arc(hx + rx + 5, y - (note.step % 2 === 0 ? GAP / 2 : 0), 2, 0, Math.PI * 2);
       ctx.fill();
     }
   }
