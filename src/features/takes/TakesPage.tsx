@@ -5,6 +5,7 @@ import { isScoreFileName } from '@/domain/mxlContainer';
 import { ShareMenu } from '@/features/export/ShareMenu';
 import { useI18n, useMessages } from '@/i18n/i18nContext';
 import { useTakeStore } from '@/state/useTakeStore';
+import { MenuButton } from '@/ui/MenuButton';
 import { shareOrDownloadFile, downloadBlob } from '@/utils/download';
 import { toErrorMessageKey } from '@/utils/errors';
 import { formatDurationMs } from '@/utils/timing';
@@ -195,12 +196,16 @@ export function TakesPage() {
           >
             {m.takes.newTake}
           </button>
-          <button type="button" className="btn" onClick={() => scoreInputRef.current?.click()}>
-            {m.takes.importMxl}
-          </button>
-          <button type="button" className="btn" onClick={() => importInputRef.current?.click()}>
-            {m.takes.importJson}
-          </button>
+          <MenuButton
+            label={m.takes.importTrigger}
+            menuLabel={m.takes.importMenuLabel}
+            triggerClassName="btn"
+            align="right"
+            items={[
+              { label: m.takes.importMxl, onSelect: () => scoreInputRef.current?.click() },
+              { label: m.takes.importJson, onSelect: () => importInputRef.current?.click() },
+            ]}
+          />
         </div>
       </header>
 

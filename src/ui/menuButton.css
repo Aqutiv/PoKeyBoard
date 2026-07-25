@@ -1,0 +1,43 @@
+/* Dropdown menu button (Share on Play/Takes, Import on Takes). */
+.menu-button {
+  position: relative;
+  display: inline-flex;
+}
+
+.menu-button__panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  min-width: 180px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  box-shadow: var(--shadow-2);
+  z-index: 30;
+}
+
+.menu-button__panel--right {
+  right: 0;
+}
+
+.menu-button__panel--left {
+  left: 0;
+}
+
+.menu-button__item {
+  min-height: var(--touch-target);
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  border-radius: calc(var(--radius-m) - 3px);
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+}
+
+.menu-button__item:hover,
+.menu-button__item:focus-visible {
+  background: var(--surface-3);
+}

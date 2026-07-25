@@ -100,6 +100,41 @@ test.describe('takes library', () => {
     await expect(page.getByLabel('Import MusicXML file')).not.toHaveAttribute('accept');
   });
 
+  test('the Import menu opens each file picker', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    const trigger = page.getByRole('button', { name: 'Import', exact: true });
+    await trigger.click();
+    const menu = page.getByRole('menu', { name: 'Import options' });
+    await expect(menu.getByRole('menuitem')).toHaveText(['Music score (MXL)', 'Take file (JSON)']);
+
+    // The picker only opens if the item kept user activation through the close.
+    const scoreChooser = page.waitForEvent('filechooser');
+    await menu.getByRole('menuitem', { name: 'Music score (MXL)' }).click();
+    expect(await (await scoreChooser).element().getAttribute('aria-label')).toBe(
+      'Import MusicXML file',
+    );
+    await expect(menu).toHaveCount(0);
+
+    await trigger.click();
+    const takeChooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: 'Take file (JSON)' }).click();
+    expect(await (await takeChooser).element().getAttribute('aria-label')).toBe(
+      'Import take JSON file',
+    );
+  });
+
+  test('Escape closes the Import menu', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await expect(page.getByRole('menu', { name: 'Import options' })).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('menu', { name: 'Import options' })).toHaveCount(0);
+  });
+
   test('backs up all takes as a download', async ({ page }) => {
     await gotoAppReady(page);
     await recordShortTake(page);
