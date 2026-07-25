@@ -85,8 +85,10 @@ export const es: Messages = {
   takes: {
     title: 'Tomas',
     newTake: 'Nueva toma',
-    importJson: 'Importar JSON',
-    importMxl: 'Importar MXL',
+    importTrigger: 'Importar',
+    importMenuLabel: 'Opciones de importación',
+    importJson: 'Archivo de toma (JSON)',
+    importMxl: 'Partitura (MXL)',
     loading: 'Cargando…',
     empty:
       'Aún no hay tomas. Graba algo en la pantalla Tocar o importa un archivo JSON de una toma.',

@@ -143,6 +143,8 @@ export interface Messages {
   takes: {
     title: string;
     newTake: string;
+    importTrigger: string;
+    importMenuLabel: string;
     importJson: string;
     importMxl: string;
     loading: string;

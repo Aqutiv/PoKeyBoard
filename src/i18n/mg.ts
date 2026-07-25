@@ -87,8 +87,10 @@ export const mg: Messages = {
   takes: {
     title: 'Rakitra',
     newTake: 'Rakitra vaovao',
-    importJson: 'Ampidiro JSON',
-    importMxl: 'Ampidiro MXL',
+    importTrigger: 'Ampidiro',
+    importMenuLabel: 'Safidy fampidirana',
+    importJson: 'Rakitra (JSON)',
+    importMxl: 'Partitiora (MXL)',
     loading: 'Am-pakàna…',
     empty:
       'Mbola tsy misy rakitra. Mandrakitra zavatra eo amin’ny efijery Mitendry, na ampidiro rakitra JSON.',

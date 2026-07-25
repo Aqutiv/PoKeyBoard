@@ -87,8 +87,10 @@ export const en: Messages = {
   takes: {
     title: 'Takes',
     newTake: 'New take',
-    importJson: 'Import JSON',
-    importMxl: 'Import MXL',
+    importTrigger: 'Import',
+    importMenuLabel: 'Import options',
+    importJson: 'Take file (JSON)',
+    importMxl: 'Music score (MXL)',
     loading: 'Loading…',
     empty: 'No takes yet. Record something on the Play screen, or import a take JSON file.',
     draft: 'Draft',

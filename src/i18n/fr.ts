@@ -86,8 +86,10 @@ export const fr: Messages = {
   takes: {
     title: 'Prises',
     newTake: 'Nouvelle prise',
-    importJson: 'Importer JSON',
-    importMxl: 'Importer MXL',
+    importTrigger: 'Importer',
+    importMenuLabel: 'Options d’importation',
+    importJson: 'Fichier de prise (JSON)',
+    importMxl: 'Partition (MXL)',
     loading: 'Chargement…',
     empty:
       'Aucune prise pour l’instant. Enregistrez quelque chose sur l’écran Jouer, ou importez un fichier JSON de prise.',

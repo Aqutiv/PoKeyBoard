@@ -1,3 +1,4 @@
+/* Keep free of overflow: the Import menu panel drops out of this row. */
 .takes-toolbar {
   display: flex;
   gap: 8px;
