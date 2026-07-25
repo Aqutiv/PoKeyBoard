@@ -233,6 +233,12 @@ function drawChord(
   const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
   /** Where a note's head sits, once any collision shift is applied. */
   const headX = (note: SheetNote): number => x + note.headShift * 2 * rx;
+  // Accidentals hang off the left of the whole chord and dots off its right:
+  // measured from the owning head alone, either would land on top of a head
+  // displaced past it.
+  const shifts = chord.notes.map((note) => note.headShift);
+  const leftEdgeX = x + Math.min(...shifts) * 2 * rx;
+  const rightEdgeX = x + Math.max(...shifts) * 2 * rx;
 
   // Ledger lines behind the heads, each long enough to carry every head on its
   // step — a displaced head needs the line to reach out to it.
@@ -275,12 +281,12 @@ function drawChord(
     }
     ctx.restore();
 
-    if (note.accidental) drawSharp(ctx, hx - 1.5 * G, y);
+    if (note.accidental) drawSharp(ctx, leftEdgeX - 1.5 * G, y);
     if (chord.symbol.dotted) {
       // Dots sit in a space: shift line-notes up half a space.
       const dotY = y - (note.step % 2 === 0 ? G / 2 : 0);
       ctx.beginPath();
-      ctx.arc(hx + 1.3 * G, dotY, 0.22 * G, 0, Math.PI * 2);
+      ctx.arc(rightEdgeX + 1.3 * G, dotY, 0.22 * G, 0, Math.PI * 2);
       ctx.fill();
     }
   }

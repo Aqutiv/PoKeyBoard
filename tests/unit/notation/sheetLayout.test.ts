@@ -334,6 +334,27 @@ describe('layoutSheet', () => {
       ).toBe(true);
     });
 
+    it('places a chord’s seconds again when the beam turns its stem around', () => {
+      // C4+D4 on its own stems up, so D moves right. The high E5 that follows
+      // pulls the beam's majority the other way, and the pair has to be laid
+      // out again against the new stem or its heads sit on the wrong side.
+      const result = sheet([
+        note({ id: 'c', midi: 60, startMs: 0, durationMs: 250 }),
+        note({ id: 'd', midi: 62, startMs: 0, durationMs: 250 }),
+        note({ id: 'e', midi: 88, startMs: 250, durationMs: 250 }),
+      ]);
+      const measure = allMeasures(result)[0]!;
+      expect(measure.beams).toHaveLength(1);
+      expect(measure.beams[0]!.stemDown).toBe(true);
+      const chord = measure.columns[0]!.treble[0]!;
+      expect(chord.stemDown).toBe(true);
+      // Stem down means the lower head is the one that steps aside, to the left.
+      expect(chord.notes.map((n) => [n.midi, n.headShift])).toEqual([
+        [60, -1],
+        [62, 0],
+      ]);
+    });
+
     it('breaks a derived voice out of its beam where the voices meet', () => {
       // The same music from a source with no voice numbers. Voices are then
       // only a pitch rank within each column, so the eighth that shares a

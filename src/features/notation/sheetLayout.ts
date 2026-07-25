@@ -1,6 +1,7 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import { beatDurationMs, clamp, wholeNoteDurationMs } from '@/utils/timing';
 import {
+  displaceSeconds,
   measureIndexAt,
   type ChordGroup,
   type HeadShift,
@@ -552,7 +553,13 @@ function emitBeam(measure: SheetMeasure, staff: StaffKind, run: BeamMember[]): v
     y2Pt: y1 + slant,
   });
   for (const member of run) {
-    member.chord.stemDown = stemDown;
+    if (member.chord.stemDown !== stemDown) {
+      // Beaming is the last word on stem direction, and a chord's seconds are
+      // placed relative to its stem — so a chord the run turns around has to
+      // place them again, or its heads sit on the wrong side of the new stem.
+      member.chord.stemDown = stemDown;
+      displaceSeconds(member.chord);
+    }
     member.chord.beamId = beamId;
   }
 }

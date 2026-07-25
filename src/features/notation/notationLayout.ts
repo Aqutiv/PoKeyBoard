@@ -164,14 +164,21 @@ function settleVoiceStems(chords: ChordGroup[], votes: Map<string, number>): voi
 }
 
 /**
- * Two noteheads a step apart cannot share a column: at best they touch, and on
- * the same step a filled head hides a hollow one entirely. Engraving moves one
- * of them a head-width clear, and that is all this does — the stem stays on
- * the chord's own column, so beams and flags are untouched.
+ * A step is half a staff space and a notehead is a whole one high, so heads a
+ * step apart already overlap, and on the same step a filled head hides a
+ * hollow one entirely. Engraving moves one of them a head-width clear, and
+ * that is all this does — the stem stays on the chord's own column, so beams
+ * and flags are untouched.
  */
 function displaceCollidingHeads(voices: ChordGroup[]): void {
   for (const chord of voices) displaceSeconds(chord);
-  if (voices.length > 1) displaceUnisons(voices);
+  if (voices.length > 1) displaceAcrossVoices(voices);
+}
+
+/** The least a chord has to expose for its heads to be placed. */
+export interface StemmedChord {
+  stemDown: boolean;
+  notes: { step: number; headShift: HeadShift }[];
 }
 
 /**
@@ -179,12 +186,16 @@ function displaceCollidingHeads(voices: ChordGroup[]): void {
  * of the stem: reading up the chord when the stem points up, down it when the
  * stem points down. A displaced head clears the column for the note after it,
  * so a cluster alternates instead of marching off the staff.
+ *
+ * Safe to run again if the stem later turns around — beaming can do that — so
+ * it starts by putting every head back on the column.
  */
-function displaceSeconds(chord: ChordGroup): void {
+export function displaceSeconds(chord: StemmedChord): void {
+  for (const note of chord.notes) note.headShift = 0;
   // notes are sorted by step ascending; the stem decides which end leads.
   const order = chord.stemDown ? [...chord.notes].reverse() : chord.notes;
   const shift: HeadShift = chord.stemDown ? -1 : 1;
-  let previous: LaidOutNote | null = null;
+  let previous: (typeof chord.notes)[number] | null = null;
   for (const note of order) {
     if (previous !== null && previous.headShift === 0 && Math.abs(note.step - previous.step) <= 1) {
       note.headShift = shift;
@@ -194,28 +205,30 @@ function displaceSeconds(chord: ChordGroup): void {
 }
 
 /**
- * Across voices, a shared step is a unison. One head keeps the column and the
- * others move right of it; the one that stays is the down-stem voice, so the
- * pair reads the way an engraver writes it — down-stem head left, up-stem head
- * right, both stems clear of each other.
+ * Heads of different voices clash on the same terms — a shared step, or steps
+ * a single step apart. The up-stem voice is the one that yields, so a unison
+ * reads the way an engraver writes it: down-stem head on the column, up-stem
+ * head to its right, both stems clear of each other.
  */
-function displaceUnisons(voices: ChordGroup[]): void {
-  const byStep = new Map<number, { chord: ChordGroup; note: LaidOutNote }[]>();
+function displaceAcrossVoices(voices: ChordGroup[]): void {
+  const heads: { chord: ChordGroup; note: LaidOutNote }[] = [];
   for (const chord of voices) {
-    for (const note of chord.notes) {
-      const sharing = byStep.get(note.step);
-      if (sharing) sharing.push({ chord, note });
-      else byStep.set(note.step, [{ chord, note }]);
-    }
+    for (const note of chord.notes) heads.push({ chord, note });
   }
-  for (const sharing of byStep.values()) {
-    if (sharing.length < 2) continue;
-    const stays =
-      sharing.find((entry) => entry.chord.stemDown) ?? (sharing[0] as (typeof sharing)[0]);
-    for (const entry of sharing) {
-      // A head already moved to resolve a second inside its own chord is where
-      // it needs to be; moving it again would only trade one clash for another.
-      if (entry !== stays && entry.note.headShift === 0) entry.note.headShift = 1;
+  heads.sort((a, b) => a.note.step - b.note.step);
+
+  for (let i = 0; i < heads.length; i += 1) {
+    const lower = heads[i] as (typeof heads)[number];
+    for (let j = i + 1; j < heads.length; j += 1) {
+      const upper = heads[j] as (typeof heads)[number];
+      if (upper.note.step - lower.note.step > 1) break; // sorted: no closer pair follows
+      // A chord has already settled its own seconds, and a head that moved for
+      // one is where it needs to be — moving it again only trades the clash.
+      if (upper.chord === lower.chord) continue;
+      if (lower.note.headShift !== 0 || upper.note.headShift !== 0) continue;
+      const bothSameWay = lower.chord.stemDown === upper.chord.stemDown;
+      const yields = bothSameWay ? upper : lower.chord.stemDown ? upper : lower;
+      yields.note.headShift = 1;
     }
   }
 }

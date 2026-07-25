@@ -150,6 +150,34 @@ describe('layoutScore', () => {
       expect(upper.notes[0]!.headShift).toBe(1);
     });
 
+    it('separates a second between two voices, not just a unison', () => {
+      // C5 in one voice against D5 in the other: a step apart is half a staff
+      // space, and a head is a whole one high, so these overlap too.
+      const layout = layoutScore(
+        [
+          note({ id: 'held', midi: 72, startMs: 0, durationMs: 1000, voice: 0 }),
+          note({ id: 'run', midi: 74, startMs: 0, durationMs: 250, voice: 1 }),
+        ],
+        OPTS,
+      );
+      expect(layout.chords).toHaveLength(2);
+      const shifts = layout.chords.map((c) => [c.stemDown, c.notes[0]!.headShift]);
+      // Exactly one head leaves the column, and it is the up-stem voice's.
+      expect(shifts.filter(([, shift]) => shift !== 0)).toHaveLength(1);
+      expect(shifts).toContainEqual([false, 1]);
+    });
+
+    it('leaves voices a third apart alone', () => {
+      const layout = layoutScore(
+        [
+          note({ id: 'held', midi: 72, startMs: 0, durationMs: 1000, voice: 0 }),
+          note({ id: 'run', midi: 76, startMs: 0, durationMs: 250, voice: 1 }),
+        ],
+        OPTS,
+      );
+      expect(layout.chords.map((c) => c.notes[0]!.headShift)).toEqual([0, 0]);
+    });
+
     it('leaves voices that do not share a step alone', () => {
       const layout = layoutScore(
         [

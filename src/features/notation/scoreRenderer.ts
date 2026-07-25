@@ -304,6 +304,12 @@ function drawChord(
   const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
   /** Where a note's head sits, once any collision shift is applied. */
   const headX = (note: LaidOutNote): number => x + note.headShift * 2 * rx;
+  // Accidentals hang off the left of the whole chord and dots off its right:
+  // measured from the owning head alone, either would land on top of a head
+  // displaced past it.
+  const shifts = chord.notes.map((note) => note.headShift);
+  const leftEdgeX = x + Math.min(...shifts) * 2 * rx;
+  const rightEdgeX = x + Math.max(...shifts) * 2 * rx;
 
   // Ledger lines first, behind heads, reaching out to any displaced head.
   ctx.strokeStyle = palette.staffLine;
@@ -349,12 +355,12 @@ function drawChord(
       ctx.font = `${GAP * 1.5}px system-ui, sans-serif`;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText('#', hx - rx - 3, y);
+      ctx.fillText('#', leftEdgeX - rx - 3, y);
     }
     if (chord.symbol.dotted) {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(hx + rx + 5, y - (note.step % 2 === 0 ? GAP / 2 : 0), 2, 0, Math.PI * 2);
+      ctx.arc(rightEdgeX + rx + 5, y - (note.step % 2 === 0 ? GAP / 2 : 0), 2, 0, Math.PI * 2);
       ctx.fill();
     }
   }
