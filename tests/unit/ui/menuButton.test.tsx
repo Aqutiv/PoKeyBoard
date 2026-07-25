@@ -62,4 +62,40 @@ describe('MenuButton', () => {
     fireEvent.pointerDown(document.body);
     expect(screen.queryByRole('menu')).toBeNull();
   });
+
+  it('returns focus to the trigger when the panel it held focus in closes', () => {
+    renderMenu();
+    const trigger = screen.getByRole('button', { name: 'Import' });
+
+    // Escape from an item: the focused element is about to be unmounted.
+    fireEvent.click(trigger);
+    screen.getByRole('menuitem', { name: 'Take file (JSON)' }).focus();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.activeElement).toBe(trigger);
+
+    // Choosing an item closes it too.
+    fireEvent.click(trigger);
+    const item = screen.getByRole('menuitem', { name: 'Music score (MXL)' });
+    item.focus();
+    fireEvent.click(item);
+    expect(document.activeElement).toBe(trigger);
+  });
+
+  it('leaves focus alone when the menu closes without holding it', () => {
+    render(<button type="button">Elsewhere</button>);
+    renderMenu();
+    const elsewhere = screen.getByRole('button', { name: 'Elsewhere' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+    elsewhere.focus();
+    fireEvent.pointerDown(elsewhere);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(document.activeElement).toBe(elsewhere);
+
+    // Escape while focus sits outside must not yank it back either.
+    fireEvent.click(screen.getByRole('button', { name: 'Import' }));
+    elsewhere.focus();
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(document.activeElement).toBe(elsewhere);
+  });
 });

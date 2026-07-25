@@ -125,14 +125,19 @@ test.describe('takes library', () => {
     );
   });
 
-  test('Escape closes the Import menu', async ({ page }) => {
+  test('Escape closes the Import menu and returns focus to the trigger', async ({ page }) => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Takes' }).click();
 
     await page.getByRole('button', { name: 'Import', exact: true }).click();
     await expect(page.getByRole('menu', { name: 'Import options' })).toBeVisible();
+
+    // Tab into an item, so Escape is about to unmount the focused element.
+    await page.keyboard.press('Tab');
+    await expect(page.getByRole('menuitem', { name: 'Music score (MXL)' })).toBeFocused();
     await page.keyboard.press('Escape');
     await expect(page.getByRole('menu', { name: 'Import options' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Import', exact: true })).toBeFocused();
   });
 
   test('backs up all takes as a download', async ({ page }) => {

@@ -36,11 +36,19 @@ export function MenuButton({
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+
+  // Closing unmounts the panel, so focus inside it would fall to the body.
+  const holdsFocus = () =>
+    rootRef.current !== null && rootRef.current.contains(document.activeElement);
 
   useEffect(() => {
     if (!open) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false);
+      if (event.key !== 'Escape') return;
+      const returnFocus = holdsFocus();
+      setOpen(false);
+      if (returnFocus) triggerRef.current?.focus();
     };
     const onPointerDown = (event: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(event.target as Node)) setOpen(false);
@@ -56,6 +64,7 @@ export function MenuButton({
   return (
     <span className="menu-button" ref={rootRef}>
       <button
+        ref={triggerRef}
         type="button"
         className={triggerClassName}
         aria-haspopup="menu"
@@ -82,6 +91,7 @@ export function MenuButton({
                 // this click's turn and keeps user activation.
                 setOpen(false);
                 item.onSelect();
+                triggerRef.current?.focus();
               }}
             >
               {item.label}
