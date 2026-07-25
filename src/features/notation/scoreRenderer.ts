@@ -1,11 +1,18 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import {
   firstChordIndexAt,
+  measureIndexAt,
   type ChordGroup,
   type LaidOutNote,
   type ScoreLayout,
 } from './notationLayout';
-import { ledgerLineSteps, midiToStaffPosition, type StaffKind } from './staffMapping';
+import {
+  defaultClefFor,
+  ledgerLineSteps,
+  midiToStaffPosition,
+  type ClefKind,
+  type StaffKind,
+} from './staffMapping';
 
 /** Staff geometry (CSS pixels; the canvas is DPR-scaled by the component). */
 export const GAP = 9;
@@ -16,6 +23,9 @@ export const BASS_TOP = TREBLE_TOP + STAFF_H + STAFF_SPACING;
 export const SCORE_MIN_HEIGHT = BASS_TOP + STAFF_H + 38;
 /** Fixed gutter: brace, clefs, and time signature; notes scroll beneath it. */
 export const GUTTER = 58;
+
+/** Horizontal pitch of stacked accidental columns, left of the chord. */
+const ACCIDENTAL_COLUMN_PX = GAP * 1.4;
 
 /** Clearance above/below an extreme note head: half-height plus padding. */
 const HEAD_CLEARANCE = GAP * 0.5 + 6;
@@ -164,7 +174,7 @@ export function drawScore(
   drawOpenNotes(ctx, view, input.openNotes, input.recording, palette);
   drawGhosts(ctx, view, input, palette);
   drawPlayhead(ctx, view, input.playheadMs, palette);
-  drawGutter(ctx, view, input.timeSignature, palette);
+  drawGutter(ctx, view, input, palette);
 }
 
 function drawStaffLines(
@@ -215,6 +225,17 @@ function drawMeasures(
       const previous = layout.measures[measure.index - 1];
       if (previous && previous.bpm !== measure.bpm) {
         drawTempoMark(ctx, x + 16, view.trebleTop - 20, measure.bpm, palette);
+        ctx.strokeStyle = palette.barLine;
+      }
+      // So is a clef, right after the bar line it takes over on.
+      if (previous) {
+        ctx.fillStyle = palette.noteDim;
+        for (const staff of ['treble', 'bass'] as const) {
+          if (previous.clefs[staff] === measure.clefs[staff]) continue;
+          const top = staff === 'treble' ? view.trebleTop : view.bassTop;
+          drawInlineClef(ctx, measure.clefs[staff], x + 4, top, palette);
+        }
+        ctx.fillStyle = palette.measureNumber;
         ctx.strokeStyle = palette.barLine;
       }
     }
@@ -355,7 +376,7 @@ function drawChord(
       ctx.font = `${GAP * 1.5}px system-ui, sans-serif`;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText('#', leftEdgeX - rx - 3, y);
+      ctx.fillText('#', leftEdgeX - rx - 3 - note.accidentalColumn * ACCIDENTAL_COLUMN_PX, y);
     }
     if (chord.symbol.dotted) {
       ctx.fillStyle = color;
@@ -508,12 +529,74 @@ function detectGlyphSupport(ctx: CanvasRenderingContext2D): { treble: boolean; b
   return glyphSupport;
 }
 
+/** Scale a clef announcing a change mid-score is drawn at. */
+const INLINE_CLEF_SCALE = 0.72;
+
+/**
+ * A clef announced mid-score, drawn smaller than the gutter's and seated on
+ * the staff it belongs to. Scaling about the staff's centre keeps it there.
+ */
+function drawInlineClef(
+  ctx: CanvasRenderingContext2D,
+  clef: ClefKind,
+  x: number,
+  staffTop: number,
+  palette: ScorePalette,
+): void {
+  ctx.save();
+  const centreY = staffTop + STAFF_H / 2;
+  ctx.translate(x, centreY);
+  ctx.scale(INLINE_CLEF_SCALE, INLINE_CLEF_SCALE);
+  ctx.translate(-x, -centreY);
+  if (clef === 'treble') drawFallbackTrebleClef(ctx, x + 6, staffTop, palette);
+  else drawFallbackBassClef(ctx, x + 6, staffTop, palette);
+  ctx.restore();
+}
+
+/** The clef each staff reads under at `ms`, or the nearest one either side. */
+function clefsAt(layout: ScoreLayout, ms: number): Record<StaffKind, ClefKind> {
+  const index = measureIndexAt(layout.measures, ms);
+  const measure =
+    index !== null
+      ? layout.measures[index]
+      : ms < 0
+        ? layout.measures[0]
+        : layout.measures[layout.measures.length - 1];
+  return measure?.clefs ?? { treble: defaultClefFor('treble'), bass: defaultClefFor('bass') };
+}
+
+/** The clef glyph for a staff, falling back to a drawn one where unsupported. */
+function drawGutterClef(
+  ctx: CanvasRenderingContext2D,
+  clef: ClefKind,
+  staffTop: number,
+  palette: ScorePalette,
+): void {
+  const support = detectGlyphSupport(ctx);
+  if (clef === 'treble') {
+    if (support.treble) {
+      ctx.font = `${GAP * 4.1}px serif`;
+      ctx.fillText('\u{1D11E}', 8, staffTop + STAFF_H - GAP + GAP * 1.4);
+    } else {
+      drawFallbackTrebleClef(ctx, 14, staffTop, palette);
+    }
+    return;
+  }
+  if (support.bass) {
+    ctx.font = `${GAP * 3.2}px serif`;
+    ctx.fillText('\u{1D122}', 8, staffTop + GAP * 3.1);
+  } else {
+    drawFallbackBassClef(ctx, 14, staffTop, palette);
+  }
+}
+
 function drawGutter(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
-  timeSignature: TimeSignature,
+  input: ScoreRenderInput,
   palette: ScorePalette,
 ): void {
+  const { timeSignature } = input;
   ctx.fillStyle = palette.gutterBg;
   ctx.fillRect(0, 0, GUTTER, view.heightPx);
   ctx.strokeStyle = palette.barLine;
@@ -524,25 +607,15 @@ function drawGutter(
   ctx.lineTo(4.5, view.bassTop + STAFF_H);
   ctx.stroke();
 
-  const support = detectGlyphSupport(ctx);
   ctx.fillStyle = palette.noteDim;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
-  // Treble (G) clef.
-  if (support.treble) {
-    ctx.font = `${GAP * 4.1}px serif`;
-    ctx.fillText('\u{1D11E}', 8, view.trebleTop + STAFF_H - GAP + GAP * 1.4);
-  } else {
-    drawFallbackTrebleClef(ctx, 14, view.trebleTop, palette);
-  }
-  // Bass (F) clef.
-  if (support.bass) {
-    ctx.font = `${GAP * 3.2}px serif`;
-    ctx.fillText('\u{1D122}', 8, view.bassTop + GAP * 3.1);
-  } else {
-    drawFallbackBassClef(ctx, 14, view.bassTop, palette);
-  }
+  // The gutter sits over the music, so it has to name the clef in force where
+  // the view actually starts — not the one the piece opened with.
+  const clefs = clefsAt(input.layout, view.scrollMs);
+  drawGutterClef(ctx, clefs.treble, view.trebleTop, palette);
+  drawGutterClef(ctx, clefs.bass, view.bassTop, palette);
 
   // Time signature on both staffs.
   ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;

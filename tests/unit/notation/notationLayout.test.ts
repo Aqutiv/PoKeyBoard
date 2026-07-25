@@ -190,6 +190,95 @@ describe('layoutScore', () => {
     });
   });
 
+  describe('clefs', () => {
+    it('defaults each staff to its own clef', () => {
+      const layout = layoutScore([note({ id: 'a', midi: 60, startMs: 0 })], OPTS);
+      expect(layout.measures[0]!.clefs).toEqual({ treble: 'treble', bass: 'bass' });
+    });
+
+    it('reads a staff under the clef the source gave it', () => {
+      // The Mozart case: a left hand at C4 written under a G clef sits a
+      // ledger line below the bass staff instead of one above it.
+      const layout = layoutScore(
+        [note({ id: 'lh', midi: 60, startMs: 0, staff: 'bass', clef: 'treble' })],
+        OPTS,
+      );
+      const chord = layout.chords[0]!;
+      expect(chord.staff).toBe('bass');
+      expect(chord.clef).toBe('treble');
+      expect(chord.notes[0]!.step).toBe(-2);
+      expect(layout.measures[0]!.clefs).toEqual({ treble: 'treble', bass: 'treble' });
+    });
+
+    it('carries a clef forward until something replaces it', () => {
+      const layout = layoutScore(
+        [
+          note({ id: 'a', midi: 60, startMs: 0, staff: 'bass', clef: 'treble' }),
+          // Nothing in bar 2 on either staff; bar 3 turns the clef back.
+          note({ id: 'b', midi: 48, startMs: 4000, staff: 'bass' }),
+        ],
+        OPTS,
+      );
+      expect(layout.measures.map((m) => m.clefs.bass)).toEqual([
+        'treble',
+        'treble',
+        'bass',
+        'bass',
+      ]);
+    });
+  });
+
+  describe('stacked accidentals', () => {
+    it('leaves a lone sharp in the first column', () => {
+      const layout = layoutScore([note({ id: 'a', midi: 61, startMs: 0 })], OPTS);
+      expect(layout.chords[0]!.notes[0]!.accidentalColumn).toBe(0);
+    });
+
+    it('moves a sharp out a column when one above it is too close', () => {
+      // C#4 and D#4 are one step apart; two sharps cannot share a column.
+      const layout = layoutScore(
+        [note({ id: 'a', midi: 61, startMs: 0 }), note({ id: 'b', midi: 63, startMs: 0 })],
+        OPTS,
+      );
+      const notes = layout.chords[0]!.notes;
+      expect(notes.map((n) => [n.midi, n.accidentalColumn])).toEqual([
+        [61, 1],
+        [63, 0],
+      ]);
+    });
+
+    it('lets sharps far enough apart share the first column', () => {
+      // C#4 and C#5 are seven steps apart, well clear of each other.
+      const layout = layoutScore(
+        [note({ id: 'a', midi: 61, startMs: 0 }), note({ id: 'b', midi: 73, startMs: 0 })],
+        OPTS,
+      );
+      expect(layout.chords[0]!.notes.every((n) => n.accidentalColumn === 0)).toBe(true);
+    });
+
+    it('reuses a column once the run has climbed clear of it', () => {
+      // C#4 and D#4 clash, but C#6 is far above both and rejoins column 0.
+      const layout = layoutScore(
+        [61, 63, 85].map((midi, i) => note({ id: `n${i}`, midi, startMs: 0 })),
+        OPTS,
+      );
+      expect(layout.chords[0]!.notes.map((n) => [n.midi, n.accidentalColumn])).toEqual([
+        [61, 1],
+        [63, 0],
+        [85, 0],
+      ]);
+    });
+
+    it('gives every sharp of a tight cluster its own column', () => {
+      // Four sharps inside four steps: nothing can share, so each steps out.
+      const layout = layoutScore(
+        [61, 63, 66, 68].map((midi, i) => note({ id: `n${i}`, midi, startMs: 0 })),
+        OPTS,
+      );
+      expect(layout.chords[0]!.notes.map((n) => n.accidentalColumn)).toEqual([3, 2, 1, 0]);
+    });
+  });
+
   it('numbers voices from the source when it has them, else by pitch', () => {
     const imported = layoutScore(
       [

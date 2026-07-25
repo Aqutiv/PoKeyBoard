@@ -53,6 +53,13 @@ export interface InstrumentSettings {
 /** The two staffs of the grand staff, in the order they are drawn. */
 export type NoteStaff = 'treble' | 'bass';
 
+/**
+ * The clef a staff is read under. Named for the staff each one normally
+ * carries; either can appear on either staff, which is how a left-hand passage
+ * written high stays on the bass staff without a ladder of ledger lines.
+ */
+export type NoteClef = 'treble' | 'bass';
+
 export interface NoteEvent {
   id: string;
   midi: number;
@@ -71,6 +78,12 @@ export interface NoteEvent {
    * voices from the written note values instead.
    */
   voice?: number;
+  /**
+   * The clef in force where the source drew this note, when it is not the one
+   * the staff normally carries. Absent means the staff's own clef, which is
+   * what every recorded take and most imports use.
+   */
+  clef?: NoteClef;
 }
 
 export interface PedalEvent {

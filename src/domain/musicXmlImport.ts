@@ -10,6 +10,7 @@ import {
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
   MAX_TEMPO_CHANGES,
+  type NoteClef,
   type NoteEvent,
   type NoteStaff,
   type PedalEvent,
@@ -47,6 +48,7 @@ interface QNote {
   /** Engraving-only hints; undefined when the score does not say. */
   staff: NoteStaff | undefined;
   voice: number | undefined;
+  clef: NoteClef | undefined;
 }
 
 interface QPedal {
@@ -67,6 +69,7 @@ interface PendingTie {
   velocity: number;
   staff: NoteStaff | undefined;
   voice: number | undefined;
+  clef: NoteClef | undefined;
 }
 
 interface CollectedScore {
@@ -116,6 +119,7 @@ function pendingToNote(pending: PendingTie): QNote {
     // A tie sounds as one note, so the whole chain belongs where it started.
     staff: pending.staff,
     voice: pending.voice,
+    clef: pending.clef,
   };
 }
 
@@ -176,6 +180,8 @@ function collectPart(
   let currentTs: TimeSignature | null = null;
   let staffCount = 1;
   const pendingTies = new Map<string, PendingTie>();
+  /** Staff number → the clef currently in force on it, once it is declared. */
+  const clefByStaff = new Map<number, NoteClef>();
   /** `${staff}|${source voice}` → the small voice number we assign it. */
   const voiceNumbers = new Map<string, number>();
   /** Per staff, the next voice number to hand out. */
@@ -220,6 +226,19 @@ function collectPart(
     nextVoice.set(staffKey, assigned + 1);
     voiceNumbers.set(key, assigned);
     return assigned;
+  };
+
+  /**
+   * The clef a note is read under, but only when it is not the one its staff
+   * normally carries — the notation falls back to that, so saying nothing
+   * keeps ordinary scores exactly as they were. A C clef (alto, tenor) has no
+   * equivalent here and is ignored, leaving the staff's own clef in force.
+   */
+  const clefOf = (staff: NoteStaff | undefined, staffNumber: number): NoteClef | undefined => {
+    const declared = clefByStaff.get(staffNumber);
+    if (declared === undefined) return undefined;
+    const normal: NoteClef = staff === 'bass' ? 'bass' : 'treble';
+    return declared === normal ? undefined : declared;
   };
 
   const applySound = (sound: Element, atQ: number): void => {
@@ -278,6 +297,18 @@ function collectPart(
           if (declared !== null && declared > 0) divisions = declared;
           const staves = numberByTag(el, 'staves');
           if (staves !== null && staves >= 1) staffCount = Math.round(staves);
+          // Clefs can turn over mid-part, and the lower staff of a piano score
+          // routinely takes a G clef where the left hand climbs.
+          for (const child of el.children) {
+            if (child.tagName !== 'clef') continue;
+            const sign = textByTag(child, 'sign');
+            if (sign !== 'G' && sign !== 'F') continue; // C clefs have no equivalent
+            const number = attrNumber(child, 'number');
+            clefByStaff.set(
+              number === null ? 1 : Math.round(number),
+              sign === 'G' ? 'treble' : 'bass',
+            );
+          }
           const time = childByTag(el, 'time');
           if (time) {
             const beats = textByTag(time, 'beats');
@@ -323,8 +354,10 @@ function collectPart(
 
           const percent = attrNumber(el, 'dynamics') ?? dynamicsPercent ?? DEFAULT_DYNAMICS_PERCENT;
           const velocity = clamp((percent / 100) * (FORTE_MIDI_VELOCITY / 127), 0, 1);
+          const staffNumber = Math.round(numberByTag(el, 'staff') ?? 1);
           const staff = staffOf(el);
           const voice = voiceOf(el, staff);
+          const clef = clefOf(staff, staffNumber);
           const tieTypes = collectTieTypes(el);
           const hasStart = tieTypes.has('start');
           const hasStop = tieTypes.has('stop');
@@ -341,16 +374,16 @@ function collectPart(
                 pendingTies.set(key, pending); // middle of a chain
               else out.notes.push(pendingToNote(pending));
             } else if (hasStart) {
-              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice });
+              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef });
             } else {
-              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice }); // orphan stop
+              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef }); // orphan stop
             }
           } else if (hasStart) {
             const stale = pendingTies.get(key);
             if (stale) out.notes.push(pendingToNote(stale));
-            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice });
+            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef });
           } else {
-            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice });
+            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef });
           }
           break;
         }
@@ -482,6 +515,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       // single-staff sources stay byte-identical to what they were before.
       ...(note.staff !== undefined ? { staff: note.staff } : {}),
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
+      ...(note.clef !== undefined ? { clef: note.clef } : {}),
     };
   });
   let maxEndMs = 0;

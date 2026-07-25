@@ -7,7 +7,14 @@ import type {
 } from '@/domain/takeTypes';
 import { barDurationMs } from '@/utils/timing';
 import { quantizeGridBeats, symbolForBeats, type DurationSymbol } from './quantization';
-import { ledgerLineSteps, midiToStaffPosition, stemGoesDown, type StaffKind } from './staffMapping';
+import {
+  defaultClefFor,
+  ledgerLineSteps,
+  midiToStaffPosition,
+  stemGoesDown,
+  type ClefKind,
+  type StaffKind,
+} from './staffMapping';
 
 /**
  * Whether a notehead is drawn on its chord's column (0) or one head-width to
@@ -25,6 +32,8 @@ export interface LaidOutNote {
   /** Where the note is drawn (visual quantization only). */
   displayStartMs: number;
   staff: StaffKind;
+  /** The clef this note is read under; usually the staff's own. */
+  clef: ClefKind;
   /** The voice the source numbered, if any; see `ChordGroup.voice`. */
   voice?: number;
   step: number;
@@ -32,11 +41,19 @@ export interface LaidOutNote {
   symbol: DurationSymbol;
   ledger: number[];
   headShift: HeadShift;
+  /**
+   * Which column left of the chord this note's accidental is drawn in, 0 being
+   * nearest the heads. Sharps are tall enough to foul each other, so notes
+   * close together stack outward instead of sharing one column.
+   */
+  accidentalColumn: number;
 }
 
 /** Notes of one voice on one staff whose quantized starts coincide. */
 export interface ChordGroup {
   staff: StaffKind;
+  /** The clef in force where this chord falls. */
+  clef: ClefKind;
   displayStartMs: number;
   /** Sorted by step ascending (lowest note first). */
   notes: LaidOutNote[];
@@ -58,6 +75,8 @@ export interface MeasureInfo {
   bpm: number;
   /** True when no chord starts inside the measure (draws a whole rest). */
   empty: boolean;
+  /** The clef each staff is read under here, carried forward between changes. */
+  clefs: Record<StaffKind, ClefKind>;
 }
 
 export interface ScoreLayout {
@@ -127,6 +146,7 @@ function chordsInStack(stack: LaidOutNote[]): ChordGroup[] {
     const first = voice.notes[0] as LaidOutNote;
     return {
       staff: first.staff,
+      clef: first.clef,
       displayStartMs: first.displayStartMs,
       notes: voice.notes,
       voice: first.voice ?? index,
@@ -134,6 +154,40 @@ function chordsInStack(stack: LaidOutNote[]): ChordGroup[] {
       symbol: voice.symbol,
     };
   });
+}
+
+/** Steps closer than this leave two sharps overlapping in one column. */
+const ACCIDENTAL_CLEARANCE_STEPS = 5;
+
+/**
+ * Give each accidental in a chord a column, working down from the top. A sharp
+ * stands about two and a half staff spaces tall — five steps — so two of them
+ * any closer than that cannot share a column and the lower one moves out a
+ * place. Most chords need only column 0.
+ */
+function stackAccidentals(voices: ChordGroup[]): void {
+  const marked = [];
+  for (const chord of voices) {
+    for (const note of chord.notes) {
+      if (note.accidental !== null) marked.push(note);
+    }
+  }
+  if (marked.length < 2) return;
+  marked.sort((a, b) => b.step - a.step);
+
+  /** The lowest step already placed in each column, top-down. */
+  const lowestInColumn: number[] = [];
+  for (const note of marked) {
+    let column = 0;
+    while (
+      lowestInColumn[column] !== undefined &&
+      (lowestInColumn[column] as number) - note.step < ACCIDENTAL_CLEARANCE_STEPS
+    ) {
+      column += 1;
+    }
+    lowestInColumn[column] = note.step;
+    note.accidentalColumn = column;
+  }
 }
 
 /**
@@ -259,7 +313,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     tempoMap.beatAtMs(note.startMs + note.durationMs) - tempoMap.beatAtMs(note.startMs);
 
   const laidOut: LaidOutNote[] = notes.map((note) => {
-    const position = midiToStaffPosition(note.midi, note.staff);
+    const position = midiToStaffPosition(note.midi, note.staff, note.clef);
     return {
       id: note.id,
       midi: note.midi,
@@ -267,12 +321,14 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       durationMs: note.durationMs,
       displayStartMs: snapToGrid(note.startMs),
       staff: position.staff,
+      clef: position.clef,
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
       step: position.step,
       accidental: position.accidental,
       symbol: symbolForBeats(beatsHeld(note), denominator),
       ledger: ledgerLineSteps(position.step),
       headShift: 0,
+      accidentalColumn: 0,
     };
   });
 
@@ -299,7 +355,10 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   settleVoiceStems(chords, stemVotes);
   // Which way a head moves depends on where its stem points, so this has to
   // wait until the stems have settled.
-  for (const voices of byStack) displaceCollidingHeads(voices);
+  for (const voices of byStack) {
+    displaceCollidingHeads(voices);
+    stackAccidentals(voices);
+  }
   chords.sort((a, b) => a.displayStartMs - b.displayStartMs);
 
   let maxEndMs = 0;
@@ -309,19 +368,32 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   }
   const spans = tempoMap.measureSpans(maxEndMs, minMeasures);
 
-  const measureHasChord = new Array<boolean>(spans.length).fill(false);
+  const chordsByMeasure: ChordGroup[][] = spans.map(() => []);
   for (const chord of chords) {
     const index = measureIndexAt(spans, chord.displayStartMs);
-    if (index !== null) measureHasChord[index] = true;
+    if (index !== null) (chordsByMeasure[index] as ChordGroup[]).push(chord);
   }
 
-  const measures: MeasureInfo[] = spans.map((span) => ({
-    index: span.index,
-    startMs: span.startMs,
-    endMs: span.endMs,
-    bpm: span.bpm,
-    empty: !measureHasChord[span.index],
-  }));
+  // A clef stands until something replaces it, so a measure with nothing on a
+  // staff keeps reading under whatever the measure before it did.
+  let carried: Record<StaffKind, ClefKind> = {
+    treble: defaultClefFor('treble'),
+    bass: defaultClefFor('bass'),
+  };
+  const measures: MeasureInfo[] = spans.map((span) => {
+    const inMeasure = chordsByMeasure[span.index] as ChordGroup[];
+    for (const chord of inMeasure) {
+      if (chord.clef !== carried[chord.staff]) carried = { ...carried, [chord.staff]: chord.clef };
+    }
+    return {
+      index: span.index,
+      startMs: span.startMs,
+      endMs: span.endMs,
+      bpm: span.bpm,
+      empty: inMeasure.length === 0,
+      clefs: carried,
+    };
+  });
 
   const last = measures[measures.length - 1];
   return { chords, measures, barMs, totalMs: last ? last.endMs : 0 };
