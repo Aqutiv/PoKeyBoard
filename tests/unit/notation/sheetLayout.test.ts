@@ -315,6 +315,46 @@ describe('layoutSheet', () => {
       expect(measure.beams.every((beam) => beam.stemDown)).toBe(true);
     });
 
+    it('carries notehead displacement through to the drawn column', () => {
+      // Two voices in unison: one head keeps the column, the other clears it,
+      // so the half note's hollow head is not painted over by the eighth.
+      const result = sheet([
+        note({ id: 'held', midi: 72, startMs: 0, durationMs: 1000, voice: 0 }),
+        note({ id: 'run', midi: 72, startMs: 0, durationMs: 250, voice: 1 }),
+      ]);
+      const column = allMeasures(result)[0]!.columns[0]!;
+      expect(column.treble.map((c) => [c.symbol.base, c.notes[0]!.headShift])).toEqual([
+        ['half', 1],
+        ['eighth', 0],
+      ]);
+      // Both chords still share one column, so the stems stay a head apart and
+      // the beams built from them are untouched.
+      expect(
+        column.treble.every((c) => c.notes[0]!.step === column.treble[0]!.notes[0]!.step),
+      ).toBe(true);
+    });
+
+    it('places a chord’s seconds again when the beam turns its stem around', () => {
+      // C4+D4 on its own stems up, so D moves right. The high E5 that follows
+      // pulls the beam's majority the other way, and the pair has to be laid
+      // out again against the new stem or its heads sit on the wrong side.
+      const result = sheet([
+        note({ id: 'c', midi: 60, startMs: 0, durationMs: 250 }),
+        note({ id: 'd', midi: 62, startMs: 0, durationMs: 250 }),
+        note({ id: 'e', midi: 88, startMs: 250, durationMs: 250 }),
+      ]);
+      const measure = allMeasures(result)[0]!;
+      expect(measure.beams).toHaveLength(1);
+      expect(measure.beams[0]!.stemDown).toBe(true);
+      const chord = measure.columns[0]!.treble[0]!;
+      expect(chord.stemDown).toBe(true);
+      // Stem down means the lower head is the one that steps aside, to the left.
+      expect(chord.notes.map((n) => [n.midi, n.headShift])).toEqual([
+        [60, -1],
+        [62, 0],
+      ]);
+    });
+
     it('breaks a derived voice out of its beam where the voices meet', () => {
       // The same music from a source with no voice numbers. Voices are then
       // only a pitch rank within each column, so the eighth that shares a
