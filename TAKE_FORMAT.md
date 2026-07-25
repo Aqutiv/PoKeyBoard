@@ -18,7 +18,10 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
     "changes": [{ "atMs": 60000, "bpm": 104 }]
   },
   "instrument": { "id": "grand-piano", "masterVolume": 0.85, "reverbMix": 0.18 },
-  "notes": [{ "id": "uuid", "midi": 60, "startMs": 0, "durationMs": 420, "velocity": 0.78 }],
+  "notes": [
+    { "id": "uuid", "midi": 60, "startMs": 0, "durationMs": 420, "velocity": 0.78 },
+    { "id": "uuid", "midi": 48, "startMs": 0, "durationMs": 420, "velocity": 0.7, "staff": "bass" }
+  ],
   "pedalEvents": [
     { "atMs": 1000, "down": true },
     { "atMs": 1800, "down": false }
@@ -33,6 +36,11 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 - `bpm` 40–240; `countInBars` 0|1|2; denominator 2|4|8|16.
 - `tempo.changes` is **optional** (absent means one tempo throughout): sorted, `atMs ≥ 1`, `bpm` 40–240, ≤ 1024 entries. Note timing is always absolute ms, so a tempo map never moves a note — it tells the notation where bar lines fall and which note values to draw. Added without a schema bump: older takes parse untouched, and an older build drops the field.
 - `quantization` `off | 1/8 | 1/16` — **display only**; raw performance timing is never quantized.
+- A note's `staff` (`treble | bass`) and `voice` (integer 0–15) are **optional engraving hints
+  from an imported score**, never audible: `staff` is the hand the source wrote the note on and
+  overrides the notation's middle-C split, `voice` says which notes share a stem. Recorded takes
+  omit both and the notation falls back to pitch and written note value. Added the same way
+  `tempo.changes` was — no schema bump, older takes parse untouched, an older build drops them.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 
 ## Import pipeline

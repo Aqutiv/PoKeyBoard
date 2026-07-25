@@ -44,6 +44,27 @@ describe('parseTakeJson', () => {
     expect(take.durationMs).toBe(900); // recomputed from notes, not trusted
   });
 
+  it('round-trips the optional engraving hints on a note', () => {
+    const raw = specExampleTake();
+    const notes = raw.notes as Record<string, unknown>[];
+    notes[0]!.staff = 'bass';
+    notes[0]!.voice = 1;
+    const { take, repairs } = parseTakeJson(raw);
+    expect(repairs).toEqual([]);
+    // Sorted by (startMs, midi, id), so the hinted note is still first.
+    expect(take.notes[0]!.staff).toBe('bass');
+    expect(take.notes[0]!.voice).toBe(1);
+    // A note without them keeps the keys absent rather than gaining undefined.
+    expect(take.notes[1]).not.toHaveProperty('staff');
+    expect(take.notes[1]).not.toHaveProperty('voice');
+  });
+
+  it('rejects an unknown staff name', () => {
+    const raw = specExampleTake();
+    (raw.notes as Record<string, unknown>[])[0]!.staff = 'middle';
+    expect(() => parseTakeJson(raw)).toThrow(ImportValidationError);
+  });
+
   it('rejects invalid MIDI values', () => {
     const raw = specExampleTake();
     (raw.notes as Record<string, unknown>[])[0]!.midi = 128;

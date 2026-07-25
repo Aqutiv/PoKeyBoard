@@ -64,8 +64,9 @@ function staffChords(
 ): { column: SheetColumn; chord: SheetChord }[] {
   const out: { column: SheetColumn; chord: SheetChord }[] = [];
   for (const column of measure.columns) {
-    const chord = staff === 'treble' ? column.treble : column.bass;
-    if (chord) out.push({ column, chord });
+    for (const chord of staff === 'treble' ? column.treble : column.bass) {
+      out.push({ column, chord });
+    }
   }
   return out;
 }
@@ -284,6 +285,63 @@ describe('layoutSheet', () => {
       expect(measure.beams).toHaveLength(1);
       expect(measure.beams[0]!.stemDown).toBe(true); // tie → down
       expect(staffChords(measure, 'treble').every(({ chord }) => chord.stemDown)).toBe(true);
+    });
+
+    it('beams each voice of a staff on its own', () => {
+      // A half note held over four eighths in the same hand: the eighths beam
+      // per beat as usual and the held note takes no part in it.
+      const result = sheet([
+        note({ id: 'held', midi: 79, startMs: 0, durationMs: 1000, voice: 0 }),
+        ...[0, 250, 500, 750].map((startMs, i) =>
+          note({ id: `e${i}`, midi: 64, startMs, durationMs: 250, voice: 1 }),
+        ),
+      ]);
+      const measure = allMeasures(result)[0]!;
+      expect(measure.beams).toHaveLength(2);
+      const chords = staffChords(measure, 'treble');
+      // The first column carries both voices; the rest carry only the eighths.
+      expect(chords.map(({ chord }) => [chord.voice, chord.beamId])).toEqual([
+        [0, null],
+        [1, 0],
+        [1, 0],
+        [1, 1],
+        [1, 1],
+      ]);
+      // The held note keeps its own value rather than absorbing the eighths.
+      expect(chords[0]!.chord.symbol).toEqual({ base: 'half', dotted: false });
+      // Outer voices stem apart and stay that way, beat 2 included, even
+      // though the eighths there are the only thing struck on the staff.
+      expect(chords[0]!.chord.stemDown).toBe(false);
+      expect(measure.beams.every((beam) => beam.stemDown)).toBe(true);
+    });
+
+    it('breaks a derived voice out of its beam where the voices meet', () => {
+      // The same music from a source with no voice numbers. Voices are then
+      // only a pitch rank within each column, so the eighth that shares a
+      // column with the held note ranks second and cannot beam to the rest.
+      const result = sheet([
+        note({ id: 'held', midi: 79, startMs: 0, durationMs: 1000 }),
+        ...[0, 250, 500, 750].map((startMs, i) =>
+          note({ id: `e${i}`, midi: 64, startMs, durationMs: 250 }),
+        ),
+      ]);
+      const measure = allMeasures(result)[0]!;
+      const chords = staffChords(measure, 'treble');
+      expect(chords.map(({ chord }) => [chord.voice, chord.beamId])).toEqual([
+        [0, null], // the half note
+        [1, null], // its column-mate, ranked below it
+        [0, null], // alone in its beat, so nothing to beam to
+        [0, 0],
+        [0, 0],
+      ]);
+      // Every note still keeps its own written value, which is the point.
+      expect(chords.map(({ chord }) => chord.symbol.base)).toEqual([
+        'half',
+        'eighth',
+        'eighth',
+        'eighth',
+        'eighth',
+      ]);
     });
 
     it('clamps beam slant and keeps every stem at minimum length', () => {

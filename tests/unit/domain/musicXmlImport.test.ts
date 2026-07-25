@@ -170,6 +170,92 @@ describe('voices, chords, and gaps', () => {
   });
 });
 
+describe('staves and voices', () => {
+  const GRAND_DIV1 =
+    '<attributes><divisions>1</divisions>' +
+    '<time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves></attributes>';
+
+  it('sends the lower staff to the bass clef however high it is written', () => {
+    // The shape of Mozart K. 545's opening: a right-hand C5 over a left-hand
+    // Alberti figure written at C4/E4/G4 — every note at or above middle C.
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          GRAND_DIV1 +
+            note('C', 5, 4, '<voice>1</voice><staff>1</staff>') +
+            '<backup><duration>4</duration></backup>' +
+            note('C', 4, 1, '<voice>5</voice><staff>2</staff>') +
+            note('G', 4, 1, '<voice>5</voice><staff>2</staff>') +
+            note('E', 4, 1, '<voice>5</voice><staff>2</staff>') +
+            note('G', 4, 1, '<voice>5</voice><staff>2</staff>'),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => [n.midi, n.staff])).toEqual([
+      [60, 'bass'],
+      [72, 'treble'],
+      [67, 'bass'],
+      [64, 'bass'],
+      [67, 'bass'],
+    ]);
+    // Each staff renumbers its own voices from 0, so "1" and "5" both land there.
+    expect(take.notes.every((n) => n.voice === 0)).toBe(true);
+  });
+
+  it('treats an omitted staff element as the top staff', () => {
+    const take = musicXmlToTake(scoreWith(measure(1, GRAND_DIV1 + note('C', 4, 1))));
+    expect(take.notes[0]!.staff).toBe('treble');
+  });
+
+  it('leaves a single-staff part without staff or voice hints', () => {
+    const take = musicXmlToTake(scoreWith(measure(1, DIV1 + note('C', 4, 1))));
+    expect(take.notes[0]).not.toHaveProperty('staff');
+    expect(take.notes[0]).not.toHaveProperty('voice');
+  });
+
+  it('numbers a second voice on the same staff separately', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          GRAND_DIV1 +
+            note('C', 5, 4, '<voice>1</voice><staff>1</staff>') +
+            '<backup><duration>4</duration></backup>' +
+            note('E', 4, 1, '<voice>2</voice><staff>1</staff>'),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => [n.midi, n.staff, n.voice])).toEqual([
+      [64, 'treble', 1],
+      [72, 'treble', 0],
+    ]);
+  });
+
+  it('keeps the staff of the note a tie chain started on', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          GRAND_DIV1 +
+            note('C', 4, 4, '<voice>5</voice><staff>2</staff><tie type="start"/>') +
+            '<backup><duration>4</duration></backup>' +
+            rest(4),
+        ) +
+          measure(
+            2,
+            note('C', 4, 4, '<voice>5</voice><staff>2</staff><tie type="stop"/>') +
+              '<backup><duration>4</duration></backup>' +
+              rest(4),
+          ),
+      ),
+    );
+    expect(take.notes).toHaveLength(1);
+    expect(take.notes[0]!.staff).toBe('bass');
+    expect(take.notes[0]!.durationMs).toBe(4000);
+  });
+});
+
 describe('ties', () => {
   const tieStart = '<tie type="start"/>';
   const tieStop = '<tie type="stop"/>';

@@ -18,18 +18,26 @@ export interface LaidOutNote {
   /** Where the note is drawn (visual quantization only). */
   displayStartMs: number;
   staff: StaffKind;
+  /** The voice the source numbered, if any; see `ChordGroup.voice`. */
+  voice?: number;
   step: number;
   accidental: '#' | null;
   symbol: DurationSymbol;
   ledger: number[];
 }
 
-/** Notes on one staff whose quantized starts coincide share one stem. */
+/** Notes of one voice on one staff whose quantized starts coincide. */
 export interface ChordGroup {
   staff: StaffKind;
   displayStartMs: number;
   /** Sorted by step ascending (lowest note first). */
   notes: LaidOutNote[];
+  /**
+   * Which line of the staff's polyphony this is, 0 for the topmost. Taken from
+   * the source score when it numbers voices (stable, so beams run across
+   * columns) and otherwise from the chord's pitch rank in its stack.
+   */
+  voice: number;
   stemDown: boolean;
   symbol: DurationSymbol;
 }
@@ -63,6 +71,90 @@ export interface LayoutOptions {
   minMeasures?: number;
 }
 
+/**
+ * What makes two notes of a stack part of the same stem. The source's voice
+ * where there is one; otherwise the written note value, which is the most a
+ * recorded take can tell us — notes of equal length struck together are a
+ * chord, and anything else is a second line of music.
+ */
+function voiceIdentity(note: LaidOutNote): string {
+  if (note.voice !== undefined) return `v${note.voice}`;
+  return `d${note.symbol.base}${note.symbol.dotted ? '.' : ''}`;
+}
+
+/** Outer voices stem away from each other; a lone voice follows the staff. */
+function stemDownFor(index: number, count: number, averageStep: number): boolean {
+  if (count === 1) return stemGoesDown(averageStep);
+  if (index === 0) return false; // top voice up
+  if (index === count - 1) return true; // bottom voice down
+  return stemGoesDown(averageStep);
+}
+
+/**
+ * One stack of simultaneous same-staff notes → a chord per voice, topmost
+ * first. A single-voice stack yields exactly the chord this layout has always
+ * produced, so recorded takes engrave unchanged.
+ */
+function chordsInStack(stack: LaidOutNote[]): ChordGroup[] {
+  const byVoice = new Map<string, LaidOutNote[]>();
+  for (const note of stack) {
+    const key = voiceIdentity(note);
+    const group = byVoice.get(key);
+    if (group) group.push(note);
+    else byVoice.set(key, [note]);
+  }
+
+  const voices = [...byVoice.values()].map((groupNotes) => {
+    groupNotes.sort((a, b) => a.step - b.step || a.midi - b.midi);
+    const averageStep = groupNotes.reduce((sum, note) => sum + note.step, 0) / groupNotes.length;
+    let longest = groupNotes[0] as LaidOutNote;
+    for (const note of groupNotes) {
+      if (note.durationMs > longest.durationMs) longest = note;
+    }
+    return { notes: groupNotes, averageStep, symbol: longest.symbol };
+  });
+  voices.sort((a, b) => b.averageStep - a.averageStep);
+
+  return voices.map((voice, index) => {
+    const first = voice.notes[0] as LaidOutNote;
+    return {
+      staff: first.staff,
+      displayStartMs: first.displayStartMs,
+      notes: voice.notes,
+      voice: first.voice ?? index,
+      stemDown: stemDownFor(index, voices.length, voice.averageStep),
+      symbol: voice.symbol,
+    };
+  });
+}
+
+/**
+ * Record which way each voice stemmed where it shared a staff with another.
+ * Only voices the source numbered count: a derived voice is a pitch rank
+ * within one stack, so voting on it would drag plain single-line passages
+ * along with whatever the one polyphonic moment decided.
+ */
+function collectStemVotes(voices: ChordGroup[], votes: Map<string, number>): void {
+  for (const chord of voices) {
+    if ((chord.notes[0] as LaidOutNote).voice === undefined) continue;
+    const key = `${chord.staff}|${chord.voice}`;
+    votes.set(key, (votes.get(key) ?? 0) + (chord.stemDown ? 1 : -1));
+  }
+}
+
+/**
+ * An engraver commits a voice to one stem direction and keeps it there, so a
+ * staff's two lines stay readable through the beats where one of them happens
+ * to be sounding alone. Voices that never meet another are left as they were.
+ */
+function settleVoiceStems(chords: ChordGroup[], votes: Map<string, number>): void {
+  if (votes.size === 0) return;
+  for (const chord of chords) {
+    const vote = votes.get(`${chord.staff}|${chord.voice}`);
+    if (vote !== undefined && vote !== 0) chord.stemDown = vote > 0;
+  }
+}
+
 export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
   const barMs = barDurationMs(options.bpm, options.timeSignature);
   const minMeasures = options.minMeasures ?? 4;
@@ -89,7 +181,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     tempoMap.beatAtMs(note.startMs + note.durationMs) - tempoMap.beatAtMs(note.startMs);
 
   const laidOut: LaidOutNote[] = notes.map((note) => {
-    const position = midiToStaffPosition(note.midi);
+    const position = midiToStaffPosition(note.midi, note.staff);
     return {
       id: note.id,
       midi: note.midi,
@@ -97,6 +189,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       durationMs: note.durationMs,
       displayStartMs: snapToGrid(note.startMs),
       staff: position.staff,
+      ...(note.voice !== undefined ? { voice: note.voice } : {}),
       step: position.step,
       accidental: position.accidental,
       symbol: symbolForBeats(beatsHeld(note), denominator),
@@ -104,29 +197,25 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     };
   });
 
-  const groups = new Map<string, LaidOutNote[]>();
+  // Notes on one staff that start together form a stack, which engraves as one
+  // chord per voice — a held note and a run beneath it keep their own written
+  // values instead of being fused into a single stem.
+  const stacks = new Map<string, LaidOutNote[]>();
   for (const note of laidOut) {
     const key = `${note.staff}:${note.displayStartMs}`;
-    const group = groups.get(key);
-    if (group) group.push(note);
-    else groups.set(key, [note]);
+    const stack = stacks.get(key);
+    if (stack) stack.push(note);
+    else stacks.set(key, [note]);
   }
 
-  const chords: ChordGroup[] = [...groups.values()].map((groupNotes) => {
-    groupNotes.sort((a, b) => a.step - b.step || a.midi - b.midi);
-    const averageStep = groupNotes.reduce((sum, note) => sum + note.step, 0) / groupNotes.length;
-    let longest = groupNotes[0] as LaidOutNote;
-    for (const note of groupNotes) {
-      if (note.durationMs > longest.durationMs) longest = note;
-    }
-    return {
-      staff: (groupNotes[0] as LaidOutNote).staff,
-      displayStartMs: (groupNotes[0] as LaidOutNote).displayStartMs,
-      notes: groupNotes,
-      stemDown: stemGoesDown(averageStep),
-      symbol: longest.symbol,
-    };
-  });
+  const chords: ChordGroup[] = [];
+  const stemVotes = new Map<string, number>();
+  for (const stack of stacks.values()) {
+    const voices = chordsInStack(stack);
+    if (voices.length > 1) collectStemVotes(voices, stemVotes);
+    chords.push(...voices);
+  }
+  settleVoiceStems(chords, stemVotes);
   chords.sort((a, b) => a.displayStartMs - b.displayStartMs);
 
   let maxEndMs = 0;

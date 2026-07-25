@@ -17,6 +17,7 @@ import {
   DEFAULT_SAMPLE_PACK_VERSION,
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
+  MAX_NOTE_VOICE,
   MAX_TAKE_MS,
   MAX_TEMPO_CHANGES,
   type Take,
@@ -30,6 +31,12 @@ export const noteEventSchema = z.object({
   startMs: timelineMs,
   durationMs: z.number().int().min(1).max(MAX_NOTE_DURATION_MS),
   velocity: z.number().min(0).max(1),
+  // Engraving hints from an imported score, additive and optional for the same
+  // reason `tempo.changes` is: takes written before they existed still parse
+  // untouched, no schema version bump, and an older build drops them silently.
+  // Neither one is audible, so playback and exports ignore them entirely.
+  staff: z.enum(['treble', 'bass']).optional(),
+  voice: z.number().int().min(0).max(MAX_NOTE_VOICE).optional(),
 });
 
 export const pedalEventSchema = z.object({

@@ -64,4 +64,14 @@ takes seconds and never touches the audio engine.
   that starts a note and closes there, so neither that ring-out nor the
   spare bar the on-screen score keeps for recording reaches the page; rest
   bars inside the piece are untouched.
-- Staff split is fixed at middle C (MIDI 60), like the live score.
+- Staff assignment follows the imported score's own `staff` per note, so a
+  left hand written at or above middle C still prints on the bass staff.
+  Recorded takes, and sources with a single staff, split at middle C as
+  before. Clefs never change mid-staff, so a lower-staff passage the source
+  engraved in a G clef prints with ledger lines instead (Mozart K. 545 bar
+  29 reaches C5, four lines above the bass staff).
+- Notes struck together on one staff engrave as one chord per voice, stemmed
+  apart, rather than as a single stem carrying the longest value. Imported
+  voices beam continuously; where a take has none, voices are derived from
+  the written note values per column, and a beam breaks where a second voice
+  joins or leaves.
