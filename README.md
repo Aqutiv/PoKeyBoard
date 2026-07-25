@@ -77,7 +77,8 @@ Core app: current Safari (iPhone/iPad), Chrome (Android/Windows/macOS/Linux), Ed
 - Audio pauses when the app goes to the background or the screen locks (recordings finalize and save automatically; a notice explains what happened).
 - iPhone mutes web audio while the ring/silent switch is on silent; PoKeyBoard applies the standard media-session workaround, but if you hear nothing, check the switch.
 - One sustain-pedal timeline (no half-pedaling), single instrument, no external MIDI input, no cloud sync in v1.
-- MusicXML import (Takes → _Import MXL_, `.mxl`/`.musicxml`/`.xml`) is one-way: scores become playable takes, but repeats/ornaments are not expanded and there is no MusicXML export.
+- MusicXML import (Takes → _Import_ → _Music score (MXL)_, `.mxl`/`.musicxml`/`.xml`) is one-way: scores become playable takes, but repeats/ornaments are not expanded and there is no MusicXML export.
+- Importing from a link — Takes → _Import_ → _From a link (URL)_, or dragging a link straight onto the Takes screen — only works when the hosting site allows downloads from other origins. Raw GitHub, gists and jsDelivr do; most file-sharing and publisher pages do not. There is no proxy — a static host cannot have one — so when a link is refused, download the file and use the file picker instead.
 - Very long takes (over ~8 minutes) warn before export; renders are capped at 20 minutes to protect memory.
 
 ## Deployment

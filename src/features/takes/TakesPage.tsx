@@ -8,8 +8,11 @@ import { useTakeStore } from '@/state/useTakeStore';
 import { MenuButton } from '@/ui/MenuButton';
 import { shareOrDownloadFile, downloadBlob } from '@/utils/download';
 import { toErrorMessageKey } from '@/utils/errors';
+import { urlFromDropText } from '@/utils/importUrl';
 import { formatDurationMs } from '@/utils/timing';
 import { ImportTakeDialog } from './ImportTakeDialog';
+import { ImportUrlDialog } from './ImportUrlDialog';
+import { remoteImportMessage } from './remoteImportMessage';
 import {
   backupAllFile,
   clearTakeNotes,
@@ -20,6 +23,7 @@ import {
   openTake,
   previewImportFile,
   previewImportScoreFile,
+  previewImportUrl,
   renameTake,
   restoreBackupFile,
   takeJsonFile,
@@ -50,6 +54,7 @@ export function TakesPage() {
   const [renameText, setRenameText] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const [urlDialogOpen, setUrlDialogOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const scoreInputRef = useRef<HTMLInputElement | null>(null);
@@ -151,14 +156,36 @@ export function TakesPage() {
     [act, m],
   );
 
+  const startUrlImport = useCallback(
+    async (rawUrl: string) => {
+      setMessage(m.importUrlDialog.loading); // a drop has no dialog to show progress in
+      try {
+        setImportPreview(await previewImportUrl(rawUrl));
+        setMessage(null);
+      } catch (error) {
+        setMessage(remoteImportMessage(m, error));
+      }
+    },
+    [m],
+  );
+
   const onDrop = useCallback(
     (event: React.DragEvent) => {
       event.preventDefault();
       setDragOver(false);
       const file = event.dataTransfer.files?.[0];
-      if (file) void startImport(file);
+      if (file) {
+        void startImport(file);
+        return;
+      }
+      // A link dragged out of a browser carries no file, only its URL.
+      const url = urlFromDropText(
+        event.dataTransfer.getData('text/uri-list'),
+        event.dataTransfer.getData('text/plain'),
+      );
+      if (url !== '') void startUrlImport(url);
     },
-    [startImport],
+    [startImport, startUrlImport],
   );
 
   const commitRename = useCallback(
@@ -204,6 +231,7 @@ export function TakesPage() {
             items={[
               { label: m.takes.importMxl, onSelect: () => scoreInputRef.current?.click() },
               { label: m.takes.importJson, onSelect: () => importInputRef.current?.click() },
+              { label: m.takes.importUrl, onSelect: () => setUrlDialogOpen(true) },
             ]}
           />
         </div>
@@ -426,6 +454,20 @@ export function TakesPage() {
               await commitImport(preview, strategy);
               navigate('play');
             }, m.takes.takeImported);
+          }}
+        />
+      ) : null}
+
+      {urlDialogOpen ? (
+        <ImportUrlDialog
+          onCancel={() => setUrlDialogOpen(false)}
+          onLoaded={(preview) => {
+            setUrlDialogOpen(false);
+            setImportPreview(preview);
+          }}
+          onUseFilePicker={() => {
+            setUrlDialogOpen(false);
+            scoreInputRef.current?.click();
           }}
         />
       ) : null}

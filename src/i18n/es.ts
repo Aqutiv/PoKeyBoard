@@ -89,6 +89,7 @@ export const es: Messages = {
     importMenuLabel: 'Opciones de importación',
     importJson: 'Archivo de toma (JSON)',
     importMxl: 'Partitura (MXL)',
+    importUrl: 'Desde un enlace (URL)',
     loading: 'Cargando…',
     empty:
       'Aún no hay tomas. Graba algo en la pantalla Tocar o importa un archivo JSON de una toma.',
@@ -164,6 +165,18 @@ export const es: Messages = {
     replaceExisting: 'Reemplazar la toma existente',
     cancel: 'Cancelar',
     import: 'Importar',
+  },
+  importUrlDialog: {
+    title: 'Importar desde un enlace',
+    urlLabel: 'Enlace al archivo',
+    placeholder: 'https://ejemplo.com/partitura.mxl',
+    hint: 'Pega un enlace directo a un archivo .mxl, .musicxml, .xml o .json de PoKeyBoard. El sitio que lo aloja debe permitir descargas desde otras aplicaciones, y muchos no lo hacen.',
+    loading: 'Descargando…',
+    httpError: ({ status }) =>
+      `El sitio respondió con un error (${status}). Revisa el enlace e inténtalo de nuevo.`,
+    useFilePicker: 'Elegir un archivo en su lugar',
+    cancel: 'Cancelar',
+    fetch: 'Importar',
   },
   exportDialog: {
     title: 'Exportar audio',
@@ -332,6 +345,12 @@ export const es: Messages = {
     exportPianoLoading:
       'El piano todavía se está cargando — intenta exportar de nuevo en un momento.',
     sheetExportFailed: 'Falló la exportación de la partitura.',
+    importUrlInvalid: 'Ese no es un enlace http(s) válido a un archivo.',
+    importUrlOffline: 'Parece que no tienes conexión. Vuelve a conectarte e inténtalo de nuevo.',
+    importUrlBlocked:
+      'No se pudo descargar el enlace. Muchos sitios bloquean las descargas desde otras aplicaciones: guarda el archivo en tu dispositivo e impórtalo con el selector de archivos.',
+    importUrlTimedOut: 'La descarga tardó demasiado y se detuvo.',
+    importUrlFailed: 'No se pudo descargar el enlace.',
   },
   repairs: {
     takeId: 'Se asignó un nuevo id de toma.',

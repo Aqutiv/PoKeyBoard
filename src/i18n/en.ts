@@ -91,6 +91,7 @@ export const en: Messages = {
     importMenuLabel: 'Import options',
     importJson: 'Take file (JSON)',
     importMxl: 'Music score (MXL)',
+    importUrl: 'From a link (URL)',
     loading: 'Loading…',
     empty: 'No takes yet. Record something on the Play screen, or import a take JSON file.',
     draft: 'Draft',
@@ -165,6 +166,18 @@ export const en: Messages = {
     replaceExisting: 'Replace the existing take',
     cancel: 'Cancel',
     import: 'Import',
+  },
+  importUrlDialog: {
+    title: 'Import from a link',
+    urlLabel: 'File link',
+    placeholder: 'https://example.com/score.mxl',
+    hint: 'Paste a direct link to an .mxl, .musicxml, .xml, or PoKeyBoard .json file. The site hosting it must allow downloads from other apps — many do not.',
+    loading: 'Downloading…',
+    httpError: ({ status }) =>
+      `The site answered with an error (${status}). Check the link and try again.`,
+    useFilePicker: 'Choose a file instead',
+    cancel: 'Cancel',
+    fetch: 'Import',
   },
   exportDialog: {
     title: 'Export audio',
@@ -324,6 +337,12 @@ export const en: Messages = {
     exportTooLong: 'This take is longer than 20 minutes — export is capped to protect memory.',
     exportPianoLoading: 'The piano is still loading — try the export again in a moment.',
     sheetExportFailed: 'Sheet music export failed.',
+    importUrlInvalid: 'That is not a valid http(s) link to a file.',
+    importUrlOffline: 'You appear to be offline. Reconnect and try the link again.',
+    importUrlBlocked:
+      'The link could not be downloaded. Many sites block downloads from other apps — save the file to your device and import it with the file picker instead.',
+    importUrlTimedOut: 'The download took too long and was stopped.',
+    importUrlFailed: 'The link could not be downloaded.',
   },
   repairs: {
     takeId: 'Assigned a new take id.',
