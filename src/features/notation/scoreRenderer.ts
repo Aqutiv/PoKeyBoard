@@ -173,6 +173,10 @@ export function drawScore(
   drawChords(ctx, view, input, palette);
   drawOpenNotes(ctx, view, input.openNotes, input.recording, palette);
   drawGhosts(ctx, view, input, palette);
+  // Clefs go on last: this view is time-proportional, so nothing can reserve
+  // room for one, and a clef that gets painted over is worse than one that
+  // covers a note head for a moment.
+  drawClefChanges(ctx, view, input.layout, palette);
   drawPlayhead(ctx, view, input.playheadMs, palette);
   drawGutter(ctx, view, input, palette);
 }
@@ -225,17 +229,6 @@ function drawMeasures(
       const previous = layout.measures[measure.index - 1];
       if (previous && previous.bpm !== measure.bpm) {
         drawTempoMark(ctx, x + 16, view.trebleTop - 20, measure.bpm, palette);
-        ctx.strokeStyle = palette.barLine;
-      }
-      // So is a clef, right after the bar line it takes over on.
-      if (previous) {
-        ctx.fillStyle = palette.noteDim;
-        for (const staff of ['treble', 'bass'] as const) {
-          if (previous.clefs[staff] === measure.clefs[staff]) continue;
-          const top = staff === 'treble' ? view.trebleTop : view.bassTop;
-          drawInlineClef(ctx, measure.clefs[staff], x + 4, top, palette);
-        }
-        ctx.fillStyle = palette.measureNumber;
         ctx.strokeStyle = palette.barLine;
       }
     }
@@ -532,17 +525,31 @@ function detectGlyphSupport(ctx: CanvasRenderingContext2D): { treble: boolean; b
 /** Scale a clef announcing a change mid-score is drawn at. */
 const INLINE_CLEF_SCALE = 0.72;
 
+/** Room an inline clef takes, and the gap it keeps off the bar line. */
+const INLINE_CLEF_W = 22;
+const INLINE_CLEF_PAD = 3;
+
 /**
  * A clef announced mid-score, drawn smaller than the gutter's and seated on
  * the staff it belongs to. Scaling about the staff's centre keeps it there.
+ *
+ * It sits in the tail of the measure before the bar line rather than after it.
+ * On paper the clef follows the bar line, but paper reserves width for it;
+ * here the downbeat note is centred on the bar line itself, so anything drawn
+ * after it lands on the note head. The tail is the one place in a
+ * time-proportional bar that a note never starts.
  */
 function drawInlineClef(
   ctx: CanvasRenderingContext2D,
   clef: ClefKind,
-  x: number,
+  barX: number,
   staffTop: number,
   palette: ScorePalette,
 ): void {
+  const x = barX - INLINE_CLEF_W - INLINE_CLEF_PAD;
+  // A wash keeps it legible over whatever the tail of the bar happens to hold.
+  ctx.fillStyle = palette.gutterBg;
+  ctx.fillRect(x - 2, staffTop - 3, INLINE_CLEF_W + 4, STAFF_H + 6);
   ctx.save();
   const centreY = staffTop + STAFF_H / 2;
   ctx.translate(x, centreY);
@@ -551,6 +558,29 @@ function drawInlineClef(
   if (clef === 'treble') drawFallbackTrebleClef(ctx, x + 6, staffTop, palette);
   else drawFallbackBassClef(ctx, x + 6, staffTop, palette);
   ctx.restore();
+}
+
+/** Announce every clef that turns over inside the visible span. */
+function drawClefChanges(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  layout: ScoreLayout,
+  palette: ScorePalette,
+): void {
+  const fromMs = view.scrollMs - 200;
+  const toMs = view.scrollMs + (view.widthPx - GUTTER) / view.pxPerMs + 200;
+  for (const measure of layout.measures) {
+    if (measure.endMs < fromMs || measure.startMs > toMs) continue;
+    const previous = layout.measures[measure.index - 1];
+    if (!previous) continue;
+    const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
+    if (x < GUTTER + INLINE_CLEF_W || x > view.widthPx) continue;
+    for (const staff of ['treble', 'bass'] as const) {
+      if (previous.clefs[staff] === measure.clefs[staff]) continue;
+      const top = staff === 'treble' ? view.trebleTop : view.bassTop;
+      drawInlineClef(ctx, measure.clefs[staff], x, top, palette);
+    }
+  }
 }
 
 /** The clef each staff reads under at `ms`, or the nearest one either side. */

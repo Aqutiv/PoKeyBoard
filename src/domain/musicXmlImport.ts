@@ -302,12 +302,16 @@ function collectPart(
           for (const child of el.children) {
             if (child.tagName !== 'clef') continue;
             const sign = textByTag(child, 'sign');
-            if (sign !== 'G' && sign !== 'F') continue; // C clefs have no equivalent
             const number = attrNumber(child, 'number');
-            clefByStaff.set(
-              number === null ? 1 : Math.round(number),
-              sign === 'G' ? 'treble' : 'bass',
-            );
+            const staffNumber = number === null ? 1 : Math.round(number);
+            if (sign === 'G' || sign === 'F') {
+              clefByStaff.set(staffNumber, sign === 'G' ? 'treble' : 'bass');
+            } else {
+              // A C clef (alto, tenor) has no equivalent here. It still ends
+              // whatever was in force, so the staff goes back to reading under
+              // its own clef rather than carrying a stale override onward.
+              clefByStaff.delete(staffNumber);
+            }
           }
           const time = childByTag(el, 'time');
           if (time) {

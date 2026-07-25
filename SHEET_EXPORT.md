@@ -73,9 +73,12 @@ takes seconds and never touches the audio engine.
 - A staff is read under whichever clef the source gives it, and a clef that
   turns over mid-piece is engraved after the bar line it takes over on (and
   in the prefix of every system that opens under it). Only G and F clefs are
-  supported; a C clef (alto, tenor) is ignored and the staff keeps its own.
-  A clef stands until something replaces it, so a measure with nothing on a
-  staff carries the last one forward.
+  supported; a C clef (alto, tenor) drops any override and the staff goes back
+  to its own. A clef stands until something replaces it, so a measure with
+  nothing on a staff carries the last one forward. The clef rides on the notes
+  themselves — takes hold no rests — so a change the source declares during a
+  bar of rest is announced at the next note instead of where it was written.
+  Pitches are unaffected either way; only the announcement moves.
 - Notes struck together on one staff engrave as one chord per voice, stemmed
   apart, rather than as a single stem carrying the longest value. Imported
   voices beam continuously; where a take has none, voices are derived from

@@ -270,6 +270,21 @@ describe('staves and voices', () => {
     expect(take.notes.map((n) => n.clef)).toEqual(['treble', undefined]);
   });
 
+  it('drops a clef override when a C clef takes over from it', () => {
+    // G on the lower staff, then alto: the G must not stand after the alto
+    // replaced it, or every later note reads under a clef the score dropped.
+    const clefFor = (sign: string, line: number): string =>
+      `<attributes><clef number="2"><sign>${sign}</sign><line>${line}</line></clef></attributes>`;
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(1, GRAND_DIV1 + clefFor('G', 2) + note('C', 4, 4, '<staff>2</staff>')) +
+          measure(2, clefFor('C', 3) + note('C', 4, 4, '<staff>2</staff>')),
+      ),
+    );
+    expect(take.notes[0]!.clef).toBe('treble');
+    expect(take.notes[1]).not.toHaveProperty('clef');
+  });
+
   it('ignores a C clef, leaving the staff reading its own', () => {
     const take = musicXmlToTake(
       scoreWith(
