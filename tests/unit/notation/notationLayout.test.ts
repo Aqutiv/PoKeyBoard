@@ -44,6 +44,62 @@ describe('layoutScore', () => {
     expect(staffs).toEqual(['bass', 'treble']);
   });
 
+  it("follows an imported note's staff over its pitch", () => {
+    // Mozart K. 545 opens with the left hand written at C4/E4/G4 — at and
+    // above middle C, so the pitch rule alone would print it in the treble.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 0, staff: 'treble' }),
+        note({ id: 'lh', midi: 60, startMs: 0, staff: 'bass' }),
+      ],
+      OPTS,
+    );
+    const bass = layout.chords.find((c) => c.staff === 'bass');
+    expect(bass?.notes.map((n) => n.midi)).toEqual([60]);
+    // C4 on the bass staff sits on the first ledger line above it.
+    expect(bass?.notes[0]!.ledger).toEqual([10]);
+  });
+
+  it('gives simultaneous notes of different lengths a stem each', () => {
+    // A half note held over a run of eighths in the same hand: one stem for
+    // each, not one fat chord carrying the longer of the two values.
+    const layout = layoutScore(
+      [
+        note({ id: 'held', midi: 72, startMs: 0, durationMs: 1000 }),
+        note({ id: 'run', midi: 64, startMs: 0, durationMs: 250 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords).toHaveLength(2);
+    const [upper, lower] = layout.chords as [(typeof layout.chords)[0], (typeof layout.chords)[0]];
+    expect(upper.notes.map((n) => n.midi)).toEqual([72]);
+    expect(upper.symbol).toEqual({ base: 'half', dotted: false });
+    expect(upper.stemDown).toBe(false); // top voice stems up
+    expect(lower.notes.map((n) => n.midi)).toEqual([64]);
+    expect(lower.symbol).toEqual({ base: 'eighth', dotted: false });
+    expect(lower.stemDown).toBe(true); // bottom voice stems down
+  });
+
+  it('numbers voices from the source when it has them, else by pitch', () => {
+    const imported = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 1000, voice: 3 }),
+        note({ id: 'b', midi: 64, startMs: 0, durationMs: 250, voice: 7 }),
+      ],
+      OPTS,
+    );
+    expect(imported.chords.map((c) => c.voice)).toEqual([3, 7]);
+
+    const derived = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 1000 }),
+        note({ id: 'b', midi: 64, startMs: 0, durationMs: 250 }),
+      ],
+      OPTS,
+    );
+    expect(derived.chords.map((c) => c.voice)).toEqual([0, 1]);
+  });
+
   it('keeps raw timing while quantizing only the drawn position', () => {
     const layout = layoutScore([note({ id: 'a', startMs: 130 })], OPTS);
     const laid = layout.chords[0]!.notes[0]!;
@@ -75,13 +131,15 @@ describe('layoutScore', () => {
   });
 
   it('gives a chord the longest note symbol and a majority stem direction', () => {
+    // One voice, so the two lengths belong to the same stem after all.
     const layout = layoutScore(
       [
-        note({ id: 'a', midi: 72, startMs: 0, durationMs: 250 }),
-        note({ id: 'b', midi: 76, startMs: 0, durationMs: 1000 }),
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 250, voice: 0 }),
+        note({ id: 'b', midi: 76, startMs: 0, durationMs: 1000, voice: 0 }),
       ],
       OPTS,
     );
+    expect(layout.chords).toHaveLength(1);
     expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
     expect(layout.chords[0]!.stemDown).toBe(true); // high notes → stems down
   });

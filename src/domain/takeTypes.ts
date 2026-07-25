@@ -14,6 +14,8 @@ export const MAX_NOTE_DURATION_MS = 2 * 60 * 1000;
 export const MAX_NOTE_COUNT = 50_000;
 /** Upper bound on a take's tempo map; scores rarely mark more than a few. */
 export const MAX_TEMPO_CHANGES = 1_024;
+/** Highest voice number a note may claim; engravings never need more. */
+export const MAX_NOTE_VOICE = 15;
 
 export type QuantizationSetting = 'off' | '1/8' | '1/16';
 
@@ -48,12 +50,27 @@ export interface InstrumentSettings {
   reverbMix: number;
 }
 
+/** The two staffs of the grand staff, in the order they are drawn. */
+export type NoteStaff = 'treble' | 'bass';
+
 export interface NoteEvent {
   id: string;
   midi: number;
   startMs: number;
   durationMs: number;
   velocity: number;
+  /**
+   * The staff the source score wrote this note on. Absent for recorded takes
+   * and for sources that say nothing, where the notation falls back to
+   * splitting the grand staff at middle C.
+   */
+  staff?: NoteStaff;
+  /**
+   * The note's voice within that staff, as numbered by the source (0-based).
+   * Notes sharing a voice share a stem; absent means the notation derives
+   * voices from the written note values instead.
+   */
+  voice?: number;
 }
 
 export interface PedalEvent {

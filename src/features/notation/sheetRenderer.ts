@@ -212,8 +212,7 @@ function drawMeasure(
   }
 
   for (const column of measure.columns) {
-    for (const chord of [column.treble, column.bass]) {
-      if (!chord) continue;
+    for (const chord of [...column.treble, ...column.bass]) {
       const staffTop = chord.staff === 'treble' ? system.trebleTopPt : system.bassTopPt;
       drawChord(ctx, chord, column.xPt, staffTop, measure.beams);
     }

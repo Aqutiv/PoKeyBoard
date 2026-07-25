@@ -28,6 +28,20 @@ describe('midiToStaffPosition', () => {
     expect(midiToStaffPosition(59).staff).toBe('bass');
   });
 
+  it('lets an imported staff override the middle-C split', () => {
+    // A left hand written at middle C stays on the bass staff, two ledger
+    // lines up, instead of jumping the gap to the treble.
+    const c4 = midiToStaffPosition(60, 'bass');
+    expect(c4).toEqual({ staff: 'bass', step: 10, accidental: null });
+    expect(ledgerLineSteps(c4.step)).toEqual([10]);
+    // And a right hand reaching under it stays in the treble.
+    expect(midiToStaffPosition(55, 'treble')).toEqual({
+      staff: 'treble',
+      step: -5,
+      accidental: null,
+    });
+  });
+
   it('spells black keys as sharps on the lower letter', () => {
     const cSharp = midiToStaffPosition(61);
     expect(cSharp.accidental).toBe('#');

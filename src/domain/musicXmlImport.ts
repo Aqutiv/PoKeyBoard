@@ -7,9 +7,11 @@ import { createQuarterTempoMap, tempoChangesFrom } from './tempoMap';
 import {
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
+  MAX_NOTE_VOICE,
   MAX_TAKE_MS,
   MAX_TEMPO_CHANGES,
   type NoteEvent,
+  type NoteStaff,
   type PedalEvent,
   type Take,
   type TimeSignature,
@@ -42,6 +44,9 @@ interface QNote {
   onsetQ: number;
   durQ: number;
   velocity: number;
+  /** Engraving-only hints; undefined when the score does not say. */
+  staff: NoteStaff | undefined;
+  voice: number | undefined;
 }
 
 interface QPedal {
@@ -60,6 +65,8 @@ interface PendingTie {
   onsetQ: number;
   endQ: number;
   velocity: number;
+  staff: NoteStaff | undefined;
+  voice: number | undefined;
 }
 
 interface CollectedScore {
@@ -106,6 +113,9 @@ function pendingToNote(pending: PendingTie): QNote {
     onsetQ: pending.onsetQ,
     durQ: pending.endQ - pending.onsetQ,
     velocity: pending.velocity,
+    // A tie sounds as one note, so the whole chain belongs where it started.
+    staff: pending.staff,
+    voice: pending.voice,
   };
 }
 
@@ -164,7 +174,12 @@ function collectPart(
   let chordAnchorQ: number | null = null;
   let dynamicsPercent: number | null = null;
   let currentTs: TimeSignature | null = null;
+  let staffCount = 1;
   const pendingTies = new Map<string, PendingTie>();
+  /** `${staff}|${source voice}` → the small voice number we assign it. */
+  const voiceNumbers = new Map<string, number>();
+  /** Per staff, the next voice number to hand out. */
+  const nextVoice = new Map<string, number>();
 
   const quartersOf = (el: Element): number => {
     const duration = numberByTag(el, 'duration');
@@ -173,6 +188,38 @@ function collectPart(
       throw new ScoreImportError(['The score uses durations before declaring <divisions>.']);
     }
     return duration / divisions;
+  };
+
+  /**
+   * Which side of the grand staff a note was written on. MusicXML numbers a
+   * part's staffs from the top down, so staff 1 is the right hand and anything
+   * under it belongs on the bass staff; an omitted <staff> means staff 1. A
+   * part with a single staff says nothing about hands, so it stays undefined
+   * and the notation falls back to splitting at middle C.
+   */
+  const staffOf = (note: Element): NoteStaff | undefined => {
+    if (staffCount < 2) return undefined;
+    const declared = numberByTag(note, 'staff');
+    return declared !== null && Math.round(declared) >= 2 ? 'bass' : 'treble';
+  };
+
+  /**
+   * Voice numbers are per-part labels that can be anything (this Mozart edition
+   * uses "1" on the upper staff and "5" on the lower). They only have to be
+   * stable and small, so each staff renumbers them from 0 as they appear.
+   */
+  const voiceOf = (note: Element, staff: NoteStaff | undefined): number | undefined => {
+    const source = textByTag(note, 'voice');
+    if (source === null) return undefined;
+    const staffKey = staff ?? '';
+    const key = `${staffKey}|${source}`;
+    const known = voiceNumbers.get(key);
+    if (known !== undefined) return known;
+    const assigned = nextVoice.get(staffKey) ?? 0;
+    if (assigned > MAX_NOTE_VOICE) return undefined; // absurdly many voices
+    nextVoice.set(staffKey, assigned + 1);
+    voiceNumbers.set(key, assigned);
+    return assigned;
   };
 
   const applySound = (sound: Element, atQ: number): void => {
@@ -229,6 +276,8 @@ function collectPart(
         case 'attributes': {
           const declared = numberByTag(el, 'divisions');
           if (declared !== null && declared > 0) divisions = declared;
+          const staves = numberByTag(el, 'staves');
+          if (staves !== null && staves >= 1) staffCount = Math.round(staves);
           const time = childByTag(el, 'time');
           if (time) {
             const beats = textByTag(time, 'beats');
@@ -274,6 +323,8 @@ function collectPart(
 
           const percent = attrNumber(el, 'dynamics') ?? dynamicsPercent ?? DEFAULT_DYNAMICS_PERCENT;
           const velocity = clamp((percent / 100) * (FORTE_MIDI_VELOCITY / 127), 0, 1);
+          const staff = staffOf(el);
+          const voice = voiceOf(el, staff);
           const tieTypes = collectTieTypes(el);
           const hasStart = tieTypes.has('start');
           const hasStop = tieTypes.has('stop');
@@ -290,16 +341,16 @@ function collectPart(
                 pendingTies.set(key, pending); // middle of a chain
               else out.notes.push(pendingToNote(pending));
             } else if (hasStart) {
-              pendingTies.set(key, { midi, onsetQ, endQ, velocity });
+              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice });
             } else {
-              out.notes.push({ midi, onsetQ, durQ, velocity }); // orphan stop
+              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice }); // orphan stop
             }
           } else if (hasStart) {
             const stale = pendingTies.get(key);
             if (stale) out.notes.push(pendingToNote(stale));
-            pendingTies.set(key, { midi, onsetQ, endQ, velocity });
+            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice });
           } else {
-            out.notes.push({ midi, onsetQ, durQ, velocity });
+            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice });
           }
           break;
         }
@@ -427,6 +478,10 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       startMs,
       durationMs: clamp(endMs - startMs, 1, MAX_NOTE_DURATION_MS),
       velocity: note.velocity,
+      // Left off entirely when the score is silent about them, so takes from
+      // single-staff sources stay byte-identical to what they were before.
+      ...(note.staff !== undefined ? { staff: note.staff } : {}),
+      ...(note.voice !== undefined ? { voice: note.voice } : {}),
     };
   });
   let maxEndMs = 0;

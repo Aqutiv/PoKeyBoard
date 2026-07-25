@@ -125,6 +125,8 @@ export interface SheetChord {
   staff: StaffKind;
   /** Sorted by step ascending (lowest pitch first). */
   notes: SheetNote[];
+  /** The staff voice this chord belongs to; see `ChordGroup.voice`. */
+  voice: number;
   symbol: DurationSymbol;
   stemDown: boolean;
   /** Index into the owning measure's `beams`, or null for a flagged chord. */
@@ -135,8 +137,12 @@ export interface SheetColumn {
   timeMs: number;
   /** Absolute page x of the notehead center. */
   xPt: number;
-  treble: SheetChord | null;
-  bass: SheetChord | null;
+  /**
+   * The voices sounding on each staff at this instant, topmost first. Usually
+   * one; two voices share the column's x and stem apart, as engraved.
+   */
+  treble: SheetChord[];
+  bass: SheetChord[];
 }
 
 export interface SheetBeam {
@@ -234,8 +240,8 @@ interface WorkColumn {
   timeMs: number;
   /** Natural head-center offset from the measure start, in staff spaces. */
   headOffG: number;
-  treble: SheetChord | null;
-  bass: SheetChord | null;
+  treble: SheetChord[];
+  bass: SheetChord[];
 }
 
 interface WorkMeasure {
@@ -285,8 +291,8 @@ function advanceG(deltaMs: number, wholeMs: number): number {
 }
 
 function columnHasAccidental(column: WorkColumn): boolean {
-  for (const chord of [column.treble, column.bass]) {
-    if (chord?.notes.some((note) => note.accidental !== null)) return true;
+  for (const chord of [...column.treble, ...column.bass]) {
+    if (chord.notes.some((note) => note.accidental !== null)) return true;
   }
   return false;
 }
@@ -300,6 +306,7 @@ function toSheetChord(chord: ChordGroup): SheetChord {
       accidental: note.accidental,
       ledger: note.ledger,
     })),
+    voice: chord.voice,
     symbol: chord.symbol,
     stemDown: chord.stemDown,
     beamId: null,
@@ -324,11 +331,12 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
     for (const chord of chordsByMeasure[measure.index]!) {
       let column = byTime.get(chord.displayStartMs);
       if (!column) {
-        column = { timeMs: chord.displayStartMs, headOffG: 0, treble: null, bass: null };
+        column = { timeMs: chord.displayStartMs, headOffG: 0, treble: [], bass: [] };
         byTime.set(chord.displayStartMs, column);
       }
-      if (chord.staff === 'treble') column.treble = toSheetChord(chord);
-      else column.bass = toSheetChord(chord);
+      // score.chords already runs topmost voice first within a stack.
+      if (chord.staff === 'treble') column.treble.push(toSheetChord(chord));
+      else column.bass.push(toSheetChord(chord));
     }
     const columns = [...byTime.values()].sort((a, b) => a.timeMs - b.timeMs);
     if (columns.length === 0) {
@@ -441,10 +449,16 @@ interface BeamMember {
   chord: SheetChord;
 }
 
+function chordsOn(column: SheetColumn, staff: StaffKind): SheetChord[] {
+  return staff === 'treble' ? column.treble : column.bass;
+}
+
 /**
  * Beam runs of equal undotted eighths/sixteenths that share a beat group on
- * one staff. Compound meters (6/8, 9/8, …) group per dotted beat-unit trio.
- * Beam y values are staff-relative here; `paginate` shifts them to page space.
+ * one voice of one staff. Compound meters (6/8, 9/8, …) group per dotted
+ * beat-unit trio. Beams never cross voices, so a run under a held note stays
+ * one beam. Beam y values are staff-relative here; `paginate` shifts them to
+ * page space.
  */
 function buildBeams(
   measure: SheetMeasure,
@@ -457,36 +471,47 @@ function buildBeams(
   const groupMs = compound ? beatMs * 3 : beatMs;
 
   for (const staff of ['treble', 'bass'] as const) {
-    let run: BeamMember[] = [];
-    let runBase: DurationSymbol['base'] | null = null;
-    let runGroup = -1;
-
-    const flush = (): void => {
-      if (run.length >= 2) emitBeam(measure, staff, run);
-      run = [];
-      runBase = null;
-    };
-
+    const voices = new Set<number>();
     for (const column of measure.columns) {
-      const chord = staff === 'treble' ? column.treble : column.bass;
-      if (!chord) continue;
-      if (!beamable(chord)) {
-        flush();
-        continue;
-      }
-      const group = Math.floor((column.timeMs - measureStartMs) / groupMs + 1e-6);
-      if (run.length > 0 && (chord.symbol.base !== runBase || group !== runGroup)) flush();
-      run.push({ column, chord });
-      runBase = chord.symbol.base;
-      runGroup = group;
+      for (const chord of chordsOn(column, staff)) voices.add(chord.voice);
     }
-    flush();
+
+    for (const voice of voices) {
+      let run: BeamMember[] = [];
+      let runBase: DurationSymbol['base'] | null = null;
+      let runGroup = -1;
+
+      const flush = (): void => {
+        if (run.length >= 2) emitBeam(measure, staff, run);
+        run = [];
+        runBase = null;
+      };
+
+      for (const column of measure.columns) {
+        const chord = chordsOn(column, staff).find((candidate) => candidate.voice === voice);
+        if (!chord) continue;
+        if (!beamable(chord)) {
+          flush();
+          continue;
+        }
+        const group = Math.floor((column.timeMs - measureStartMs) / groupMs + 1e-6);
+        if (run.length > 0 && (chord.symbol.base !== runBase || group !== runGroup)) flush();
+        run.push({ column, chord });
+        runBase = chord.symbol.base;
+        runGroup = group;
+      }
+      flush();
+    }
   }
 }
 
 function emitBeam(measure: SheetMeasure, staff: StaffKind, run: BeamMember[]): void {
+  // Where the run meets a second voice, that column has already stemmed its
+  // voices apart to keep both readable, and its direction binds the whole run.
+  // The majority vote only settles runs that are free to point either way.
+  const polyphonic = run.find((member) => chordsOn(member.column, staff).length > 1);
   const downVotes = run.filter((member) => member.chord.stemDown).length;
-  const stemDown = downVotes * 2 >= run.length;
+  const stemDown = polyphonic ? polyphonic.chord.stemDown : downVotes * 2 >= run.length;
   const dir = stemDown ? 1 : -1;
 
   const xs = run.map((member) => stemXPt(member.column.xPt, stemDown));
@@ -536,8 +561,7 @@ function systemExtents(measures: SheetMeasure[]): { abovePt: number; belowPt: nu
 
   for (const measure of measures) {
     for (const column of measure.columns) {
-      for (const chord of [column.treble, column.bass]) {
-        if (!chord) continue;
+      for (const chord of [...column.treble, ...column.bass]) {
         let top = staffYRel(chord.notes[chord.notes.length - 1]!.step) - headPad;
         let bottom = staffYRel(chord.notes[0]!.step) + headPad;
         if (chord.symbol.base !== 'whole' && chord.beamId === null) {

@@ -1,10 +1,12 @@
+import type { NoteStaff } from '@/domain/takeTypes';
+
 /**
  * MIDI → grand-staff geometry in C-major display context (explicit sharps).
  * Positions are diatonic steps from each staff's bottom line (treble: E4,
  * bass: G2); one step is half a staff space. Middle C sits at step -2 on the
  * treble staff (first ledger line below).
  */
-export type StaffKind = 'treble' | 'bass';
+export type StaffKind = NoteStaff;
 
 const DIATONIC_STEP: Record<number, number> = {
   0: 0, // C
@@ -30,7 +32,13 @@ export interface StaffPosition {
   accidental: '#' | null;
 }
 
-export function midiToStaffPosition(midi: number): StaffPosition {
+/**
+ * `staffHint` is the staff an imported score wrote the note on, and always
+ * wins: a left hand reaching above middle C stays on the bass staff and gets
+ * ledger lines, which is how the source engraved it. Without a hint (recorded
+ * takes, sources with one staff) the split falls back to middle C.
+ */
+export function midiToStaffPosition(midi: number, staffHint?: StaffKind): StaffPosition {
   const pitchClass = ((midi % 12) + 12) % 12;
   const octave = Math.floor(midi / 12) - 1;
   const natural = DIATONIC_STEP[pitchClass];
@@ -38,7 +46,7 @@ export function midiToStaffPosition(midi: number): StaffPosition {
   // Sharps take the letter below (C# uses C's line/space).
   const letterStep = isSharp ? (DIATONIC_STEP[pitchClass - 1] as number) : natural;
   const absolute = octave * 7 + letterStep;
-  const staff: StaffKind = midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass';
+  const staff: StaffKind = staffHint ?? (midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
   const reference = staff === 'treble' ? TREBLE_BOTTOM_LINE : BASS_BOTTOM_LINE;
   return { staff, step: absolute - reference, accidental: isSharp ? '#' : null };
 }
