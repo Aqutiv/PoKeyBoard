@@ -130,7 +130,11 @@ export function TakesPage() {
       const file = event.target.files?.[0];
       event.target.value = '';
       if (!file) return;
-      void previewImportScoreFile(file)
+      // This picker carries no accept filter (iOS greys out .mxl), and the
+      // blocked-link fallback sends take JSON here too, so honour an explicit
+      // .json. Anything else stays a score, which keeps the MusicXML wording
+      // for a wrong pick made from the "Music score" menu item.
+      void (/\.json$/i.test(file.name) ? previewImportFile(file) : previewImportScoreFile(file))
         .then(setImportPreview)
         .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
     },

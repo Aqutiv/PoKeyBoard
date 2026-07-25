@@ -259,17 +259,38 @@ describe('previewImportUrl', () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('reports a cancel distinctly from a failure', async () => {
+  it('never starts a request the caller already gave up on', async () => {
     const { previewImportUrl, RemoteImportCancelled } = await loadService();
     const controller = new AbortController();
     controller.abort();
-    fetchMock.mockRejectedValue(Object.assign(new Error('aborted'), { name: 'AbortError' }));
 
+    // An already-aborted signal emits no further `abort` event, so this must be
+    // caught up front rather than left to a listener that will never fire.
     await expect(
       previewImportUrl('https://x.test/a.mxl', controller.signal),
     ).rejects.toBeInstanceOf(RemoteImportCancelled);
-    // The caller's signal is forwarded, so the request is really torn down.
-    const init = fetchMock.mock.calls[0]?.[1] as RequestInit;
-    expect(init.signal?.aborted).toBe(true);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('tears down an in-flight request when the caller aborts', async () => {
+    const { previewImportUrl, RemoteImportCancelled } = await loadService();
+    const controller = new AbortController();
+    let sentSignal: AbortSignal | undefined;
+    fetchMock.mockImplementation(
+      (_input: unknown, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          sentSignal = init.signal ?? undefined;
+          init.signal?.addEventListener('abort', () => {
+            reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+          });
+        }),
+    );
+
+    const promise = previewImportUrl('https://x.test/a.mxl', controller.signal);
+    await vi.waitFor(() => expect(sentSignal).toBeDefined());
+    controller.abort();
+
+    await expect(promise).rejects.toBeInstanceOf(RemoteImportCancelled);
+    expect(sentSignal?.aborted).toBe(true); // the abort really reached fetch
   });
 });

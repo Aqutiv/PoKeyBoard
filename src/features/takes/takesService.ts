@@ -336,13 +336,20 @@ export async function previewImportUrl(
   signal?: AbortSignal,
 ): Promise<ImportPreview> {
   const url = parseImportUrl(rawUrl);
+  // An already-aborted signal never fires `abort` again, so nothing would
+  // forward it — bail before a request the caller has already given up on.
+  if (signal?.aborted === true) throw new RemoteImportCancelled();
   const controller = new AbortController();
   let timedOut = false;
+  let cancelled = false;
   const timer = setTimeout(() => {
     timedOut = true;
     controller.abort();
   }, REMOTE_IMPORT_TIMEOUT_MS);
-  const forwardAbort = () => controller.abort();
+  const forwardAbort = () => {
+    cancelled = true;
+    controller.abort();
+  };
   signal?.addEventListener('abort', forwardAbort, { once: true });
 
   try {
@@ -385,7 +392,7 @@ export async function previewImportUrl(
   } catch (error) {
     controller.abort();
     // Both a cancel and a timeout raise AbortError, so trust our own flags.
-    if (signal?.aborted === true) throw new RemoteImportCancelled();
+    if (cancelled) throw new RemoteImportCancelled();
     if (timedOut) throw new RemoteImportError('timeout', { cause: error });
     if (error instanceof AppError) throw error;
     // CORS, DNS, TLS and mixed-content all arrive as an opaque TypeError.

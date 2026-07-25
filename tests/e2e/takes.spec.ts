@@ -188,6 +188,32 @@ test.describe('takes library', () => {
     expect(await (await chooser).element().getAttribute('aria-label')).toBe('Import MusicXML file');
   });
 
+  test('the blocked-link fallback picker still accepts a take JSON', async ({ page }) => {
+    await gotoAppReady(page);
+    await page.route('**/fixtures/blocked.pokeyboard.json', (route) => route.abort('failed'));
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'From a link (URL)' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Import from a link' });
+    await dialog
+      .getByLabel('File link')
+      .fill('http://127.0.0.1:4173/fixtures/blocked.pokeyboard.json');
+    await dialog.getByRole('button', { name: 'Import', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('could not be downloaded');
+    await dialog.getByRole('button', { name: 'Choose a file instead' }).click();
+
+    // The fallback opens the unfiltered score picker, so a take JSON picked
+    // there must not be parsed as MusicXML just because of which input it was.
+    await page.getByLabel('Import MusicXML file').setInputFiles({
+      name: 'PoKeyBoard - Imported scale.pokeyboard.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(VALID_TAKE)),
+    });
+    await expect(page.getByRole('dialog', { name: 'Import take' })).toContainText('Imported scale');
+  });
+
   test('rejects a link that is not an http(s) file link', async ({ page }) => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Takes' }).click();

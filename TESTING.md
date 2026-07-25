@@ -3,8 +3,8 @@
 ## Automated
 
 ```bash
-npm run test        # 424 Vitest unit tests (jsdom + fake-indexeddb)
-npm run test:e2e    # 35 Playwright tests against the production preview build
+npm run test        # 448 Vitest unit tests (jsdom + fake-indexeddb)
+npm run test:e2e    # 36 Playwright tests against the production preview build
 npm run lint && npm run typecheck && npm run format:check
 ```
 
