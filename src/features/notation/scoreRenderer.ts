@@ -1,11 +1,18 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import {
   firstChordIndexAt,
+  measureIndexAt,
   type ChordGroup,
   type LaidOutNote,
   type ScoreLayout,
 } from './notationLayout';
-import { ledgerLineSteps, midiToStaffPosition, type StaffKind } from './staffMapping';
+import {
+  defaultClefFor,
+  ledgerLineSteps,
+  midiToStaffPosition,
+  type ClefKind,
+  type StaffKind,
+} from './staffMapping';
 
 /** Staff geometry (CSS pixels; the canvas is DPR-scaled by the component). */
 export const GAP = 9;
@@ -16,6 +23,9 @@ export const BASS_TOP = TREBLE_TOP + STAFF_H + STAFF_SPACING;
 export const SCORE_MIN_HEIGHT = BASS_TOP + STAFF_H + 38;
 /** Fixed gutter: brace, clefs, and time signature; notes scroll beneath it. */
 export const GUTTER = 58;
+
+/** Horizontal pitch of stacked accidental columns, left of the chord. */
+const ACCIDENTAL_COLUMN_PX = GAP * 1.4;
 
 /** Clearance above/below an extreme note head: half-height plus padding. */
 const HEAD_CLEARANCE = GAP * 0.5 + 6;
@@ -163,8 +173,12 @@ export function drawScore(
   drawChords(ctx, view, input, palette);
   drawOpenNotes(ctx, view, input.openNotes, input.recording, palette);
   drawGhosts(ctx, view, input, palette);
+  // Clefs go on last: this view is time-proportional, so nothing can reserve
+  // room for one, and a clef that gets painted over is worse than one that
+  // covers a note head for a moment.
+  drawClefChanges(ctx, view, input.layout, palette);
   drawPlayhead(ctx, view, input.playheadMs, palette);
-  drawGutter(ctx, view, input.timeSignature, palette);
+  drawGutter(ctx, view, input, palette);
 }
 
 function drawStaffLines(
@@ -355,7 +369,7 @@ function drawChord(
       ctx.font = `${GAP * 1.5}px system-ui, sans-serif`;
       ctx.textAlign = 'right';
       ctx.textBaseline = 'middle';
-      ctx.fillText('#', leftEdgeX - rx - 3, y);
+      ctx.fillText('#', leftEdgeX - rx - 3 - note.accidentalColumn * ACCIDENTAL_COLUMN_PX, y);
     }
     if (chord.symbol.dotted) {
       ctx.fillStyle = color;
@@ -508,12 +522,111 @@ function detectGlyphSupport(ctx: CanvasRenderingContext2D): { treble: boolean; b
   return glyphSupport;
 }
 
+/** Scale a clef announcing a change mid-score is drawn at. */
+const INLINE_CLEF_SCALE = 0.72;
+
+/** Room an inline clef takes, and the gap it keeps off the bar line. */
+const INLINE_CLEF_W = 22;
+const INLINE_CLEF_PAD = 3;
+
+/**
+ * A clef announced mid-score, drawn smaller than the gutter's and seated on
+ * the staff it belongs to. Scaling about the staff's centre keeps it there.
+ *
+ * It sits in the tail of the measure before the bar line rather than after it.
+ * On paper the clef follows the bar line, but paper reserves width for it;
+ * here the downbeat note is centred on the bar line itself, so anything drawn
+ * after it lands on the note head. The tail is the one place in a
+ * time-proportional bar that a note never starts.
+ */
+function drawInlineClef(
+  ctx: CanvasRenderingContext2D,
+  clef: ClefKind,
+  barX: number,
+  staffTop: number,
+  palette: ScorePalette,
+): void {
+  const x = barX - INLINE_CLEF_W - INLINE_CLEF_PAD;
+  // A wash keeps it legible over whatever the tail of the bar happens to hold.
+  ctx.fillStyle = palette.gutterBg;
+  ctx.fillRect(x - 2, staffTop - 3, INLINE_CLEF_W + 4, STAFF_H + 6);
+  ctx.save();
+  const centreY = staffTop + STAFF_H / 2;
+  ctx.translate(x, centreY);
+  ctx.scale(INLINE_CLEF_SCALE, INLINE_CLEF_SCALE);
+  ctx.translate(-x, -centreY);
+  if (clef === 'treble') drawFallbackTrebleClef(ctx, x + 6, staffTop, palette);
+  else drawFallbackBassClef(ctx, x + 6, staffTop, palette);
+  ctx.restore();
+}
+
+/** Announce every clef that turns over inside the visible span. */
+function drawClefChanges(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  layout: ScoreLayout,
+  palette: ScorePalette,
+): void {
+  const fromMs = view.scrollMs - 200;
+  const toMs = view.scrollMs + (view.widthPx - GUTTER) / view.pxPerMs + 200;
+  for (const measure of layout.measures) {
+    if (measure.endMs < fromMs || measure.startMs > toMs) continue;
+    const previous = layout.measures[measure.index - 1];
+    if (!previous) continue;
+    const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
+    if (x < GUTTER + INLINE_CLEF_W || x > view.widthPx) continue;
+    for (const staff of ['treble', 'bass'] as const) {
+      if (previous.clefs[staff] === measure.clefs[staff]) continue;
+      const top = staff === 'treble' ? view.trebleTop : view.bassTop;
+      drawInlineClef(ctx, measure.clefs[staff], x, top, palette);
+    }
+  }
+}
+
+/** The clef each staff reads under at `ms`, or the nearest one either side. */
+function clefsAt(layout: ScoreLayout, ms: number): Record<StaffKind, ClefKind> {
+  const index = measureIndexAt(layout.measures, ms);
+  const measure =
+    index !== null
+      ? layout.measures[index]
+      : ms < 0
+        ? layout.measures[0]
+        : layout.measures[layout.measures.length - 1];
+  return measure?.clefs ?? { treble: defaultClefFor('treble'), bass: defaultClefFor('bass') };
+}
+
+/** The clef glyph for a staff, falling back to a drawn one where unsupported. */
+function drawGutterClef(
+  ctx: CanvasRenderingContext2D,
+  clef: ClefKind,
+  staffTop: number,
+  palette: ScorePalette,
+): void {
+  const support = detectGlyphSupport(ctx);
+  if (clef === 'treble') {
+    if (support.treble) {
+      ctx.font = `${GAP * 4.1}px serif`;
+      ctx.fillText('\u{1D11E}', 8, staffTop + STAFF_H - GAP + GAP * 1.4);
+    } else {
+      drawFallbackTrebleClef(ctx, 14, staffTop, palette);
+    }
+    return;
+  }
+  if (support.bass) {
+    ctx.font = `${GAP * 3.2}px serif`;
+    ctx.fillText('\u{1D122}', 8, staffTop + GAP * 3.1);
+  } else {
+    drawFallbackBassClef(ctx, 14, staffTop, palette);
+  }
+}
+
 function drawGutter(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
-  timeSignature: TimeSignature,
+  input: ScoreRenderInput,
   palette: ScorePalette,
 ): void {
+  const { timeSignature } = input;
   ctx.fillStyle = palette.gutterBg;
   ctx.fillRect(0, 0, GUTTER, view.heightPx);
   ctx.strokeStyle = palette.barLine;
@@ -524,25 +637,15 @@ function drawGutter(
   ctx.lineTo(4.5, view.bassTop + STAFF_H);
   ctx.stroke();
 
-  const support = detectGlyphSupport(ctx);
   ctx.fillStyle = palette.noteDim;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
-  // Treble (G) clef.
-  if (support.treble) {
-    ctx.font = `${GAP * 4.1}px serif`;
-    ctx.fillText('\u{1D11E}', 8, view.trebleTop + STAFF_H - GAP + GAP * 1.4);
-  } else {
-    drawFallbackTrebleClef(ctx, 14, view.trebleTop, palette);
-  }
-  // Bass (F) clef.
-  if (support.bass) {
-    ctx.font = `${GAP * 3.2}px serif`;
-    ctx.fillText('\u{1D122}', 8, view.bassTop + GAP * 3.1);
-  } else {
-    drawFallbackBassClef(ctx, 14, view.bassTop, palette);
-  }
+  // The gutter sits over the music, so it has to name the clef in force where
+  // the view actually starts — not the one the piece opened with.
+  const clefs = clefsAt(input.layout, view.scrollMs);
+  drawGutterClef(ctx, clefs.treble, view.trebleTop, palette);
+  drawGutterClef(ctx, clefs.bass, view.bassTop, palette);
 
   // Time signature on both staffs.
   ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;

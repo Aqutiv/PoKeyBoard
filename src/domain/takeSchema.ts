@@ -37,6 +37,7 @@ export const noteEventSchema = z.object({
   // Neither one is audible, so playback and exports ignore them entirely.
   staff: z.enum(['treble', 'bass']).optional(),
   voice: z.number().int().min(0).max(MAX_NOTE_VOICE).optional(),
+  clef: z.enum(['treble', 'bass']).optional(),
 });
 
 export const pedalEventSchema = z.object({

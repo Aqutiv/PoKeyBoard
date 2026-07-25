@@ -56,7 +56,9 @@ takes seconds and never touches the audio engine.
 - Visual quantization to a 1/8 or 1/16 grid; ternary rhythms (triplets) land
   on the nearest binary slot and typically render as dotted values.
 - Sharps-only spelling, no key signatures (matches the on-screen score);
-  accidentals repeat on every occurrence.
+  accidentals repeat on every occurrence. Sharps that would foul each other —
+  closer than five steps, about the height of the glyph — stack into columns
+  left of the chord, the topmost nearest.
 - Whole-measure rests only; no partial rests, ties, dynamics, pedal or
   tuplet marks. Notes longer than a whole note render as a whole note.
 - Because there are no ties, a final chord that rings past its bar line is
@@ -67,9 +69,16 @@ takes seconds and never touches the audio engine.
 - Staff assignment follows the imported score's own `staff` per note, so a
   left hand written at or above middle C still prints on the bass staff.
   Recorded takes, and sources with a single staff, split at middle C as
-  before. Clefs never change mid-staff, so a lower-staff passage the source
-  engraved in a G clef prints with ledger lines instead (Mozart K. 545 bar
-  29 reaches C5, four lines above the bass staff).
+  before.
+- A staff is read under whichever clef the source gives it, and a clef that
+  turns over mid-piece is engraved after the bar line it takes over on (and
+  in the prefix of every system that opens under it). Only G and F clefs are
+  supported; a C clef (alto, tenor) drops any override and the staff goes back
+  to its own. A clef stands until something replaces it, so a measure with
+  nothing on a staff carries the last one forward. The clef rides on the notes
+  themselves — takes hold no rests — so a change the source declares during a
+  bar of rest is announced at the next note instead of where it was written.
+  Pitches are unaffected either way; only the announcement moves.
 - Notes struck together on one staff engrave as one chord per voice, stemmed
   apart, rather than as a single stem carrying the longest value. Imported
   voices beam continuously; where a take has none, voices are derived from
@@ -81,5 +90,4 @@ takes seconds and never touches the audio engine.
   move with them, so beams are unaffected; accidentals hang off the left of
   the whole chord and dots off its right, so neither lands on a displaced
   head. Only one displacement is available, so a cluster alternates on and off
-  the column rather than fanning out, and several accidentals in one chord
-  still stack at the same x.
+  the column rather than fanning out.

@@ -36,11 +36,14 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 - `bpm` 40–240; `countInBars` 0|1|2; denominator 2|4|8|16.
 - `tempo.changes` is **optional** (absent means one tempo throughout): sorted, `atMs ≥ 1`, `bpm` 40–240, ≤ 1024 entries. Note timing is always absolute ms, so a tempo map never moves a note — it tells the notation where bar lines fall and which note values to draw. Added without a schema bump: older takes parse untouched, and an older build drops the field.
 - `quantization` `off | 1/8 | 1/16` — **display only**; raw performance timing is never quantized.
-- A note's `staff` (`treble | bass`) and `voice` (integer 0–15) are **optional engraving hints
-  from an imported score**, never audible: `staff` is the hand the source wrote the note on and
-  overrides the notation's middle-C split, `voice` says which notes share a stem. Recorded takes
-  omit both and the notation falls back to pitch and written note value. Added the same way
-  `tempo.changes` was — no schema bump, older takes parse untouched, an older build drops them.
+- A note's `staff` (`treble | bass`), `voice` (integer 0–15) and `clef` (`treble | bass`) are
+  **optional engraving hints from an imported score**, never audible: `staff` is the hand the
+  source wrote the note on and overrides the notation's middle-C split, `voice` says which notes
+  share a stem, and `clef` is how that staff is read where the note falls — present only when it
+  differs from the staff's own, which is how a high left hand avoids a ladder of ledger lines.
+  Recorded takes omit all three and the notation falls back to pitch, written note value, and the
+  staff's own clef. Added the same way `tempo.changes` was — no schema bump, older takes parse
+  untouched, an older build drops them.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 
 ## Import pipeline

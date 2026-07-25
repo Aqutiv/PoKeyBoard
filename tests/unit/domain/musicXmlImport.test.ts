@@ -232,6 +232,73 @@ describe('staves and voices', () => {
     ]);
   });
 
+  it('records a clef only where it is not the staff’s own', () => {
+    // Mozart K. 545 gives its lower staff a G clef where the left hand climbs.
+    const gClefOnStaff2 =
+      '<attributes><divisions>1</divisions>' +
+      '<time><beats>4</beats><beat-type>4</beat-type></time><staves>2</staves>' +
+      '<clef number="1"><sign>G</sign><line>2</line></clef>' +
+      '<clef number="2"><sign>G</sign><line>2</line></clef></attributes>';
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          gClefOnStaff2 +
+            note('C', 5, 4, '<staff>1</staff>') +
+            '<backup><duration>4</duration></backup>' +
+            note('C', 4, 4, '<staff>2</staff>'),
+        ),
+      ),
+    );
+    const [lower, upper] = take.notes as [(typeof take.notes)[0], (typeof take.notes)[0]];
+    // The upper staff's G clef is its own, so it says nothing.
+    expect(upper).not.toHaveProperty('clef');
+    // The lower staff's is not, so it is carried.
+    expect(lower.staff).toBe('bass');
+    expect(lower.clef).toBe('treble');
+  });
+
+  it('turns a clef back when the score does', () => {
+    const clefFor = (sign: string): string =>
+      `<attributes><clef number="2"><sign>${sign}</sign><line>${sign === 'G' ? 2 : 4}</line></clef></attributes>`;
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(1, GRAND_DIV1 + clefFor('G') + note('C', 4, 4, '<staff>2</staff>')) +
+          measure(2, clefFor('F') + note('C', 3, 4, '<staff>2</staff>')),
+      ),
+    );
+    expect(take.notes.map((n) => n.clef)).toEqual(['treble', undefined]);
+  });
+
+  it('drops a clef override when a C clef takes over from it', () => {
+    // G on the lower staff, then alto: the G must not stand after the alto
+    // replaced it, or every later note reads under a clef the score dropped.
+    const clefFor = (sign: string, line: number): string =>
+      `<attributes><clef number="2"><sign>${sign}</sign><line>${line}</line></clef></attributes>`;
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(1, GRAND_DIV1 + clefFor('G', 2) + note('C', 4, 4, '<staff>2</staff>')) +
+          measure(2, clefFor('C', 3) + note('C', 4, 4, '<staff>2</staff>')),
+      ),
+    );
+    expect(take.notes[0]!.clef).toBe('treble');
+    expect(take.notes[1]).not.toHaveProperty('clef');
+  });
+
+  it('ignores a C clef, leaving the staff reading its own', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          GRAND_DIV1 +
+            '<attributes><clef number="2"><sign>C</sign><line>3</line></clef></attributes>' +
+            note('C', 4, 4, '<staff>2</staff>'),
+        ),
+      ),
+    );
+    expect(take.notes[0]).not.toHaveProperty('clef');
+  });
+
   it('keeps the staff of the note a tie chain started on', () => {
     const take = musicXmlToTake(
       scoreWith(

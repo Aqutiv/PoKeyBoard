@@ -1,5 +1,6 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import {
+  ACCIDENTAL_COLUMN_W_G,
   BEAM_SPACING_G,
   BEAM_THICKNESS_G,
   HEAD_RX_G,
@@ -15,6 +16,7 @@ import {
   type SheetPageMetrics,
   type SheetSystem,
 } from './sheetLayout';
+import type { ClefKind } from './staffMapping';
 
 /**
  * Draws one sheet page in engraved print style: black ink on white paper.
@@ -157,8 +159,8 @@ function drawSystem(ctx: CanvasRenderingContext2D, system: SheetSystem, page: Sh
   ctx.lineTo(system.xPt, bassBottom);
   ctx.stroke();
 
-  drawTrebleClef(ctx, system.xPt + 13, system.trebleTopPt);
-  drawBassClef(ctx, system.xPt + 12, system.bassTopPt);
+  drawClef(ctx, system.clefs.treble, system.xPt + 13, system.trebleTopPt, 1);
+  drawClef(ctx, system.clefs.bass, system.xPt + 12, system.bassTopPt, 1);
 
   if (system.showTimeSignature) drawTimeSignature(ctx, system, metrics, page.timeSignature);
 
@@ -182,6 +184,12 @@ function drawMeasure(
 ): void {
   const bassBottom = system.bassTopPt + 4 * G;
   const endX = measure.xPt + measure.widthPt;
+
+  // A clef turning over is engraved small, just inside the bar line it follows.
+  for (const staff of measure.clefChanges) {
+    const staffTop = staff === 'treble' ? system.trebleTopPt : system.bassTopPt;
+    drawClef(ctx, measure.clefs[staff], measure.xPt + 1.5 * G, staffTop, CLEF_CHANGE_SCALE);
+  }
 
   if (measure.tempoMarkBpm !== null) {
     drawTempoMark(ctx, measure.xPt + 1, system.tempoMarkBaselinePt, measure.tempoMarkBpm);
@@ -281,7 +289,9 @@ function drawChord(
     }
     ctx.restore();
 
-    if (note.accidental) drawSharp(ctx, leftEdgeX - 1.5 * G, y);
+    if (note.accidental) {
+      drawSharp(ctx, leftEdgeX - 1.5 * G - note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G, y);
+    }
     if (chord.symbol.dotted) {
       // Dots sit in a space: shift line-notes up half a space.
       const dotY = y - (note.step % 2 === 0 ? G / 2 : 0);
@@ -411,6 +421,38 @@ function drawBrace(ctx: CanvasRenderingContext2D, x: number, top: number, bottom
   ctx.bezierCurveTo(right - 0.2, mid - h * 0.14, right - 5.2, top + h * 0.26, right, top);
   ctx.closePath();
   ctx.fill();
+}
+
+/** Scale a clef announcing a change mid-staff is drawn at. */
+const CLEF_CHANGE_SCALE = 0.72;
+
+/**
+ * A clef at `cx`, drawn at `scale` — full size in a system prefix, smaller
+ * where one turns over mid-staff. The glyphs are laid out around the staff
+ * top, so scaling about that point keeps them seated on their own lines.
+ */
+function drawClef(
+  ctx: CanvasRenderingContext2D,
+  clef: ClefKind,
+  cx: number,
+  staffTop: number,
+  scale: number,
+): void {
+  if (scale === 1) {
+    if (clef === 'treble') drawTrebleClef(ctx, cx, staffTop);
+    else drawBassClef(ctx, cx, staffTop);
+    return;
+  }
+  ctx.save();
+  // Scale about the staff's vertical centre so a smaller clef stays centred on
+  // the staff rather than riding up off its top line.
+  const centreY = staffTop + 2 * G;
+  ctx.translate(cx, centreY);
+  ctx.scale(scale, scale);
+  ctx.translate(-cx, -centreY);
+  if (clef === 'treble') drawTrebleClef(ctx, cx, staffTop);
+  else drawBassClef(ctx, cx, staffTop);
+  ctx.restore();
 }
 
 /** Stylized G clef: spiral on the G line, tall flourish, tail with a dot. */

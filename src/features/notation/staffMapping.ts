@@ -1,4 +1,4 @@
-import type { NoteStaff } from '@/domain/takeTypes';
+import type { NoteClef, NoteStaff } from '@/domain/takeTypes';
 
 /**
  * MIDI → grand-staff geometry in C-major display context (explicit sharps).
@@ -7,6 +7,12 @@ import type { NoteStaff } from '@/domain/takeTypes';
  * treble staff (first ledger line below).
  */
 export type StaffKind = NoteStaff;
+export type ClefKind = NoteClef;
+
+/** The clef a staff carries unless the score says otherwise. */
+export function defaultClefFor(staff: StaffKind): ClefKind {
+  return staff;
+}
 
 const DIATONIC_STEP: Record<number, number> = {
   0: 0, // C
@@ -26,6 +32,8 @@ export const TREBLE_SPLIT_MIDI = 60;
 
 export interface StaffPosition {
   staff: StaffKind;
+  /** The clef this position was read under. */
+  clef: ClefKind;
   /** Diatonic steps above the staff's bottom line (may be negative). */
   step: number;
   /** '#' when the pitch is a black key (C-major spelling), else null. */
@@ -34,11 +42,20 @@ export interface StaffPosition {
 
 /**
  * `staffHint` is the staff an imported score wrote the note on, and always
- * wins: a left hand reaching above middle C stays on the bass staff and gets
- * ledger lines, which is how the source engraved it. Without a hint (recorded
- * takes, sources with one staff) the split falls back to middle C.
+ * wins: a left hand reaching above middle C stays on the bass staff, which is
+ * how the source engraved it. Without a hint (recorded takes, sources with one
+ * staff) the split falls back to middle C.
+ *
+ * `clefHint` is how that staff is read where the note falls — the two are
+ * independent, so a bass staff under a G clef puts a high left hand on the
+ * staff instead of a ladder of ledger lines. It defaults to the staff's own
+ * clef, which is what every recorded take uses.
  */
-export function midiToStaffPosition(midi: number, staffHint?: StaffKind): StaffPosition {
+export function midiToStaffPosition(
+  midi: number,
+  staffHint?: StaffKind,
+  clefHint?: ClefKind,
+): StaffPosition {
   const pitchClass = ((midi % 12) + 12) % 12;
   const octave = Math.floor(midi / 12) - 1;
   const natural = DIATONIC_STEP[pitchClass];
@@ -47,8 +64,9 @@ export function midiToStaffPosition(midi: number, staffHint?: StaffKind): StaffP
   const letterStep = isSharp ? (DIATONIC_STEP[pitchClass - 1] as number) : natural;
   const absolute = octave * 7 + letterStep;
   const staff: StaffKind = staffHint ?? (midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
-  const reference = staff === 'treble' ? TREBLE_BOTTOM_LINE : BASS_BOTTOM_LINE;
-  return { staff, step: absolute - reference, accidental: isSharp ? '#' : null };
+  const clef: ClefKind = clefHint ?? defaultClefFor(staff);
+  const reference = clef === 'treble' ? TREBLE_BOTTOM_LINE : BASS_BOTTOM_LINE;
+  return { staff, clef, step: absolute - reference, accidental: isSharp ? '#' : null };
 }
 
 /**

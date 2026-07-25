@@ -9,7 +9,7 @@ import {
   type ScoreLayout,
 } from './notationLayout';
 import type { DurationSymbol } from './quantization';
-import type { StaffKind } from './staffMapping';
+import type { ClefKind, StaffKind } from './staffMapping';
 
 /**
  * Paginated engraving layout for printable sheet music. Consumes the same
@@ -39,6 +39,10 @@ export const HEAD_RX_G = 0.64;
 export const STEM_X_G = HEAD_RX_G - 0.1;
 /** Extra lead reserved before a column that carries an accidental. */
 export const ACCIDENTAL_LEAD_G = 1.7;
+/** Each further accidental column stacked left of the first. */
+export const ACCIDENTAL_COLUMN_W_G = 1.4;
+/** Width a mid-staff clef change takes at the head of a measure. */
+export const CLEF_CHANGE_W_G = 3.6;
 /** Band a system reserves above the music for a mid-score tempo mark (pt). */
 export const TEMPO_MARK_SPACE_PT = 20;
 /** The mark's baseline inside that band, measured from the band's top. */
@@ -120,6 +124,8 @@ export interface SheetNote {
   midi: number;
   step: number;
   accidental: '#' | null;
+  /** Which column left of the chord the accidental goes in, 0 nearest. */
+  accidentalColumn: number;
   ledger: number[];
   /** Head-widths this head sits clear of the column; see `HeadShift`. */
   headShift: HeadShift;
@@ -127,6 +133,7 @@ export interface SheetNote {
 
 export interface SheetChord {
   staff: StaffKind;
+  clef: ClefKind;
   /** Sorted by step ascending (lowest pitch first). */
   notes: SheetNote[];
   /** The staff voice this chord belongs to; see `ChordGroup.voice`. */
@@ -173,6 +180,14 @@ export interface SheetMeasure {
   bpm: number;
   /** Set on the first measure of a new tempo — engrave a "♩ = n" mark. */
   tempoMarkBpm: number | null;
+  /** The clef each staff reads under here. */
+  clefs: Record<StaffKind, ClefKind>;
+  /**
+   * Staffs whose clef turns over at this measure, so the renderer engraves the
+   * new one after the bar line. Empty on the first measure of a system, where
+   * the system prefix already shows it.
+   */
+  clefChanges: StaffKind[];
 }
 
 export interface SheetSystem {
@@ -184,6 +199,8 @@ export interface SheetSystem {
   trebleTopPt: number;
   bassTopPt: number;
   measures: SheetMeasure[];
+  /** The clef each staff opens this system under. */
+  clefs: Record<StaffKind, ClefKind>;
   /** 1-based label at the system start. */
   firstMeasureNumber: number;
   /** True only on the first system of the piece. */
@@ -255,10 +272,14 @@ interface WorkMeasure {
   naturalWG: number;
   bpm: number;
   tempoMarkBpm: number | null;
+  clefs: Record<StaffKind, ClefKind>;
+  /** Staffs whose clef differs from the measure before it, system aside. */
+  clefTurnsOver: StaffKind[];
 }
 
 interface WorkSystem {
   measures: SheetMeasure[];
+  clefs: Record<StaffKind, ClefKind>;
   widthPt: number;
   /** Space needed above the treble top line / below the bass bottom line. */
   abovePt: number;
@@ -294,20 +315,26 @@ function advanceG(deltaMs: number, wholeMs: number): number {
   return clamp(10 * Math.pow(Math.max(deltaMs, 0) / wholeMs, 0.47), MIN_ADV_G, MAX_ADV_G);
 }
 
-function columnHasAccidental(column: WorkColumn): boolean {
+/** How many accidental columns the widest chord here needs (0 if none). */
+function accidentalColumnsIn(column: WorkColumn): number {
+  let columns = 0;
   for (const chord of [...column.treble, ...column.bass]) {
-    if (chord.notes.some((note) => note.accidental !== null)) return true;
+    for (const note of chord.notes) {
+      if (note.accidental !== null) columns = Math.max(columns, note.accidentalColumn + 1);
+    }
   }
-  return false;
+  return columns;
 }
 
 function toSheetChord(chord: ChordGroup): SheetChord {
   return {
     staff: chord.staff,
+    clef: chord.clef,
     notes: chord.notes.map((note) => ({
       midi: note.midi,
       step: note.step,
       accidental: note.accidental,
+      accidentalColumn: note.accidentalColumn,
       ledger: note.ledger,
       headShift: note.headShift,
     })),
@@ -330,8 +357,14 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
     // Spacing is relative to the local whole note, so bars either side of a
     // tempo change engrave the same rhythms at the same widths.
     const wholeMs = wholeNoteDurationMs(measure.bpm);
-    const previousBpm = position === 0 ? null : (score.measures[position - 1] as MeasureInfo).bpm;
-    const tempoMarkBpm = previousBpm !== null && previousBpm !== measure.bpm ? measure.bpm : null;
+    const previous = position === 0 ? null : (score.measures[position - 1] as MeasureInfo);
+    const tempoMarkBpm = previous !== null && previous.bpm !== measure.bpm ? measure.bpm : null;
+    const clefTurnsOver: StaffKind[] = [];
+    if (previous !== null) {
+      for (const staff of ['treble', 'bass'] as const) {
+        if (previous.clefs[staff] !== measure.clefs[staff]) clefTurnsOver.push(staff);
+      }
+    }
     const byTime = new Map<number, WorkColumn>();
     for (const chord of chordsByMeasure[measure.index]!) {
       let column = byTime.get(chord.displayStartMs);
@@ -349,19 +382,27 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
         index: measure.index,
         startMs: measure.startMs,
         columns,
-        naturalWG: EMPTY_MEASURE_W_G,
+        naturalWG: EMPTY_MEASURE_W_G + clefTurnsOver.length * CLEF_CHANGE_W_G,
         bpm: measure.bpm,
         tempoMarkBpm,
+        clefs: measure.clefs,
+        clefTurnsOver,
       };
     }
 
     const lead = columns[0]!.timeMs - measure.startMs;
     let offset =
-      START_PAD_G + (lead > 0 ? Math.min(advanceG(lead, wholeMs), LEAD_SILENCE_MAX_G) : 0);
+      START_PAD_G +
+      // A clef turning over needs room after the bar line before the music.
+      (clefTurnsOver.length > 0 ? CLEF_CHANGE_W_G : 0) +
+      (lead > 0 ? Math.min(advanceG(lead, wholeMs), LEAD_SILENCE_MAX_G) : 0);
     for (let i = 0; i < columns.length; i += 1) {
       const column = columns[i]!;
       if (i > 0) offset += advanceG(column.timeMs - columns[i - 1]!.timeMs, wholeMs);
-      if (columnHasAccidental(column)) offset += ACCIDENTAL_LEAD_G;
+      const accidentals = accidentalColumnsIn(column);
+      if (accidentals > 0) {
+        offset += ACCIDENTAL_LEAD_G + (accidentals - 1) * ACCIDENTAL_COLUMN_W_G;
+      }
       column.headOffG = offset;
     }
     const tailMs = measure.endMs - columns[columns.length - 1]!.timeMs;
@@ -373,6 +414,8 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
       naturalWG,
       bpm: measure.bpm,
       tempoMarkBpm,
+      clefs: measure.clefs,
+      clefTurnsOver,
     };
   });
 }
@@ -408,7 +451,7 @@ function packSystems(
   return rows.map((row, systemIndex) => {
     let x =
       metrics.marginLeftPt + metrics.clefAreaPt + (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
-    const measures: SheetMeasure[] = row.measures.map((wm) => {
+    const measures: SheetMeasure[] = row.measures.map((wm, position) => {
       const widthPt = wm.naturalWG * row.stretch * G;
       const columns: SheetColumn[] = wm.columns.map((column) => ({
         timeMs: column.timeMs,
@@ -425,6 +468,10 @@ function packSystems(
         beams: [],
         bpm: wm.bpm,
         tempoMarkBpm: wm.tempoMarkBpm,
+        clefs: wm.clefs,
+        // The system prefix already engraves the clef it opens under, so a
+        // turnover landing on the first measure needs nothing after the bar.
+        clefChanges: position === 0 ? [] : wm.clefTurnsOver,
       };
       x += widthPt;
       return measure;
@@ -439,6 +486,7 @@ function packSystems(
       widthPt: x - metrics.marginLeftPt,
       abovePt: extents.abovePt,
       belowPt: extents.belowPt,
+      clefs: (row.measures[0] as WorkMeasure).clefs,
     };
   });
 }
@@ -654,6 +702,7 @@ function paginate(
       trebleTopPt,
       bassTopPt,
       measures: system.measures,
+      clefs: system.clefs,
       firstMeasureNumber: system.measures[0]!.index + 1,
       showTimeSignature: s === 0,
       isLast: s === systems.length - 1,
