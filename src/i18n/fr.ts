@@ -90,6 +90,7 @@ export const fr: Messages = {
     importMenuLabel: 'Options d’importation',
     importJson: 'Fichier de prise (JSON)',
     importMxl: 'Partition (MXL)',
+    importUrl: 'Depuis un lien (URL)',
     loading: 'Chargement…',
     empty:
       'Aucune prise pour l’instant. Enregistrez quelque chose sur l’écran Jouer, ou importez un fichier JSON de prise.',
@@ -164,6 +165,18 @@ export const fr: Messages = {
     replaceExisting: 'Remplacer la prise existante',
     cancel: 'Annuler',
     import: 'Importer',
+  },
+  importUrlDialog: {
+    title: 'Importer depuis un lien',
+    urlLabel: 'Lien du fichier',
+    placeholder: 'https://exemple.com/partition.mxl',
+    hint: 'Collez un lien direct vers un fichier .mxl, .musicxml, .xml ou .json PoKeyBoard. Le site qui l’héberge doit autoriser les téléchargements depuis d’autres applications, ce que beaucoup ne font pas.',
+    loading: 'Téléchargement…',
+    httpError: ({ status }) =>
+      `Le site a répondu par une erreur (${status}). Vérifiez le lien et réessayez.`,
+    useFilePicker: 'Choisir un fichier à la place',
+    cancel: 'Annuler',
+    fetch: 'Importer',
   },
   exportDialog: {
     title: 'Exporter l’audio',
@@ -328,6 +341,12 @@ export const fr: Messages = {
     exportTooLong: 'Cette prise dépasse 20 minutes — l’export est limité pour protéger la mémoire.',
     exportPianoLoading: 'Le piano se charge encore — réessayez l’export dans un instant.',
     sheetExportFailed: 'Échec de l’export de la partition.',
+    importUrlInvalid: 'Ce n’est pas un lien http(s) valide vers un fichier.',
+    importUrlOffline: 'Vous semblez hors ligne. Reconnectez-vous et réessayez le lien.',
+    importUrlBlocked:
+      'Le lien n’a pas pu être téléchargé. De nombreux sites bloquent les téléchargements depuis d’autres applications — enregistrez le fichier sur votre appareil puis importez-le avec le sélecteur de fichiers.',
+    importUrlTimedOut: 'Le téléchargement a pris trop de temps et a été interrompu.',
+    importUrlFailed: 'Le lien n’a pas pu être téléchargé.',
   },
   repairs: {
     takeId: 'Un nouvel id de prise a été attribué.',

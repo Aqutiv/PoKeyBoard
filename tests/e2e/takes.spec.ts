@@ -20,6 +20,17 @@ const VALID_TAKE = {
   display: { quantization: '1/16', zoom: 1, playheadMs: 0 },
 };
 
+const SCORE_XML =
+  '<?xml version="1.0" encoding="UTF-8"?>' +
+  '<score-partwise version="3.1"><part-list>' +
+  '<score-part id="P1"><part-name>P1</part-name></score-part></part-list>' +
+  '<part id="P1"><measure number="1">' +
+  '<attributes><divisions>1</divisions>' +
+  '<time><beats>4</beats><beat-type>4</beat-type></time></attributes>' +
+  '<note><pitch><step>C</step><octave>4</octave></pitch><duration>1</duration></note>' +
+  '<note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration></note>' +
+  '</measure></part></score-partwise>';
+
 test.describe('takes library', () => {
   test('lists a recorded take; rename, duplicate, and delete work', async ({ page }) => {
     await gotoAppReady(page);
@@ -107,7 +118,11 @@ test.describe('takes library', () => {
     const trigger = page.getByRole('button', { name: 'Import', exact: true });
     await trigger.click();
     const menu = page.getByRole('menu', { name: 'Import options' });
-    await expect(menu.getByRole('menuitem')).toHaveText(['Music score (MXL)', 'Take file (JSON)']);
+    await expect(menu.getByRole('menuitem')).toHaveText([
+      'Music score (MXL)',
+      'Take file (JSON)',
+      'From a link (URL)',
+    ]);
 
     // The picker only opens if the item kept user activation through the close.
     const scoreChooser = page.waitForEvent('filechooser');
@@ -123,6 +138,136 @@ test.describe('takes library', () => {
     expect(await (await takeChooser).element().getAttribute('aria-label')).toBe(
       'Import take JSON file',
     );
+  });
+
+  test('imports a score from a pasted link', async ({ page }) => {
+    await gotoAppReady(page);
+    // Same-origin, so CORS is out of the picture; the service worker routes
+    // only navigations and /piano/, so this reaches Playwright's interception.
+    await page.route('**/fixtures/linked.musicxml', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/xml', body: SCORE_XML }),
+    );
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'From a link (URL)' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Import from a link' });
+    await expect(dialog).toBeVisible();
+    await dialog.getByLabel('File link').fill('http://127.0.0.1:4173/fixtures/linked.musicxml');
+    await dialog.getByRole('button', { name: 'Import', exact: true }).click();
+
+    const preview = page.getByRole('dialog', { name: 'Import take' });
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('linked'); // titled from the link's file name
+    await preview.getByRole('button', { name: 'Import', exact: true }).click();
+    // Lands on Play with the downloaded score active.
+    await expect(page.getByRole('heading', { name: 'linked' })).toBeVisible();
+  });
+
+  test('a link that cannot be downloaded offers the file picker instead', async ({ page }) => {
+    await gotoAppReady(page);
+    await page.route('**/fixtures/blocked.mxl', (route) => route.abort('failed'));
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'From a link (URL)' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Import from a link' });
+    await dialog.getByLabel('File link').fill('http://127.0.0.1:4173/fixtures/blocked.mxl');
+    await dialog.getByRole('button', { name: 'Import', exact: true }).click();
+
+    await expect(dialog.getByRole('alert')).toContainText('could not be downloaded');
+    // The link stays put so the user can fix a typo instead of retyping.
+    await expect(dialog.getByLabel('File link')).toHaveValue(
+      'http://127.0.0.1:4173/fixtures/blocked.mxl',
+    );
+
+    const chooser = page.waitForEvent('filechooser');
+    await dialog.getByRole('button', { name: 'Choose a file instead' }).click();
+    expect(await (await chooser).element().getAttribute('aria-label')).toBe('Import MusicXML file');
+  });
+
+  test('the blocked-link fallback picker still accepts a take JSON', async ({ page }) => {
+    await gotoAppReady(page);
+    await page.route('**/fixtures/blocked.pokeyboard.json', (route) => route.abort('failed'));
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'From a link (URL)' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Import from a link' });
+    await dialog
+      .getByLabel('File link')
+      .fill('http://127.0.0.1:4173/fixtures/blocked.pokeyboard.json');
+    await dialog.getByRole('button', { name: 'Import', exact: true }).click();
+    await expect(dialog.getByRole('alert')).toContainText('could not be downloaded');
+    await dialog.getByRole('button', { name: 'Choose a file instead' }).click();
+
+    // The fallback opens the unfiltered score picker, so a take JSON picked
+    // there must not be parsed as MusicXML just because of which input it was.
+    await page.getByLabel('Import MusicXML file').setInputFiles({
+      name: 'PoKeyBoard - Imported scale.pokeyboard.json',
+      mimeType: 'application/json',
+      buffer: Buffer.from(JSON.stringify(VALID_TAKE)),
+    });
+    await expect(page.getByRole('dialog', { name: 'Import take' })).toContainText('Imported scale');
+  });
+
+  test('rejects a link that is not an http(s) file link', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    await page.getByRole('button', { name: 'Import', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'From a link (URL)' }).click();
+
+    const dialog = page.getByRole('dialog', { name: 'Import from a link' });
+    // Enter submits the single-field form, so the mouse is never required.
+    await dialog.getByLabel('File link').fill('javascript:alert(1)');
+    await dialog.getByLabel('File link').press('Enter');
+
+    await expect(dialog.getByRole('alert')).toContainText('not a valid http(s) link');
+    await expect(dialog).toBeVisible();
+  });
+
+  test('imports a score dropped as a link from another browser window', async ({ page }) => {
+    await gotoAppReady(page);
+    await page.route('**/fixtures/dropped.musicxml', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/xml', body: SCORE_XML }),
+    );
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    // Both pages render as `.page`, so wait or the drop lands on Play.
+    await expect(page.getByRole('button', { name: 'Backup all takes' })).toBeVisible();
+
+    // A dragged link carries no file — only the text flavours Chrome supplies.
+    await page.locator('.page').evaluate((node) => {
+      const data = new DataTransfer();
+      data.setData('text/uri-list', 'http://127.0.0.1:4173/fixtures/dropped.musicxml');
+      data.setData('text/plain', 'http://127.0.0.1:4173/fixtures/dropped.musicxml');
+      node.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true }));
+    });
+
+    const preview = page.getByRole('dialog', { name: 'Import take' });
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('dropped');
+    await preview.getByRole('button', { name: 'Import', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'dropped' })).toBeVisible();
+  });
+
+  test('ignores dropped text that is not a link', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    await expect(page.getByRole('button', { name: 'Backup all takes' })).toBeVisible();
+
+    await page.locator('.page').evaluate((node) => {
+      const data = new DataTransfer();
+      data.setData('text/plain', 'just some selected words');
+      node.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true }));
+    });
+
+    // Silence is correct here: no dialog, and no error blaming the user.
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+    await expect(page.getByRole('status')).toHaveCount(0);
   });
 
   test('Escape closes the Import menu and returns focus to the trigger', async ({ page }) => {

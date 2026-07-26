@@ -12,7 +12,7 @@ import {
   takeExists,
 } from '@/data/takeRepository';
 import { ensureNotLibraryTake } from '@/domain/libraryTakes';
-import { extractMusicXmlText } from '@/domain/mxlContainer';
+import { extractMusicXmlText, isScoreFileName } from '@/domain/mxlContainer';
 import { musicXmlToTake } from '@/domain/musicXmlImport';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
@@ -23,20 +23,31 @@ import { pinLanguage } from '@/i18n/languagePreference';
 import { useTakeStore } from '@/state/useTakeStore';
 import { loadSettings } from '@/data/settingsRepository';
 import { useSettingsStore } from '@/state/useSettingsStore';
-import { ImportValidationError, ScoreImportError } from '@/utils/errors';
+import {
+  AppError,
+  ImportValidationError,
+  RemoteImportCancelled,
+  RemoteImportError,
+  ScoreImportError,
+} from '@/utils/errors';
 import { backupFileName, takeJsonFileName } from '@/utils/filenames';
+import { fileNameFromImportUrl, parseImportUrl } from '@/utils/importUrl';
 import { newId } from '@/utils/ids';
 
 const MAX_TAKE_IMPORT_BYTES = 10 * 1024 * 1024;
 const MAX_SCORE_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_BACKUP_IMPORT_BYTES = 100 * 1024 * 1024;
 
-function rejectOversizedFile(file: File, maximumBytes: number, kind: string): void {
-  if (file.size > maximumBytes) {
+function rejectOversizedBytes(byteLength: number, maximumBytes: number, kind: string): void {
+  if (byteLength > maximumBytes) {
     throw new ImportValidationError([
-      `${kind} is too large (${Math.ceil(file.size / 1_048_576)} MB; maximum ${Math.floor(maximumBytes / 1_048_576)} MB).`,
+      `${kind} is too large (${Math.ceil(byteLength / 1_048_576)} MB; maximum ${Math.floor(maximumBytes / 1_048_576)} MB).`,
     ]);
   }
+}
+
+function rejectOversizedFile(file: File, maximumBytes: number, kind: string): void {
+  rejectOversizedBytes(file.size, maximumBytes, kind);
 }
 
 /** Stop any transport activity before swapping the active take. */
@@ -185,21 +196,25 @@ export interface ImportPreview {
   fileName: string;
 }
 
-export async function previewImportFile(file: File): Promise<ImportPreview> {
-  rejectOversizedFile(file, MAX_TAKE_IMPORT_BYTES, 'The take file');
-  const text = await file.text();
-  const parsed = parseTakeJsonString(text);
+/** Preview take JSON already read into memory, whatever carried it here. */
+export async function previewImportTakeText(
+  text: string,
+  fileName: string,
+): Promise<ImportPreview> {
+  const parsed = parseTakeJsonString(text.charCodeAt(0) === 0xfeff ? text.slice(1) : text);
   const collision = await takeExists(parsed.take.id);
-  return { parsed, collision, fileName: file.name };
+  return { parsed, collision, fileName };
 }
 
-/** Preview an MXL/MusicXML score file as a freshly converted take. */
-export async function previewImportScoreFile(file: File): Promise<ImportPreview> {
+/** Preview MXL/MusicXML bytes already in memory as a freshly converted take. */
+export async function previewImportScoreBytes(
+  bytes: Uint8Array,
+  fileName: string,
+): Promise<ImportPreview> {
   let parsed: ParsedTake;
   try {
-    rejectOversizedFile(file, MAX_SCORE_IMPORT_BYTES, 'The score file');
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const take = musicXmlToTake(extractMusicXmlText(bytes), file.name);
+    rejectOversizedBytes(bytes.byteLength, MAX_SCORE_IMPORT_BYTES, 'The score file');
+    const take = musicXmlToTake(extractMusicXmlText(bytes), fileName);
     parsed = parseTakeJson(take); // defense-in-depth: the uniform import pipeline
   } catch (error) {
     if (error instanceof ScoreImportError) throw error;
@@ -207,7 +222,187 @@ export async function previewImportScoreFile(file: File): Promise<ImportPreview>
     throw new ScoreImportError([error instanceof Error ? error.message : String(error)]);
   }
   const collision = await takeExists(parsed.take.id); // fresh id — effectively always false
-  return { parsed, collision, fileName: file.name };
+  return { parsed, collision, fileName };
+}
+
+export async function previewImportFile(file: File): Promise<ImportPreview> {
+  rejectOversizedFile(file, MAX_TAKE_IMPORT_BYTES, 'The take file');
+  return previewImportTakeText(await file.text(), file.name);
+}
+
+/** Preview an MXL/MusicXML score file as a freshly converted take. */
+export async function previewImportScoreFile(file: File): Promise<ImportPreview> {
+  try {
+    // Cheap early-out so an oversized pick is never buffered into memory.
+    rejectOversizedFile(file, MAX_SCORE_IMPORT_BYTES, 'The score file');
+  } catch (error) {
+    if (error instanceof ImportValidationError) throw new ScoreImportError(error.issues);
+    throw error;
+  }
+  return previewImportScoreBytes(new Uint8Array(await file.arrayBuffer()), file.name);
+}
+
+// --------------------------------------------------------- import by URL --
+
+const REMOTE_IMPORT_TIMEOUT_MS = 30_000;
+
+type RemoteImportKind = 'score' | 'take';
+
+function kindFromContentType(header: string | null): RemoteImportKind | null {
+  if (header === null) return null;
+  const type = (header.split(';')[0] ?? '').trim().toLowerCase();
+  if (type === 'application/json' || type === 'text/json') return 'take';
+  if (type === 'application/xml' || type === 'text/xml' || type.endsWith('+xml')) return 'score';
+  if (type.startsWith('application/vnd.recordare.musicxml')) return 'score';
+  return null;
+}
+
+/** Last resort: hosts lie about Content-Type (raw GitHub serves MusicXML as text/plain). */
+function kindFromBytes(bytes: Uint8Array): RemoteImportKind | null {
+  if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
+    return 'score'; // MXL is a zip
+  }
+  const skippable = new Set([0x20, 0x09, 0x0a, 0x0d, 0xef, 0xbb, 0xbf]); // space, tabs, EOLs, BOM
+  for (const byte of bytes.subarray(0, 64)) {
+    if (skippable.has(byte)) continue;
+    if (byte === 0x3c) return 'score'; // '<' — raw MusicXML
+    if (byte === 0x7b) return 'take'; // '{' — take JSON
+    return null;
+  }
+  return null;
+}
+
+/** The final URL after redirects is the truthful one; fall back to what was pasted. */
+function remoteFileName(requested: URL, responseUrl: string): string {
+  if (responseUrl !== '') {
+    try {
+      const fromResponse = fileNameFromImportUrl(new URL(responseUrl));
+      if (fromResponse !== '') return fromResponse;
+    } catch {
+      // Not a parsable URL (some mocked responses): use the requested one.
+    }
+  }
+  return fileNameFromImportUrl(requested);
+}
+
+/**
+ * Buffer a response body, bailing the moment it exceeds `maximumBytes`. A
+ * missing or dishonest Content-Length must not let a host stream unbounded
+ * data into memory — the same posture as the archive limits in mxlContainer.
+ */
+async function readBodyWithLimit(
+  response: Response,
+  maximumBytes: number,
+  kind: string,
+): Promise<Uint8Array> {
+  if (!response.body) {
+    const buffer = await response.arrayBuffer();
+    rejectOversizedBytes(buffer.byteLength, maximumBytes, kind);
+    return new Uint8Array(buffer);
+  }
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      total += value.byteLength;
+      rejectOversizedBytes(total, maximumBytes, kind);
+      chunks.push(value);
+    }
+  } catch (error) {
+    await reader.cancel().catch(() => undefined);
+    throw error;
+  }
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return out;
+}
+
+/**
+ * Download a score or take from a pasted link and preview it exactly as a
+ * picked file would be. Cross-origin success depends entirely on the host
+ * sending CORS headers; there is no proxy, and there cannot be one on a
+ * static deploy, so a rejection surfaces as `RemoteImportError('blocked')`.
+ */
+export async function previewImportUrl(
+  rawUrl: string,
+  signal?: AbortSignal,
+): Promise<ImportPreview> {
+  const url = parseImportUrl(rawUrl);
+  // An already-aborted signal never fires `abort` again, so nothing would
+  // forward it — bail before a request the caller has already given up on.
+  if (signal?.aborted === true) throw new RemoteImportCancelled();
+  const controller = new AbortController();
+  let timedOut = false;
+  let cancelled = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, REMOTE_IMPORT_TIMEOUT_MS);
+  const forwardAbort = () => {
+    cancelled = true;
+    controller.abort();
+  };
+  signal?.addEventListener('abort', forwardAbort, { once: true });
+
+  try {
+    // The service worker runtime-caches only /piano/, so this passes straight
+    // through to the network — do not add a catch-all route without revisiting.
+    const response = await fetch(url, {
+      signal: controller.signal,
+      mode: 'cors',
+      credentials: 'omit', // never send cookies to a third-party host
+      redirect: 'follow',
+      cache: 'no-store',
+    });
+    if (!response.ok) throw new RemoteImportError('http', { status: response.status });
+
+    // Content-Length is CORS-safelisted, so this early-out works cross-origin.
+    const declared = Number(response.headers.get('content-length'));
+    if (Number.isFinite(declared) && declared > 0) {
+      rejectOversizedBytes(declared, MAX_SCORE_IMPORT_BYTES, 'The linked file');
+    }
+
+    const fileName = remoteFileName(url, response.url);
+    let kind: RemoteImportKind | null = null;
+    if (fileName !== '') {
+      if (isScoreFileName(fileName)) kind = 'score';
+      else if (/\.json$/i.test(fileName)) kind = 'take';
+    }
+    kind ??= kindFromContentType(response.headers.get('content-type'));
+
+    const bytes = await readBodyWithLimit(response, MAX_SCORE_IMPORT_BYTES, 'The linked file');
+    kind ??= kindFromBytes(bytes) ?? 'take'; // unknown falls through to the friendlier message
+
+    if (kind === 'score') {
+      return await previewImportScoreBytes(bytes, fileName === '' ? 'score.musicxml' : fileName);
+    }
+    rejectOversizedBytes(bytes.byteLength, MAX_TAKE_IMPORT_BYTES, 'The take file');
+    return await previewImportTakeText(
+      new TextDecoder('utf-8').decode(bytes),
+      fileName === '' ? 'take.json' : fileName,
+    );
+  } catch (error) {
+    controller.abort();
+    // Both a cancel and a timeout raise AbortError, so trust our own flags.
+    if (cancelled) throw new RemoteImportCancelled();
+    if (timedOut) throw new RemoteImportError('timeout', { cause: error });
+    if (error instanceof AppError) throw error;
+    // CORS, DNS, TLS and mixed-content all arrive as an opaque TypeError.
+    // `navigator.onLine` is only trustworthy when it is false.
+    const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+    throw new RemoteImportError(offline ? 'offline' : 'blocked', { cause: error });
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', forwardAbort);
+  }
 }
 
 /**

@@ -48,6 +48,50 @@ export class ScoreImportError extends AppError {
   }
 }
 
+/**
+ * Why a download from a pasted link failed. CORS, DNS, TLS and mixed-content
+ * rejections are all an opaque `TypeError` in the browser and cannot be told
+ * apart from script, so they share the single honest `blocked` kind.
+ */
+export type RemoteImportFailure = 'invalidUrl' | 'offline' | 'blocked' | 'timeout' | 'http';
+
+const REMOTE_IMPORT_MESSAGES: Record<RemoteImportFailure, [ErrorMessageKey, string]> = {
+  invalidUrl: ['importUrlInvalid', 'That is not a valid http(s) link to a file.'],
+  offline: ['importUrlOffline', 'You appear to be offline. Reconnect and try the link again.'],
+  blocked: [
+    'importUrlBlocked',
+    'The link could not be downloaded. Many sites block downloads from other apps — save the file to your device and import it with the file picker instead.',
+  ],
+  timeout: ['importUrlTimedOut', 'The download took too long and was stopped.'],
+  http: ['importUrlFailed', 'The link could not be downloaded.'],
+};
+
+export class RemoteImportError extends AppError {
+  readonly kind: RemoteImportFailure;
+  /** HTTP status, when `kind` is `'http'`. */
+  readonly status?: number;
+
+  constructor(kind: RemoteImportFailure, options?: { status?: number; cause?: unknown }) {
+    const [messageKey, userMessage] = REMOTE_IMPORT_MESSAGES[kind];
+    super(
+      `Remote import failed (${kind}${options?.status === undefined ? '' : ` ${options.status}`})`,
+      userMessage,
+      messageKey,
+      options,
+    );
+    this.kind = kind;
+    this.status = options?.status;
+  }
+}
+
+/** Thrown when the user cancels a download; callers close quietly, no error UI. */
+export class RemoteImportCancelled extends Error {
+  constructor() {
+    super('Remote import cancelled');
+    this.name = 'RemoteImportCancelled';
+  }
+}
+
 export class StorageError extends AppError {
   constructor(message: string, options?: { cause?: unknown }) {
     super(

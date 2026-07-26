@@ -91,6 +91,7 @@ export const mg: Messages = {
     importMenuLabel: 'Safidy fampidirana',
     importJson: 'Rakitra (JSON)',
     importMxl: 'Partitiora (MXL)',
+    importUrl: 'Avy amin’ny rohy (URL)',
     loading: 'Am-pakàna…',
     empty:
       'Mbola tsy misy rakitra. Mandrakitra zavatra eo amin’ny efijery Mitendry, na ampidiro rakitra JSON.',
@@ -166,6 +167,18 @@ export const mg: Messages = {
     replaceExisting: 'Soloy ny rakitra efa misy',
     cancel: 'Aoka',
     import: 'Ampidiro',
+  },
+  importUrlDialog: {
+    title: 'Ampidiro avy amin’ny rohy',
+    urlLabel: 'Rohin’ny rakitra',
+    placeholder: 'https://ohatra.com/partitiora.mxl',
+    hint: 'Apetaho eto ny rohy mivantana mankany amin’ny rakitra .mxl, .musicxml, .xml na .json PoKeyBoard. Tsy maintsy mamela fisintonana avy amin’ny fampiharana hafa ilay tranonkala mitahiry azy — betsaka no tsy manaiky izany.',
+    loading: 'Misintona…',
+    httpError: ({ status }) =>
+      `Namaly tsy fetezana (${status}) ilay tranonkala. Hamarino ny rohy dia andramo indray.`,
+    useFilePicker: 'Misafidiana rakitra kosa',
+    cancel: 'Aoka',
+    fetch: 'Ampidiro',
   },
   exportDialog: {
     title: 'Havoahy ny feo',
@@ -331,6 +344,13 @@ export const mg: Messages = {
       'Mihoatra ny 20 minitra ity rakitra ity — voafetra ny famoahana mba hiarovana ny memoria.',
     exportPianoLoading: 'Mbola mila ny piano — andramo indray ny famoahana afaka kelikely.',
     sheetExportFailed: 'Tsy nahomby ny famoahana ny partitiora.',
+    importUrlInvalid: 'Tsy rohy http(s) mety mankany amin’ny rakitra izany.',
+    importUrlOffline:
+      'Toa tsy tafiditra amin’ny aterineto ianao. Miverena mifandray dia andramo indray.',
+    importUrlBlocked:
+      'Tsy voasintona ilay rohy. Tranonkala maro no manakana ny fisintonana avy amin’ny fampiharana hafa — tehirizo ao amin’ny fitaovanao ny rakitra dia ampidiro amin’ny mpisafidy rakitra.',
+    importUrlTimedOut: 'Naharitra ela loatra ny fisintonana ka najanona.',
+    importUrlFailed: 'Tsy voasintona ilay rohy.',
   },
   repairs: {
     takeId: 'Nomena id rakitra vaovao.',

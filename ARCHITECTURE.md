@@ -30,7 +30,8 @@ src/
     transport/  transportMachine (pure), transportClock, transportController,
                 sustainPedal, TransportControls
     metronome/  MetronomeControls
-    takes/      takesService, TakesPage, ImportTakeDialog
+    takes/      takesService, TakesPage, ImportTakeDialog, ImportUrlDialog,
+                remoteImportMessage
     export/     AudioExportDialog, SheetExportDialog, sheetPdfService
                 (pdf-lib, dynamic import — see SHEET_EXPORT.md)
     settings/   SettingsPage (offline pack, diagnostics, install, updates)

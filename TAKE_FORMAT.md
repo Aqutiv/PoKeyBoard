@@ -55,6 +55,8 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 3. **Validate:** Zod schema; failures list human-readable `path: message` issues.
 4. **Normalize:** notes sorted by `(startMs, midi, id)`, pedals by time, `durationMs` recomputed from note ends, playhead clamped.
 
+Every entry point — the file pickers, a dropped file, a dropped link, and a pasted link — converges on this one pipeline and the same preview dialog. A dropped link is read from `text/uri-list`, falling back to plain text only when it carries an explicit `http(s)` scheme, so dragging ordinary selected text never starts a download. A downloaded link is classified by its file name first, then `Content-Type`, then a byte sniff, because hosts routinely mislabel MusicXML as `text/plain`.
+
 Imports whose `id` already exists locally become a **copy with a fresh id** unless the user explicitly chooses replacement in the preview dialog.
 
 ## Backup files

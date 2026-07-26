@@ -28,7 +28,12 @@ export type ErrorMessageKey =
   | 'exportEmpty'
   | 'exportTooLong'
   | 'exportPianoLoading'
-  | 'sheetExportFailed';
+  | 'sheetExportFailed'
+  | 'importUrlInvalid'
+  | 'importUrlOffline'
+  | 'importUrlBlocked'
+  | 'importUrlTimedOut'
+  | 'importUrlFailed';
 
 /** A structured repair record produced by take import, translated for display. */
 export type RepairCode =
@@ -147,6 +152,7 @@ export interface Messages {
     importMenuLabel: string;
     importJson: string;
     importMxl: string;
+    importUrl: string;
     loading: string;
     empty: string;
     draft: string;
@@ -209,6 +215,17 @@ export interface Messages {
     replaceExisting: string;
     cancel: string;
     import: string;
+  };
+  importUrlDialog: {
+    title: string;
+    urlLabel: string;
+    placeholder: string;
+    hint: string;
+    loading: string;
+    httpError: (p: { status: number }) => string;
+    useFilePicker: string;
+    cancel: string;
+    fetch: string;
   };
   exportDialog: {
     title: string;

@@ -167,3 +167,30 @@
   gap: 8px;
   font-size: 14px;
 }
+
+.import-url__input {
+  width: 100%;
+  min-height: var(--touch-target);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  padding: 0 10px;
+  font-size: 14px;
+}
+
+.import-url__input:focus-visible {
+  border-color: var(--accent);
+}
+
+.import-url__hint {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.import-url__error {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--record);
+}
