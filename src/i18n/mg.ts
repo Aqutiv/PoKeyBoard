@@ -320,8 +320,37 @@ export const mg: Messages = {
     swReady: 'Voatahiry ny fototry ny rindrambaiko ary miroso na tsy misy fifandraisana aza.',
     swNotReady:
       'Mihetsika ny fanohanana tsy an-tserasera aorian’ny fitsidihana voalohany amin’ny HTTPS.',
+    featuresTitle: 'Izay azonao atao',
+    features: [
+      {
+        title: 'Piano lehibe voaraki-peo',
+        body: 'Misy piano akoustika voaraki-peo betsaka mivoaka rehefa ilaina, miaraka amin’ny hery miankina amin’ny toerana kasihinao eo amin’ny fanalahidy, reverb azo ovaina, ary anaran’ny naoty raha tianao. Alaino indray mandeha ao amin’ny Fandrindrana ny fonosana feno dia mbola azo tendrena tsy an-tserasera ny fanalahidy rehetra.',
+      },
+      {
+        title: 'Mitendre amin’ny fanalahidy na amin’ny partition',
+        body: 'Ifandimbiaso ny fijery fanalahidy sy ny fijery naoty izay manaraka anao am-pitendrena. Ny metronome, ny tempo ary ny partition azo dinihina isan-tsombiny dia manamora ny fiasana miadana amin’ny andalana sarotra.',
+      },
+      {
+        title: 'Tahiry hanorenana',
+        body: 'Misy hira noforonina sy hira kilasika efa ao anatin’ny rindrambaiko, manomboka amin’ny hira mora voalohany ka hatramin’ny Moonlight Sonata feno. Tsy miova mihitsy ny hira ao amin’ny tahiry — raketo eo amboniny dia voatahiry ho rakitra vaovao ny anao.',
+      },
+      {
+        title: 'Mandraketa, manitsy, mitahiry',
+        body: 'Hetsika naoty voarafitra ny rakitra, ka mbola azo ovaina: ovay anarana, adikao, fafao ny naoty, na atombohy indray amin’ny fototra mitovy. Azonao tahirizina ao anaty rakitra JSON tokana ny zava-drehetra na oviana na oviana.',
+      },
+      {
+        title: 'Avoahy sy zarao',
+        body: 'Ataovy MP3 ny rakitra, avoahy ho partition PDF, na omeo mivantana ny JSON. Azo ampidirina koa ny partition — ampidiro ny MusicXML na rakitra PoKeyBoard avy amin’ny rakitra na rohy mivantana.',
+      },
+    ],
+    privacyTitle: 'Aiza no misy ny mozikanao',
+    privacyBody:
+      'Tsy misy kaonty, tsy misy serivera, tsy misy alefa any ivelany. Voasoratra ao amin’ny fitehirizan’ity navigatera ity, eto amin’ity fitaovana ity, ny rakitra sy ny safidy, ary tsy kasihina mihitsy ny mikrô — avy amin’ny naoty notendrenao no anaovana ny feo rehetra renao.',
     backgroundHint:
       'Mitsahatra matetika ny feo rehefa lasa ambadika ny rindrambaiko na mihidy ny efijery. An’ity profil navigatera ity ihany ny rakitra — mety hampiasa fitehirizana hafa ny rindrambaiko voapetraka, koa avoahy ho tahiry JSON izay rehetra manan-danja.',
+    installTitle: 'Apetraho',
+    installBody:
+      'Ampio ao amin’ny efijery fandraisana na ny biraonao ny PoKeyBoard: misokatra manerana ny efijery izy, miroso na tsy misy fifandraisana aza, ary tsy tsindrian’ny navigatera intsony. Apetraho alohan’ny handraketanao zavatra tianao hotehirizina, satria mety hampiasa fitehirizana hafa noho ny onglet ny rindrambaiko voapetraka.',
     credits: 'Fisaorana',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:

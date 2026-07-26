@@ -315,8 +315,37 @@ export const en: Messages = {
     offline: 'Offline.',
     swReady: 'The app shell is cached and starts without a connection.',
     swNotReady: 'Offline support activates after the first visit over HTTPS.',
+    featuresTitle: 'What you can do',
+    features: [
+      {
+        title: 'A sampled grand piano',
+        body: 'A multi-sampled acoustic piano loads on demand, with velocity from where you touch each key, adjustable reverb, and optional note labels. Download the full sample pack once from Settings and every key stays playable offline.',
+      },
+      {
+        title: 'Play from the keys or the score',
+        body: 'Switch between the keyboard and a notation view that follows along as you play. A metronome, tempo, and a scrubbable score make it easy to work through a passage slowly.',
+      },
+      {
+        title: 'A library to build on',
+        body: 'Curated originals and classics come with the app, from a first easy tune to a complete Moonlight Sonata. Library tracks never change — record over one and your version is saved as a new take.',
+      },
+      {
+        title: 'Record, revise, and keep',
+        body: 'Takes are structured note events, so they stay editable: rename, duplicate, clear the notes, or start again over the same backing. Back up everything to a single JSON file whenever you like.',
+      },
+      {
+        title: 'Export and share',
+        body: 'Render a take to MP3, engrave it as sheet music in PDF, or hand off the raw JSON. Scores come in too — import MusicXML or a PoKeyBoard take from a file or a direct link.',
+      },
+    ],
+    privacyTitle: 'Where your music lives',
+    privacyBody:
+      'There is no account, no server, and nothing to upload. Takes and settings are written to this browser’s storage on this device, and the microphone is never touched — everything you hear is synthesised from the notes you played.',
     backgroundHint:
       'Audio normally pauses when the app goes to the background or the screen locks. Takes are local to this browser profile — installing the app can use separate storage, so export JSON backups for anything important.',
+    installTitle: 'Install it',
+    installBody:
+      'Add PoKeyBoard to your home screen or desktop and it launches full-screen, starts without a connection, and stays out of the browser’s way. Install before you record anything you want to keep, since the installed app can use storage separate from the browser tab.',
     credits: 'Credits',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useMessages } from '@/i18n/i18nContext';
+import './about.css';
 
 function useOnline(): boolean {
   const [online, setOnline] = useState(() => navigator.onLine);
@@ -33,17 +34,35 @@ export function AboutPage() {
       <header className="page__header">
         <h1 className="page__title">{m.about.title}</h1>
       </header>
-      <p className="page__hint">{m.about.intro}</p>
-      <p className="page__hint" role="status">
-        {online ? m.about.online : m.about.offline} {swReady ? m.about.swReady : m.about.swNotReady}
-      </p>
-      <p className="page__hint">{m.about.backgroundHint}</p>
-      <h2 className="page__hint" style={{ fontWeight: 650 }}>
-        {m.about.credits}
-      </h2>
-      <p className="page__hint">{m.about.creditLine}</p>
-      <p className="page__hint">{m.about.attribution}</p>
-      <p className="page__hint">{m.about.version({ version: __APP_VERSION__ })}</p>
+      <div className="about__scroll">
+        <p className="page__hint">{m.about.intro}</p>
+        <p className="page__hint" role="status">
+          {online ? m.about.online : m.about.offline}{' '}
+          {swReady ? m.about.swReady : m.about.swNotReady}
+        </p>
+
+        <h2 className="about__section">{m.about.featuresTitle}</h2>
+        <ul className="about__features">
+          {m.about.features.map((feature) => (
+            <li key={feature.title}>
+              <h3 className="about__feature-title">{feature.title}</h3>
+              <p className="about__feature-body">{feature.body}</p>
+            </li>
+          ))}
+        </ul>
+
+        <h2 className="about__section">{m.about.privacyTitle}</h2>
+        <p className="page__hint">{m.about.privacyBody}</p>
+        <p className="page__hint">{m.about.backgroundHint}</p>
+
+        <h2 className="about__section">{m.about.installTitle}</h2>
+        <p className="page__hint">{m.about.installBody}</p>
+
+        <h2 className="about__section">{m.about.credits}</h2>
+        <p className="page__hint">{m.about.creditLine}</p>
+        <p className="page__hint">{m.about.attribution}</p>
+        <p className="page__hint">{m.about.version({ version: __APP_VERSION__ })}</p>
+      </div>
     </section>
   );
 }
