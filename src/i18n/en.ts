@@ -327,7 +327,7 @@ export const en: Messages = {
       },
       {
         title: 'A library to build on',
-        body: 'Curated originals and classics come with the app, from a first easy tune to a complete Moonlight Sonata. Library tracks never change — record over one and your version is saved as a new take.',
+        body: 'Curated originals and classics come with the app, from a first easy tune to the complete first movement of the Moonlight Sonata. Library tracks never change — record over one and your version is saved as a new take.',
       },
       {
         title: 'Record, revise, and keep',

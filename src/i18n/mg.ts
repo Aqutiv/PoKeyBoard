@@ -332,7 +332,7 @@ export const mg: Messages = {
       },
       {
         title: 'Tahiry hanorenana',
-        body: 'Misy hira noforonina sy hira kilasika efa ao anatin’ny rindrambaiko, manomboka amin’ny hira mora voalohany ka hatramin’ny Moonlight Sonata feno. Tsy miova mihitsy ny hira ao amin’ny tahiry — raketo eo amboniny dia voatahiry ho rakitra vaovao ny anao.',
+        body: 'Misy hira noforonina sy hira kilasika efa ao anatin’ny rindrambaiko, manomboka amin’ny hira mora voalohany ka hatramin’ny hetsika voalohany feno amin’ny Moonlight Sonata. Tsy miova mihitsy ny hira ao amin’ny tahiry — raketo eo amboniny dia voatahiry ho rakitra vaovao ny anao.',
       },
       {
         title: 'Mandraketa, manitsy, mitahiry',

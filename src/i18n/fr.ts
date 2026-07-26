@@ -330,7 +330,7 @@ export const fr: Messages = {
       },
       {
         title: 'Une bibliothèque comme point de départ',
-        body: 'Des originaux et des classiques sont fournis avec l’application, d’un premier morceau facile à la Sonate au clair de lune complète. Les morceaux de la bibliothèque ne changent jamais — enregistrez par-dessus et votre version devient une nouvelle prise.',
+        body: 'Des originaux et des classiques sont fournis avec l’application, d’un premier morceau facile au premier mouvement complet de la Sonate au clair de lune. Les morceaux de la bibliothèque ne changent jamais — enregistrez par-dessus et votre version devient une nouvelle prise.',
       },
       {
         title: 'Enregistrer, retravailler, conserver',

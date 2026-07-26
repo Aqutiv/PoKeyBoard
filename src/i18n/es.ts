@@ -332,7 +332,7 @@ export const es: Messages = {
       },
       {
         title: 'Una biblioteca sobre la que construir',
-        body: 'La app incluye originales y clásicos, desde una primera pieza fácil hasta la Sonata Claro de Luna completa. Las pistas de la biblioteca nunca cambian: graba encima y tu versión se guarda como una toma nueva.',
+        body: 'La app incluye originales y clásicos, desde una primera pieza fácil hasta el primer movimiento completo de la Sonata Claro de Luna. Las pistas de la biblioteca nunca cambian: graba encima y tu versión se guarda como una toma nueva.',
       },
       {
         title: 'Graba, retoca y conserva',
