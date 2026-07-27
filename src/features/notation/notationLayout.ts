@@ -13,6 +13,7 @@ import {
   symbolForBeats,
   type DurationSymbol,
 } from './quantization';
+import { readDynamics, type DynamicEvent, type HairpinEvent } from './dynamics';
 import { accidentalFor, normalizeFifths, type AccidentalKind } from './keySignature';
 import {
   barUnits,
@@ -146,6 +147,10 @@ export interface ScoreLayout {
   rests: LaidOutRest[];
   /** Beam runs; `ChordGroup.beamId` indexes into this. See `BeamGroup`. */
   beams: BeamGroup[];
+  /** Dynamic marks read from how hard the keys were struck. */
+  dynamics: DynamicEvent[];
+  /** Crescendos and diminuendos spanning several bars; see `HairpinEvent`. */
+  hairpins: HairpinEvent[];
   /** Sorted, non-overlapping; see `PedalSpan`. */
   pedals: PedalSpan[];
   measures: MeasureInfo[];
@@ -892,7 +897,20 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   const last = measures[measures.length - 1];
   const totalMs = last ? last.endMs : 0;
   const pedals = pedalSpans(options.pedals ?? [], totalMs);
-  return { chords, rests, beams, pedals, measures, barMs, totalMs };
+  // Read from the notes as played, not from where they are drawn: how hard a
+  // key went down is performance, and quantizing it would only blur it.
+  const { marks, hairpins } = readDynamics(notes, { barMs });
+  return {
+    chords,
+    rests,
+    beams,
+    dynamics: marks,
+    hairpins,
+    pedals,
+    measures,
+    barMs,
+    totalMs,
+  };
 }
 
 /**
