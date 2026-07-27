@@ -145,6 +145,22 @@ export interface MeasureInfo {
 /** Beats within this of a whole one are on it; see the note in `layoutScore`. */
 const BEAT_EPSILON = 1e-3;
 
+/**
+ * A stretch drawn an octave in, under an `8va` or `8vb` line.
+ *
+ * The notes inside it are written where they can be read and the line says to
+ * play them an octave away, which is the whole purpose: a piano reaches far
+ * enough past both staves that the alternative is a ladder of ledger lines
+ * nobody can count at speed.
+ */
+export interface OctaveSpan {
+  staff: StaffKind;
+  fromMs: number;
+  toMs: number;
+  /** True for 8va above the treble, false for 8vb below the bass. */
+  up: boolean;
+}
+
 /** A stretch the sustain pedal is held down for, in take milliseconds. */
 export interface PedalSpan {
   fromMs: number;
@@ -163,6 +179,8 @@ export interface ScoreLayout {
   hairpins: HairpinEvent[];
   /** Sorted, non-overlapping; see `PedalSpan`. */
   pedals: PedalSpan[];
+  /** Passages drawn an octave in; see `OctaveSpan`. */
+  octaves: OctaveSpan[];
   measures: MeasureInfo[];
   /** The FIRST measure's length; later measures can differ (tempo changes). */
   barMs: number;
@@ -834,6 +852,60 @@ function deriveRests(
   return rests;
 }
 
+/** Steps beyond a staff at which its ledger lines stop being countable. */
+const OCTAVE_LINE_STEP_ABOVE = 12; // C6, three ledger lines over the treble
+const OCTAVE_LINE_STEP_BELOW = -4; // C2, three under the bass
+/** One octave, in diatonic steps. */
+const OCTAVE_STEPS = 7;
+/** Chords in a row that must all be out there before a line is worth drawing. */
+const MIN_OCTAVE_CHORDS = 4;
+
+/**
+ * Find the passages that sit so far outside a staff that they are better
+ * written an octave in, and move them there.
+ *
+ * Only whole chords qualify: half a chord shifted would be a different chord.
+ * And only runs of them, because a line drawn over one note costs a reader
+ * more attention than the ledger lines it saves.
+ */
+function deriveOctaveSpans(chords: readonly ChordGroup[]): OctaveSpan[] {
+  const spans: OctaveSpan[] = [];
+
+  for (const staff of ['treble', 'bass'] as const) {
+    const up = staff === 'treble';
+    const limit = up ? OCTAVE_LINE_STEP_ABOVE : OCTAVE_LINE_STEP_BELOW;
+    const beyond = (chord: ChordGroup): boolean =>
+      chord.notes.every((note) => (up ? note.step >= limit : note.step <= limit));
+
+    const onStaff = chords.filter((chord) => chord.staff === staff);
+    let run: ChordGroup[] = [];
+    const flush = (): void => {
+      if (run.length >= MIN_OCTAVE_CHORDS) {
+        const shift = up ? -OCTAVE_STEPS : OCTAVE_STEPS;
+        for (const chord of run) {
+          for (const note of chord.notes) {
+            note.step += shift;
+            note.ledger = ledgerLineSteps(note.step);
+          }
+        }
+        spans.push({
+          staff,
+          fromMs: (run[0] as ChordGroup).displayStartMs,
+          toMs: (run[run.length - 1] as ChordGroup).displayStartMs,
+          up,
+        });
+      }
+      run = [];
+    };
+    for (const chord of onStaff) {
+      if (beyond(chord)) run.push(chord);
+      else flush();
+    }
+    flush();
+  }
+  return spans;
+}
+
 export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
   const barMs = barDurationMs(options.bpm, options.timeSignature);
   const minMeasures = options.minMeasures ?? 4;
@@ -1099,6 +1171,9 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   const last = measures[measures.length - 1];
   const totalMs = last ? last.endMs : 0;
   const pedals = pedalSpans(options.pedals ?? [], totalMs);
+  // After the heads have been placed and their accidentals given columns: the
+  // shift moves whole chords bodily, so nothing about their arrangement changes.
+  const octaves = deriveOctaveSpans(chords);
   // Read from the notes as played, not from where they are drawn: how hard a
   // key went down is performance, and quantizing it would only blur it. The
   // thresholds are counted in bars, which the tempo map knows how to find
@@ -1113,6 +1188,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     dynamics: marks,
     hairpins,
     pedals,
+    octaves,
     measures,
     barMs,
     totalMs,

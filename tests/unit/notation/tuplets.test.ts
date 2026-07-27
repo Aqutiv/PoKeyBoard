@@ -8,6 +8,7 @@ import { FUR_ELISE } from '@/features/library/tracks/furElise';
 import { GOOD_NIGHT } from '@/features/library/tracks/goodNight';
 import { MOONLIGHT_SONATA } from '@/features/library/tracks/moonlightSonata';
 import { layoutScore } from '@/features/notation/notationLayout';
+import { layoutSheet } from '@/features/notation/sheetLayout';
 import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
 import { isTernaryBeat } from '@/features/notation/tuplets';
 
@@ -199,5 +200,107 @@ describe('laying a tuplet out', () => {
     expect(layout.chords.every((chord) => chord.symbol.tuplet)).toBe(true);
     // ...but neither holds a whole one, so neither is numbered.
     expect(layout.beams.every((beam) => beam.tupletCount === null)).toBe(true);
+  });
+});
+
+describe('octave lines', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+
+  function run(midis: number[]): NoteEvent[] {
+    return midis.map((midi, i) => ({
+      id: `n${i}`,
+      midi,
+      startMs: i * 500,
+      durationMs: 400,
+      velocity: 0.5,
+    }));
+  }
+
+  it('draws a passage far above the treble an octave in', () => {
+    // Six notes around C7, which would otherwise need four ledger lines each.
+    const high = [96, 98, 100, 101, 103, 96];
+    const layout = layoutScore(run(high), OPTS);
+    expect(layout.octaves).toHaveLength(1);
+    expect(layout.octaves[0]!.up).toBe(true);
+    expect(layout.octaves[0]!.staff).toBe('treble');
+
+    // Every head has come in by an octave, and its ledger lines with it.
+    const plain = layoutScore(run([96]), OPTS);
+    const shifted = layout.chords[0]!.notes[0]!;
+    expect(shifted.step).toBe(plain.chords[0]!.notes[0]!.step - 7);
+    expect(shifted.ledger.length).toBeLessThan(plain.chords[0]!.notes[0]!.ledger.length);
+  });
+
+  it('draws a passage far below the bass an octave in', () => {
+    const low = [28, 26, 24, 23, 21, 28];
+    const layout = layoutScore(run(low), OPTS);
+    expect(layout.octaves).toHaveLength(1);
+    expect(layout.octaves[0]!.up).toBe(false);
+    expect(layout.octaves[0]!.staff).toBe('bass');
+  });
+
+  it('does not draw a line over one stray note', () => {
+    // A single leap up costs a reader less than a line and a label would.
+    const layout = layoutScore(run([72, 74, 100, 74, 72]), OPTS);
+    expect(layout.octaves).toEqual([]);
+  });
+
+  it('leaves music inside the staves entirely alone', () => {
+    const layout = layoutScore(run([60, 62, 64, 65, 67, 69]), OPTS);
+    expect(layout.octaves).toEqual([]);
+  });
+});
+
+describe('octave lines on paper', () => {
+  const SHEET_OPTS = {
+    paper: 'a4' as const,
+    timeSignature: { numerator: 4, denominator: 4 },
+    bpm: 120,
+    title: 'T',
+    subtitle: '',
+    credit: 'C',
+  };
+
+  it('runs the line over the passage and reserves room for it', () => {
+    const notes: NoteEvent[] = [96, 98, 100, 101, 103, 96].map((midi, i) => ({
+      id: `n${i}`,
+      midi,
+      startMs: i * 500,
+      durationMs: 400,
+      velocity: 0.5,
+    }));
+    const score = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: SHEET_OPTS.timeSignature,
+      quantization: '1/16',
+      minMeasures: 1,
+    });
+    const result = layoutSheet(score, SHEET_OPTS);
+    const system = result.pages[0]!.systems[0]!;
+    expect(system.octaves).toHaveLength(1);
+    const octave = system.octaves[0]!;
+    expect(octave.up).toBe(true);
+    expect(octave.x2Pt).toBeGreaterThan(octave.x1Pt);
+    expect(octave.continuesLeft).toBe(false);
+    expect(octave.continuesRight).toBe(false);
+
+    // The system opens up above the treble staff to carry it.
+    const plain = layoutSheet(
+      layoutScore(
+        notes.map((note) => ({ ...note, midi: note.midi - 24 })),
+        {
+          bpm: 120,
+          timeSignature: SHEET_OPTS.timeSignature,
+          quantization: '1/16',
+          minMeasures: 1,
+        },
+      ),
+      SHEET_OPTS,
+    );
+    expect(plain.pages[0]!.systems[0]!.octaves).toEqual([]);
   });
 });
