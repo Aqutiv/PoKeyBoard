@@ -4,6 +4,9 @@ import {
   BEAM_SPACING_G,
   BEAM_THICKNESS_G,
   HEAD_RX_G,
+  KEY_ACCIDENTAL_W_G,
+  keySignatureWidthPt,
+  PEDAL_HOOK_G,
   SHEET_GAP_PT,
   STEM_LENGTH_G,
   staffYRel,
@@ -14,16 +17,30 @@ import {
   type SheetNote,
   type SheetPage,
   type SheetPageMetrics,
+  type SheetPedal,
   type SheetSystem,
+  type SheetTie,
 } from './sheetLayout';
+import { drawAccidentalGlyph } from './accidentalGlyph';
+import {
+  normalizeFifths,
+  signatureAccidental,
+  signatureSteps,
+  type AccidentalKind,
+} from './keySignature';
+import type { DurationSymbol } from './quantization';
+import { drawRestGlyph } from './restGlyph';
+import { restStep } from './rests';
 import type { ClefKind } from './staffMapping';
 
 /**
  * Draws one sheet page in engraved print style: black ink on white paper.
  * The ctx must be scaled so 1 canvas unit = 1 PDF point. All music glyphs
- * (clefs, brace, sharp, flags) are hand-drawn Béziers so the output is
- * identical on every device; fonts are used only for genuinely textual
- * elements (title, digits, page numbers).
+ * (clefs, brace, accidentals, flags, rests) are hand-drawn Béziers so the
+ * output is identical on every device; fonts are used only for genuinely
+ * textual elements (title, digits, page numbers). Rests and accidentals come
+ * from `restGlyph.ts` and `accidentalGlyph.ts`, shared with the live score so
+ * both views draw the same shapes.
  */
 
 /** Device pixels per PDF point for print rasterization (≈288 DPI). */
@@ -41,6 +58,10 @@ const SERIF = 'Georgia, "Times New Roman", Times, serif';
 const STAFF_LINE_W = 0.9;
 const BARLINE_W = 1;
 const STEM_W = 1;
+
+/** What a bar of silence takes, whatever the meter is. */
+const WHOLE_REST: DurationSymbol = { base: 'whole', dotted: false };
+const WHOLE_REST_STEP = restStep(WHOLE_REST);
 
 export function drawSheetPage(ctx: CanvasRenderingContext2D, page: SheetPage): void {
   const { metrics } = page;
@@ -162,7 +183,9 @@ function drawSystem(ctx: CanvasRenderingContext2D, system: SheetSystem, page: Sh
   drawClef(ctx, system.clefs.treble, system.xPt + 13, system.trebleTopPt, 1);
   drawClef(ctx, system.clefs.bass, system.xPt + 12, system.bassTopPt, 1);
 
-  if (system.showTimeSignature) drawTimeSignature(ctx, system, metrics, page.timeSignature);
+  drawKeySignature(ctx, system, metrics, page.keySignature);
+  if (system.showTimeSignature)
+    drawTimeSignature(ctx, system, metrics, page.keySignature, page.timeSignature);
 
   ctx.font = `8px ${SERIF}`;
   ctx.textAlign = 'left';
@@ -174,6 +197,48 @@ function drawSystem(ctx: CanvasRenderingContext2D, system: SheetSystem, page: Sh
     const isFinal = system.isLast && i === system.measures.length - 1;
     drawMeasure(ctx, measure, system, isFinal);
   }
+  for (const tie of system.ties) drawTie(ctx, tie);
+  for (const pedal of system.pedals) drawPedal(ctx, pedal, system.pedalRowPt);
+}
+
+/**
+ * The sustain pedal, as the bracket modern editions use: a line under the bass
+ * staff hooked up at each end, the hooks marking where the pedal goes down and
+ * comes up. An end that runs off the system is left open instead of hooked,
+ * which says the press carries on.
+ */
+function drawPedal(ctx: CanvasRenderingContext2D, pedal: SheetPedal, rowY: number): void {
+  const hook = PEDAL_HOOK_G * G;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  if (!pedal.continuesLeft) {
+    ctx.moveTo(pedal.xFromPt, rowY - hook);
+    ctx.lineTo(pedal.xFromPt, rowY);
+  } else {
+    ctx.moveTo(pedal.xFromPt, rowY);
+  }
+  ctx.lineTo(pedal.xToPt, rowY);
+  if (!pedal.continuesRight) ctx.lineTo(pedal.xToPt, rowY - hook);
+  ctx.stroke();
+}
+
+/**
+ * A tie: a shallow crescent between two heads, filled so it tapers at both
+ * ends the way an engraved one does rather than reading as a drawn line.
+ */
+function drawTie(ctx: CanvasRenderingContext2D, tie: SheetTie): void {
+  const dir = tie.above ? -1 : 1;
+  const span = Math.max(tie.x2Pt - tie.x1Pt, 0.1);
+  // Shallow over a short tie, deeper over a long one, but never a semicircle.
+  const depth = dir * Math.min(1.1 * G, 0.24 * span + 0.35 * G);
+  const midX = (tie.x1Pt + tie.x2Pt) / 2;
+  const midY = (tie.y1Pt + tie.y2Pt) / 2;
+  ctx.beginPath();
+  ctx.moveTo(tie.x1Pt, tie.y1Pt);
+  ctx.quadraticCurveTo(midX, midY + depth, tie.x2Pt, tie.y2Pt);
+  ctx.quadraticCurveTo(midX, midY + depth * 0.72, tie.x1Pt, tie.y1Pt);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function drawMeasure(
@@ -214,8 +279,7 @@ function drawMeasure(
   if (measure.empty) {
     const centerX = measure.xPt + measure.widthPt / 2;
     for (const top of [system.trebleTopPt, system.bassTopPt]) {
-      // Whole rest hangs from the second staff line.
-      ctx.fillRect(centerX - 1.1 * G, top + G, 2.2 * G, 0.55 * G);
+      drawRestGlyph(ctx, WHOLE_REST, centerX, top, WHOLE_REST_STEP, G);
     }
     return;
   }
@@ -224,6 +288,26 @@ function drawMeasure(
     for (const chord of [...column.treble, ...column.bass]) {
       const staffTop = chord.staff === 'treble' ? system.trebleTopPt : system.bassTopPt;
       drawChord(ctx, chord, column.xPt, staffTop, measure.beams);
+    }
+    if (column.trebleRest) {
+      drawRestGlyph(
+        ctx,
+        column.trebleRest.symbol,
+        column.xPt,
+        system.trebleTopPt,
+        column.trebleRest.step,
+        G,
+      );
+    }
+    if (column.bassRest) {
+      drawRestGlyph(
+        ctx,
+        column.bassRest.symbol,
+        column.xPt,
+        system.bassTopPt,
+        column.bassRest.step,
+        G,
+      );
     }
   }
   for (const beam of measure.beams) drawBeam(ctx, beam);
@@ -290,7 +374,12 @@ function drawChord(
     ctx.restore();
 
     if (note.accidental) {
-      drawSharp(ctx, leftEdgeX - 1.5 * G - note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G, y);
+      drawAccidental(
+        ctx,
+        note.accidental,
+        leftEdgeX - 1.5 * G - note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G,
+        y,
+      );
     }
     if (chord.symbol.dotted) {
       // Dots sit in a space: shift line-notes up half a space.
@@ -370,14 +459,43 @@ function drawBeam(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {
   }
 }
 
+/**
+ * The key signature after the clef, on both staffs, in every system prefix —
+ * a reader picks up mid-page as often as at the top, and the alternative is
+ * marking the same accidentals over and over inside the bars.
+ *
+ * The positions are read under the clef the staff carries, so a bass staff
+ * under a G clef gets the treble layout.
+ */
+function drawKeySignature(
+  ctx: CanvasRenderingContext2D,
+  system: SheetSystem,
+  metrics: SheetPageMetrics,
+  fifths: number,
+): void {
+  if (normalizeFifths(fifths) === 0) return;
+  const sign = signatureAccidental(fifths);
+  const left = system.xPt + metrics.clefAreaPt;
+  for (const staff of ['treble', 'bass'] as const) {
+    const top = staff === 'treble' ? system.trebleTopPt : system.bassTopPt;
+    const steps = signatureSteps(fifths, system.clefs[staff]);
+    for (let i = 0; i < steps.length; i += 1) {
+      const x = left + (i + 0.5) * KEY_ACCIDENTAL_W_G * G;
+      drawAccidental(ctx, sign, x, top + staffYRel(steps[i] as number));
+    }
+  }
+}
+
 /** Time signature digits on both staffs (first system only). */
 function drawTimeSignature(
   ctx: CanvasRenderingContext2D,
   system: SheetSystem,
   metrics: SheetPageMetrics,
+  fifths: number,
   timeSignature: TimeSignature,
 ): void {
-  const x = system.xPt + metrics.clefAreaPt + metrics.timeSigAreaPt * 0.4;
+  const x =
+    system.xPt + metrics.clefAreaPt + keySignatureWidthPt(fifths) + metrics.timeSigAreaPt * 0.4;
   ctx.font = `700 ${2.6 * G}px ${SERIF}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
@@ -388,24 +506,13 @@ function drawTimeSignature(
   ctx.textAlign = 'left';
 }
 
-/** Sharp: two thin verticals crossed by two thick slanted beams. */
-function drawSharp(ctx: CanvasRenderingContext2D, x: number, y: number): void {
-  ctx.lineWidth = 0.55;
-  ctx.beginPath();
-  ctx.moveTo(x - 0.25 * G, y - 0.95 * G);
-  ctx.lineTo(x - 0.25 * G, y + 1.15 * G);
-  ctx.moveTo(x + 0.25 * G, y - 1.15 * G);
-  ctx.lineTo(x + 0.25 * G, y + 0.95 * G);
-  ctx.stroke();
-  for (const beamY of [y - 0.35 * G, y + 0.45 * G]) {
-    ctx.beginPath();
-    ctx.moveTo(x - 0.6 * G, beamY + 0.35 * G);
-    ctx.lineTo(x + 0.6 * G, beamY - 0.05 * G);
-    ctx.lineTo(x + 0.6 * G, beamY - 0.45 * G);
-    ctx.lineTo(x - 0.6 * G, beamY - 0.05 * G);
-    ctx.closePath();
-    ctx.fill();
-  }
+function drawAccidental(
+  ctx: CanvasRenderingContext2D,
+  kind: AccidentalKind,
+  x: number,
+  y: number,
+): void {
+  drawAccidentalGlyph(ctx, kind, x, y, G);
 }
 
 /** Curly brace joining the two staffs, drawn as a filled double curve. */

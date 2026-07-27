@@ -1,10 +1,21 @@
 import type { NoteClef, NoteStaff } from '@/domain/takeTypes';
+import {
+  accidentalFor,
+  keyAlterations,
+  letterPitchClass,
+  spellingsFor,
+  type AccidentalKind,
+} from './keySignature';
 
 /**
- * MIDI → grand-staff geometry in C-major display context (explicit sharps).
- * Positions are diatonic steps from each staff's bottom line (treble: E4,
- * bass: G2); one step is half a staff space. Middle C sits at step -2 on the
- * treble staff (first ledger line below).
+ * MIDI → grand-staff geometry. Positions are diatonic steps from each staff's
+ * bottom line (treble: E4, bass: G2); one step is half a staff space. Middle C
+ * sits at step -2 on the treble staff (first ledger line below).
+ *
+ * How a pitch is spelled comes from the key: an E flat in a flat key is an E
+ * flat, not a D sharp, and it sits on E's line. With no key given the context
+ * is C major, which spells every black key as a sharp — what this did before
+ * keys existed at all.
  */
 export type StaffKind = NoteStaff;
 export type ClefKind = NoteClef;
@@ -14,21 +25,23 @@ export function defaultClefFor(staff: StaffKind): ClefKind {
   return staff;
 }
 
-const DIATONIC_STEP: Record<number, number> = {
-  0: 0, // C
-  2: 1, // D
-  4: 2, // E
-  5: 3, // F
-  7: 4, // G
-  9: 5, // A
-  11: 6, // B
-};
-
 const TREBLE_BOTTOM_LINE = 4 * 7 + 2; // E4 as absolute diatonic index
 const BASS_BOTTOM_LINE = 2 * 7 + 4; // G2
 
 /** Notes at or above middle C display on the treble staff. */
 export const TREBLE_SPLIT_MIDI = 60;
+
+/**
+ * The letter and octave a position names, with the clef taken back out —
+ * `octave * 7 + letter`, the index `step` was measured from.
+ *
+ * A step alone only means something under a clef: step 0 is E4 under a G clef
+ * and G2 under an F clef. Anything that has to know whether two notes are the
+ * *same note* rather than the same line has to ask this instead.
+ */
+export function absoluteDiatonic(step: number, clef: ClefKind): number {
+  return step + (clef === 'treble' ? TREBLE_BOTTOM_LINE : BASS_BOTTOM_LINE);
+}
 
 export interface StaffPosition {
   staff: StaffKind;
@@ -36,8 +49,14 @@ export interface StaffPosition {
   clef: ClefKind;
   /** Diatonic steps above the staff's bottom line (may be negative). */
   step: number;
-  /** '#' when the pitch is a black key (C-major spelling), else null. */
-  accidental: '#' | null;
+  /**
+   * The accidental to print, or null when the key signature already says it.
+   * A measure can still override this: see `layoutScore`, where an accidental
+   * printed earlier in the bar holds until the bar line.
+   */
+  accidental: AccidentalKind | null;
+  /** How this pitch is altered from its letter: −1 flat, 0 natural, +1 sharp. */
+  alter: number;
 }
 
 /**
@@ -55,18 +74,29 @@ export function midiToStaffPosition(
   midi: number,
   staffHint?: StaffKind,
   clefHint?: ClefKind,
+  fifths = 0,
 ): StaffPosition {
   const pitchClass = ((midi % 12) + 12) % 12;
-  const octave = Math.floor(midi / 12) - 1;
-  const natural = DIATONIC_STEP[pitchClass];
-  const isSharp = natural === undefined;
-  // Sharps take the letter below (C# uses C's line/space).
-  const letterStep = isSharp ? (DIATONIC_STEP[pitchClass - 1] as number) : natural;
-  const absolute = octave * 7 + letterStep;
+  const spelling = spellingsFor(fifths)[pitchClass] as { letter: number; alter: number };
+
+  // A letter can belong to the octave next door: B sharp sounds as the C above
+  // it but is written on B's line, and C flat the other way about.
+  const raw = letterPitchClass(spelling.letter) + spelling.alter;
+  const octave = Math.floor(midi / 12) - 1 + (raw < 0 ? 1 : raw > 11 ? -1 : 0);
+  const absolute = octave * 7 + spelling.letter;
+
   const staff: StaffKind = staffHint ?? (midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
   const clef: ClefKind = clefHint ?? defaultClefFor(staff);
   const reference = clef === 'treble' ? TREBLE_BOTTOM_LINE : BASS_BOTTOM_LINE;
-  return { staff, clef, step: absolute - reference, accidental: isSharp ? '#' : null };
+  // Nothing is printed for a note the key signature has already accounted for.
+  const inKey = (keyAlterations(fifths)[spelling.letter] as number) === spelling.alter;
+  return {
+    staff,
+    clef,
+    step: absolute - reference,
+    accidental: inKey ? null : accidentalFor(spelling.alter),
+    alter: spelling.alter,
+  };
 }
 
 /**

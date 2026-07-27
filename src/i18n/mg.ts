@@ -223,6 +223,9 @@ export const mg: Messages = {
     grid16: 'Naoty 1/16',
     gridHint:
       'Ahitsy amin’io makarakara io eo amin’ny taratasy ny fitendrena malalaka. Tsy miova mihitsy ny famerenana.',
+    keySignature: 'Famantarana lakile',
+    keyName: ({ major, minor }) => `${major} lehibe / ${minor} kely`,
+    keyHint: 'Alaina amin’ny partitiora, na amin’ny naoty raha tsy voalaza. Tsy miova ny feo.',
     previewLabel: 'Topi-mason’ny pejy 1',
     pageEstimate: ({ pages }) => `≈ pejy ${pages}`,
     generate: 'Amboary ny PDF',

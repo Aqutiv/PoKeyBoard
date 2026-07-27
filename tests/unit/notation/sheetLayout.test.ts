@@ -478,13 +478,18 @@ describe('layoutSheet', () => {
       expect(lastMeasure(result).empty).toBe(false);
     });
 
-    it('drops the bar a final chord only rings into', () => {
-      // The chord starts in bar 1 and rings halfway through bar 2. With no
-      // ties yet, bar 2 owns no onset and would otherwise print as rests.
+    it('engraves the bar a final chord rings into, tied', () => {
+      // The chord starts in bar 1 and rings halfway through bar 2. A tie
+      // carries it over the bar line, so bar 2 owns a real half note rather
+      // than being dropped for having no onset of its own.
       const result = sheet([note({ startMs: 0, durationMs: 3000 })]);
-      expect(result.measureCount).toBe(1);
-      expect(allMeasures(result)).toHaveLength(1);
+      expect(result.measureCount).toBe(2);
+      const measures = allMeasures(result);
+      expect(measures).toHaveLength(2);
       expect(lastMeasure(result).empty).toBe(false);
+      const tail = measures[1]!.columns[0]!.treble[0]!;
+      expect(tail.symbol).toEqual({ base: 'half', dotted: false });
+      expect(tail.notes[0]!.tiedFromPrev).toBe(true);
     });
 
     it('keeps a rest bar that falls inside the piece', () => {

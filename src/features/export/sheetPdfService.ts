@@ -1,4 +1,6 @@
 import type { Take } from '@/domain/takeTypes';
+import { detectFifths } from '@/features/notation/keyDetection';
+import { normalizeFifths } from '@/features/notation/keySignature';
 import { layoutScore } from '@/features/notation/notationLayout';
 import {
   layoutSheet,
@@ -21,6 +23,8 @@ export const SHEET_CREDIT = 'PoKeyBoard';
 export interface SheetPdfOptions {
   paper: PaperSize;
   grid: SheetGrid;
+  /** Sharps (positive) or flats (negative); the dialog defaults it and lets it be changed. */
+  keySignature: number;
   /** Localized subtitle line (e.g. the recording date); the dialog formats it. */
   subtitle: string;
 }
@@ -63,11 +67,22 @@ export class SheetTooManyPagesError extends SheetExportError {
   }
 }
 
+/**
+ * The key a take is engraved in unless the player says otherwise: what the
+ * source score declared, or what its own pitches read as.
+ */
+export function defaultKeySignatureFor(take: Take): number {
+  return take.tempo.keySignature !== undefined
+    ? normalizeFifths(take.tempo.keySignature)
+    : detectFifths(take.notes);
+}
+
 /** Sheet layout for a take — shared by the dialog preview and the export. */
 export function layoutTakeSheet(
   take: Take,
   paper: PaperSize,
   grid: SheetGrid,
+  keySignature: number,
   subtitle: string,
 ): SheetLayoutResult {
   const score = layoutScore(take.notes, {
@@ -75,11 +90,14 @@ export function layoutTakeSheet(
     timeSignature: take.tempo.timeSignature,
     tempoChanges: take.tempo.changes,
     quantization: grid,
+    keySignature,
+    pedals: take.pedalEvents,
     minMeasures: 1,
   });
   return layoutSheet(score, {
     paper,
     timeSignature: take.tempo.timeSignature,
+    keySignature,
     bpm: take.tempo.bpm,
     title: take.title,
     subtitle,
@@ -103,7 +121,13 @@ export async function generateSheetPdf(
   };
 
   onProgress?.({ stage: 'layout', fraction: -1 });
-  const layout = layoutTakeSheet(take, options.paper, options.grid, options.subtitle);
+  const layout = layoutTakeSheet(
+    take,
+    options.paper,
+    options.grid,
+    options.keySignature,
+    options.subtitle,
+  );
   const pageCount = layout.pages.length;
   if (pageCount > MAX_SHEET_PAGES) throw new SheetTooManyPagesError(pageCount);
   throwIfAborted();

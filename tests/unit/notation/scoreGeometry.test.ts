@@ -27,12 +27,16 @@ function geometryFor(midis: number[]) {
   return computeScoreGeometry(layoutScore(notes, LAYOUT_OPTS).chords);
 }
 
+/** The pedal row a take in the ordinary range gets: the foot of its margin. */
+const DEFAULT_PEDAL_ROW = SCORE_MIN_HEIGHT - 9;
+
 describe('computeScoreGeometry', () => {
   it('returns the default constants for an empty take', () => {
     expect(computeScoreGeometry([])).toEqual({
       trebleTop: TREBLE_TOP,
       bassTop: BASS_TOP,
       minHeight: SCORE_MIN_HEIGHT,
+      pedalRow: DEFAULT_PEDAL_ROW,
     });
   });
 
@@ -41,6 +45,7 @@ describe('computeScoreGeometry', () => {
       trebleTop: TREBLE_TOP,
       bassTop: BASS_TOP,
       minHeight: SCORE_MIN_HEIGHT,
+      pedalRow: DEFAULT_PEDAL_ROW,
     });
   });
 

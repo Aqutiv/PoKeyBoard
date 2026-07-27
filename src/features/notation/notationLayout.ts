@@ -1,13 +1,29 @@
-import { createTakeTempoMap } from '@/domain/tempoMap';
+import { createTakeTempoMap, type TempoMap } from '@/domain/tempoMap';
 import type {
   NoteEvent,
+  PedalEvent,
   QuantizationSetting,
   TempoChange,
   TimeSignature,
 } from '@/domain/takeTypes';
 import { barDurationMs } from '@/utils/timing';
-import { quantizeGridBeats, symbolForBeats, type DurationSymbol } from './quantization';
 import {
+  beatsForSymbol,
+  quantizeGridBeats,
+  symbolForBeats,
+  type DurationSymbol,
+} from './quantization';
+import { accidentalFor, normalizeFifths, type AccidentalKind } from './keySignature';
+import {
+  barUnits,
+  restStep,
+  restsForGap,
+  symbolForUnits,
+  unitsPerBeat,
+  valuesForSpan,
+} from './rests';
+import {
+  absoluteDiatonic,
   defaultClefFor,
   ledgerLineSteps,
   midiToStaffPosition,
@@ -37,8 +53,15 @@ export interface LaidOutNote {
   /** The voice the source numbered, if any; see `ChordGroup.voice`. */
   voice?: number;
   step: number;
-  accidental: '#' | null;
+  /** The accidental printed here, after the key and the rest of the bar. */
+  accidental: AccidentalKind | null;
+  /** How the pitch is altered from its letter; see `StaffPosition.alter`. */
+  alter: number;
   symbol: DurationSymbol;
+  /** True when this head continues one before it, under a tie. */
+  tiedFromPrev: boolean;
+  /** True when a tie runs from this head into the next piece of the same note. */
+  tiedToNext: boolean;
   ledger: number[];
   headShift: HeadShift;
   /**
@@ -67,6 +90,20 @@ export interface ChordGroup {
   symbol: DurationSymbol;
 }
 
+/**
+ * A silence engraved on one staff. Rests are derived, never stored: what a
+ * take records is when keys went down, and the silence between them is
+ * whatever the written note values leave over.
+ */
+export interface LaidOutRest {
+  staff: StaffKind;
+  /** Where the rest is drawn, on the same clock as `ChordGroup`. */
+  displayStartMs: number;
+  symbol: DurationSymbol;
+  /** Diatonic steps above the staff's bottom line; 4 is the middle line. */
+  step: number;
+}
+
 export interface MeasureInfo {
   index: number;
   startMs: number;
@@ -79,8 +116,18 @@ export interface MeasureInfo {
   clefs: Record<StaffKind, ClefKind>;
 }
 
+/** A stretch the sustain pedal is held down for, in take milliseconds. */
+export interface PedalSpan {
+  fromMs: number;
+  toMs: number;
+}
+
 export interface ScoreLayout {
   chords: ChordGroup[];
+  /** Sorted by display start; see `LaidOutRest`. */
+  rests: LaidOutRest[];
+  /** Sorted, non-overlapping; see `PedalSpan`. */
+  pedals: PedalSpan[];
   measures: MeasureInfo[];
   /** The FIRST measure's length; later measures can differ (tempo changes). */
   barMs: number;
@@ -92,6 +139,14 @@ export interface LayoutOptions {
   bpm: number;
   timeSignature: TimeSignature;
   quantization: QuantizationSetting;
+  /**
+   * Sharps (positive) or flats (negative) the score is written with. Decides
+   * how black keys are spelled and what the prefix prints; C major by default,
+   * which spells every one of them as a sharp.
+   */
+  keySignature?: number;
+  /** The take's pedal events; engraved as brackets under the bass staff. */
+  pedals?: readonly PedalEvent[];
   /** Tempo marks after the first, from the take (`tempo.changes`). */
   tempoChanges?: readonly TempoChange[];
   /** Never lay out fewer measures than this (empty-score scaffold). */
@@ -287,6 +342,271 @@ function displaceAcrossVoices(voices: ChordGroup[]): void {
   }
 }
 
+interface TieContext {
+  tempoMap: TempoMap;
+  timeSignature: TimeSignature;
+  /** The snap grid in beats, or null when the score is not on one. */
+  gridBeats: number | null;
+  beatsHeld: (note: { startMs: number; durationMs: number }) => number;
+}
+
+/**
+ * Cut held notes into the pieces a bar can actually carry, joined by ties.
+ *
+ * A bar line is a hard edge: no symbol reaches across one, so a note that does
+ * is written as a note in each bar with a tie between them. The same applies
+ * inside a bar to any length no single value can express, and to anything
+ * longer than a whole note — which used to be drawn as a whole note and lose
+ * the difference.
+ *
+ * With no grid there is nothing to align to, so notes are left whole. Only the
+ * live score allows that, and the export always sets one.
+ */
+function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext): LaidOutNote[] {
+  const { tempoMap, timeSignature, gridBeats, beatsHeld } = context;
+  if (gridBeats === null) return [...laidOut];
+
+  const perBeat = unitsPerBeat(timeSignature.denominator);
+  const bar = barUnits(timeSignature);
+  /** Absolute 32nd notes from the start of the piece. */
+  const unitsAt = (ms: number): number => Math.round(tempoMap.beatAtMs(ms) * perBeat);
+  const msAtUnits = (units: number): number => Math.round(tempoMap.msAtBeat(units / perBeat));
+
+  const out: LaidOutNote[] = [];
+  for (const note of laidOut) {
+    const from = unitsAt(note.displayStartMs);
+    const heldBeats = Math.max(1, Math.round(beatsHeld(note) / gridBeats)) * gridBeats;
+    const to = from + Math.max(2, Math.round(heldBeats * perBeat));
+
+    // Bar lines first, then the value or values that fill each piece between
+    // them — one where a single symbol is exactly that long, which is the
+    // ordinary case and the one that must not be split.
+    const pieces: { startUnits: number; symbol: DurationSymbol }[] = [];
+    let edge = from;
+    while (edge < to) {
+      const measureStart = Math.floor(edge / bar) * bar;
+      const nextBarLine = Math.min(to, measureStart + bar);
+      const whole = symbolForUnits(nextBarLine - edge);
+      if (whole !== null) {
+        pieces.push({ startUnits: edge, symbol: whole });
+      } else {
+        for (const span of valuesForSpan(
+          edge - measureStart,
+          nextBarLine - measureStart,
+          timeSignature,
+        )) {
+          pieces.push({ startUnits: measureStart + span.startUnits, symbol: span.symbol });
+        }
+      }
+      edge = nextBarLine;
+    }
+    if (pieces.length === 0) {
+      out.push(note);
+      continue;
+    }
+
+    for (let i = 0; i < pieces.length; i += 1) {
+      const piece = pieces[i] as (typeof pieces)[number];
+      out.push({
+        ...note,
+        // Every piece keeps the whole note's performance timing: it is one
+        // sounding note, so it lights up as one under the playhead.
+        displayStartMs: i === 0 ? note.displayStartMs : msAtUnits(piece.startUnits),
+        symbol: piece.symbol,
+        tiedFromPrev: i > 0,
+        tiedToNext: i < pieces.length - 1,
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * Apply the bar's memory to the accidentals the key left over.
+ *
+ * An accidental holds for the rest of the measure at the line or space it was
+ * written on, and the bar line forgets it. So a repeated F sharp is marked once
+ * and not four times, and a note that goes back to what the key says needs a
+ * natural to say so — which is the difference between an engraved bar and a
+ * page that restates everything on every note.
+ *
+ * Keyed by staff and absolute pitch — the letter and octave, clef taken out.
+ * The step alone would be the line or space, which is the same thing right up
+ * until a clef turns over inside the bar: step 0 is E4 before an F clef and G2
+ * after it, and a flat written on the first has nothing to say about the
+ * second. The letter is what an accidental actually attaches to, so C flat and
+ * B still keep their own memories.
+ */
+function applyMeasureAccidentals(chordsByMeasure: readonly ChordGroup[][]): void {
+  for (const inMeasure of chordsByMeasure) {
+    /** What each line or space currently sounds as; absent means "as the key says". */
+    const inForce = new Map<string, number>();
+    // Read in the order the bar is read, so an accidental reaches the notes
+    // after it and not the ones before.
+    const ordered = [...inMeasure].sort((a, b) => a.displayStartMs - b.displayStartMs);
+    for (const chord of ordered) {
+      for (const note of chord.notes) {
+        const key = `${note.staff}|${absoluteDiatonic(note.step, note.clef)}`;
+        // A tie carries its note's accidental over the bar line with it, so the
+        // far side of one is never marked again — but it does hold the line for
+        // whatever else lands there.
+        if (note.tiedFromPrev) {
+          note.accidental = null;
+          inForce.set(key, note.alter);
+          continue;
+        }
+        const standing = inForce.get(key);
+        if (standing === undefined) {
+          // Nothing written here yet, so the key signature is still speaking;
+          // `accidental` already says whether this note departs from it.
+          if (note.accidental !== null) inForce.set(key, note.alter);
+        } else if (standing === note.alter) {
+          note.accidental = null;
+        } else {
+          note.accidental = accidentalFor(note.alter);
+          inForce.set(key, note.alter);
+        }
+      }
+    }
+  }
+}
+
+/**
+ * Turn pedal events into the stretches a bracket is drawn under.
+ *
+ * The events are a stream of downs and ups; what gets engraved is the span
+ * between them. A down while already down is the same press continuing, and an
+ * up with nothing held is ignored, so a stream that never quite balances still
+ * draws something sensible. A press left open at the end runs to the end.
+ */
+function pedalSpans(events: readonly PedalEvent[], totalMs: number): PedalSpan[] {
+  const sorted = [...events].sort((a, b) => a.atMs - b.atMs);
+  const spans: PedalSpan[] = [];
+  let downAt: number | null = null;
+  for (const event of sorted) {
+    if (event.down) {
+      downAt ??= event.atMs;
+    } else if (downAt !== null) {
+      if (event.atMs > downAt) spans.push({ fromMs: downAt, toMs: event.atMs });
+      downAt = null;
+    }
+  }
+  if (downAt !== null && totalMs > downAt) spans.push({ fromMs: downAt, toMs: totalMs });
+  return spans;
+}
+
+/** A stretch of one staff that is sounding, in take milliseconds. */
+interface SoundingSpan {
+  fromMs: number;
+  toMs: number;
+}
+
+/** Sort and coalesce overlapping spans, so what is left between them is silence. */
+function mergeSpans(spans: SoundingSpan[]): SoundingSpan[] {
+  spans.sort((a, b) => a.fromMs - b.fromMs);
+  const merged: SoundingSpan[] = [];
+  for (const span of spans) {
+    const last = merged[merged.length - 1];
+    if (last !== undefined && span.fromMs <= last.toMs) last.toMs = Math.max(last.toMs, span.toMs);
+    else merged.push({ ...span });
+  }
+  return merged;
+}
+
+function pushRests(
+  out: LaidOutRest[],
+  staff: StaffKind,
+  fromUnits: number,
+  toUnits: number,
+  timeSignature: TimeSignature,
+  msAtUnits: (units: number) => number,
+): void {
+  for (const span of restsForGap(fromUnits, toUnits, timeSignature)) {
+    out.push({
+      staff,
+      displayStartMs: msAtUnits(span.startUnits),
+      symbol: span.symbol,
+      step: restStep(span.symbol),
+    });
+  }
+}
+
+/**
+ * The rests each staff needs, from the silence its chords leave over.
+ *
+ * A staff is occupied for as long as its notes are *written*, not as long as
+ * they were held: play a bar of detached quarters and every one of them lifts
+ * early, which is phrasing rather than four extra rests. So the span a chord
+ * covers is the length of the symbol it engraves as, which is also exactly the
+ * span the reader sees filled.
+ *
+ * Bars with nothing starting in them are left alone — `MeasureInfo.empty`
+ * already draws the whole rest that a wholly silent bar takes.
+ */
+function deriveRests(
+  chords: readonly ChordGroup[],
+  measures: readonly MeasureInfo[],
+  timeSignature: TimeSignature,
+  tempoMap: TempoMap,
+): LaidOutRest[] {
+  const { denominator } = timeSignature;
+  const perBeat = unitsPerBeat(denominator);
+  const bar = barUnits(timeSignature);
+
+  const spans: Record<StaffKind, SoundingSpan[]> = { treble: [], bass: [] };
+  for (const chord of chords) {
+    const fromBeat = tempoMap.beatAtMs(chord.displayStartMs);
+    spans[chord.staff].push({
+      fromMs: chord.displayStartMs,
+      toMs: tempoMap.msAtBeat(fromBeat + beatsForSymbol(chord.symbol, denominator)),
+    });
+  }
+  const sounding: Record<StaffKind, SoundingSpan[]> = {
+    treble: mergeSpans(spans.treble),
+    bass: mergeSpans(spans.bass),
+  };
+  // Spans are sorted, so each staff can walk its own list once across the whole
+  // piece instead of rescanning it per measure.
+  const scanned: Record<StaffKind, number> = { treble: 0, bass: 0 };
+
+  const rests: LaidOutRest[] = [];
+  for (const measure of measures) {
+    if (measure.empty) continue;
+    const startBeat = tempoMap.beatAtMs(measure.startMs);
+    const unitsAt = (ms: number): number =>
+      Math.round((tempoMap.beatAtMs(ms) - startBeat) * perBeat);
+    const msAtUnits = (units: number): number =>
+      Math.round(tempoMap.msAtBeat(startBeat + units / perBeat));
+
+    for (const staff of ['treble', 'bass'] as const) {
+      const list = sounding[staff];
+      // Only spans that finish before this bar can be retired; one that runs
+      // into it is still occupying the bars after it too.
+      while (
+        scanned[staff] < list.length &&
+        (list[scanned[staff]] as SoundingSpan).toMs <= measure.startMs
+      ) {
+        scanned[staff] += 1;
+      }
+
+      let cursor = 0;
+      for (let i = scanned[staff]; i < list.length; i += 1) {
+        const span = list[i] as SoundingSpan;
+        const from = unitsAt(span.fromMs);
+        if (from >= bar) break;
+        const to = unitsAt(span.toMs);
+        if (to <= cursor) continue;
+        if (from > cursor) pushRests(rests, staff, cursor, from, timeSignature, msAtUnits);
+        cursor = to;
+        if (cursor >= bar) break;
+      }
+      if (cursor < bar) pushRests(rests, staff, cursor, bar, timeSignature, msAtUnits);
+    }
+  }
+  rests.sort((a, b) => a.displayStartMs - b.displayStartMs);
+  return rests;
+}
+
 export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
   const barMs = barDurationMs(options.bpm, options.timeSignature);
   const minMeasures = options.minMeasures ?? 4;
@@ -308,12 +628,31 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   };
 
   const { denominator } = options.timeSignature;
-  /** A note's written length: beats between its endpoints, tempo map and all. */
-  const beatsHeld = (note: NoteEvent): number =>
+  /** Beats between a note's endpoints, tempo map and all. */
+  const beatsHeld = (note: { startMs: number; durationMs: number }): number =>
     tempoMap.beatAtMs(note.startMs + note.durationMs) - tempoMap.beatAtMs(note.startMs);
 
+  /**
+   * The value a note is written as. Onsets snap to the grid, so lengths have to
+   * as well or the two disagree: a quarter played detached is held for perhaps
+   * four fifths of its beat, which reads as a dotted eighth against a grid that
+   * has already put the next note on the following beat. Written that way the
+   * bar no longer adds up, and the rests derived from what is left over turn
+   * the shortfall into a scattering of unaskable-for silences.
+   *
+   * Rounding is to the nearest slot and never to nothing, so the shortest note
+   * still gets the shortest value the grid can express. With the grid off —
+   * only the live score offers that — lengths stay exactly as played.
+   */
+  const symbolFor = (note: NoteEvent): DurationSymbol => {
+    const held = beatsHeld(note);
+    if (gridBeats === null) return symbolForBeats(held, denominator);
+    return symbolForBeats(Math.max(1, Math.round(held / gridBeats)) * gridBeats, denominator);
+  };
+
+  const fifths = normalizeFifths(options.keySignature ?? 0);
   const laidOut: LaidOutNote[] = notes.map((note) => {
-    const position = midiToStaffPosition(note.midi, note.staff, note.clef);
+    const position = midiToStaffPosition(note.midi, note.staff, note.clef, fifths);
     return {
       id: note.id,
       midi: note.midi,
@@ -325,18 +664,28 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
       step: position.step,
       accidental: position.accidental,
-      symbol: symbolForBeats(beatsHeld(note), denominator),
+      alter: position.alter,
+      symbol: symbolFor(note),
       ledger: ledgerLineSteps(position.step),
       headShift: 0,
       accidentalColumn: 0,
+      tiedFromPrev: false,
+      tiedToNext: false,
     };
+  });
+
+  const tied = tieAcrossBarLines(laidOut, {
+    tempoMap,
+    timeSignature: options.timeSignature,
+    gridBeats,
+    beatsHeld,
   });
 
   // Notes on one staff that start together form a stack, which engraves as one
   // chord per voice — a held note and a run beneath it keep their own written
   // values instead of being fused into a single stem.
   const stacks = new Map<string, LaidOutNote[]>();
-  for (const note of laidOut) {
+  for (const note of tied) {
     const key = `${note.staff}:${note.displayStartMs}`;
     const stack = stacks.get(key);
     if (stack) stack.push(note);
@@ -353,17 +702,19 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     chords.push(...voices);
   }
   settleVoiceStems(chords, stemVotes);
-  // Which way a head moves depends on where its stem points, so this has to
-  // wait until the stems have settled.
-  for (const voices of byStack) {
-    displaceCollidingHeads(voices);
-    stackAccidentals(voices);
-  }
   chords.sort((a, b) => a.displayStartMs - b.displayStartMs);
 
+  // How far the layout has to reach. A tied piece carries the whole note's
+  // performance timing — it is one sounding note — so its own extent is where
+  // its *symbol* ends, not its start plus a duration that belongs to the note
+  // as a whole. Adding the latter to a later piece's start counts the note
+  // twice and buys a blank bar for every tie.
   let maxEndMs = 0;
-  for (const note of laidOut) {
-    const end = Math.max(note.displayStartMs, note.startMs) + note.durationMs;
+  for (const note of tied) {
+    const writtenEnd = tempoMap.msAtBeat(
+      tempoMap.beatAtMs(note.displayStartMs) + beatsForSymbol(note.symbol, denominator),
+    );
+    const end = Math.max(note.startMs + note.durationMs, writtenEnd);
     if (end > maxEndMs) maxEndMs = end;
   }
   const spans = tempoMap.measureSpans(maxEndMs, minMeasures);
@@ -372,6 +723,16 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   for (const chord of chords) {
     const index = measureIndexAt(spans, chord.displayStartMs);
     if (index !== null) (chordsByMeasure[index] as ChordGroup[]).push(chord);
+  }
+
+  // The bar decides which accidentals survive, so it has to speak before the
+  // ones that are left are given columns to stand in.
+  applyMeasureAccidentals(chordsByMeasure);
+  // Which way a head moves depends on where its stem points, so this has to
+  // wait until the stems have settled.
+  for (const voices of byStack) {
+    displaceCollidingHeads(voices);
+    stackAccidentals(voices);
   }
 
   // A clef stands until something replaces it, so a measure with nothing on a
@@ -395,8 +756,12 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     };
   });
 
+  const rests = deriveRests(chords, measures, options.timeSignature, tempoMap);
+
   const last = measures[measures.length - 1];
-  return { chords, measures, barMs, totalMs: last ? last.endMs : 0 };
+  const totalMs = last ? last.endMs : 0;
+  const pedals = pedalSpans(options.pedals ?? [], totalMs);
+  return { chords, rests, pedals, measures, barMs, totalMs };
 }
 
 /**

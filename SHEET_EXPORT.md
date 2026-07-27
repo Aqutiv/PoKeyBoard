@@ -24,9 +24,12 @@ getTakeForExport(id)
   All positions are in PDF points; `SHEET_GAP_PT` (staff space) scales the
   engraving.
 - `sheetRenderer.ts` draws a page onto a canvas whose ctx is scaled so
-  1 unit = 1 pt. All music glyphs (clefs, brace, sharp, flags, beams, rests)
-  are hand-drawn Béziers — no music font is required, so output is identical
-  on every device. Fonts are used only for text (serif stack).
+  1 unit = 1 pt. All music glyphs (clefs, brace, accidentals, flags, beams,
+  rests, ties, pedal brackets) are hand-drawn Béziers — no music font is
+  required, so output is identical on every device. Fonts are used only for
+  text (serif stack). Rests and accidentals live in `restGlyph.ts` and
+  `accidentalGlyph.ts`, shared with the live score so both views draw the same
+  shapes at their own staff-space scale.
 - `sheetPdfService.ts` rasterizes pages sequentially on one reused canvas at
   `RENDER_SCALE` (4× ≈ 288 DPI; 3× above 30 pages) and assembles the PDF with
   **pdf-lib** (MIT, dynamically imported so it code-splits; still precached by
@@ -36,8 +39,9 @@ getTakeForExport(id)
 
 `SheetExportDialog` (mounted in `App.tsx`, driven by `useExportUiStore.
 openSheetExport(takeId)`) mirrors the audio export dialog: options (paper
-size A4/US Letter — persisted via `settings.sheetPaperSize` — and a 1/8 or
-1/16 snap grid defaulting from the take's display quantization) with a live
+size A4/US Letter — persisted via `settings.sheetPaperSize`, a 1/8 or 1/16
+snap grid defaulting from the take's display quantization, and a key signature
+defaulting to the declared or detected one, per piece and not persisted) with a live
 page-1 preview and page estimate → progress with cancel (`AbortSignal`) →
 ready with Download PDF / Share PDF. Entry points: the Play header and each
 Takes action row (disabled for empty takes). No result caching — generation
@@ -51,21 +55,42 @@ takes seconds and never touches the audio engine.
   sequentially on a single reused canvas.
 - Share must run in the click handler (user activation), same as audio.
 
-## Known limitations (v1)
+## Rests, keys, ties, pedal
 
-- Visual quantization to a 1/8 or 1/16 grid; ternary rhythms (triplets) land
-  on the nearest binary slot and typically render as dotted values.
-- Sharps-only spelling, no key signatures (matches the on-screen score);
-  accidentals repeat on every occurrence. Sharps that would foul each other —
-  closer than five steps, about the height of the glyph — stack into columns
-  left of the chord, the topmost nearest.
-- Whole-measure rests only; no partial rests, ties, dynamics, pedal or
-  tuplet marks. Notes longer than a whole note render as a whole note.
-- Because there are no ties, a final chord that rings past its bar line is
-  drawn only where it is struck. The layout prints up to the last measure
-  that starts a note and closes there, so neither that ring-out nor the
-  spare bar the on-screen score keeps for recording reaches the page; rest
-  bars inside the piece are untouched.
+- **Rests** are derived, never stored: a staff is occupied for as long as its
+  notes are _written_, and the silence left over is filled with rests, split at
+  beat boundaries and never across the middle of an even bar. A wholly silent
+  bar takes one whole rest whatever the meter is. Because onsets snap to the
+  grid, note _lengths_ snap to it too — otherwise a quarter played detached
+  reads as a dotted eighth against a grid that already put the next note on the
+  following beat, and the bar stops adding up.
+- **Key signatures** decide spelling: `tempo.keySignature` when the score
+  declared one (MusicXML `<key><fifths>`), otherwise a key read from the
+  take's own pitches (`keyDetection.ts`, a duration-weighted
+  Krumhansl–Kessler correlation; under twelve notes it stays in C major). The
+  export dialog offers all fifteen and defaults to that answer. An accidental
+  holds for the rest of its bar at the line it stands on and the bar line
+  forgets it, so repeats are unmarked and a return to the key takes a natural.
+  Accidentals that would foul each other — closer than five steps, about the
+  height of the glyph — stack into columns left of the chord, topmost nearest.
+- **Ties** cut a note at every bar line it crosses, and again wherever no
+  single value covers the remainder, so a note longer than a whole note is
+  written rather than clamped and a ring-out past the bar line is engraved
+  where it actually sounds. A tie carries its accidental with it. A tie whose
+  ends land on different systems is drawn as a stub at each end.
+- **Pedal** brackets go under the bass staff, in a row of their own, from every
+  press to its release; a press outliving the system is left open at that end.
+  The events were always recorded and imported — this is where they finally get
+  drawn.
+
+## Known limitations
+
+- Visual quantization to a 1/8 or 1/16 grid; ternary rhythms (triplets) land on
+  the nearest binary slot. Now that rests fill what notes leave over, a triplet
+  passage engraves as a note and a rest per slot rather than as a triplet — the
+  bar adds up, but it reads as detached eighths. Tuplets are the fix, and
+  nothing short of them is one.
+- Dynamics, articulations, slurs, ornaments and repeats are still not drawn.
 - Staff assignment follows the imported score's own `staff` per note, so a
   left hand written at or above middle C still prints on the bass staff.
   Recorded takes, and sources with a single staff, split at middle C as
@@ -76,9 +101,9 @@ takes seconds and never touches the audio engine.
   supported; a C clef (alto, tenor) drops any override and the staff goes back
   to its own. A clef stands until something replaces it, so a measure with
   nothing on a staff carries the last one forward. The clef rides on the notes
-  themselves — takes hold no rests — so a change the source declares during a
-  bar of rest is announced at the next note instead of where it was written.
-  Pitches are unaffected either way; only the announcement moves.
+  themselves, and derived rests carry none, so a change the source declares
+  during a bar of rest is announced at the next note instead of where it was
+  written. Pitches are unaffected either way; only the announcement moves.
 - Notes struck together on one staff engrave as one chord per voice, stemmed
   apart, rather than as a single stem carrying the longest value. Imported
   voices beam continuously; where a take has none, voices are derived from
