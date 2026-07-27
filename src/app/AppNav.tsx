@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { useMessages } from '@/i18n/i18nContext';
 import type { Messages } from '@/i18n/types';
+import { useTransportState } from './hooks/useTransport';
 import { useRouter, type Route } from './routerContext';
 
 interface NavItem {
@@ -72,6 +73,10 @@ const NAV_ITEMS: NavItem[] = [
 export function AppNav() {
   const { route, navigate } = useRouter();
   const m = useMessages();
+  const transportState = useTransportState();
+  // Playback survives tab changes, so the Play tab carries the only cue that
+  // sound is still coming from a page you are not looking at.
+  const showPlayingDot = transportState === 'playing' && route !== 'play';
   return (
     <nav className="app-nav" aria-label={m.nav.mainLabel}>
       {NAV_ITEMS.map((item) => (
@@ -84,6 +89,12 @@ export function AppNav() {
         >
           {item.icon}
           <span>{m.nav[item.labelKey]}</span>
+          {item.route === 'play' && showPlayingDot && (
+            <>
+              <span className="app-nav__playing-dot" aria-hidden="true" />
+              <span className="visually-hidden">{m.nav.nowPlaying}</span>
+            </>
+          )}
         </button>
       ))}
     </nav>

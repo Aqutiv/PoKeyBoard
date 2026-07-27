@@ -72,6 +72,7 @@ export interface Messages {
     settings: string;
     about: string;
     mainLabel: string;
+    nowPlaying: string;
   };
   save: {
     failed: string;
@@ -195,6 +196,7 @@ export interface Messages {
       aBeautifulDay: string;
       eveningTide: string;
       forwardGently: string;
+      crookedLanternWaltz: string;
       furElise: string;
       gymnopedie1: string;
       bluesInC: string;

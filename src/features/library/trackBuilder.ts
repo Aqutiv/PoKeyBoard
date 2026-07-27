@@ -4,6 +4,7 @@ import { createBeatTempoMap, tempoChangesFrom, type TempoMap } from '@/domain/te
 import type {
   CountInBars,
   NoteEvent,
+  NoteStaff,
   PedalEvent,
   QuantizationSetting,
   Take,
@@ -13,16 +14,22 @@ import type { Messages } from '@/i18n/types';
 import { noteNameToMidi } from '@/utils/midi';
 
 /**
- * One authored event: `[beat, note(s), durationBeats, velocity?]`.
+ * One authored event: `[beat, note(s), durationBeats, velocity?, staff?]`.
  * `beat` counts from 0 in units of the time signature's denominator note
  * (quarters in 4/4, eighths in 3/8); fractional beats express sixteenths and
  * swing placement. A string array sounds a chord.
+ *
+ * `staff` says which side of the grand staff the source score wrote the event
+ * on. Leaving it off — as every track written straight into this format does —
+ * lets the notation split at middle C, which is right for a piece composed
+ * that way and wrong for one whose left hand climbs above it.
  */
 export type TrackEvent = [
   beat: number,
   note: string | string[],
   durationBeats: number,
   velocity?: number,
+  staff?: NoteStaff,
 ];
 
 export interface LibraryTrackDef {
@@ -76,7 +83,7 @@ export function buildLibraryTake(def: LibraryTrackDef): Take {
   const notes: NoteEvent[] = [];
 
   def.events.forEach((event, index) => {
-    const [beat, noteOrChord, durationBeats, velocity] = event;
+    const [beat, noteOrChord, durationBeats, velocity, staff] = event;
     const names = Array.isArray(noteOrChord) ? noteOrChord : [noteOrChord];
     // Endpoints, not durations, go through the map: a note held across a tempo
     // change then sounds exactly as long as it is written.
@@ -93,6 +100,9 @@ export function buildLibraryTake(def: LibraryTrackDef): Take {
         startMs,
         durationMs,
         velocity: velocity ?? DEFAULT_VELOCITY,
+        // Omitted entirely when unsaid, so tracks that never mention a staff
+        // serialize exactly as they did before.
+        ...(staff !== undefined ? { staff } : {}),
       });
     });
   });

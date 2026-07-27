@@ -110,7 +110,17 @@ button {
   padding-bottom: var(--safe-bottom);
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
 .app-nav__item {
+  position: relative;
   flex: 1;
   min-height: var(--nav-size);
   display: flex;
@@ -131,6 +141,31 @@ button {
 
 .app-nav__item[aria-current='page'] {
   color: var(--accent-strong);
+}
+
+/* Playback keeps running across tabs; this marks where the sound comes from. */
+.app-nav__playing-dot {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  margin-left: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+  animation: nav-playing-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes nav-playing-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app-nav__playing-dot {
+    animation: none;
+  }
 }
 
 @media (min-width: 900px) {

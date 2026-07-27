@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import { audioEngine } from '@/audio/AudioEngine';
 import { scrubController } from '@/features/notation/scrubController';
 import { transportController } from '@/features/transport/transportController';
 import { parseHash, RouterContext, type Route } from './routerContext';
 
+/**
+ * Playback intentionally keeps running across tab changes, so this only ends
+ * the interactions that belong to the page being left. Notes are not flushed:
+ * the scheduler has already queued the next look-ahead window.
+ */
 function settleTransportForRouteChange(): void {
   if (scrubController.isActive) scrubController.end();
-  transportController.handleInterruption();
-  audioEngine.allNotesOff();
+  transportController.handleNavigation();
 }
 
 /**

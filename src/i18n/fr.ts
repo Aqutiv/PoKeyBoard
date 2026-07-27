@@ -9,6 +9,7 @@ export const fr: Messages = {
     settings: 'Réglages',
     about: 'À propos',
     mainLabel: 'Principal',
+    nowPlaying: 'Lecture en cours',
   },
   save: {
     failed: 'Échec de l’enregistrement',
@@ -142,6 +143,8 @@ export const fr: Messages = {
         'Un nocturne original en E mineur : une marée de la main gauche sous une mélodie chantante qui monte vers la lumière, puis retombe au crépuscule.',
       forwardGently:
         'Une pièce originale pour violon, piano et violoncelle portée au clavier : elle s’ouvre avec chaleur, monte vers un sommet radieux et s’achève dans le calme.',
+      crookedLanternWaltz:
+        'Une valse d’Halloween originale en A mineur : une cloche aiguë au-dessus d’un pom-pom-pom bancal, une section centrale pleine d’ombres, et une fin qui ralentit jusqu’à disparaître.',
       furElise: 'La bagatelle bien-aimée de Beethoven — le célèbre thème d’ouverture.',
       gymnopedie1: 'Le classique rêveur de Satie — lent, doux et aérien. Écoutez, tout simplement.',
       bluesInC:

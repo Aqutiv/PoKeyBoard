@@ -9,6 +9,7 @@ export const es: Messages = {
     settings: 'Ajustes',
     about: 'Acerca de',
     mainLabel: 'Principal',
+    nowPlaying: 'Reproduciendo ahora',
   },
   save: {
     failed: 'Error al guardar',
@@ -141,6 +142,8 @@ export const es: Messages = {
         'Un nocturno original en E menor: una marea de la mano izquierda bajo una melodía cantabile que crece hacia la luz y vuelve a apagarse al anochecer.',
       forwardGently:
         'Una obra original para violín, piano y violonchelo llevada al teclado: empieza con calidez, crece hasta un clímax radiante y termina en calma.',
+      crookedLanternWaltz:
+        'Un vals de Halloween original en A menor: una campana aguda sobre un pum-pam-pam desvencijado, una sección central llena de sombras y un final que se frena hasta desvanecerse.',
       furElise: 'La querida bagatela de Beethoven — el famoso tema inicial.',
       gymnopedie1:
         'El clásico soñador de Satie — lento, suave y espacioso. Solo escucha, o déjate llevar.',
