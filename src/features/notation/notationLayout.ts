@@ -19,6 +19,7 @@ import {
   barUnits,
   restStep,
   restsForGap,
+  SMALLEST_UNITS,
   symbolForUnits,
   unitsPerBeat,
   valuesForSpan,
@@ -402,7 +403,7 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
   for (const note of laidOut) {
     const from = unitsAt(note.displayStartMs);
     const heldBeats = Math.max(1, Math.round(beatsHeld(note) / gridBeats)) * gridBeats;
-    const to = from + Math.max(2, Math.round(heldBeats * perBeat));
+    const to = from + Math.max(SMALLEST_UNITS, Math.round(heldBeats * perBeat));
 
     // Bar lines first, then the value or values that fill each piece between
     // them — one where a single symbol is exactly that long, which is the
