@@ -10,7 +10,7 @@ import { MOONLIGHT_SONATA } from '@/features/library/tracks/moonlightSonata';
 import { layoutScore } from '@/features/notation/notationLayout';
 import { layoutSheet } from '@/features/notation/sheetLayout';
 import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
-import { isTernaryBeat } from '@/features/notation/tuplets';
+import { fitsDivision, isTernaryBeat } from '@/features/notation/tuplets';
 
 /** A little human sloppiness, as a fraction of the beat. */
 function jitter(offsets: number[], by: number): number[] {
@@ -50,6 +50,22 @@ describe('isTernaryBeat', () => {
     expect(isTernaryBeat(jitter([0, 0.25, 0.5, 0.75], 0.02))).toBe(false);
   });
 
+  it('does not read an evenly spaced run that merely starts late', () => {
+    // Four notes a clean quarter-beat apart, displaced from the beat. That is
+    // binary spacing, but neither grid anchored at the beat fits it well, so a
+    // reading that only had to beat the alternative would take it as ternary.
+    // Chopin's ornamental runs are full of these; they are not triplets.
+    expect(isTernaryBeat([0.143, 0.393, 0.643, 0.893])).toBe(false);
+    // Shifted the other way, and at a coarser spacing, still binary.
+    expect(isTernaryBeat([0.09, 0.34, 0.59, 0.84])).toBe(false);
+    expect(isTernaryBeat([0.12, 0.62])).toBe(false);
+  });
+
+  it('still reads a genuine sextuplet fragment sitting off the downbeat', () => {
+    // The true positives in the same piece: onsets on sixths of the beat.
+    expect(isTernaryBeat([0, 0.5, 2 / 3, 5 / 6])).toBe(true);
+  });
+
   it('refuses to guess at playing too loose to read either way', () => {
     // Halfway between every division of both kinds: no reading is evidence.
     expect(isTernaryBeat([0, 0.19, 0.42])).toBe(false);
@@ -64,6 +80,21 @@ describe('isTernaryBeat', () => {
   it('reads a sextuplet as ternary', () => {
     const sixths = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6];
     expect(isTernaryBeat(sixths)).toBe(true);
+  });
+
+  it('lets a sparse fragment join a figure it is slightly out of', () => {
+    // Detection and inheritance answer different questions. Whether a triplet
+    // exists at all must be judged strictly, on these onsets alone. Whether a
+    // hand holding one or two notes belongs to the triplet already found next
+    // door is a laxer question, because the triplet has already been evidenced
+    // — and at 120bpm the stricter bound would reject a note twenty
+    // milliseconds out and write it on the binary grid instead.
+    const slightlyOut = [0.04];
+    expect(isTernaryBeat(slightlyOut)).toBe(false); // far too little to claim one
+    expect(fitsDivision(slightlyOut, 3)).toBe(true); // but it belongs to one
+
+    // What inheritance must still refuse: two straight eighths under triplets.
+    expect(fitsDivision([0, 0.5], 3)).toBe(false);
   });
 
   it('does not care what order the onsets arrive in', () => {
