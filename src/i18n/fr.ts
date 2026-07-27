@@ -318,8 +318,37 @@ export const fr: Messages = {
     offline: 'Hors ligne.',
     swReady: 'Le cœur de l’application est en cache et démarre sans connexion.',
     swNotReady: 'La prise en charge hors ligne s’active après la première visite en HTTPS.',
+    featuresTitle: 'Ce que vous pouvez faire',
+    features: [
+      {
+        title: 'Un piano à queue échantillonné',
+        body: 'Un piano acoustique multi-échantillonné se charge à la demande, avec une vélocité liée à l’endroit où vous touchez la touche, une réverbération réglable et des noms de notes en option. Téléchargez une fois la banque complète depuis les Réglages et chaque touche reste jouable hors ligne.',
+      },
+      {
+        title: 'Jouer au clavier ou sur la partition',
+        body: 'Passez du clavier à une vue de notation qui suit votre jeu. Métronome, tempo et défilement de la partition permettent de travailler un passage lentement.',
+      },
+      {
+        title: 'Une bibliothèque comme point de départ',
+        body: 'Des originaux et des classiques sont fournis avec l’application, d’un premier morceau facile au premier mouvement complet de la Sonate au clair de lune. Les morceaux de la bibliothèque ne changent jamais — enregistrez par-dessus et votre version devient une nouvelle prise.',
+      },
+      {
+        title: 'Enregistrer, retravailler, conserver',
+        body: 'Les prises sont des événements de notes structurés, donc modifiables : renommez, dupliquez, effacez les notes ou recommencez sur le même accompagnement. Sauvegardez le tout dans un seul fichier JSON quand vous voulez.',
+      },
+      {
+        title: 'Exporter et partager',
+        body: 'Rendez une prise en MP3, gravez-la en partition PDF ou transmettez le JSON brut. Les partitions entrent aussi — importez un MusicXML ou une prise PoKeyBoard depuis un fichier ou un lien direct.',
+      },
+    ],
+    privacyTitle: 'Où vit votre musique',
+    privacyBody:
+      'Pas de compte, pas de serveur, rien à téléverser. Les prises et les réglages sont écrits dans le stockage de ce navigateur, sur cet appareil, et le microphone n’est jamais sollicité — tout ce que vous entendez est synthétisé à partir des notes jouées.',
     backgroundHint:
       'L’audio se met normalement en pause quand l’application passe en arrière-plan ou que l’écran se verrouille. Les prises sont locales à ce profil de navigateur — l’application installée peut utiliser un stockage distinct, alors exportez des sauvegardes JSON de tout ce qui compte.',
+    installTitle: 'Installer l’application',
+    installBody:
+      'Ajoutez PoKeyBoard à votre écran d’accueil ou à votre bureau : elle s’ouvre en plein écran, démarre sans connexion et laisse le navigateur de côté. Installez-la avant d’enregistrer quoi que ce soit d’important, car l’application installée peut utiliser un stockage distinct de celui de l’onglet.',
     credits: 'Crédits',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:

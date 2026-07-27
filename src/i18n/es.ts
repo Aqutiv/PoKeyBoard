@@ -320,8 +320,37 @@ export const es: Messages = {
     offline: 'Sin conexión.',
     swReady: 'El núcleo de la app está en caché y arranca sin conexión.',
     swNotReady: 'El soporte sin conexión se activa tras la primera visita por HTTPS.',
+    featuresTitle: 'Qué puedes hacer',
+    features: [
+      {
+        title: 'Un piano de cola muestreado',
+        body: 'Un piano acústico multimuestreado se carga bajo demanda, con velocidad según dónde tocas cada tecla, reverberación ajustable y nombres de nota opcionales. Descarga el paquete completo una vez desde Ajustes y todas las teclas seguirán sonando sin conexión.',
+      },
+      {
+        title: 'Toca desde las teclas o la partitura',
+        body: 'Alterna entre el teclado y una vista de notación que te sigue mientras tocas. Metrónomo, tempo y una partitura recorrible facilitan trabajar un pasaje despacio.',
+      },
+      {
+        title: 'Una biblioteca sobre la que construir',
+        body: 'La app incluye originales y clásicos, desde una primera pieza fácil hasta el primer movimiento completo de la Sonata Claro de Luna. Las pistas de la biblioteca nunca cambian: graba encima y tu versión se guarda como una toma nueva.',
+      },
+      {
+        title: 'Graba, retoca y conserva',
+        body: 'Las tomas son eventos de notas estructurados, así que siguen siendo editables: renombra, duplica, borra las notas o vuelve a empezar sobre la misma base. Respalda todo en un único archivo JSON cuando quieras.',
+      },
+      {
+        title: 'Exporta y comparte',
+        body: 'Renderiza una toma a MP3, grábala como partitura en PDF o entrega el JSON en bruto. Las partituras también entran: importa MusicXML o una toma de PoKeyBoard desde un archivo o un enlace directo.',
+      },
+    ],
+    privacyTitle: 'Dónde vive tu música',
+    privacyBody:
+      'No hay cuenta, ni servidor, ni nada que subir. Las tomas y los ajustes se escriben en el almacenamiento de este navegador, en este dispositivo, y el micrófono nunca se usa: todo lo que oyes se sintetiza a partir de las notas que tocaste.',
     backgroundHint:
       'El audio normalmente se pausa cuando la app pasa a segundo plano o la pantalla se bloquea. Las tomas son locales a este perfil del navegador — la app instalada puede usar un almacenamiento distinto, así que exporta respaldos JSON de lo importante.',
+    installTitle: 'Instálala',
+    installBody:
+      'Añade PoKeyBoard a tu pantalla de inicio o escritorio: se abre a pantalla completa, arranca sin conexión y deja al navegador a un lado. Instálala antes de grabar algo que quieras conservar, porque la app instalada puede usar un almacenamiento distinto al de la pestaña.',
     credits: 'Créditos',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:

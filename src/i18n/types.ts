@@ -355,7 +355,13 @@ export interface Messages {
     offline: string;
     swReady: string;
     swNotReady: string;
+    featuresTitle: string;
+    features: readonly { title: string; body: string }[];
+    privacyTitle: string;
+    privacyBody: string;
     backgroundHint: string;
+    installTitle: string;
+    installBody: string;
     credits: string;
     creditLine: string;
     attribution: string;
