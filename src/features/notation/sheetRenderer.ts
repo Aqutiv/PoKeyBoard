@@ -1,14 +1,11 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import {
   ACCIDENTAL_COLUMN_W_G,
-  BEAM_SPACING_G,
-  BEAM_THICKNESS_G,
   HEAD_RX_G,
   KEY_ACCIDENTAL_W_G,
   keySignatureWidthPt,
   PEDAL_HOOK_G,
   SHEET_GAP_PT,
-  STEM_LENGTH_G,
   staffYRel,
   stemXPt,
   type SheetBeam,
@@ -22,6 +19,7 @@ import {
   type SheetTie,
 } from './sheetLayout';
 import { drawAccidentalGlyph } from './accidentalGlyph';
+import { BEAM_SPACING_G, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
 import {
   normalizeFifths,
   signatureAccidental,

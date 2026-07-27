@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent, TempoChange, TimeSignature } from '@/domain/takeTypes';
+import { BEAM_SLANT_MAX_G, MIN_BEAM_STEM_G } from '@/features/notation/beamGeometry';
 import { layoutScore } from '@/features/notation/notationLayout';
 import {
   ACCIDENTAL_LEAD_G,
-  BEAM_SLANT_MAX_G,
-  MIN_BEAM_STEM_G,
   SHEET_GAP_PT,
   layoutSheet,
   metricsFor,

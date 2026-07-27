@@ -435,3 +435,76 @@ describe('layoutScore', () => {
     expect(elapsed).toBeLessThan(250);
   });
 });
+
+describe('beam grouping', () => {
+  /** Eighths at 120bpm 4/4: a beat is 500ms, so an eighth is 250ms. */
+  function eighths(starts: number[], partial: Partial<NoteEvent> = {}): NoteEvent[] {
+    return starts.map((startMs, i) =>
+      note({ id: `e${i}`, midi: 72, startMs, durationMs: 250, ...partial }),
+    );
+  }
+
+  it('beams each beat of a run on its own', () => {
+    const layout = layoutScore(eighths([0, 250, 500, 750]), OPTS);
+    expect(layout.beams).toHaveLength(2);
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
+    expect(layout.beams.every((beam) => beam.beamCount === 1)).toBe(true);
+    // Every chord points back at the run it belongs to.
+    expect(layout.chords.map((chord) => chord.beamId)).toEqual([0, 0, 1, 1]);
+  });
+
+  it('leaves a lone eighth to its flag', () => {
+    const layout = layoutScore(eighths([0]), OPTS);
+    expect(layout.beams).toEqual([]);
+    expect(layout.chords[0]!.beamId).toBeNull();
+  });
+
+  it('does not beam quarters', () => {
+    const layout = layoutScore(
+      [0, 500].map((startMs, i) => note({ id: `q${i}`, midi: 72, startMs, durationMs: 500 })),
+      OPTS,
+    );
+    expect(layout.beams).toEqual([]);
+  });
+
+  it('breaks a run where the staff falls silent', () => {
+    // Sixteenths at 0 and 125, a sixteenth of silence, then one at 375 — all
+    // inside the first beat, so only the rest can separate them.
+    const layout = layoutScore(
+      [0, 125, 375].map((startMs, i) => note({ id: `s${i}`, midi: 72, startMs, durationMs: 125 })),
+      OPTS,
+    );
+    expect(layout.rests.some((rest) => rest.displayStartMs === 250)).toBe(true);
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.members.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+    expect(layout.beams[0]!.beamCount).toBe(2);
+  });
+
+  it('commits every chord of a run to one stem direction', () => {
+    // A run straddling the middle line would stem both ways left alone; the
+    // beam settles it, and the members all agree afterwards.
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 64, startMs: 0, durationMs: 250 }),
+        note({ id: 'b', midi: 81, startMs: 250, durationMs: 250 }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams).toHaveLength(1);
+    const beam = layout.beams[0]!;
+    expect(beam.members.every((chord) => chord.stemDown === beam.stemDown)).toBe(true);
+  });
+
+  it('groups a compound meter by its dotted beat', () => {
+    // 6/8 at 120bpm: the beat is the eighth at 250ms, so a dotted-quarter beat
+    // unit lasts 750ms. Six eighths make two beams of three, the way 6/8 is
+    // counted, rather than three of two.
+    const layout = layoutScore(
+      [0, 250, 500, 750, 1000, 1250].map((startMs, i) =>
+        note({ id: `c${i}`, midi: 72, startMs, durationMs: 250 }),
+      ),
+      { ...OPTS, timeSignature: { numerator: 6, denominator: 8 } },
+    );
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([3, 3]);
+  });
+});
