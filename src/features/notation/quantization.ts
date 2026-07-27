@@ -21,6 +21,27 @@ const SYMBOLS: Array<{ fraction: number; symbol: DurationSymbol }> = [
   { fraction: 0.0625, symbol: { base: 'sixteenth', dotted: false } },
 ];
 
+/** Every standard symbol, longest first — the values a note or rest may take. */
+export const DURATION_SYMBOLS: readonly DurationSymbol[] = SYMBOLS.map((entry) => entry.symbol);
+
+const BASE_FRACTION: Record<DurationSymbol['base'], number> = {
+  whole: 1,
+  half: 0.5,
+  quarter: 0.25,
+  eighth: 0.125,
+  sixteenth: 0.0625,
+};
+
+/**
+ * A symbol's written length in time-signature beats — the inverse of
+ * `symbolForBeats`. What a note is *drawn* as, which is what decides where the
+ * silence around it starts and ends; the raw performance duration says only
+ * how long a key happened to be held.
+ */
+export function beatsForSymbol(symbol: DurationSymbol, denominator: number): number {
+  return BASE_FRACTION[symbol.base] * (symbol.dotted ? 1.5 : 1) * denominator;
+}
+
 /**
  * Grid size in time-signature beats; null when off. The grid lives in beat
  * space so that it stays anchored to the music — bar lines and the tempo

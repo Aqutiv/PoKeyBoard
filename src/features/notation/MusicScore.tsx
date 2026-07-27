@@ -7,11 +7,13 @@ import { transportController } from '@/features/transport/transportController';
 import type { QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
 import { useTakeStore } from '@/state/useTakeStore';
 import { midiToNoteName } from '@/utils/midi';
+import { detectFifths } from './keyDetection';
+import { normalizeFifths } from './keySignature';
 import { layoutScore, type ScoreLayout } from './notationLayout';
 import {
   computeScoreGeometry,
   drawScore,
-  GUTTER,
+  gutterWidthFor,
   SCORE_PALETTES,
   type ScoreGeometry,
   type ScoreView,
@@ -61,11 +63,21 @@ export function MusicScore() {
 
   const state = useTransportState();
   const notes = useTakeStore((s) => s.take.notes);
+  const pedalEvents = useTakeStore((s) => s.take.pedalEvents);
   const tempo = useTakeStore((s) => s.take.tempo);
   const zoom = useTakeStore((s) => s.take.display.zoom);
   const quantization = useTakeStore((s) => s.take.display.quantization);
   const setDisplayQuantization = useTakeStore((s) => s.setDisplayQuantization);
   const [lastNoteName, setLastNoteName] = useState<string | null>(null);
+
+  // An imported score says which key it is in; a recording never does, so the
+  // notes are read for one. Both views spell from the same answer, so the
+  // score on screen and the printed page never disagree about a flat.
+  const keySignature = useMemo(
+    () =>
+      tempo.keySignature !== undefined ? normalizeFifths(tempo.keySignature) : detectFifths(notes),
+    [tempo.keySignature, notes],
+  );
 
   const layout = useMemo(
     () =>
@@ -74,8 +86,10 @@ export function MusicScore() {
         timeSignature: tempo.timeSignature,
         tempoChanges: tempo.changes,
         quantization,
+        keySignature,
+        pedals: pedalEvents,
       }),
-    [notes, tempo.bpm, tempo.timeSignature, tempo.changes, quantization],
+    [notes, tempo.bpm, tempo.timeSignature, tempo.changes, quantization, keySignature, pedalEvents],
   );
   const geometry = useMemo(() => computeScoreGeometry(layout.chords), [layout]);
 
@@ -84,6 +98,7 @@ export function MusicScore() {
   const layoutBoxRef = useRef<LayoutBox>({ layout, geometry, version: 0 });
   const stateRef = useRef<TransportState>(state);
   const tempoRef = useRef<TempoSettings>(tempo);
+  const keyRef = useRef(keySignature);
   const zoomRef = useRef(zoom);
   const ghostsRef = useRef<LiveGhost[]>([]);
   const scrollMsRef = useRef(0);
@@ -105,6 +120,9 @@ export function MusicScore() {
   useEffect(() => {
     tempoRef.current = tempo;
   }, [tempo]);
+  useEffect(() => {
+    keyRef.current = keySignature;
+  }, [keySignature]);
   useEffect(() => {
     zoomRef.current = zoom;
   }, [zoom]);
@@ -180,13 +198,14 @@ export function MusicScore() {
       const openNotes = transportController.getOpenRecordingNotes();
 
       const pxPerMs = BASE_PX_PER_MS * zoomRef.current;
-      const anchorOffsetMs = ((width - GUTTER) * PLAYHEAD_ANCHOR) / pxPerMs;
+      const gutterPx = gutterWidthFor(keyRef.current);
+      const anchorOffsetMs = ((width - gutterPx) * PLAYHEAD_ANCHOR) / pxPerMs;
       const moving = currentState === 'playing' || currentState === 'recording';
       if (moving) {
         scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
       } else {
-        const x = GUTTER + (playheadMs - scrollMsRef.current) * pxPerMs;
-        if (x < GUTTER - 1 || x > width - 20) {
+        const x = gutterPx + (playheadMs - scrollMsRef.current) * pxPerMs;
+        if (x < gutterPx - 1 || x > width - 20) {
           scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
         }
       }
@@ -216,6 +235,8 @@ export function MusicScore() {
         scrollMs: scrollMsRef.current,
         trebleTop: box.geometry.trebleTop,
         bassTop: box.geometry.bassTop,
+        pedalRow: box.geometry.pedalRow,
+        gutterPx,
       };
       drawScore(
         ctx,
@@ -223,6 +244,7 @@ export function MusicScore() {
         {
           layout: box.layout,
           timeSignature: tempoRef.current.timeSignature,
+          keySignature: keyRef.current,
           playheadMs,
           recording: currentState === 'recording',
           openNotes,

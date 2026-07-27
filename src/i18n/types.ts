@@ -264,6 +264,10 @@ export interface Messages {
     grid8: string;
     grid16: string;
     gridHint: string;
+    keySignature: string;
+    /** Both tonics already carry their own accidental signs, e.g. "E♭". */
+    keyName: (p: { major: string; minor: string }) => string;
+    keyHint: string;
     previewLabel: string;
     pageEstimate: (p: { pages: number }) => string;
     generate: string;

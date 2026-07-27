@@ -16,6 +16,8 @@ export const MAX_NOTE_COUNT = 50_000;
 export const MAX_TEMPO_CHANGES = 1_024;
 /** Highest voice number a note may claim; engravings never need more. */
 export const MAX_NOTE_VOICE = 15;
+/** Furthest a key signature goes round the circle of fifths (C sharp/flat major). */
+export const MAX_FIFTHS = 7;
 
 export type QuantizationSetting = 'off' | '1/8' | '1/16';
 
@@ -42,6 +44,13 @@ export interface TempoSettings {
   countInBars: CountInBars;
   /** Sorted, all `atMs > 0`; absent (or empty) means one tempo throughout. */
   changes?: readonly TempoChange[];
+  /**
+   * Sharps (positive) or flats (negative) in the key signature, −7..7. Purely
+   * notational, like `changes` — it decides how a pitch is spelled and what the
+   * system prefix prints, and never moves or retunes a note. Absent means the
+   * score never said, and the notation reads a key from the pitches instead.
+   */
+  keySignature?: number;
 }
 
 export interface InstrumentSettings {

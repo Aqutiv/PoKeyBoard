@@ -15,6 +15,7 @@ import {
   DEFAULT_MASTER_VOLUME,
   DEFAULT_REVERB_MIX,
   DEFAULT_SAMPLE_PACK_VERSION,
+  MAX_FIFTHS,
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
   MAX_NOTE_VOICE,
@@ -61,6 +62,9 @@ export const tempoSchema = z.object({
   // parse untouched and no schema version bump is needed. Older builds parse a
   // take that has one and silently drop the field (zod strips unknown keys).
   changes: z.array(tempoChangeSchema).max(MAX_TEMPO_CHANGES).optional(),
+  // Additive for the same reason, and inaudible in the same way: dropping it
+  // costs a build the spelling of the accidentals, never a note.
+  keySignature: z.number().int().min(-MAX_FIFTHS).max(MAX_FIFTHS).optional(),
 });
 
 export const instrumentSchema = z.object({

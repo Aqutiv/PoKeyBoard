@@ -219,6 +219,9 @@ export const es: Messages = {
     grid16: 'Semicorcheas (1/16)',
     gridHint:
       'La interpretación libre se ajusta a esta cuadrícula en el papel. La reproducción no cambia.',
+    keySignature: 'Armadura',
+    keyName: ({ major, minor }) => `${major} mayor / ${minor} menor`,
+    keyHint: 'Se toma de la partitura o, si no la indica, de las notas. La afinación no cambia.',
     previewLabel: 'Vista previa de la página 1',
     pageEstimate: ({ pages }) => `≈ ${pages} página${pages === 1 ? '' : 's'}`,
     generate: 'Generar PDF',

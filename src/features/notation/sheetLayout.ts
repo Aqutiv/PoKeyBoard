@@ -5,9 +5,12 @@ import {
   measureIndexAt,
   type ChordGroup,
   type HeadShift,
+  type LaidOutRest,
   type MeasureInfo,
+  type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
+import { normalizeFifths, type AccidentalKind } from './keySignature';
 import type { DurationSymbol } from './quantization';
 import type { ClefKind, StaffKind } from './staffMapping';
 
@@ -43,6 +46,19 @@ export const ACCIDENTAL_LEAD_G = 1.7;
 export const ACCIDENTAL_COLUMN_W_G = 1.4;
 /** Width a mid-staff clef change takes at the head of a measure. */
 export const CLEF_CHANGE_W_G = 3.6;
+/** Horizontal pitch of the accidentals in a key signature. */
+export const KEY_ACCIDENTAL_W_G = 1.15;
+/** Clear space kept after the last of them, before the time signature or music. */
+export const KEY_SIGNATURE_PAD_G = 0.9;
+
+/**
+ * Width the key signature takes in every system prefix. Zero for C major, so a
+ * score without one is laid out exactly as it was before keys existed.
+ */
+export function keySignatureWidthPt(fifths: number): number {
+  const count = Math.abs(normalizeFifths(fifths));
+  return count === 0 ? 0 : (count * KEY_ACCIDENTAL_W_G + KEY_SIGNATURE_PAD_G) * G;
+}
 /** Band a system reserves above the music for a mid-score tempo mark (pt). */
 export const TEMPO_MARK_SPACE_PT = 20;
 /** The mark's baseline inside that band, measured from the band's top. */
@@ -123,12 +139,31 @@ export function metricsFor(paper: PaperSize): SheetPageMetrics {
 export interface SheetNote {
   midi: number;
   step: number;
-  accidental: '#' | null;
+  accidental: AccidentalKind | null;
   /** Which column left of the chord the accidental goes in, 0 nearest. */
   accidentalColumn: number;
   ledger: number[];
   /** Head-widths this head sits clear of the column; see `HeadShift`. */
   headShift: HeadShift;
+  /** True when this head continues one before it, under a tie. */
+  tiedFromPrev: boolean;
+  /** True when a tie runs from this head into the next piece of the same note. */
+  tiedToNext: boolean;
+}
+
+/**
+ * A tie arc, in absolute page coordinates. A tie whose ends fall in different
+ * systems is written as two of these: a stub off the end of the first and a
+ * stub into the head on the second, which is how it is engraved on paper.
+ */
+export interface SheetTie {
+  staff: StaffKind;
+  /** True when the arc bows upward, away from a downward stem. */
+  above: boolean;
+  x1Pt: number;
+  y1Pt: number;
+  x2Pt: number;
+  y2Pt: number;
 }
 
 export interface SheetChord {
@@ -144,6 +179,13 @@ export interface SheetChord {
   beamId: number | null;
 }
 
+/** A silence engraved on one staff; see `LaidOutRest`. */
+export interface SheetRest {
+  symbol: DurationSymbol;
+  /** Steps above the staff's bottom line the glyph is read from. */
+  step: number;
+}
+
 export interface SheetColumn {
   timeMs: number;
   /** Absolute page x of the notehead center. */
@@ -154,6 +196,9 @@ export interface SheetColumn {
    */
   treble: SheetChord[];
   bass: SheetChord[];
+  /** The rest each staff starts here, where it is silent instead. */
+  trebleRest: SheetRest | null;
+  bassRest: SheetRest | null;
 }
 
 export interface SheetBeam {
@@ -172,6 +217,9 @@ export interface SheetMeasure {
   index: number;
   xPt: number;
   widthPt: number;
+  /** The stretch of take time this measure covers. */
+  startMs: number;
+  endMs: number;
   /** Draw a whole rest on both staffs. */
   empty: boolean;
   columns: SheetColumn[];
@@ -190,6 +238,19 @@ export interface SheetMeasure {
   clefChanges: StaffKind[];
 }
 
+/**
+ * A sustain-pedal bracket under the bass staff, clipped to one system. A press
+ * that outlives its system is drawn open at that end and picked up on the next,
+ * which is how a long pedal is engraved on paper.
+ */
+export interface SheetPedal {
+  xFromPt: number;
+  xToPt: number;
+  /** True when the press began before this system, or runs past its end. */
+  continuesLeft: boolean;
+  continuesRight: boolean;
+}
+
 export interface SheetSystem {
   xPt: number;
   /** Staff-line extent from xPt (clef area + measures). */
@@ -199,6 +260,12 @@ export interface SheetSystem {
   trebleTopPt: number;
   bassTopPt: number;
   measures: SheetMeasure[];
+  /** Tie arcs spanning this system's music; see `SheetTie`. */
+  ties: SheetTie[];
+  /** Pedal brackets under the bass staff; see `SheetPedal`. */
+  pedals: SheetPedal[];
+  /** y of the pedal row, below the bass staff (absolute page pt). */
+  pedalRowPt: number;
   /** The clef each staff opens this system under. */
   clefs: Record<StaffKind, ClefKind>;
   /** 1-based label at the system start. */
@@ -220,6 +287,8 @@ export interface SheetPage {
   pageNumber: number;
   metrics: SheetPageMetrics;
   timeSignature: TimeSignature;
+  /** Sharps (positive) or flats (negative) every system prefix carries. */
+  keySignature: number;
   /** Present on page 1 only. */
   titleBlock: SheetTitleBlock | null;
   systems: SheetSystem[];
@@ -228,6 +297,8 @@ export interface SheetPage {
 export interface SheetLayoutOptions {
   paper: PaperSize;
   timeSignature: TimeSignature;
+  /** Sharps (positive) or flats (negative); 0 (C major) prints nothing. */
+  keySignature?: number;
   bpm: number;
   title: string;
   /** Pre-formatted (localized) subtitle line, e.g. the recording date. */
@@ -263,11 +334,14 @@ interface WorkColumn {
   headOffG: number;
   treble: SheetChord[];
   bass: SheetChord[];
+  trebleRest: SheetRest | null;
+  bassRest: SheetRest | null;
 }
 
 interface WorkMeasure {
   index: number;
   startMs: number;
+  endMs: number;
   columns: WorkColumn[];
   naturalWG: number;
   bpm: number;
@@ -279,6 +353,8 @@ interface WorkMeasure {
 
 interface WorkSystem {
   measures: SheetMeasure[];
+  ties: SheetTie[];
+  pedals: SheetPedal[];
   clefs: Record<StaffKind, ClefKind>;
   widthPt: number;
   /** Space needed above the treble top line / below the bass bottom line. */
@@ -289,7 +365,7 @@ interface WorkSystem {
 export function layoutSheet(score: ScoreLayout, options: SheetLayoutOptions): SheetLayoutResult {
   const metrics = metricsFor(options.paper);
   const workMeasures = trimTrailingEmpty(buildWorkMeasures(score));
-  const systems = packSystems(workMeasures, metrics, options);
+  const systems = packSystems(workMeasures, score, metrics, options);
   const pages = paginate(systems, metrics, options);
   return { pages, measureCount: workMeasures.length, systemCount: systems.length };
 }
@@ -337,6 +413,8 @@ function toSheetChord(chord: ChordGroup): SheetChord {
       accidentalColumn: note.accidentalColumn,
       ledger: note.ledger,
       headShift: note.headShift,
+      tiedFromPrev: note.tiedFromPrev,
+      tiedToNext: note.tiedToNext,
     })),
     voice: chord.voice,
     symbol: chord.symbol,
@@ -352,6 +430,11 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
     const index = measureIndexAt(score.measures, chord.displayStartMs);
     if (index !== null) chordsByMeasure[index]!.push(chord);
   }
+  const restsByMeasure: LaidOutRest[][] = score.measures.map(() => []);
+  for (const rest of score.rests) {
+    const index = measureIndexAt(score.measures, rest.displayStartMs);
+    if (index !== null) restsByMeasure[index]!.push(rest);
+  }
 
   return score.measures.map((measure, position) => {
     // Spacing is relative to the local whole note, so bars either side of a
@@ -366,21 +449,41 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
       }
     }
     const byTime = new Map<number, WorkColumn>();
-    for (const chord of chordsByMeasure[measure.index]!) {
-      let column = byTime.get(chord.displayStartMs);
+    const columnAt = (timeMs: number): WorkColumn => {
+      let column = byTime.get(timeMs);
       if (!column) {
-        column = { timeMs: chord.displayStartMs, headOffG: 0, treble: [], bass: [] };
-        byTime.set(chord.displayStartMs, column);
+        column = {
+          timeMs,
+          headOffG: 0,
+          treble: [],
+          bass: [],
+          trebleRest: null,
+          bassRest: null,
+        };
+        byTime.set(timeMs, column);
       }
+      return column;
+    };
+    for (const chord of chordsByMeasure[measure.index]!) {
+      const column = columnAt(chord.displayStartMs);
       // score.chords already runs topmost voice first within a stack.
       if (chord.staff === 'treble') column.treble.push(toSheetChord(chord));
       else column.bass.push(toSheetChord(chord));
+    }
+    // A rest takes a column of its own where the other staff has nothing at
+    // that instant, and shares one where it does.
+    for (const rest of restsByMeasure[measure.index]!) {
+      const column = columnAt(rest.displayStartMs);
+      const entry: SheetRest = { symbol: rest.symbol, step: rest.step };
+      if (rest.staff === 'treble') column.trebleRest = entry;
+      else column.bassRest = entry;
     }
     const columns = [...byTime.values()].sort((a, b) => a.timeMs - b.timeMs);
     if (columns.length === 0) {
       return {
         index: measure.index,
         startMs: measure.startMs,
+        endMs: measure.endMs,
         columns,
         naturalWG: EMPTY_MEASURE_W_G + clefTurnsOver.length * CLEF_CHANGE_W_G,
         bpm: measure.bpm,
@@ -410,6 +513,7 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
     return {
       index: measure.index,
       startMs: measure.startMs,
+      endMs: measure.endMs,
       columns,
       naturalWG,
       bpm: measure.bpm,
@@ -423,11 +527,17 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
 /** Greedily fill systems, justify, assign x positions, and build beams. */
 function packSystems(
   workMeasures: WorkMeasure[],
+  score: ScoreLayout,
   metrics: SheetPageMetrics,
   options: SheetLayoutOptions,
 ): WorkSystem[] {
+  // The key signature repeats in every prefix, unlike the time signature.
+  const keyAreaPt = keySignatureWidthPt(options.keySignature ?? 0);
   const availableFor = (systemIndex: number): number =>
-    metrics.contentWidthPt - metrics.clefAreaPt - (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
+    metrics.contentWidthPt -
+    metrics.clefAreaPt -
+    keyAreaPt -
+    (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
 
   const rows: { measures: WorkMeasure[]; stretch: number }[] = [];
   let current: WorkMeasure[] = [];
@@ -450,7 +560,10 @@ function packSystems(
 
   return rows.map((row, systemIndex) => {
     let x =
-      metrics.marginLeftPt + metrics.clefAreaPt + (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
+      metrics.marginLeftPt +
+      metrics.clefAreaPt +
+      keyAreaPt +
+      (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
     const measures: SheetMeasure[] = row.measures.map((wm, position) => {
       const widthPt = wm.naturalWG * row.stretch * G;
       const columns: SheetColumn[] = wm.columns.map((column) => ({
@@ -458,11 +571,15 @@ function packSystems(
         xPt: x + column.headOffG * row.stretch * G,
         treble: column.treble,
         bass: column.bass,
+        trebleRest: column.trebleRest,
+        bassRest: column.bassRest,
       }));
       const measure: SheetMeasure = {
         index: wm.index,
         xPt: x,
         widthPt,
+        startMs: wm.startMs,
+        endMs: wm.endMs,
         empty: columns.length === 0,
         columns,
         beams: [],
@@ -480,15 +597,166 @@ function packSystems(
     for (let i = 0; i < measures.length; i += 1) {
       buildBeams(measures[i]!, row.measures[i]!.startMs, options);
     }
+    const ties = buildTies(measures, metrics.marginLeftPt, x);
+    const pedals = buildPedals(measures, score.pedals);
     const extents = systemExtents(measures);
     return {
       measures,
+      ties,
+      pedals,
       widthPt: x - metrics.marginLeftPt,
       abovePt: extents.abovePt,
-      belowPt: extents.belowPt,
+      // A pedal bracket gets a row of its own under the staff, so it can never
+      // be pushed into by a low note or land on one.
+      belowPt: extents.belowPt + (pedals.length > 0 ? PEDAL_ROW_PT : 0),
       clefs: (row.measures[0] as WorkMeasure).clefs,
     };
   });
+}
+
+/** Vertical room under the bass staff for a pedal bracket (pt). */
+export const PEDAL_ROW_PT = 13;
+/** The bracket's own height, measured up from its line. */
+export const PEDAL_HOOK_G = 0.75;
+
+/**
+ * Where a moment in time falls across a system, in points.
+ *
+ * Music is not spaced in proportion to time — a run of sixteenths is packed
+ * tighter per millisecond than a whole note is — so a pedal mark can only be
+ * placed by the columns around it. Interpolating between the two nearest
+ * anchors puts a press exactly under the note it was taken with, which is the
+ * only placement a player reads it against.
+ */
+function xAtTime(anchors: readonly { timeMs: number; xPt: number }[], timeMs: number): number {
+  const first = anchors[0] as { timeMs: number; xPt: number };
+  const last = anchors[anchors.length - 1] as { timeMs: number; xPt: number };
+  if (timeMs <= first.timeMs) return first.xPt;
+  if (timeMs >= last.timeMs) return last.xPt;
+  let low = 0;
+  let high = anchors.length - 1;
+  while (high - low > 1) {
+    const mid = (low + high) >> 1;
+    if ((anchors[mid] as { timeMs: number }).timeMs <= timeMs) low = mid;
+    else high = mid;
+  }
+  const a = anchors[low] as { timeMs: number; xPt: number };
+  const b = anchors[high] as { timeMs: number; xPt: number };
+  const span = b.timeMs - a.timeMs;
+  return span <= 0 ? a.xPt : a.xPt + ((timeMs - a.timeMs) / span) * (b.xPt - a.xPt);
+}
+
+/** The pedal brackets a system carries, clipped to the music it holds. */
+function buildPedals(measures: readonly SheetMeasure[], spans: readonly PedalSpan[]): SheetPedal[] {
+  const first = measures[0];
+  const last = measures[measures.length - 1];
+  if (!first || !last || spans.length === 0) return [];
+
+  // Bar lines and note columns alike anchor the mapping from time to page x.
+  const anchors: { timeMs: number; xPt: number }[] = [];
+  for (const measure of measures) {
+    anchors.push({ timeMs: measure.startMs, xPt: measure.xPt });
+    for (const column of measure.columns) anchors.push({ timeMs: column.timeMs, xPt: column.xPt });
+  }
+  anchors.push({ timeMs: last.endMs, xPt: last.xPt + last.widthPt });
+  anchors.sort((a, b) => a.timeMs - b.timeMs);
+
+  const fromMs = first.startMs;
+  const toMs = last.endMs;
+  const pedals: SheetPedal[] = [];
+  for (const span of spans) {
+    if (span.toMs <= fromMs || span.fromMs >= toMs) continue;
+    const xFromPt = xAtTime(anchors, Math.max(span.fromMs, fromMs));
+    const xToPt = xAtTime(anchors, Math.min(span.toMs, toMs));
+    pedals.push({
+      xFromPt,
+      xToPt: Math.max(xToPt, xFromPt + G),
+      continuesLeft: span.fromMs < fromMs,
+      continuesRight: span.toMs > toMs,
+    });
+  }
+  return pedals;
+}
+
+/** How far a tie stub reaches when the note it joins is on another system. */
+const TIE_STUB_G = 1.6;
+/** Clearance between a tie and the head it springs from. */
+const TIE_LIFT_G = 0.85;
+
+/**
+ * Pair up the tied heads of a system into arcs.
+ *
+ * A tie joins two writings of one note, so its ends are always the same staff
+ * and the same line — that pair identifies it, and the pieces come out of the
+ * layout in order. Where the far end is on the next system there is nothing to
+ * reach, so the arc becomes a stub off the end of this one, and the head that
+ * resumes over there gets a matching stub into it.
+ *
+ * y values are staff-relative here; `paginate` moves them into page space.
+ */
+function buildTies(
+  measures: SheetMeasure[],
+  systemLeftPt: number,
+  systemRightPt: number,
+): SheetTie[] {
+  const ties: SheetTie[] = [];
+  /** Heads still waiting for the other end of their tie, by staff and step. */
+  const open = new Map<string, { xPt: number; step: number; above: boolean; staff: StaffKind }>();
+
+  for (const measure of measures) {
+    for (const column of measure.columns) {
+      for (const chord of [...column.treble, ...column.bass]) {
+        for (const note of chord.notes) {
+          if (!note.tiedFromPrev && !note.tiedToNext) continue;
+          const key = `${chord.staff}|${note.step}`;
+          // The arc bows away from the stem, so it never fouls it.
+          const above = chord.stemDown;
+          const yRel = staffYRel(note.step) + (above ? -TIE_LIFT_G : TIE_LIFT_G) * G;
+
+          if (note.tiedFromPrev) {
+            const from = open.get(key);
+            if (from) {
+              open.delete(key);
+              ties.push({
+                staff: chord.staff,
+                above: from.above,
+                x1Pt: from.xPt + HEAD_RX_G * G,
+                y1Pt: staffYRel(from.step) + (from.above ? -TIE_LIFT_G : TIE_LIFT_G) * G,
+                x2Pt: column.xPt - HEAD_RX_G * G,
+                y2Pt: yRel,
+              });
+            } else {
+              // Resuming from the system above: a stub into the head.
+              ties.push({
+                staff: chord.staff,
+                above,
+                x1Pt: Math.max(systemLeftPt, column.xPt - HEAD_RX_G * G - TIE_STUB_G * G),
+                y1Pt: yRel,
+                x2Pt: column.xPt - HEAD_RX_G * G,
+                y2Pt: yRel,
+              });
+            }
+          }
+          if (note.tiedToNext)
+            open.set(key, { xPt: column.xPt, step: note.step, above, staff: chord.staff });
+        }
+      }
+    }
+  }
+
+  // Whatever is still open runs off the end of the system.
+  for (const from of open.values()) {
+    const yRel = staffYRel(from.step) + (from.above ? -TIE_LIFT_G : TIE_LIFT_G) * G;
+    ties.push({
+      staff: from.staff,
+      above: from.above,
+      x1Pt: from.xPt + HEAD_RX_G * G,
+      y1Pt: yRel,
+      x2Pt: Math.min(systemRightPt, from.xPt + HEAD_RX_G * G + TIE_STUB_G * G),
+      y2Pt: yRel,
+    });
+  }
+  return ties;
 }
 
 function beamable(chord: SheetChord): boolean {
@@ -541,6 +809,11 @@ function buildBeams(
       };
 
       for (const column of measure.columns) {
+        // A rest ends the run: a beam carries over silence in no engraving.
+        if ((staff === 'treble' ? column.trebleRest : column.bassRest) !== null) {
+          flush();
+          continue;
+        }
         const chord = chordsOn(column, staff).find((candidate) => candidate.voice === voice);
         if (!chord) continue;
         if (!beamable(chord)) {
@@ -666,6 +939,7 @@ function paginate(
       pageNumber,
       metrics,
       timeSignature: options.timeSignature,
+      keySignature: normalizeFifths(options.keySignature ?? 0),
       titleBlock:
         pageNumber === 1
           ? {
@@ -695,6 +969,11 @@ function paginate(
         beam.y2Pt += staffTop;
       }
     }
+    for (const tie of system.ties) {
+      const staffTop = tie.staff === 'treble' ? trebleTopPt : bassTopPt;
+      tie.y1Pt += staffTop;
+      tie.y2Pt += staffTop;
+    }
     currentSystems.push({
       xPt: metrics.marginLeftPt,
       widthPt: system.widthPt,
@@ -702,6 +981,10 @@ function paginate(
       trebleTopPt,
       bassTopPt,
       measures: system.measures,
+      ties: system.ties,
+      pedals: system.pedals,
+      // The row sits under everything the music itself needed.
+      pedalRowPt: bassTopPt + metrics.staffHeightPt + system.belowPt - PEDAL_ROW_PT * 0.45,
       clefs: system.clefs,
       firstMeasureNumber: system.measures[0]!.index + 1,
       showTimeSignature: s === 0,

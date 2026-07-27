@@ -12,18 +12,21 @@ describe('midiToStaffPosition', () => {
       clef: 'treble',
       step: 0,
       accidental: null,
+      alter: 0,
     }); // E4 bottom line
     expect(midiToStaffPosition(77)).toEqual({
       staff: 'treble',
       clef: 'treble',
       step: 8,
       accidental: null,
+      alter: 0,
     }); // F5 top line
     expect(midiToStaffPosition(71)).toEqual({
       staff: 'treble',
       clef: 'treble',
       step: 4,
       accidental: null,
+      alter: 0,
     }); // B4 middle line
   });
 
@@ -33,6 +36,7 @@ describe('midiToStaffPosition', () => {
       clef: 'treble',
       step: -2,
       accidental: null,
+      alter: 0,
     });
     expect(ledgerLineSteps(-2)).toEqual([-2]);
   });
@@ -43,18 +47,21 @@ describe('midiToStaffPosition', () => {
       clef: 'bass',
       step: 0,
       accidental: null,
+      alter: 0,
     }); // G2 bottom line
     expect(midiToStaffPosition(57)).toEqual({
       staff: 'bass',
       clef: 'bass',
       step: 8,
       accidental: null,
+      alter: 0,
     }); // A3 top line
     expect(midiToStaffPosition(59)).toEqual({
       staff: 'bass',
       clef: 'bass',
       step: 9,
       accidental: null,
+      alter: 0,
     }); // B3 above staff
   });
 
@@ -67,7 +74,7 @@ describe('midiToStaffPosition', () => {
     // A left hand written at middle C stays on the bass staff, two ledger
     // lines up, instead of jumping the gap to the treble.
     const c4 = midiToStaffPosition(60, 'bass');
-    expect(c4).toEqual({ staff: 'bass', clef: 'bass', step: 10, accidental: null });
+    expect(c4).toEqual({ staff: 'bass', clef: 'bass', step: 10, accidental: null, alter: 0 });
     expect(ledgerLineSteps(c4.step)).toEqual([10]);
     // And a right hand reaching under it stays in the treble.
     expect(midiToStaffPosition(55, 'treble')).toEqual({
@@ -75,6 +82,7 @@ describe('midiToStaffPosition', () => {
       clef: 'treble',
       step: -5,
       accidental: null,
+      alter: 0,
     });
   });
 
@@ -86,6 +94,7 @@ describe('midiToStaffPosition', () => {
       clef: 'treble',
       step: -2,
       accidental: null,
+      alter: 0,
     });
     // And the treble staff under an F clef reads the low register.
     expect(midiToStaffPosition(43, 'treble', 'bass')).toEqual({
@@ -93,6 +102,7 @@ describe('midiToStaffPosition', () => {
       clef: 'bass',
       step: 0,
       accidental: null,
+      alter: 0,
     });
   });
 

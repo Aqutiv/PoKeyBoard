@@ -7,6 +7,7 @@ import { createQuarterTempoMap, tempoChangesFrom } from './tempoMap';
 import {
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
+  MAX_FIFTHS,
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
   MAX_TEMPO_CHANGES,
@@ -77,6 +78,8 @@ interface CollectedScore {
   pedals: QPedal[];
   tempi: TempoEntry[];
   timeSignature: TimeSignature | null;
+  /** Fifths from the score's own <key>, or null when it never declared one. */
+  keySignature: number | null;
   title: string | null;
 }
 
@@ -313,6 +316,16 @@ function collectPart(
               clefByStaff.delete(staffNumber);
             }
           }
+          // The first key signature wins, as the first <time> does: a take
+          // carries one of each, and a change partway through has nowhere to
+          // live yet.
+          const key = childByTag(el, 'key');
+          if (key !== null && out.keySignature === null) {
+            const fifths = numberByTag(key, 'fifths');
+            if (fifths !== null && Number.isInteger(fifths) && Math.abs(fifths) <= MAX_FIFTHS) {
+              out.keySignature = fifths;
+            }
+          }
           const time = childByTag(el, 'time');
           if (time) {
             const beats = textByTag(time, 'beats');
@@ -346,6 +359,10 @@ function collectPart(
             cursorQ += durQ;
             maxQ = Math.max(maxQ, cursorQ);
           }
+          // A rest sounds nothing, so it stores nothing; having advanced the
+          // cursor it leaves a gap of exactly its length, and the notation
+          // engraves the silence between notes rather than reading a symbol.
+          // Its length therefore survives import even though the rest does not.
           if (isRest || isCue || pitch === null) break; // advanced; nothing sounds
 
           const step = textByTag(pitch, 'step');
@@ -453,6 +470,7 @@ function collectScore(root: Element): CollectedScore {
     pedals: [],
     tempi: [],
     timeSignature: null,
+    keySignature: null,
     title: null,
   };
   const work = childByTag(root, 'work');
@@ -558,6 +576,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
         timeSignature,
         countInBars: 1,
         ...(tempoChanges.length > 0 ? { changes: tempoChanges } : {}),
+        ...(collected.keySignature !== null ? { keySignature: collected.keySignature } : {}),
       },
       notes,
       pedalEvents,

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Take } from '@/domain/takeTypes';
+import { ALL_FIFTHS, majorTonicName, minorTonicName } from '@/features/notation/keySignature';
 import { normalizePaperSize, type SheetGrid } from '@/features/notation/sheetLayout';
 import { drawSheetPage } from '@/features/notation/sheetRenderer';
 import { getTakeForExport } from '@/features/takes/takesService';
@@ -11,6 +12,7 @@ import { useSettingsStore } from '@/state/useSettingsStore';
 import { downloadBlob, shareOrDownloadFile } from '@/utils/download';
 import { toErrorMessageKey } from '@/utils/errors';
 import {
+  defaultKeySignatureFor,
   generateSheetPdf,
   layoutTakeSheet,
   MAX_SHEET_PAGES,
@@ -59,6 +61,9 @@ export function SheetExportDialog() {
   const [phase, setPhase] = useState<Phase | null>(null);
   const [lastRequestedId, setLastRequestedId] = useState<string | null>(null);
   const [grid, setGrid] = useState<SheetGrid>('1/16');
+  // Per-piece, so it is not persisted the way the paper size is: the next take
+  // is a different piece and will have its own key read for it.
+  const [keySignature, setKeySignature] = useState(0);
   const abortRef = useRef<AbortController | null>(null);
 
   // Adjust-during-render: reset the dialog whenever the request changes.
@@ -78,6 +83,7 @@ export function SheetExportDialog() {
           setPhase({ kind: 'error', take: null, message: m.sheetDialog.errorCouldNotLoad });
         } else {
           setGrid(take.display.quantization === 'off' ? '1/16' : take.display.quantization);
+          setKeySignature(defaultKeySignatureFor(take));
           setPhase({ kind: 'options', take });
         }
       })
@@ -126,8 +132,8 @@ export function SheetExportDialog() {
   // Live layout for the preview and the page estimate.
   const layout = useMemo(() => {
     if (phase?.kind !== 'options') return null;
-    return layoutTakeSheet(phase.take, paper, grid, formatSubtitle(phase.take));
-  }, [phase, paper, grid, formatSubtitle]);
+    return layoutTakeSheet(phase.take, paper, grid, keySignature, formatSubtitle(phase.take));
+  }, [phase, paper, grid, keySignature, formatSubtitle]);
 
   // Draw page 1 into the preview canvas.
   const previewCanvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -169,7 +175,7 @@ export function SheetExportDialog() {
       setPhase({ kind: 'working', take, progress: { stage: 'layout', fraction: -1 } });
       generateSheetPdf(
         take,
-        { paper, grid, subtitle: formatSubtitle(take) },
+        { paper, grid, keySignature, subtitle: formatSubtitle(take) },
         (progress) => {
           setPhase((current) => (current?.kind === 'working' ? { ...current, progress } : current));
         },
@@ -196,7 +202,7 @@ export function SheetExportDialog() {
           }
         });
     },
-    [paper, grid, formatSubtitle, m],
+    [paper, grid, keySignature, formatSubtitle, m],
   );
 
   const cancelGenerate = useCallback(() => {
@@ -271,6 +277,26 @@ export function SheetExportDialog() {
               </label>
             </fieldset>
             <p className="export-note">{m.sheetDialog.gridHint}</p>
+            <fieldset className="export-options">
+              <legend>
+                <label htmlFor="sheet-key">{m.sheetDialog.keySignature}</label>
+              </legend>
+              <select
+                id="sheet-key"
+                value={keySignature}
+                onChange={(event) => setKeySignature(Number(event.target.value))}
+              >
+                {ALL_FIFTHS.map((fifths) => (
+                  <option key={fifths} value={fifths}>
+                    {m.sheetDialog.keyName({
+                      major: majorTonicName(fifths),
+                      minor: minorTonicName(fifths),
+                    })}
+                  </option>
+                ))}
+              </select>
+            </fieldset>
+            <p className="export-note">{m.sheetDialog.keyHint}</p>
             <div className="sheet-preview">
               <canvas
                 ref={previewCanvasRef}

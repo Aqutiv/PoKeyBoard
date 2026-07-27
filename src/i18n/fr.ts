@@ -218,6 +218,10 @@ export const fr: Messages = {
     grid16: 'Doubles croches (1/16)',
     gridHint:
       'Le jeu libre est aligné sur cette grille sur le papier. La lecture n’est jamais modifiée.',
+    keySignature: 'Armure',
+    keyName: ({ major, minor }) => `${major} majeur / ${minor} mineur`,
+    keyHint:
+      'Lue dans la partition, ou dans les notes si elle ne l’indiquait pas. La hauteur ne change pas.',
     previewLabel: 'Aperçu de la page 1',
     pageEstimate: ({ pages }) => `≈ ${pages} page${pages === 1 ? '' : 's'}`,
     generate: 'Générer le PDF',
