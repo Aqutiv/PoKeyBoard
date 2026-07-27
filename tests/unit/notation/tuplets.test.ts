@@ -50,6 +50,22 @@ describe('isTernaryBeat', () => {
     expect(isTernaryBeat(jitter([0, 0.25, 0.5, 0.75], 0.02))).toBe(false);
   });
 
+  it('does not read an evenly spaced run that merely starts late', () => {
+    // Four notes a clean quarter-beat apart, displaced from the beat. That is
+    // binary spacing, but neither grid anchored at the beat fits it well, so a
+    // reading that only had to beat the alternative would take it as ternary.
+    // Chopin's ornamental runs are full of these; they are not triplets.
+    expect(isTernaryBeat([0.143, 0.393, 0.643, 0.893])).toBe(false);
+    // Shifted the other way, and at a coarser spacing, still binary.
+    expect(isTernaryBeat([0.09, 0.34, 0.59, 0.84])).toBe(false);
+    expect(isTernaryBeat([0.12, 0.62])).toBe(false);
+  });
+
+  it('still reads a genuine sextuplet fragment sitting off the downbeat', () => {
+    // The true positives in the same piece: onsets on sixths of the beat.
+    expect(isTernaryBeat([0, 0.5, 2 / 3, 5 / 6])).toBe(true);
+  });
+
   it('refuses to guess at playing too loose to read either way', () => {
     // Halfway between every division of both kinds: no reading is evidence.
     expect(isTernaryBeat([0, 0.19, 0.42])).toBe(false);
