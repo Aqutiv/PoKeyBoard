@@ -446,6 +446,7 @@ export const FORWARD_GENTLY: LibraryTrackDef = {
   trackId: 'forward-gently',
   title: 'Forward, Gently',
   composer: 'Sol 5.6 Pro',
+  folder: 'originals',
   descriptionKey: 'forwardGently',
   bpm: 96,
   timeSignature: { numerator: 4, denominator: 4 },

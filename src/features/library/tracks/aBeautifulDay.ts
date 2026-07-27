@@ -222,6 +222,7 @@ export const A_BEAUTIFUL_DAY: LibraryTrackDef = {
   trackId: 'a-beautiful-day',
   title: 'A Beautiful Day',
   composer: 'Claude Fable 5',
+  folder: 'originals',
   descriptionKey: 'aBeautifulDay',
   bpm: 92,
   timeSignature: { numerator: 4, denominator: 4 },

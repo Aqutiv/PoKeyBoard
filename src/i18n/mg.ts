@@ -132,6 +132,11 @@ export const mg: Messages = {
     title: 'Hira',
     hint: 'Hira voafantina: tendreo, ianaro, ary avadiho ho anao.',
     chip: 'Hira',
+    folderLabel: 'Lahatahiry hira',
+    folders: {
+      originals: 'Noforonina',
+      classics: 'Klasika',
+    },
     byline: ({ composer }) => `nataon’i ${composer}`,
     openLabel: ({ title }) => `Sokafy ${title}`,
     meta: ({ notes, duration, bpm }) => `naoty ${notes} · ${duration} · ${bpm} BPM`,

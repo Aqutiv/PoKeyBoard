@@ -244,6 +244,7 @@ export const EVENING_TIDE: LibraryTrackDef = {
   trackId: 'evening-tide',
   title: 'Evening Tide',
   composer: 'Claude Opus 5',
+  folder: 'originals',
   descriptionKey: 'eveningTide',
   bpm: 66,
   timeSignature: { numerator: 4, denominator: 4 },

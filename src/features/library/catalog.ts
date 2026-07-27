@@ -1,5 +1,6 @@
 import { libraryTakeId } from '@/domain/libraryTakes';
 import type { Take } from '@/domain/takeTypes';
+import type { LibraryFolderId } from './folders';
 import { buildLibraryTake, type LibraryTrackDef } from './trackBuilder';
 import { A_BEAUTIFUL_DAY } from './tracks/aBeautifulDay';
 import { BLUES_IN_C } from './tracks/bluesInC';
@@ -33,6 +34,7 @@ export interface LibraryTrackSummary {
   takeId: string;
   title: string;
   composer: string;
+  folder: LibraryFolderId;
   descriptionKey: LibraryTrackDef['descriptionKey'];
   bpm: number;
   durationMs: number;
@@ -47,12 +49,27 @@ export const LIBRARY_TRACK_SUMMARIES: readonly LibraryTrackSummary[] = LIBRARY_T
     takeId: take.id,
     title: def.title,
     composer: def.composer,
+    folder: def.folder,
     descriptionKey: def.descriptionKey,
     bpm: def.bpm,
     durationMs: take.durationMs,
     noteCount: take.notes.length,
   };
 });
+
+function summariesIn(folder: LibraryFolderId): readonly LibraryTrackSummary[] {
+  return LIBRARY_TRACK_SUMMARIES.filter((summary) => summary.folder === folder);
+}
+
+/**
+ * The summaries shelved by folder, each folder keeping the catalog's display
+ * order. Derived once, so the list view never filters on render; spelled out a
+ * key at a time so a new folder id fails to compile until it is filed here.
+ */
+export const LIBRARY_FOLDER_SUMMARIES: Record<LibraryFolderId, readonly LibraryTrackSummary[]> = {
+  originals: summariesIn('originals'),
+  classics: summariesIn('classics'),
+};
 
 /**
  * Build a pristine `Take` for a library take id. A fresh object every call:

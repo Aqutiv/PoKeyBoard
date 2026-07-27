@@ -3,9 +3,11 @@ import { isLibraryTakeId, libraryTakeId } from '@/domain/libraryTakes';
 import { parseTakeJsonString } from '@/domain/takeSchema';
 import {
   getLibraryTake,
+  LIBRARY_FOLDER_SUMMARIES,
   LIBRARY_TRACK_SUMMARIES,
   LIBRARY_TRACKS,
 } from '@/features/library/catalog';
+import { DEFAULT_LIBRARY_FOLDER, LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { buildLibraryTake } from '@/features/library/trackBuilder';
 import { MIDI_MAX, MIDI_MIN } from '@/utils/midi';
 
@@ -22,6 +24,38 @@ describe('library catalog', () => {
       'good-night',
       'moonlight-sonata',
     ]);
+  });
+
+  it('shelves every track in its folder', () => {
+    expect(LIBRARY_FOLDER_SUMMARIES.originals.map((track) => track.trackId)).toEqual([
+      'a-beautiful-day',
+      'evening-tide',
+      'forward-gently',
+      'crooked-lantern-waltz',
+      'blues-in-c',
+      'good-night',
+    ]);
+    expect(LIBRARY_FOLDER_SUMMARIES.classics.map((track) => track.trackId)).toEqual([
+      'fur-elise',
+      'gymnopedie-1',
+      'moonlight-sonata',
+    ]);
+    // The default folder is the one shown before the user has chosen.
+    expect(LIBRARY_FOLDER_SUMMARIES[DEFAULT_LIBRARY_FOLDER]).toBe(
+      LIBRARY_FOLDER_SUMMARIES.originals,
+    );
+  });
+
+  it('partitions the catalog exactly — every track filed once', () => {
+    const filed = LIBRARY_FOLDER_IDS.flatMap((folder) => [...LIBRARY_FOLDER_SUMMARIES[folder]]);
+    expect(filed).toHaveLength(LIBRARY_TRACK_SUMMARIES.length);
+    expect(new Set(filed.map((track) => track.trackId)).size).toBe(filed.length);
+    // Order inside a folder follows the catalog's display order.
+    for (const folder of LIBRARY_FOLDER_IDS) {
+      expect(LIBRARY_FOLDER_SUMMARIES[folder]).toEqual(
+        LIBRARY_TRACK_SUMMARIES.filter((track) => track.folder === folder),
+      );
+    }
   });
 
   it('credits Good Night to its requested artist', () => {

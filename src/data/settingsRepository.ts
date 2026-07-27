@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { SETTINGS_DEFAULTS, type SettingsState } from '@/state/useSettingsStore';
 import { db } from './db';
 
@@ -17,6 +18,7 @@ const SETTING_SCHEMAS = {
   displayQuantization: z.enum(['off', '1/8', '1/16']),
   keyboardAnchorMidi: z.number().int().min(21).max(108),
   sheetPaperSize: z.enum(['a4', 'letter']),
+  libraryFolder: z.enum(LIBRARY_FOLDER_IDS),
 } satisfies Record<keyof PersistableSettings, z.ZodType>;
 
 /** Load persisted settings, ignoring unknown keys and bad values. */
