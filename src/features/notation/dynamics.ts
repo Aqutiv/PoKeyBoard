@@ -70,6 +70,8 @@ const SMOOTHING_RADIUS = 8;
 const LEVEL_PERCENTILE = 0.7;
 /** A monotonic climb or fall of at least this many bands is a hairpin. */
 const HAIRPIN_MIN_STEPS = 2;
+/** And of at least this many bars, or there is nowhere to draw a wedge. */
+const HAIRPIN_MIN_BARS = 2;
 /**
  * Bars a hairpin may span before it stops being one.
  *
@@ -83,10 +85,16 @@ const HAIRPIN_MAX_BARS = 6;
 const MIN_MARK_BARS = 2;
 
 export interface DynamicsOptions {
-  /** One bar in milliseconds — marks are kept at least this far apart. */
-  barMs: number;
-  /** A hairpin has to span at least this long to be worth drawing. */
-  minHairpinMs?: number;
+  /**
+   * The fractional bar a moment falls in.
+   *
+   * Bars rather than milliseconds, because every threshold here is musical —
+   * "two bars apart", "no longer than six bars" — and a tempo change makes a
+   * bar longer without making the phrase any different. Measured in
+   * milliseconds against the opening tempo, a slow passage would be marked
+   * twice as often and its swells rejected for running long.
+   */
+  barAtMs: (atMs: number) => number;
 }
 
 /** One instant the music speaks, and how loudly. */
@@ -159,8 +167,7 @@ function smooth(onsets: readonly Onset[]): number[] {
 function foldHairpins(
   marks: DynamicEvent[],
   bands: number[],
-  minSpanMs: number,
-  maxSpanMs: number,
+  barAtMs: (atMs: number) => number,
 ): DynamicsReading {
   const keptMarks: DynamicEvent[] = [];
   const hairpins: HairpinEvent[] = [];
@@ -181,12 +188,20 @@ function foldHairpins(
     const steps = end - i;
     const from = marks[i] as DynamicEvent;
     const to = marks[end] as DynamicEvent;
-    const spanMs = to.atMs - from.atMs;
-    if (steps >= HAIRPIN_MIN_STEPS && spanMs >= minSpanMs && spanMs <= maxSpanMs) {
+    const spanBars = barAtMs(to.atMs) - barAtMs(from.atMs);
+    if (
+      steps >= HAIRPIN_MIN_STEPS &&
+      spanBars >= HAIRPIN_MIN_BARS &&
+      spanBars <= HAIRPIN_MAX_BARS
+    ) {
       keptMarks.push(from);
       hairpins.push({ fromMs: from.atMs, toMs: to.atMs, grow: direction > 0 });
-      keptMarks.push(to);
-      i = end + 1;
+      // Resume *at* the peak, not past it. A swell that rises and then falls
+      // is the commonest shape there is, and the mark at the top is both the
+      // end of the crescendo and the start of the diminuendo. Stepping over it
+      // left the second wedge undrawn. The next pass pushes it as its own
+      // `from`, so it is still written exactly once.
+      i = end;
     } else {
       keptMarks.push(from);
       i += 1;
@@ -209,8 +224,7 @@ export function readDynamics(
   if (onsets.length === 0) return { marks: [], hairpins: [] };
 
   const levels = smooth(onsets);
-  const minGapMs = Math.max(1, options.barMs * MIN_MARK_BARS);
-  const minHairpinMs = options.minHairpinMs ?? options.barMs * 2;
+  const { barAtMs } = options;
 
   const marks: DynamicEvent[] = [];
   const bands: number[] = [];
@@ -218,7 +232,7 @@ export function readDynamics(
   let current: number | null = null;
   /** The band the page currently claims, and when it started claiming it. */
   let written: number | null = null;
-  let writtenAt = Number.NEGATIVE_INFINITY;
+  let writtenBar = Number.NEGATIVE_INFINITY;
 
   for (let i = 0; i < onsets.length; i += 1) {
     current = bandIndexOf(levels[i] as number, current);
@@ -229,13 +243,13 @@ export function readDynamics(
     // A change that has not yet held for a couple of bars is not a dynamic —
     // it is the music breathing. Say nothing and let it settle; if it is real
     // it will still be true at the next onset, and get its mark then.
-    if (at - writtenAt < minGapMs) continue;
+    if (barAtMs(at) - writtenBar < MIN_MARK_BARS) continue;
 
     marks.push({ atMs: at, mark: (BANDS[current] as { mark: DynamicMark }).mark });
     bands.push(current);
     written = current;
-    writtenAt = at;
+    writtenBar = barAtMs(at);
   }
 
-  return foldHairpins(marks, bands, minHairpinMs, options.barMs * HAIRPIN_MAX_BARS);
+  return foldHairpins(marks, bands, barAtMs);
 }

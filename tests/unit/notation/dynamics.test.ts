@@ -5,7 +5,7 @@ import { layoutSheet } from '@/features/notation/sheetLayout';
 
 /** One bar of 4/4 at 120bpm, the tempo the other notation tests use. */
 const BAR_MS = 2000;
-const OPTS = { barMs: BAR_MS };
+const OPTS = { barAtMs: (atMs: number) => atMs / BAR_MS };
 
 /** Notes a beat apart, at the given velocities. */
 function played(velocities: number[], stepMs = 500) {
@@ -127,6 +127,30 @@ describe('readDynamics', () => {
     const reading = readDynamics(played(velocities, 250), OPTS);
     expect(reading.hairpins).toHaveLength(1);
     expect(reading.hairpins[0]!.grow).toBe(false);
+  });
+
+  it('turns a swell that rises and falls into two hairpins', () => {
+    // The commonest shape there is. The mark at the peak ends the crescendo
+    // and starts the diminuendo, so stepping past it lost the second wedge.
+    const up = Array.from({ length: 40 }, (_, i) => atForte(0.3 + (i / 39) * 1.0));
+    const down = Array.from({ length: 40 }, (_, i) => atForte(1.3 - (i / 39) * 1.0));
+    const reading = readDynamics(played([...up, ...down], 250), OPTS);
+    expect(reading.hairpins.map((h) => h.grow)).toEqual([true, false]);
+    // The peak is written once, and it is where the two wedges meet.
+    const peak = reading.hairpins[0]!.toMs;
+    expect(reading.hairpins[1]!.fromMs).toBe(peak);
+    expect(reading.marks.filter((mark) => mark.atMs === peak)).toHaveLength(1);
+  });
+
+  it('counts the thresholds in bars, so a slower passage is not marked more', () => {
+    // The same music twice: once at the opening tempo, once at half of it, so
+    // every bar takes twice as long in milliseconds but is the same bar.
+    const velocities = [...new Array(16).fill(atForte(0.35)), ...new Array(16).fill(atForte(1.0))];
+    const atTempo = readDynamics(played(velocities), OPTS);
+    const halved = readDynamics(played(velocities, 1000), {
+      barAtMs: (atMs) => atMs / (BAR_MS * 2),
+    });
+    expect(halved.marks.map((mark) => mark.mark)).toEqual(atTempo.marks.map((m) => m.mark));
   });
 
   it('leaves a swell too long to taper as marks alone', () => {

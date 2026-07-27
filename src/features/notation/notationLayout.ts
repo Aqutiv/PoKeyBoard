@@ -898,8 +898,12 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   const totalMs = last ? last.endMs : 0;
   const pedals = pedalSpans(options.pedals ?? [], totalMs);
   // Read from the notes as played, not from where they are drawn: how hard a
-  // key went down is performance, and quantizing it would only blur it.
-  const { marks, hairpins } = readDynamics(notes, { barMs });
+  // key went down is performance, and quantizing it would only blur it. The
+  // thresholds are counted in bars, which the tempo map knows how to find
+  // wherever the tempo happens to be at the time.
+  const { marks, hairpins } = readDynamics(notes, {
+    barAtMs: (atMs) => tempoMap.beatAtMs(atMs) / options.timeSignature.numerator,
+  });
   return {
     chords,
     rests,
