@@ -23,6 +23,7 @@ import {
   valuesForSpan,
 } from './rests';
 import {
+  absoluteDiatonic,
   defaultClefFor,
   ledgerLineSteps,
   midiToStaffPosition,
@@ -429,8 +430,12 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
  * natural to say so — which is the difference between an engraved bar and a
  * page that restates everything on every note.
  *
- * Keyed by staff and step, because that pair *is* the line or space: the step
- * comes from the letter, so C flat and B keep their own memories.
+ * Keyed by staff and absolute pitch — the letter and octave, clef taken out.
+ * The step alone would be the line or space, which is the same thing right up
+ * until a clef turns over inside the bar: step 0 is E4 before an F clef and G2
+ * after it, and a flat written on the first has nothing to say about the
+ * second. The letter is what an accidental actually attaches to, so C flat and
+ * B still keep their own memories.
  */
 function applyMeasureAccidentals(chordsByMeasure: readonly ChordGroup[][]): void {
   for (const inMeasure of chordsByMeasure) {
@@ -441,7 +446,7 @@ function applyMeasureAccidentals(chordsByMeasure: readonly ChordGroup[][]): void
     const ordered = [...inMeasure].sort((a, b) => a.displayStartMs - b.displayStartMs);
     for (const chord of ordered) {
       for (const note of chord.notes) {
-        const key = `${note.staff}|${note.step}`;
+        const key = `${note.staff}|${absoluteDiatonic(note.step, note.clef)}`;
         // A tie carries its note's accidental over the bar line with it, so the
         // far side of one is never marked again — but it does hold the line for
         // whatever else lands there.
@@ -699,9 +704,17 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   settleVoiceStems(chords, stemVotes);
   chords.sort((a, b) => a.displayStartMs - b.displayStartMs);
 
+  // How far the layout has to reach. A tied piece carries the whole note's
+  // performance timing — it is one sounding note — so its own extent is where
+  // its *symbol* ends, not its start plus a duration that belongs to the note
+  // as a whole. Adding the latter to a later piece's start counts the note
+  // twice and buys a blank bar for every tie.
   let maxEndMs = 0;
   for (const note of tied) {
-    const end = Math.max(note.displayStartMs, note.startMs) + note.durationMs;
+    const writtenEnd = tempoMap.msAtBeat(
+      tempoMap.beatAtMs(note.displayStartMs) + beatsForSymbol(note.symbol, denominator),
+    );
+    const end = Math.max(note.startMs + note.durationMs, writtenEnd);
     if (end > maxEndMs) maxEndMs = end;
   }
   const spans = tempoMap.measureSpans(maxEndMs, minMeasures);

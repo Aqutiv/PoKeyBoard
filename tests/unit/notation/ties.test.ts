@@ -64,6 +64,31 @@ describe('ties', () => {
     }
   });
 
+  it('does not buy a blank bar for every tie', () => {
+    // Because each piece carries the whole note's performance timing, measuring
+    // a piece as its own start plus that duration counts the note twice: two
+    // bars held would reach four. The layout ends where the music does, plus
+    // the one spare bar the on-screen score always keeps to record into.
+    const twoBars = layoutScore([note({ startMs: 0, durationMs: 4000 })], OPTS);
+    expect(twoBars.measures).toHaveLength(3);
+    expect(twoBars.totalMs).toBe(6000);
+
+    // And the error grew with the tie: four bars held must not reach eight.
+    const fourBars = layoutScore([note({ startMs: 0, durationMs: 8000 })], OPTS);
+    expect(fourBars.measures).toHaveLength(5);
+    expect(fourBars.totalMs).toBe(10000);
+  });
+
+  it('closes an open pedal at the real end of the music', () => {
+    // totalMs is where an unreleased pedal bracket stops, so an inflated
+    // extent dragged the bracket past the take with it.
+    const layout = layoutScore([note({ startMs: 0, durationMs: 4000 })], {
+      ...OPTS,
+      pedals: [{ atMs: 0, down: true }],
+    });
+    expect(layout.pedals).toEqual([{ fromMs: 0, toMs: 6000 }]);
+  });
+
   it('does not repeat the accidental on the far side of a tie', () => {
     // A C sharp held over the bar line is marked once. The new bar has
     // forgotten every other accidental, but the tie carries this one.

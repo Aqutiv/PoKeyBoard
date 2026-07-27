@@ -135,6 +135,30 @@ describe('accidentals within a measure', () => {
     expect(layout.chords.map((chord) => chord.notes[0]!.accidental)).toEqual(['#', '#']);
   });
 
+  it('holds the memory against the note, not against the line', () => {
+    // A clef turning over inside the bar moves every line under it. On the bass
+    // staff, A♯3 sits two ledger lines below a G clef and C♯2 sits on that very
+    // same line under an F clef — same staff, same step, same alteration, and
+    // two notes a twelfth apart. Marking the first says nothing about the
+    // second, which has to be marked on its own account.
+    const layout = layoutScore(
+      [
+        note({ id: 'aSharp', midi: 58, startMs: 0, staff: 'bass', clef: 'treble' }),
+        note({ id: 'cSharp', midi: 37, startMs: 500, staff: 'bass', clef: 'bass' }),
+      ],
+      OPTS,
+    );
+    // They really do land on the same line — that is what made them collide.
+    const steps = layout.chords.map((chord) => chord.notes[0]!.step);
+    expect(steps[0]).toBe(steps[1]);
+
+    const marks = new Map(
+      layout.chords.map((chord) => [chord.notes[0]!.id, chord.notes[0]!.accidental]),
+    );
+    expect(marks.get('aSharp')).toBe('#');
+    expect(marks.get('cSharp')).toBe('#');
+  });
+
   it('leaves the key signature to speak for notes inside the key', () => {
     // E flat major: three E flats in a bar print no accidentals at all.
     const layout = layoutScore(

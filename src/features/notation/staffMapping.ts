@@ -31,6 +31,18 @@ const BASS_BOTTOM_LINE = 2 * 7 + 4; // G2
 /** Notes at or above middle C display on the treble staff. */
 export const TREBLE_SPLIT_MIDI = 60;
 
+/**
+ * The letter and octave a position names, with the clef taken back out —
+ * `octave * 7 + letter`, the index `step` was measured from.
+ *
+ * A step alone only means something under a clef: step 0 is E4 under a G clef
+ * and G2 under an F clef. Anything that has to know whether two notes are the
+ * *same note* rather than the same line has to ask this instead.
+ */
+export function absoluteDiatonic(step: number, clef: ClefKind): number {
+  return step + (clef === 'treble' ? TREBLE_BOTTOM_LINE : BASS_BOTTOM_LINE);
+}
+
 export interface StaffPosition {
   staff: StaffKind;
   /** The clef this position was read under. */
