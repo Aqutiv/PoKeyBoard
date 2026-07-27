@@ -15,6 +15,7 @@ describe('library catalog', () => {
       'a-beautiful-day',
       'evening-tide',
       'forward-gently',
+      'crooked-lantern-waltz',
       'fur-elise',
       'gymnopedie-1',
       'blues-in-c',
@@ -72,6 +73,32 @@ describe('library catalog', () => {
     const finalChord = take?.notes.filter((note) => note.startMs >= 77_088) ?? [];
     expect(finalChord.length).toBeGreaterThan(4);
     expect(finalChord.every((note) => note.durationMs === 3158)).toBe(true);
+  });
+
+  it('keeps the crooked waltz on the staffs its score was written on', () => {
+    const take = getLibraryTake(libraryTakeId('crooked-lantern-waltz'));
+    expect(take?.tempo.bpm).toBe(112);
+    expect(take?.tempo.timeSignature).toEqual({ numerator: 3, denominator: 4 });
+    // Bars 29, 37 and the written-out ritardando of the last four bars.
+    expect(take?.tempo.changes).toEqual([
+      { atMs: 45_000, bpm: 126 },
+      { atMs: 56_429, bpm: 112 },
+      { atMs: 69_286, bpm: 96 },
+      { atMs: 71_161, bpm: 84 },
+      { atMs: 73_304, bpm: 72 },
+      { atMs: 75_804, bpm: 56 },
+    ]);
+    // Every note says which hand wrote it, and the left hand climbs well past
+    // middle C — where splitting the grand staff at middle C would misdraw it.
+    const notes = take?.notes ?? [];
+    expect(notes.every((note) => note.staff !== undefined)).toBe(true);
+    const bass = notes.filter((note) => note.staff === 'bass');
+    expect(bass.filter((note) => note.midi >= 60)).not.toHaveLength(0);
+    expect(Math.max(...bass.map((note) => note.midi))).toBe(69); // A4
+
+    // The last bar is A minor add 9 over an open bass, struck once and left ringing.
+    const finalChord = notes.filter((note) => note.startMs >= 75_804);
+    expect(finalChord.map((note) => note.midi)).toEqual([33, 40, 45, 69, 72, 76, 83]);
   });
 
   it('summaries mirror the built takes', () => {

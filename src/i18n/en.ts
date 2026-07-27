@@ -143,6 +143,8 @@ export const en: Messages = {
         'An original nocturne in E minor — a rolling left-hand tide beneath a singing melody that swells into the light, then settles back at dusk.',
       forwardGently:
         'An original for violin, piano, and cello brought to the keyboard — it opens warmly, builds to a radiant climax, and settles into calm.',
+      crookedLanternWaltz:
+        'An original Halloween waltz in A minor — a high bell above a lopsided oom-pah-pah, a shadowy middle section, and an ending that slows until it vanishes.',
       furElise: 'Beethoven’s beloved bagatelle — the famous opening theme.',
       gymnopedie1:
         'Satie’s dreamy classic — slow, soft, and spacious. Just listen, or drift along.',
