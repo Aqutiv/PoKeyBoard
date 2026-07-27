@@ -52,9 +52,8 @@ test.describe('Sheet music export', () => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Library' }).click();
     // Moonlight lives in the Classics folder; Originals is what opens by default.
-    await page.getByRole('group', { name: 'Library folder' }).getByRole('button', {
-      name: 'Classics',
-    }).click();
+    const folders = page.getByRole('group', { name: 'Library folder' });
+    await folders.getByRole('button', { name: 'Classics' }).click();
     await page.getByRole('button', { name: 'Open Moonlight Sonata (1st Movement)' }).click();
     await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
 
