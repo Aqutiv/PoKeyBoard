@@ -119,14 +119,7 @@
   font-weight: 600;
 }
 
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
+/* .visually-hidden lives in index.css so every chunk can rely on it. */
 
 /* Short landscape: seek slider joins the buttons row to save a line. */
 @media (orientation: landscape) and (max-height: 500px) {

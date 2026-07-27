@@ -9,6 +9,7 @@ export const es: Messages = {
     settings: 'Ajustes',
     about: 'Acerca de',
     mainLabel: 'Principal',
+    nowPlaying: 'Reproduciendo ahora',
   },
   save: {
     failed: 'Error al guardar',

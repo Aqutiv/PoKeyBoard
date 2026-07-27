@@ -11,6 +11,7 @@ export const en: Messages = {
     settings: 'Settings',
     about: 'About',
     mainLabel: 'Main',
+    nowPlaying: 'Now playing',
   },
   save: {
     failed: 'Save failed',

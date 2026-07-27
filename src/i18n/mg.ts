@@ -10,6 +10,7 @@ export const mg: Messages = {
     settings: 'Fandrindrana',
     about: 'Mombamomba',
     mainLabel: 'Fototra',
+    nowPlaying: 'Mitendry izao',
   },
   save: {
     failed: 'Tsy nahomby ny fitehirizana',

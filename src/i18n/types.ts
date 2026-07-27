@@ -72,6 +72,7 @@ export interface Messages {
     settings: string;
     about: string;
     mainLabel: string;
+    nowPlaying: string;
   };
   save: {
     failed: string;

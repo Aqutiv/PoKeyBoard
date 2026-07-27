@@ -611,6 +611,18 @@ export class TransportController {
     }
   }
 
+  /**
+   * Called when the user navigates between app tabs. Playback deliberately
+   * survives the route change; recording does not, because its UI is gone.
+   */
+  handleNavigation(): void {
+    if (this.state === 'recording' || this.state === 'countIn') {
+      this.stop();
+    } else if (this.state === 'scrubbing') {
+      this.send('SCRUB_END');
+    }
+  }
+
   private clearScheduler(): void {
     if (this.schedulerTimer !== null) {
       clearInterval(this.schedulerTimer);

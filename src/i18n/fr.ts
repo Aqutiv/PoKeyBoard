@@ -9,6 +9,7 @@ export const fr: Messages = {
     settings: 'Réglages',
     about: 'À propos',
     mainLabel: 'Principal',
+    nowPlaying: 'Lecture en cours',
   },
   save: {
     failed: 'Échec de l’enregistrement',
