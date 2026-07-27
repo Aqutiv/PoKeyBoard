@@ -86,15 +86,36 @@ export const MIN_ONSETS_TO_DECIDE = 3;
 const MAX_MISFIT = 0.035;
 
 /**
+ * How near those divisions a *sparse* hand must be to join a figure the other
+ * hand has already established.
+ *
+ * Looser than the detection bound, because it answers a different question.
+ * Detection asks "is there a triplet here at all", with nothing but these
+ * onsets to go on, so it must be strict. This asks only "does this fragment
+ * belong to the triplet already evidenced next door, or is it a different
+ * rhythm" — and the evidence for the triplet has already been found. Holding a
+ * fragment to the stricter bound would reject a note twenty milliseconds out at
+ * 120bpm and then write it on the binary grid, leaving one hand's half of a
+ * figure disagreeing with the other's about what the beat is.
+ *
+ * Still tight enough to rule out the thing that matters: two straight eighths
+ * under a triplet sit a full 0.118 from any division in three.
+ */
+const MAX_INHERITED_MISFIT = 0.06;
+
+/**
  * Whether a set of onsets actually sits on a given division of the beat.
  *
  * Asked of a hand that has too little in a beat to read it alone, before it is
  * allowed to take the other hand's answer. Two onsets are not enough to *claim*
  * a division, but they are plenty to rule one out — and a hand playing two
  * straight eighths against the other's triplets must not be dragged into them.
+ *
+ * Judged against `MAX_INHERITED_MISFIT` rather than the detection bound; see
+ * the note there for why the two differ.
  */
 export function fitsDivision(offsets: readonly BeatOffset[], division: number): boolean {
-  return offsets.length === 0 || misfit(offsets, division) <= MAX_MISFIT;
+  return offsets.length === 0 || misfit(offsets, division) <= MAX_INHERITED_MISFIT;
 }
 
 /**

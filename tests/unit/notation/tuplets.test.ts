@@ -10,7 +10,7 @@ import { MOONLIGHT_SONATA } from '@/features/library/tracks/moonlightSonata';
 import { layoutScore } from '@/features/notation/notationLayout';
 import { layoutSheet } from '@/features/notation/sheetLayout';
 import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
-import { isTernaryBeat } from '@/features/notation/tuplets';
+import { fitsDivision, isTernaryBeat } from '@/features/notation/tuplets';
 
 /** A little human sloppiness, as a fraction of the beat. */
 function jitter(offsets: number[], by: number): number[] {
@@ -80,6 +80,21 @@ describe('isTernaryBeat', () => {
   it('reads a sextuplet as ternary', () => {
     const sixths = [0, 1 / 6, 2 / 6, 3 / 6, 4 / 6, 5 / 6];
     expect(isTernaryBeat(sixths)).toBe(true);
+  });
+
+  it('lets a sparse fragment join a figure it is slightly out of', () => {
+    // Detection and inheritance answer different questions. Whether a triplet
+    // exists at all must be judged strictly, on these onsets alone. Whether a
+    // hand holding one or two notes belongs to the triplet already found next
+    // door is a laxer question, because the triplet has already been evidenced
+    // — and at 120bpm the stricter bound would reject a note twenty
+    // milliseconds out and write it on the binary grid instead.
+    const slightlyOut = [0.04];
+    expect(isTernaryBeat(slightlyOut)).toBe(false); // far too little to claim one
+    expect(fitsDivision(slightlyOut, 3)).toBe(true); // but it belongs to one
+
+    // What inheritance must still refuse: two straight eighths under triplets.
+    expect(fitsDivision([0, 0.5], 3)).toBe(false);
   });
 
   it('does not care what order the onsets arrive in', () => {
