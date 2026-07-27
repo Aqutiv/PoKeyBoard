@@ -41,11 +41,14 @@ function misfit(offsets: readonly BeatOffset[], divisions: number): number {
 const BINARY_DIVISIONS = [2, 4];
 const TERNARY_DIVISIONS = [3, 6];
 
-function bestMisfit(offsets: readonly BeatOffset[], divisions: readonly number[]): number {
-  let best = Number.POSITIVE_INFINITY;
+function bestFit(
+  offsets: readonly BeatOffset[],
+  divisions: readonly number[],
+): { division: number; misfit: number } {
+  let best = { division: divisions[0] as number, misfit: Number.POSITIVE_INFINITY };
   for (const division of divisions) {
     const value = misfit(offsets, division);
-    if (value < best) best = value;
+    if (value < best.misfit) best = { division, misfit: value };
   }
   return best;
 }
@@ -64,7 +67,7 @@ const TERNARY_MARGIN = 0.6;
  * A beat with fewer onsets than this cannot say anything. One note says
  * nothing at all; two can land on thirds by accident often enough to matter.
  */
-const MIN_ONSETS = 3;
+export const MIN_ONSETS_TO_DECIDE = 3;
 
 /** How far off the grid a set of onsets may sit before neither reading is trusted. */
 const MAX_MISFIT = 0.06;
@@ -77,14 +80,19 @@ const MAX_MISFIT = 0.06;
  * triplet at 0, ⅓ and ⅔. Both look "three-ish" if you only count notes. Only
  * the positions tell them apart, which is why this measures them.
  */
-export function isTernaryBeat(offsets: readonly BeatOffset[]): boolean {
-  if (offsets.length < MIN_ONSETS) return false;
+export function ternaryDivisionOf(offsets: readonly BeatOffset[]): number | null {
+  if (offsets.length < MIN_ONSETS_TO_DECIDE) return null;
 
-  const ternary = bestMisfit(offsets, TERNARY_DIVISIONS);
-  const binary = bestMisfit(offsets, BINARY_DIVISIONS);
+  const ternary = bestFit(offsets, TERNARY_DIVISIONS);
+  const binary = bestFit(offsets, BINARY_DIVISIONS);
 
   // Playing loose enough to fit neither reading is not evidence for the rarer
   // one; leave it binary and let the ordinary grid round it.
-  if (ternary > MAX_MISFIT) return false;
-  return ternary < binary * TERNARY_MARGIN;
+  if (ternary.misfit > MAX_MISFIT) return null;
+  return ternary.misfit < binary.misfit * TERNARY_MARGIN ? ternary.division : null;
+}
+
+/** Whether the beat divides in three at all; see `ternaryDivisionOf`. */
+export function isTernaryBeat(offsets: readonly BeatOffset[]): boolean {
+  return ternaryDivisionOf(offsets) !== null;
 }

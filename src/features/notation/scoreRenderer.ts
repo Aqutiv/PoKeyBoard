@@ -68,6 +68,7 @@ interface BeamLine {
   y2: number;
   stemDown: boolean;
   beamCount: 1 | 2;
+  tupletCount: number | null;
 }
 type BeamLines = Map<number, BeamLine>;
 
@@ -595,6 +596,7 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
       y2: span.y2,
       stemDown: beam.stemDown,
       beamCount: beam.beamCount,
+      tupletCount: beam.tupletCount,
     });
   }
   return lines;
@@ -603,6 +605,16 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
 function drawBeams(ctx: CanvasRenderingContext2D, lines: BeamLines, palette: ScorePalette): void {
   ctx.fillStyle = palette.note;
   for (const line of lines.values()) {
+    if (line.tupletCount !== null) {
+      // The numeral goes on the side away from the heads, as on paper.
+      const midX = (line.x1 + line.x2) / 2;
+      const midY = (line.y1 + line.y2) / 2;
+      ctx.font = `italic 600 ${GAP * 1.7}px Georgia, "Times New Roman", Times, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(line.tupletCount), midX, midY + (line.stemDown ? GAP * 1.5 : -GAP * 0.8));
+      ctx.textAlign = 'left';
+    }
     const toward = line.stemDown ? -1 : 1; // further beams stack toward the heads
     for (let i = 0; i < line.beamCount; i += 1) {
       const dy = i * toward * BEAM_SPACING_PX;

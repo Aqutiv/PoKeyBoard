@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { NoteEvent } from '@/domain/takeTypes';
 import { createTakeTempoMap } from '@/domain/tempoMap';
 import { buildLibraryTake, type LibraryTrackDef } from '@/features/library/trackBuilder';
 import { A_BEAUTIFUL_DAY } from '@/features/library/tracks/aBeautifulDay';
@@ -6,6 +7,7 @@ import { EVENING_TIDE } from '@/features/library/tracks/eveningTide';
 import { FUR_ELISE } from '@/features/library/tracks/furElise';
 import { GOOD_NIGHT } from '@/features/library/tracks/goodNight';
 import { MOONLIGHT_SONATA } from '@/features/library/tracks/moonlightSonata';
+import { layoutScore } from '@/features/notation/notationLayout';
 import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
 import { isTernaryBeat } from '@/features/notation/tuplets';
 
@@ -107,5 +109,95 @@ describe('against the bundled repertoire', () => {
     for (const def of [FUR_ELISE, A_BEAUTIFUL_DAY, GOOD_NIGHT, EVENING_TIDE]) {
       expect(ternaryBeatsIn(def).ternary).toBe(0);
     }
+  });
+});
+
+describe('laying a tuplet out', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+
+  /** `count` even notes filling each of `beats` beats, in one hand. */
+  function evenly(count: number, beats: number, midi = 72): NoteEvent[] {
+    const notes: NoteEvent[] = [];
+    for (let beat = 0; beat < beats; beat += 1) {
+      for (let k = 0; k < count; k += 1) {
+        notes.push({
+          id: `b${beat}k${k}`,
+          midi,
+          startMs: Math.round(beat * 500 + (k * 500) / count),
+          durationMs: Math.round(400 / count),
+          velocity: 0.5,
+        });
+      }
+    }
+    return notes;
+  }
+
+  it('writes triplets in one hand as beamed threes with a numeral', () => {
+    const layout = layoutScore(evenly(3, 4), OPTS);
+    expect(layout.chords.every((chord) => chord.symbol.tuplet)).toBe(true);
+    expect(layout.chords.every((chord) => chord.symbol.base === 'eighth')).toBe(true);
+    expect(layout.beams.map((beam) => [beam.members.length, beam.tupletCount])).toEqual([
+      [3, 3],
+      [3, 3],
+      [3, 3],
+      [3, 3],
+    ]);
+  });
+
+  it('leaves straight sixteenths entirely alone', () => {
+    const layout = layoutScore(evenly(4, 4), OPTS);
+    expect(layout.chords.some((chord) => chord.symbol.tuplet)).toBe(false);
+    expect(layout.beams.every((beam) => beam.tupletCount === null)).toBe(true);
+  });
+
+  it('makes a bar of triplets add up, rests and all', () => {
+    // Three of the four beats played, the last silent: the rests filling it
+    // have to be triplet rests too, or the bar comes out short.
+    const layout = layoutScore(evenly(3, 3), OPTS);
+    const written = (symbol: {
+      base: string;
+      dotted: boolean;
+      tuplet?: { actual: number; normal: number };
+    }): number => {
+      const base = { whole: 96, half: 48, quarter: 24, eighth: 12, sixteenth: 6 }[symbol.base]!;
+      const dotted = base * (symbol.dotted ? 1.5 : 1);
+      return symbol.tuplet ? (dotted * symbol.tuplet.normal) / symbol.tuplet.actual : dotted;
+    };
+    const inBar = (ms: number): boolean => ms < 2000;
+    const filled =
+      layout.chords
+        .filter((c) => c.staff === 'treble' && inBar(c.displayStartMs))
+        .reduce((sum, c) => sum + written(c.symbol), 0) +
+      layout.rests
+        .filter((r) => r.staff === 'treble' && inBar(r.displayStartMs))
+        .reduce((sum, r) => sum + written(r.symbol), 0);
+    expect(filled).toBe(96); // one 4/4 bar in ninety-sixths
+  });
+
+  it('does not number a tuplet the hands have split between them', () => {
+    // An arpeggio crossing middle C leaves a fragment on each staff. Two
+    // thirds of a triplet numbered "2" would name a duplet — a different
+    // rhythm — so a fragment carries no numeral at all.
+    const notes: NoteEvent[] = [];
+    for (let beat = 0; beat < 4; beat += 1) {
+      for (let k = 0; k < 3; k += 1) {
+        notes.push({
+          id: `s${beat}${k}`,
+          midi: k === 0 ? 52 : 72, // the lowest of each triplet falls to the bass
+          startMs: Math.round(beat * 500 + (k * 500) / 3),
+          durationMs: 130,
+          velocity: 0.5,
+        });
+      }
+    }
+    const layout = layoutScore(notes, OPTS);
+    // Both hands still agree the beat is in three...
+    expect(layout.chords.every((chord) => chord.symbol.tuplet)).toBe(true);
+    // ...but neither holds a whole one, so neither is numbered.
+    expect(layout.beams.every((beam) => beam.tupletCount === null)).toBe(true);
   });
 });

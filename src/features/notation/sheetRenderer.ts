@@ -351,7 +351,10 @@ function drawMeasure(
       );
     }
   }
-  for (const beam of measure.beams) drawBeam(ctx, beam);
+  for (const beam of measure.beams) {
+    drawBeam(ctx, beam);
+    drawTupletNumeral(ctx, beam);
+  }
 }
 
 function drawChord(
@@ -483,6 +486,23 @@ function drawFlag(ctx: CanvasRenderingContext2D, x: number, tipY: number, stemDo
   );
   ctx.closePath();
   ctx.fill();
+}
+
+/**
+ * The tuplet numeral, centred over its beam on the side away from the heads.
+ * Italic, as editions set it, and small enough not to compete with the notes.
+ */
+function drawTupletNumeral(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {
+  if (beam.tupletCount === null) return;
+  const midX = (beam.x1Pt + beam.x2Pt) / 2;
+  const midY = (beam.y1Pt + beam.y2Pt) / 2;
+  // Clear of the beam on the stem side: below a down-stem run, above an up one.
+  const away = beam.stemDown ? 1.5 * G : -0.9 * G;
+  ctx.font = `italic 600 ${1.9 * G}px ${SERIF}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(String(beam.tupletCount), midX, midY + away);
+  ctx.textAlign = 'left';
 }
 
 function drawBeam(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {

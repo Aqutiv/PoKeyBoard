@@ -198,6 +198,8 @@ export interface SheetBeam {
   stemDown: boolean;
   /** 1 for eighths, 2 for sixteenths. */
   beamCount: 1 | 2;
+  /** The tuplet numeral over the beam, where the run is one. */
+  tupletCount: number | null;
   x1Pt: number;
   y1Pt: number;
   x2Pt: number;
@@ -889,6 +891,12 @@ function buildBeams(measure: SheetMeasure): void {
   }
 }
 
+/** The numeral a beamed run carries, or null where it is not a whole tuplet. */
+function tupletCountFor(symbol: DurationSymbol, runLength: number): number | null {
+  const ratio = symbol.tuplet;
+  return ratio && runLength % ratio.actual === 0 ? runLength : null;
+}
+
 function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
   const first = run[0] as BeamMember;
   const staff = first.chord.staff;
@@ -908,6 +916,10 @@ function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
     staff,
     stemDown,
     beamCount: run[0]!.chord.symbol.base === 'sixteenth' ? 2 : 1,
+    // Only whole tuplets are numbered; see `buildBeamGroups`, which decides
+    // the same way. A number over a fragment would name a rhythm that is not
+    // being played.
+    tupletCount: tupletCountFor(run[0]!.chord.symbol, run.length),
     x1Pt: xs[0]!,
     y1Pt: span.y1,
     x2Pt: xs[xs.length - 1]!,
