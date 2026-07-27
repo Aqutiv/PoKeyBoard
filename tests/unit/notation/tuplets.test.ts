@@ -304,3 +304,136 @@ describe('octave lines on paper', () => {
     expect(plain.pages[0]!.systems[0]!.octaves).toEqual([]);
   });
 });
+
+describe('three against two', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+
+  /** Triplets in the right hand against straight eighths in the left. */
+  function polyrhythm(): NoteEvent[] {
+    const notes: NoteEvent[] = [];
+    let i = 0;
+    for (let beat = 0; beat < 4; beat += 1) {
+      const at = beat * 500;
+      for (let k = 0; k < 3; k += 1) {
+        notes.push({
+          id: `t${i++}`,
+          midi: 72,
+          startMs: Math.round(at + (k * 500) / 3),
+          durationMs: 150,
+          velocity: 0.5,
+        });
+      }
+      for (let k = 0; k < 2; k += 1) {
+        notes.push({
+          id: `b${i++}`,
+          midi: 48,
+          startMs: at + k * 250,
+          durationMs: 230,
+          velocity: 0.5,
+        });
+      }
+    }
+    return notes;
+  }
+
+  it('leaves the binary hand playing straight eighths', () => {
+    // The left hand has only two onsets a beat — too few to claim a division,
+    // but plenty to rule one out. Dragged into the right hand's triplets, its
+    // offbeat would move from halfway through the beat to two thirds.
+    const layout = layoutScore(polyrhythm(), OPTS);
+    const bass = layout.chords.filter((chord) => chord.staff === 'bass');
+    expect(bass).toHaveLength(8);
+    expect(bass.every((chord) => chord.symbol.tuplet === undefined)).toBe(true);
+    expect(bass.every((chord) => chord.symbol.base === 'eighth')).toBe(true);
+    // And it still lands on the half-beat, not on a third of one.
+    expect(bass.map((chord) => chord.displayStartMs)).toEqual([
+      0, 250, 500, 750, 1000, 1250, 1500, 1750,
+    ]);
+  });
+
+  it('still reads the triplet hand as triplets', () => {
+    const layout = layoutScore(polyrhythm(), OPTS);
+    const treble = layout.chords.filter((chord) => chord.staff === 'treble');
+    expect(treble.every((chord) => chord.symbol.tuplet)).toBe(true);
+  });
+});
+
+describe('octave spans in time order', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+
+  it('orders an early bass passage before a later treble one', () => {
+    // The live score walks these and stops at the first past the view, so a
+    // late treble line sorted ahead of an early bass one would hide the bass
+    // line while its notes stayed shifted.
+    const notes: NoteEvent[] = [];
+    let i = 0;
+    for (let k = 0; k < 6; k += 1) {
+      notes.push({
+        id: `low${i++}`,
+        midi: 26 + k,
+        startMs: k * 500,
+        durationMs: 400,
+        velocity: 0.5,
+      });
+    }
+    for (let k = 0; k < 6; k += 1) {
+      notes.push({
+        id: `high${i++}`,
+        midi: 96 + k,
+        startMs: 6000 + k * 500,
+        durationMs: 400,
+        velocity: 0.5,
+      });
+    }
+    const layout = layoutScore(notes, OPTS);
+    expect(layout.octaves).toHaveLength(2);
+    expect(layout.octaves.map((span) => span.staff)).toEqual(['bass', 'treble']);
+    for (let k = 1; k < layout.octaves.length; k += 1) {
+      expect(layout.octaves[k]!.fromMs).toBeGreaterThanOrEqual(layout.octaves[k - 1]!.fromMs);
+    }
+  });
+});
+
+describe('tuplet lengths a symbol cannot state', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+
+  it('never writes a tuplet longer than it was played', () => {
+    // Triplet eighths, one of them held five slots — a length no single value
+    // states. Rounded up to six it would overfill the beat, and a tuplet is
+    // never split into tied pieces to make up the difference.
+    const notes: NoteEvent[] = [
+      { id: 'a', midi: 72, startMs: 0, durationMs: 160, velocity: 0.5 },
+      { id: 'b', midi: 74, startMs: 167, durationMs: 160, velocity: 0.5 },
+      { id: 'c', midi: 76, startMs: 333, durationMs: 833, velocity: 0.5 }, // five slots
+      { id: 'd', midi: 72, startMs: 1500, durationMs: 160, velocity: 0.5 },
+      { id: 'e', midi: 74, startMs: 1667, durationMs: 160, velocity: 0.5 },
+      { id: 'f', midi: 76, startMs: 1833, durationMs: 160, velocity: 0.5 },
+    ];
+    const layout = layoutScore(notes, OPTS);
+    const held = layout.chords.find((chord) => chord.notes[0]!.id === 'c');
+    expect(held).toBeDefined();
+    const units = (symbol: {
+      base: string;
+      dotted: boolean;
+      tuplet?: { actual: number; normal: number };
+    }): number => {
+      const base = { whole: 96, half: 48, quarter: 24, eighth: 12, sixteenth: 6 }[symbol.base]!;
+      const dotted = base * (symbol.dotted ? 1.5 : 1);
+      return symbol.tuplet ? (dotted * symbol.tuplet.normal) / symbol.tuplet.actual : dotted;
+    };
+    // Five slots of eight units is forty; the value written must not exceed it.
+    expect(units(held!.symbol)).toBeLessThanOrEqual(40);
+  });
+});

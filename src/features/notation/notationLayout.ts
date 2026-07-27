@@ -36,7 +36,7 @@ import {
   type ClefKind,
   type StaffKind,
 } from './staffMapping';
-import { MIN_ONSETS_TO_DECIDE, ternaryDivisionOf } from './tuplets';
+import { fitsDivision, MIN_ONSETS_TO_DECIDE, ternaryDivisionOf } from './tuplets';
 
 /**
  * Whether a notehead is drawn on its chord's column (0) or one head-width to
@@ -144,6 +144,21 @@ export interface MeasureInfo {
 
 /** Beats within this of a whole one are on it; see the note in `layoutScore`. */
 const BEAT_EPSILON = 1e-3;
+
+/**
+ * The value that states a length exactly, plain or tupleted, or null when none
+ * does. A plain value wins wherever there is one: three triplet eighths are
+ * exactly a quarter, and a note that merely begins on a triplet beat is a half
+ * note rather than a "triplet half".
+ */
+function exactValueForUnits(units: number): DurationSymbol | null {
+  const plain = symbolForUnits(units);
+  if (plain) return plain;
+  const asPlain = (units * TRIPLET.actual) / TRIPLET.normal;
+  if (!Number.isInteger(asPlain)) return null;
+  const base = symbolForUnits(asPlain);
+  return base ? { ...base, tuplet: TRIPLET } : null;
+}
 
 /**
  * A stretch drawn an octave in, under an `8va` or `8vb` line.
@@ -903,6 +918,11 @@ function deriveOctaveSpans(chords: readonly ChordGroup[]): OctaveSpan[] {
     }
     flush();
   }
+  // In time order, not staff order. The live score walks these and stops at the
+  // first one past the view, so a late treble line ahead of an early bass one
+  // would hide the bass line while its notes stayed shifted — the wrong pitch
+  // on screen with nothing to explain it.
+  spans.sort((a, b) => a.fromMs - b.fromMs);
   return spans;
 }
 
@@ -983,9 +1003,15 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       // pooled, which is the only way to read a figure so evenly divided
       // between them that neither holds enough of it to tell.
       const neighbour = ternaryBeats.get(`${other}|${beat}`);
-      const pooled =
+      const division =
         neighbour ?? ternaryDivisionOf(offsetsPerBeatBothHands.get(Number(beat)) ?? []);
-      if (pooled !== null && pooled !== undefined) ternaryBeats.set(key, pooled);
+      if (division === null || division === undefined) continue;
+      // Only if this hand's own notes actually sit on that division. Too few
+      // onsets to claim a division is still plenty to rule one out, and three
+      // against two is a texture, not a mistake: a hand playing two straight
+      // eighths under the other's triplets must be left playing them.
+      if (!fitsDivision(offsets, division)) continue;
+      ternaryBeats.set(key, division);
     }
   }
 
@@ -1034,13 +1060,18 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       // is the unit the value rounds to — never the binary grid, whatever the
       // score's grid setting says.
       const slot = 1 / division;
-      const beats = Math.max(1, Math.round(held / slot)) * slot;
-      // But a tuplet marking is only worth writing when no ordinary value says
-      // the same thing. Three triplet eighths are exactly a quarter, and a
-      // melody note that merely begins on a triplet beat is a half note, not a
-      // "triplet half" — so the plain value wins wherever there is one.
-      const plain = symbolForUnits(Math.round(beats * unitsPerBeat(denominator)));
-      return plain ?? tupletSymbolForBeats(beats, denominator, TRIPLET);
+      const slotUnits = slot * unitsPerBeat(denominator);
+      const wanted = Math.max(1, Math.round(held / slot));
+      // Only lengths a symbol can state exactly. Five triplet slots are not one
+      // — the nearest is six, which would overfill the beat by a slot, and a
+      // tuplet is never split into tied pieces to make up the difference. So
+      // the value steps *down* to the longest it can say, and what is left
+      // becomes a rest, which is how the bar keeps adding up.
+      for (let slots = wanted; slots >= 1; slots -= 1) {
+        const exact = exactValueForUnits(Math.round(slots * slotUnits));
+        if (exact) return exact;
+      }
+      return tupletSymbolForBeats(slot, denominator, TRIPLET);
     }
     if (gridBeats === null) return symbolForBeats(held, denominator);
     return symbolForBeats(Math.max(1, Math.round(held / gridBeats)) * gridBeats, denominator);

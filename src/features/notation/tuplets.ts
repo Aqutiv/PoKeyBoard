@@ -73,6 +73,18 @@ export const MIN_ONSETS_TO_DECIDE = 3;
 const MAX_MISFIT = 0.06;
 
 /**
+ * Whether a set of onsets actually sits on a given division of the beat.
+ *
+ * Asked of a hand that has too little in a beat to read it alone, before it is
+ * allowed to take the other hand's answer. Two onsets are not enough to *claim*
+ * a division, but they are plenty to rule one out — and a hand playing two
+ * straight eighths against the other's triplets must not be dragged into them.
+ */
+export function fitsDivision(offsets: readonly BeatOffset[], division: number): boolean {
+  return offsets.length === 0 || misfit(offsets, division) <= MAX_MISFIT;
+}
+
+/**
  * Whether a beat's onsets are better explained by dividing it in three.
  *
  * The case this has to get right is the one that fools a careless test: a
