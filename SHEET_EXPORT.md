@@ -16,18 +16,19 @@ getTakeForExport(id)
 
 - `sheetLayout.ts` is pure geometry (unit-tested, no DOM): columns spaced
   roughly proportionally to duration, measures packed greedily into justified
-  systems, systems flowed down pages, per-beat beaming (compound meters like
-  6/8 group per dotted beat), and dynamic vertical room for ledger notes.
-  Spacing, note values, and beam grouping all follow the tempo in force in
+  systems, systems flowed down pages, and dynamic vertical room for ledger
+  notes, pedal brackets and dynamics.
+  Spacing and note values follow the tempo in force in
   each measure, so a take whose tempo changes still engraves correctly and
   gets a "♩ = n" mark where the new tempo takes over.
   All positions are in PDF points; `SHEET_GAP_PT` (staff space) scales the
   engraving.
 - `sheetRenderer.ts` draws a page onto a canvas whose ctx is scaled so
   1 unit = 1 pt. All music glyphs (clefs, brace, accidentals, flags, beams,
-  rests, ties, pedal brackets) are hand-drawn Béziers — no music font is
-  required, so output is identical on every device. Fonts are used only for
-  text (serif stack). Rests and accidentals live in `restGlyph.ts` and
+  rests, ties, pedal brackets, hairpins) are hand-drawn Béziers — no music font
+  is required, so output is identical on every device. Fonts are used only for
+  text (serif stack), which includes dynamic marks: `p` and `f` are letters,
+  and editions have always set them in bold italic. Rests and accidentals live in `restGlyph.ts` and
   `accidentalGlyph.ts`, shared with the live score so both views draw the same
   shapes at their own staff-space scale.
 - `sheetPdfService.ts` rasterizes pages sequentially on one reused canvas at
@@ -82,6 +83,20 @@ takes seconds and never touches the audio engine.
   press to its release; a press outliving the system is left open at that end.
   The events were always recorded and imported — this is where they finally get
   drawn.
+- **Beaming** is decided once, in `layoutScore`, so the printed page and the
+  live score group runs the same way and commit a run to the same stem
+  direction; `beamGeometry.ts` holds the line arithmetic in staff spaces, read
+  as points here and as pixels on screen. Runs break at a rest, a change of
+  note value, a beat group, or a voice; compound meters group per dotted beat.
+- **Dynamics** are read out of velocity (`dynamics.ts`) and set between the
+  staves, which is where a pianist looks for them — a system carrying them
+  opens its inter-staff gap, and one without is laid out exactly as before.
+  The reading is deliberately deaf to detail, because a mark on every change of
+  touch would say nothing: it takes a high percentile over a wide window of
+  onsets, holds its band until the level clearly leaves it, and will not speak
+  twice inside two bars. A steady climb or fall across a phrase becomes a
+  hairpin with the marks kept at each end; a swell too long to taper visibly
+  (more than six bars) stays as marks, which is what an edition writes.
 
 ## Known limitations
 
@@ -90,7 +105,10 @@ takes seconds and never touches the audio engine.
   passage engraves as a note and a rest per slot rather than as a triplet — the
   bar adds up, but it reads as detached eighths. Tuplets are the fix, and
   nothing short of them is one.
-- Dynamics, articulations, slurs, ornaments and repeats are still not drawn.
+- Articulations, slurs, ornaments and repeats are still not drawn.
+- A dynamic mark sits at a fixed height in the inter-staff gap and nothing
+  moves it, so a bass note stemming up into that gap can crowd one. It stays
+  legible; engraving software nudges marks per-collision, and this does not.
 - Staff assignment follows the imported score's own `staff` per note, so a
   left hand written at or above middle C still prints on the bass staff.
   Recorded takes, and sources with a single staff, split at middle C as

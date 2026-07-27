@@ -70,6 +70,15 @@ const SMOOTHING_RADIUS = 8;
 const LEVEL_PERCENTILE = 0.7;
 /** A monotonic climb or fall of at least this many bands is a hairpin. */
 const HAIRPIN_MIN_STEPS = 2;
+/**
+ * Bars a hairpin may span before it stops being one.
+ *
+ * A wedge works over a phrase. Stretched across twenty bars it is a pair of
+ * ruled lines that say nothing a reader can see tapering, and editions write
+ * that swell as dynamics at each end instead. So beyond this the marks stay
+ * and the wedge is dropped.
+ */
+const HAIRPIN_MAX_BARS = 6;
 /** Bars a mark holds the floor for; an editor writes one a phrase, not one a bar. */
 const MIN_MARK_BARS = 2;
 
@@ -147,7 +156,12 @@ function smooth(onsets: readonly Onset[]): number[] {
  * wedge it is one, and it is the one the composer meant. The marks at either
  * end stay — a hairpin says "get louder", never how loud to arrive.
  */
-function foldHairpins(marks: DynamicEvent[], bands: number[], minSpanMs: number): DynamicsReading {
+function foldHairpins(
+  marks: DynamicEvent[],
+  bands: number[],
+  minSpanMs: number,
+  maxSpanMs: number,
+): DynamicsReading {
   const keptMarks: DynamicEvent[] = [];
   const hairpins: HairpinEvent[] = [];
 
@@ -167,7 +181,8 @@ function foldHairpins(marks: DynamicEvent[], bands: number[], minSpanMs: number)
     const steps = end - i;
     const from = marks[i] as DynamicEvent;
     const to = marks[end] as DynamicEvent;
-    if (steps >= HAIRPIN_MIN_STEPS && to.atMs - from.atMs >= minSpanMs) {
+    const spanMs = to.atMs - from.atMs;
+    if (steps >= HAIRPIN_MIN_STEPS && spanMs >= minSpanMs && spanMs <= maxSpanMs) {
       keptMarks.push(from);
       hairpins.push({ fromMs: from.atMs, toMs: to.atMs, grow: direction > 0 });
       keptMarks.push(to);
@@ -222,5 +237,5 @@ export function readDynamics(
     writtenAt = at;
   }
 
-  return foldHairpins(marks, bands, minHairpinMs);
+  return foldHairpins(marks, bands, minHairpinMs, options.barMs * HAIRPIN_MAX_BARS);
 }

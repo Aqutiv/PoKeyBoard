@@ -29,6 +29,8 @@ function geometryFor(midis: number[]) {
 
 /** The pedal row a take in the ordinary range gets: the foot of its margin. */
 const DEFAULT_PEDAL_ROW = SCORE_MIN_HEIGHT - 9;
+/** With no dynamics the staves keep their usual spacing, so the row sits in it. */
+const DEFAULT_DYNAMICS_ROW = BASS_TOP - STAFF_SPACING * 0.3;
 
 describe('computeScoreGeometry', () => {
   it('returns the default constants for an empty take', () => {
@@ -37,6 +39,7 @@ describe('computeScoreGeometry', () => {
       bassTop: BASS_TOP,
       minHeight: SCORE_MIN_HEIGHT,
       pedalRow: DEFAULT_PEDAL_ROW,
+      dynamicsRow: DEFAULT_DYNAMICS_ROW,
     });
   });
 
@@ -46,6 +49,7 @@ describe('computeScoreGeometry', () => {
       bassTop: BASS_TOP,
       minHeight: SCORE_MIN_HEIGHT,
       pedalRow: DEFAULT_PEDAL_ROW,
+      dynamicsRow: DEFAULT_DYNAMICS_ROW,
     });
   });
 

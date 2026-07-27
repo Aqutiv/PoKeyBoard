@@ -79,6 +79,10 @@ const WHOLE_REST_STEP = restStep(WHOLE_REST);
 const HEAD_CLEARANCE = GAP * 0.5 + 6;
 /** Least room the pedal bracket keeps under the bass staff. */
 const PEDAL_ROW_PX = 15;
+/** Extra room between the staves when the take carries dynamics. */
+const DYNAMICS_ROW_PX = 14;
+/** Half-height of a hairpin's open end. */
+const HAIRPIN_MOUTH_PX = GAP * 0.55;
 /** Bottom margin below the bass staff at the default geometry. */
 const BOTTOM_MARGIN = SCORE_MIN_HEIGHT - BASS_TOP - STAFF_H;
 
@@ -89,6 +93,8 @@ export interface ScoreGeometry {
   minHeight: number;
   /** y of the pedal row, under everything the bass staff reaches down to. */
   pedalRow: number;
+  /** Baseline of the dynamics row, in the gap between the staves. */
+  dynamicsRow: number;
 }
 
 /**
@@ -98,7 +104,10 @@ export interface ScoreGeometry {
  * notes, so heads and their ledger lines set the required clearance. Takes
  * in the normal range get exactly the default constants.
  */
-export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeometry {
+export function computeScoreGeometry(
+  chords: readonly ChordGroup[],
+  hasDynamics = false,
+): ScoreGeometry {
   let maxTrebleStep = Number.NEGATIVE_INFINITY;
   let minBassStep = Number.POSITIVE_INFINITY;
   for (const chord of chords) {
@@ -112,7 +121,10 @@ export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeomet
       ? 0
       : (maxTrebleStep * GAP) / 2 - STAFF_H + HEAD_CLEARANCE;
   const trebleTop = Math.max(TREBLE_TOP, Math.ceil(topExtent));
-  const bassTop = trebleTop + STAFF_H + STAFF_SPACING;
+  // Nothing else reserves the gap between the staves, so a take with dynamics
+  // opens it up for them; one without keeps the geometry it always had.
+  const staffSpacing = STAFF_SPACING + (hasDynamics ? DYNAMICS_ROW_PX : 0);
+  const bassTop = trebleTop + STAFF_H + staffSpacing;
   const bottomExtent =
     minBassStep === Number.POSITIVE_INFINITY
       ? BOTTOM_MARGIN
@@ -125,6 +137,9 @@ export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeomet
     // so it clears the low notes hanging under it instead of running through
     // them. On a take that stays in range that is the default bottom margin.
     pedalRow: bassTop + STAFF_H + Math.max(PEDAL_ROW_PX, bottomExtent - PEDAL_ROW_PX * 0.6),
+    // Marks sit low in the gap, nearer the bass staff — where a pianist looks
+    // for them, and where the treble's own stems are not.
+    dynamicsRow: bassTop - staffSpacing * 0.3,
   };
 }
 
@@ -188,6 +203,8 @@ export interface ScoreView {
   bassTop: number;
   /** y of the pedal row; see `ScoreGeometry.pedalRow`. */
   pedalRow: number;
+  /** y of the dynamics row; see `ScoreGeometry.dynamicsRow`. */
+  dynamicsRow: number;
   /** Width of the fixed prefix; `gutterWidthFor` the take's key signature. */
   gutterPx: number;
 }
@@ -238,6 +255,7 @@ export function drawScore(
   drawMeasures(ctx, view, input.layout, palette);
   drawRests(ctx, view, input.layout, palette);
   drawPedals(ctx, view, input.layout, palette);
+  drawDynamics(ctx, view, input.layout, palette);
   drawTies(ctx, view, input.layout, palette);
   // Beams before the chords that hang from them: a stem has to know where its
   // beam ended up before it can reach for it.
@@ -422,6 +440,59 @@ function drawPedals(
     if (!openRight) ctx.lineTo(x2, y - PEDAL_HOOK_PX);
     ctx.stroke();
   }
+}
+
+/**
+ * Dynamic marks and hairpins, between the staves.
+ *
+ * The velocity behind them has been recorded all along; this is the first time
+ * either view has said anything about it. Both draw from the same reading, so
+ * the screen and the page agree about where the music swells.
+ */
+function drawDynamics(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  layout: ScoreLayout,
+  palette: ScorePalette,
+): void {
+  if (layout.dynamics.length === 0 && layout.hairpins.length === 0) return;
+  const fromMs = view.scrollMs;
+  const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs;
+  const rowY = view.dynamicsRow;
+
+  ctx.strokeStyle = palette.noteDim;
+  ctx.lineWidth = 1.2;
+  for (const hairpin of layout.hairpins) {
+    if (hairpin.toMs <= fromMs) continue;
+    if (hairpin.fromMs >= toMs) break; // sorted by start
+    const openLeft = hairpin.fromMs < fromMs;
+    const openRight = hairpin.toMs > toMs;
+    const x1 = openLeft ? view.gutterPx : xForMs(view, hairpin.fromMs);
+    const x2 = openRight ? view.widthPx : xForMs(view, hairpin.toMs);
+    if (x2 - x1 < GAP * 2) continue;
+    const midY = rowY - GAP * 0.8;
+    const closed = hairpin.grow ? x1 : x2;
+    const open = hairpin.grow ? x2 : x1;
+    ctx.beginPath();
+    ctx.moveTo(open, midY - HAIRPIN_MOUTH_PX);
+    ctx.lineTo(closed, midY);
+    ctx.lineTo(open, midY + HAIRPIN_MOUTH_PX);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = palette.noteDim;
+  ctx.font = `bold italic ${GAP * 2.1}px Georgia, "Times New Roman", Times, serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  for (const mark of layout.dynamics) {
+    if (mark.atMs < fromMs) continue;
+    if (mark.atMs > toMs) break; // sorted by time
+    // Marks are centred, so one at the very start of the piece sits half under
+    // the gutter — which is painted last, and would swallow it. Nudge it clear.
+    const x = Math.max(view.gutterPx + GAP * 1.2, xForMs(view, mark.atMs));
+    ctx.fillText(mark.mark, x, rowY);
+  }
+  ctx.textAlign = 'left';
 }
 
 /**

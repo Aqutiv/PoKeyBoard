@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FORTE_VELOCITY, readDynamics } from '@/features/notation/dynamics';
+import { layoutScore } from '@/features/notation/notationLayout';
+import { layoutSheet } from '@/features/notation/sheetLayout';
 
 /** One bar of 4/4 at 120bpm, the tempo the other notation tests use. */
 const BAR_MS = 2000;
@@ -105,10 +107,10 @@ describe('readDynamics', () => {
     expect(reading.hairpins).toEqual([]);
   });
 
-  it('writes a long swell as a hairpin, not a row of marks', () => {
-    // Forty beats climbing steadily from pp to ff.
+  it('writes a swell across a phrase as a hairpin, not a row of marks', () => {
+    // Five bars climbing steadily from p toward f.
     const velocities = Array.from({ length: 40 }, (_, i) => atForte(0.3 + (i / 39) * 1.0));
-    const reading = readDynamics(played(velocities), OPTS);
+    const reading = readDynamics(played(velocities, 250), OPTS);
     expect(reading.hairpins).toHaveLength(1);
     const hairpin = reading.hairpins[0]!;
     expect(hairpin.grow).toBe(true);
@@ -122,9 +124,19 @@ describe('readDynamics', () => {
 
   it('writes a fall as a diminuendo', () => {
     const velocities = Array.from({ length: 40 }, (_, i) => atForte(1.3 - (i / 39) * 1.0));
-    const reading = readDynamics(played(velocities), OPTS);
+    const reading = readDynamics(played(velocities, 250), OPTS);
     expect(reading.hairpins).toHaveLength(1);
     expect(reading.hairpins[0]!.grow).toBe(false);
+  });
+
+  it('leaves a swell too long to taper as marks alone', () => {
+    // The same climb spread over twenty bars. A wedge that wide is a pair of
+    // ruled lines with no visible taper, and it would run across systems; an
+    // edition writes the dynamics at each end and lets them speak.
+    const velocities = Array.from({ length: 80 }, (_, i) => atForte(0.3 + (i / 79) * 1.0));
+    const reading = readDynamics(played(velocities), OPTS);
+    expect(reading.hairpins).toEqual([]);
+    expect(reading.marks.length).toBeGreaterThan(2);
   });
 
   it('leaves a single step as a plain mark', () => {
@@ -160,5 +172,71 @@ describe('readDynamics', () => {
       OPTS,
     );
     expect(withAccompaniment.marks[0]!.mark).toBe('f');
+  });
+});
+
+describe('dynamics on paper', () => {
+  const SHEET_OPTS = {
+    paper: 'a4' as const,
+    timeSignature: { numerator: 4, denominator: 4 },
+    bpm: 120,
+    title: 'T',
+    subtitle: '',
+    credit: 'C',
+  };
+
+  /** Bars of four quarters, at a velocity per bar. */
+  function take(barVelocities: number[]) {
+    const notes = barVelocities.flatMap((velocity, bar) =>
+      [0, 1, 2, 3].map((beat) => ({
+        id: `b${bar}n${beat}`,
+        midi: 72,
+        startMs: bar * BAR_MS + beat * 500,
+        durationMs: 500,
+        velocity,
+      })),
+    );
+    return layoutSheet(
+      layoutScore(notes, {
+        bpm: 120,
+        timeSignature: SHEET_OPTS.timeSignature,
+        quantization: '1/16',
+        minMeasures: 1,
+      }),
+      SHEET_OPTS,
+    );
+  }
+
+  it('puts the marks between the staves and opens the gap for them', () => {
+    const loud = take([...new Array(6).fill(atForte(0.35)), ...new Array(6).fill(atForte(1.0))]);
+    const system = loud.pages[0]!.systems[0]!;
+    expect(system.dynamics.length).toBeGreaterThan(0);
+    // Between the staves, not above or below them.
+    expect(system.dynamicsRowPt).toBeGreaterThan(
+      system.trebleTopPt + loud.pages[0]!.metrics.staffHeightPt,
+    );
+    expect(system.dynamicsRowPt).toBeLessThan(system.bassTopPt);
+    // Each mark sits inside the system it belongs to.
+    for (const mark of system.dynamics) {
+      expect(mark.xPt).toBeGreaterThanOrEqual(system.xPt);
+      expect(mark.xPt).toBeLessThanOrEqual(system.xPt + system.widthPt);
+    }
+  });
+
+  it('leaves the staves where they were when nothing is marked', () => {
+    // An evenly played take gets one mark at the start and no more, so the
+    // system carries dynamics and opens the gap. A take with none at all —
+    // no notes — keeps the original spacing.
+    const even = take(new Array(8).fill(atForte(0.5)));
+    const withMarks = even.pages[0]!.systems[0]!;
+    const gapWithMarks = withMarks.bassTopPt - withMarks.trebleTopPt;
+
+    const silent = layoutSheet(
+      layoutScore([], { bpm: 120, timeSignature: SHEET_OPTS.timeSignature, quantization: '1/16' }),
+      SHEET_OPTS,
+    );
+    const bare = silent.pages[0]!.systems[0]!;
+    expect(bare.dynamics).toEqual([]);
+    expect(bare.bassTopPt - bare.trebleTopPt).toBeLessThan(gapWithMarks);
   });
 });
