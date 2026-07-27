@@ -6,13 +6,14 @@ import type {
   TempoChange,
   TimeSignature,
 } from '@/domain/takeTypes';
-import { barDurationMs } from '@/utils/timing';
+import { barDurationMs, beatDurationMs } from '@/utils/timing';
 import {
   beatsForSymbol,
   quantizeGridBeats,
   symbolForBeats,
   type DurationSymbol,
 } from './quantization';
+import { readDynamics, type DynamicEvent, type HairpinEvent } from './dynamics';
 import { accidentalFor, normalizeFifths, type AccidentalKind } from './keySignature';
 import {
   barUnits,
@@ -88,6 +89,24 @@ export interface ChordGroup {
   voice: number;
   stemDown: boolean;
   symbol: DurationSymbol;
+  /** Index into `ScoreLayout.beams`, or null for a chord that flags instead. */
+  beamId: number | null;
+}
+
+/**
+ * A run of chords carrying one beam, in time order.
+ *
+ * Beaming is the last word on stem direction — a run commits to one and every
+ * member follows — so it is settled here rather than by whichever renderer got
+ * there first. Both views then draw the same grouping, and the heads that have
+ * to move for a stem can be placed once, afterwards, against the answer.
+ */
+export interface BeamGroup {
+  staff: StaffKind;
+  stemDown: boolean;
+  /** 1 for eighths, 2 for sixteenths. */
+  beamCount: 1 | 2;
+  members: ChordGroup[];
 }
 
 /**
@@ -126,6 +145,12 @@ export interface ScoreLayout {
   chords: ChordGroup[];
   /** Sorted by display start; see `LaidOutRest`. */
   rests: LaidOutRest[];
+  /** Beam runs; `ChordGroup.beamId` indexes into this. See `BeamGroup`. */
+  beams: BeamGroup[];
+  /** Dynamic marks read from how hard the keys were struck. */
+  dynamics: DynamicEvent[];
+  /** Crescendos and diminuendos spanning several bars; see `HairpinEvent`. */
+  hairpins: HairpinEvent[];
   /** Sorted, non-overlapping; see `PedalSpan`. */
   pedals: PedalSpan[];
   measures: MeasureInfo[];
@@ -207,6 +232,7 @@ function chordsInStack(stack: LaidOutNote[]): ChordGroup[] {
       voice: first.voice ?? index,
       stemDown: stemDownFor(index, voices.length, voice.averageStep),
       symbol: voice.symbol,
+      beamId: null,
     };
   });
 }
@@ -419,6 +445,114 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
     }
   }
   return out;
+}
+
+function beamable(chord: ChordGroup): boolean {
+  return (
+    !chord.symbol.dotted && (chord.symbol.base === 'eighth' || chord.symbol.base === 'sixteenth')
+  );
+}
+
+/**
+ * Beam runs of equal undotted eighths and sixteenths sharing a beat group on
+ * one voice of one staff. Compound meters (6/8, 9/8, …) group per dotted
+ * beat-unit trio. A beam never crosses a rest, a change of note value, a beat
+ * group, or a voice — so a run under a held note stays one beam.
+ *
+ * The run also settles the stem direction of everything in it: the majority
+ * wins, except where the run passes a moment when two voices sound on the
+ * staff, which has already stemmed them apart to keep both readable and binds
+ * the whole run.
+ */
+function buildBeamGroups(
+  chordsByMeasure: readonly ChordGroup[][],
+  measures: readonly MeasureInfo[],
+  rests: readonly LaidOutRest[],
+  timeSignature: TimeSignature,
+): BeamGroup[] {
+  const compound = timeSignature.numerator % 3 === 0 && timeSignature.denominator >= 8;
+  /** Where each staff falls silent — a beam stops at any of these. */
+  const silentAt = new Set<string>();
+  for (const rest of rests) silentAt.add(`${rest.staff}|${rest.displayStartMs}`);
+
+  const beams: BeamGroup[] = [];
+  for (const measure of measures) {
+    const inMeasure = chordsByMeasure[measure.index] ?? [];
+    if (inMeasure.length === 0) continue;
+    const beatMs = beatDurationMs(measure.bpm, timeSignature);
+    const groupMs = compound ? beatMs * 3 : beatMs;
+
+    for (const staff of ['treble', 'bass'] as const) {
+      const onStaff = inMeasure.filter((chord) => chord.staff === staff);
+      if (onStaff.length === 0) continue;
+
+      // How many voices sound at each instant, which is what marks a moment as
+      // polyphonic and so fixes the direction of any run passing through it.
+      const voicesAt = new Map<number, number>();
+      for (const chord of onStaff) {
+        voicesAt.set(chord.displayStartMs, (voicesAt.get(chord.displayStartMs) ?? 0) + 1);
+      }
+      // Every instant the staff is doing something, silence included: a rest
+      // has to end a run even where the voice being followed has no chord.
+      const times = [...voicesAt.keys()];
+      for (const rest of rests) {
+        if (rest.staff !== staff) continue;
+        if (rest.displayStartMs < measure.startMs || rest.displayStartMs >= measure.endMs) continue;
+        times.push(rest.displayStartMs);
+      }
+      times.sort((a, b) => a - b);
+
+      const byTime = new Map<string, ChordGroup>();
+      for (const chord of onStaff) byTime.set(`${chord.voice}|${chord.displayStartMs}`, chord);
+
+      for (const voice of new Set(onStaff.map((chord) => chord.voice))) {
+        let run: ChordGroup[] = [];
+        let runBase: DurationSymbol['base'] | null = null;
+        let runGroup = -1;
+
+        const flush = (): void => {
+          if (run.length >= 2) {
+            const polyphonic = run.find((chord) => (voicesAt.get(chord.displayStartMs) ?? 1) > 1);
+            const downVotes = run.filter((chord) => chord.stemDown).length;
+            const stemDown = polyphonic ? polyphonic.stemDown : downVotes * 2 >= run.length;
+            const id = beams.length;
+            beams.push({
+              staff,
+              stemDown,
+              beamCount: (run[0] as ChordGroup).symbol.base === 'sixteenth' ? 2 : 1,
+              members: run,
+            });
+            for (const chord of run) {
+              chord.stemDown = stemDown;
+              chord.beamId = id;
+            }
+          }
+          run = [];
+          runBase = null;
+        };
+
+        for (const timeMs of times) {
+          if (silentAt.has(`${staff}|${timeMs}`)) {
+            flush();
+            continue;
+          }
+          const chord = byTime.get(`${voice}|${timeMs}`);
+          if (!chord) continue;
+          if (!beamable(chord)) {
+            flush();
+            continue;
+          }
+          const group = Math.floor((timeMs - measure.startMs) / groupMs + 1e-6);
+          if (run.length > 0 && (chord.symbol.base !== runBase || group !== runGroup)) flush();
+          run.push(chord);
+          runBase = chord.symbol.base;
+          runGroup = group;
+        }
+        flush();
+      }
+    }
+  }
+  return beams;
 }
 
 /**
@@ -725,16 +859,6 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     if (index !== null) (chordsByMeasure[index] as ChordGroup[]).push(chord);
   }
 
-  // The bar decides which accidentals survive, so it has to speak before the
-  // ones that are left are given columns to stand in.
-  applyMeasureAccidentals(chordsByMeasure);
-  // Which way a head moves depends on where its stem points, so this has to
-  // wait until the stems have settled.
-  for (const voices of byStack) {
-    displaceCollidingHeads(voices);
-    stackAccidentals(voices);
-  }
-
   // A clef stands until something replaces it, so a measure with nothing on a
   // staff keeps reading under whatever the measure before it did.
   let carried: Record<StaffKind, ClefKind> = {
@@ -758,10 +882,39 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
 
   const rests = deriveRests(chords, measures, options.timeSignature, tempoMap);
 
+  // Beaming has the last word on stem direction, so it runs before anything
+  // that reads one: the heads a stem displaces, and the columns their
+  // accidentals stand in.
+  const beams = buildBeamGroups(chordsByMeasure, measures, rests, options.timeSignature);
+  // The bar decides which accidentals survive, so it has to speak before the
+  // ones that are left are given columns to stand in.
+  applyMeasureAccidentals(chordsByMeasure);
+  for (const voices of byStack) {
+    displaceCollidingHeads(voices);
+    stackAccidentals(voices);
+  }
+
   const last = measures[measures.length - 1];
   const totalMs = last ? last.endMs : 0;
   const pedals = pedalSpans(options.pedals ?? [], totalMs);
-  return { chords, rests, pedals, measures, barMs, totalMs };
+  // Read from the notes as played, not from where they are drawn: how hard a
+  // key went down is performance, and quantizing it would only blur it. The
+  // thresholds are counted in bars, which the tempo map knows how to find
+  // wherever the tempo happens to be at the time.
+  const { marks, hairpins } = readDynamics(notes, {
+    barAtMs: (atMs) => tempoMap.beatAtMs(atMs) / options.timeSignature.numerator,
+  });
+  return {
+    chords,
+    rests,
+    beams,
+    dynamics: marks,
+    hairpins,
+    pedals,
+    measures,
+    barMs,
+    totalMs,
+  };
 }
 
 /**

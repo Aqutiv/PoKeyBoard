@@ -1,7 +1,6 @@
 import type { TimeSignature } from '@/domain/takeTypes';
-import { beatDurationMs, clamp, wholeNoteDurationMs } from '@/utils/timing';
+import { clamp, wholeNoteDurationMs } from '@/utils/timing';
 import {
-  displaceSeconds,
   measureIndexAt,
   type ChordGroup,
   type HeadShift,
@@ -10,6 +9,8 @@ import {
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
+import { beamSpanFor, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
+import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
 import { normalizeFifths, type AccidentalKind } from './keySignature';
 import type { DurationSymbol } from './quantization';
 import type { ClefKind, StaffKind } from './staffMapping';
@@ -27,15 +28,6 @@ export type SheetGrid = '1/8' | '1/16';
 export const SHEET_GAP_PT = 5.4;
 const G = SHEET_GAP_PT;
 
-/** Ideal stem length in staff spaces. */
-export const STEM_LENGTH_G = 3.5;
-/** Shortest stem a beam may leave. */
-export const MIN_BEAM_STEM_G = 2.8;
-/** Maximum beam slant across a run. */
-export const BEAM_SLANT_MAX_G = 1;
-export const BEAM_THICKNESS_G = 0.5;
-/** Center-to-center offset of a secondary beam, toward the noteheads. */
-export const BEAM_SPACING_G = 0.75;
 /** Notehead horizontal radius. */
 export const HEAD_RX_G = 0.64;
 /** Stem x offset from the head center (inset from the head edge). */
@@ -251,6 +243,24 @@ export interface SheetPedal {
   continuesRight: boolean;
 }
 
+/** A dynamic mark standing between the staves. */
+export interface SheetDynamic {
+  xPt: number;
+  mark: DynamicMark;
+}
+
+/**
+ * A crescendo or diminuendo wedge, clipped to one system. A swell outliving
+ * its system is left open at that end and picked up on the next.
+ */
+export interface SheetHairpin {
+  x1Pt: number;
+  x2Pt: number;
+  grow: boolean;
+  continuesLeft: boolean;
+  continuesRight: boolean;
+}
+
 export interface SheetSystem {
   xPt: number;
   /** Staff-line extent from xPt (clef area + measures). */
@@ -266,6 +276,12 @@ export interface SheetSystem {
   pedals: SheetPedal[];
   /** y of the pedal row, below the bass staff (absolute page pt). */
   pedalRowPt: number;
+  /** Dynamic marks between the staves; see `SheetDynamic`. */
+  dynamics: SheetDynamic[];
+  /** Hairpins between the staves; see `SheetHairpin`. */
+  hairpins: SheetHairpin[];
+  /** Baseline of the dynamics row, in the gap between the staves. */
+  dynamicsRowPt: number;
   /** The clef each staff opens this system under. */
   clefs: Record<StaffKind, ClefKind>;
   /** 1-based label at the system start. */
@@ -355,6 +371,10 @@ interface WorkSystem {
   measures: SheetMeasure[];
   ties: SheetTie[];
   pedals: SheetPedal[];
+  dynamics: SheetDynamic[];
+  hairpins: SheetHairpin[];
+  /** Extra room this system needs between its staves, for the dynamics row. */
+  interStaffExtraPt: number;
   clefs: Record<StaffKind, ClefKind>;
   widthPt: number;
   /** Space needed above the treble top line / below the bass bottom line. */
@@ -419,7 +439,8 @@ function toSheetChord(chord: ChordGroup): SheetChord {
     voice: chord.voice,
     symbol: chord.symbol,
     stemDown: chord.stemDown,
-    beamId: null,
+    // The layout's own index; `buildBeams` swaps it for this measure's.
+    beamId: chord.beamId,
   };
 }
 
@@ -595,15 +616,20 @@ function packSystems(
     });
 
     for (let i = 0; i < measures.length; i += 1) {
-      buildBeams(measures[i]!, row.measures[i]!.startMs, options);
+      buildBeams(measures[i]!);
     }
     const ties = buildTies(measures, metrics.marginLeftPt, x);
     const pedals = buildPedals(measures, score.pedals);
+    const marks = buildDynamics(measures, score.dynamics, score.hairpins);
     const extents = systemExtents(measures);
+    const carriesDynamics = marks.dynamics.length > 0 || marks.hairpins.length > 0;
     return {
       measures,
       ties,
       pedals,
+      dynamics: marks.dynamics,
+      hairpins: marks.hairpins,
+      interStaffExtraPt: carriesDynamics ? DYNAMICS_ROW_PT : 0,
       widthPt: x - metrics.marginLeftPt,
       abovePt: extents.abovePt,
       // A pedal bracket gets a row of its own under the staff, so it can never
@@ -618,6 +644,19 @@ function packSystems(
 export const PEDAL_ROW_PT = 13;
 /** The bracket's own height, measured up from its line. */
 export const PEDAL_HOOK_G = 0.75;
+
+/**
+ * Extra room a system opens between its staves to carry dynamics.
+ *
+ * Nothing reserves that gap otherwise — a low treble note or a high bass one
+ * hangs into it freely — so a system with marks has to widen, and one without
+ * is laid out exactly as it was before dynamics existed.
+ */
+export const DYNAMICS_ROW_PT = 12;
+/** Half-height of a hairpin's open end. */
+export const HAIRPIN_MOUTH_G = 0.55;
+/** Clear space kept between a hairpin and the mark at either end of it. */
+const HAIRPIN_CLEARANCE_G = 1.2;
 
 /**
  * Where a moment in time falls across a system, in points.
@@ -646,20 +685,30 @@ function xAtTime(anchors: readonly { timeMs: number; xPt: number }[], timeMs: nu
   return span <= 0 ? a.xPt : a.xPt + ((timeMs - a.timeMs) / span) * (b.xPt - a.xPt);
 }
 
+interface TimeAnchor {
+  timeMs: number;
+  xPt: number;
+}
+
+/** Bar lines and note columns alike anchor the mapping from time to page x. */
+function timeAnchorsFor(measures: readonly SheetMeasure[]): TimeAnchor[] {
+  const last = measures[measures.length - 1];
+  const anchors: TimeAnchor[] = [];
+  for (const measure of measures) {
+    anchors.push({ timeMs: measure.startMs, xPt: measure.xPt });
+    for (const column of measure.columns) anchors.push({ timeMs: column.timeMs, xPt: column.xPt });
+  }
+  if (last) anchors.push({ timeMs: last.endMs, xPt: last.xPt + last.widthPt });
+  anchors.sort((a, b) => a.timeMs - b.timeMs);
+  return anchors;
+}
+
 /** The pedal brackets a system carries, clipped to the music it holds. */
 function buildPedals(measures: readonly SheetMeasure[], spans: readonly PedalSpan[]): SheetPedal[] {
   const first = measures[0];
   const last = measures[measures.length - 1];
   if (!first || !last || spans.length === 0) return [];
-
-  // Bar lines and note columns alike anchor the mapping from time to page x.
-  const anchors: { timeMs: number; xPt: number }[] = [];
-  for (const measure of measures) {
-    anchors.push({ timeMs: measure.startMs, xPt: measure.xPt });
-    for (const column of measure.columns) anchors.push({ timeMs: column.timeMs, xPt: column.xPt });
-  }
-  anchors.push({ timeMs: last.endMs, xPt: last.xPt + last.widthPt });
-  anchors.sort((a, b) => a.timeMs - b.timeMs);
+  const anchors = timeAnchorsFor(measures);
 
   const fromMs = first.startMs;
   const toMs = last.endMs;
@@ -676,6 +725,51 @@ function buildPedals(measures: readonly SheetMeasure[], spans: readonly PedalSpa
     });
   }
   return pedals;
+}
+
+/**
+ * The dynamics a system carries, clipped to the music it holds.
+ *
+ * A mark belongs under the note it applies to, so it is placed by the columns
+ * around it exactly as a pedal press is. A hairpin keeps clear of the marks at
+ * either end of it, since a wedge running into a letter reads as neither.
+ */
+function buildDynamics(
+  measures: readonly SheetMeasure[],
+  marks: readonly DynamicEvent[],
+  hairpins: readonly HairpinEvent[],
+): { dynamics: SheetDynamic[]; hairpins: SheetHairpin[] } {
+  const first = measures[0];
+  const last = measures[measures.length - 1];
+  if (!first || !last || (marks.length === 0 && hairpins.length === 0)) {
+    return { dynamics: [], hairpins: [] };
+  }
+  const anchors = timeAnchorsFor(measures);
+  const fromMs = first.startMs;
+  const toMs = last.endMs;
+
+  const dynamics: SheetDynamic[] = [];
+  for (const mark of marks) {
+    if (mark.atMs < fromMs || mark.atMs >= toMs) continue;
+    dynamics.push({ xPt: xAtTime(anchors, mark.atMs), mark: mark.mark });
+  }
+
+  const wedges: SheetHairpin[] = [];
+  for (const hairpin of hairpins) {
+    if (hairpin.toMs <= fromMs || hairpin.fromMs >= toMs) continue;
+    const continuesLeft = hairpin.fromMs < fromMs;
+    const continuesRight = hairpin.toMs > toMs;
+    // Where an end carries a mark of its own, start clear of it; where the
+    // wedge runs off the system there is nothing to avoid.
+    const lead = continuesLeft ? 0 : HAIRPIN_CLEARANCE_G * G;
+    const trail = continuesRight ? 0 : HAIRPIN_CLEARANCE_G * G;
+    const x1Pt = xAtTime(anchors, Math.max(hairpin.fromMs, fromMs)) + lead;
+    const x2Pt = xAtTime(anchors, Math.min(hairpin.toMs, toMs)) - trail;
+    // A wedge with no room left to open in says less than nothing.
+    if (x2Pt - x1Pt < 3 * G) continue;
+    wedges.push({ x1Pt, x2Pt, grow: hairpin.grow, continuesLeft, continuesRight });
+  }
+  return { dynamics, hairpins: wedges };
 }
 
 /** How far a tie stub reaches when the note it joins is on another system. */
@@ -759,86 +853,46 @@ function buildTies(
   return ties;
 }
 
-function beamable(chord: SheetChord): boolean {
-  return (
-    !chord.symbol.dotted && (chord.symbol.base === 'eighth' || chord.symbol.base === 'sixteenth')
-  );
-}
-
 interface BeamMember {
   column: SheetColumn;
   chord: SheetChord;
 }
 
-function chordsOn(column: SheetColumn, staff: StaffKind): SheetChord[] {
-  return staff === 'treble' ? column.treble : column.bass;
-}
-
 /**
- * Beam runs of equal undotted eighths/sixteenths that share a beat group on
- * one voice of one staff. Compound meters (6/8, 9/8, …) group per dotted
- * beat-unit trio. Beams never cross voices, so a run under a held note stays
- * one beam. Beam y values are staff-relative here; `paginate` shifts them to
- * page space.
+ * Give this measure's beams their geometry.
+ *
+ * Which chords beam together, and which way their stems point, was settled by
+ * `layoutScore` — both views draw the same grouping, so only the points are
+ * decided here. `SheetChord.beamId` arrives holding the layout's own index and
+ * leaves holding this measure's, which is what the renderer looks up. A beam
+ * never crosses a bar line, so every member of a run is in one measure.
+ *
+ * Beam y values are staff-relative here; `paginate` shifts them to page space.
  */
-function buildBeams(
-  measure: SheetMeasure,
-  measureStartMs: number,
-  options: SheetLayoutOptions,
-): void {
-  const { timeSignature } = options;
-  const beatMs = beatDurationMs(measure.bpm, timeSignature);
-  const compound = timeSignature.numerator % 3 === 0 && timeSignature.denominator >= 8;
-  const groupMs = compound ? beatMs * 3 : beatMs;
-
-  for (const staff of ['treble', 'bass'] as const) {
-    const voices = new Set<number>();
-    for (const column of measure.columns) {
-      for (const chord of chordsOn(column, staff)) voices.add(chord.voice);
+function buildBeams(measure: SheetMeasure): void {
+  const runs = new Map<number, BeamMember[]>();
+  for (const column of measure.columns) {
+    for (const chord of [...column.treble, ...column.bass]) {
+      if (chord.beamId === null) continue;
+      const run = runs.get(chord.beamId);
+      if (run) run.push({ column, chord });
+      else runs.set(chord.beamId, [{ column, chord }]);
     }
-
-    for (const voice of voices) {
-      let run: BeamMember[] = [];
-      let runBase: DurationSymbol['base'] | null = null;
-      let runGroup = -1;
-
-      const flush = (): void => {
-        if (run.length >= 2) emitBeam(measure, staff, run);
-        run = [];
-        runBase = null;
-      };
-
-      for (const column of measure.columns) {
-        // A rest ends the run: a beam carries over silence in no engraving.
-        if ((staff === 'treble' ? column.trebleRest : column.bassRest) !== null) {
-          flush();
-          continue;
-        }
-        const chord = chordsOn(column, staff).find((candidate) => candidate.voice === voice);
-        if (!chord) continue;
-        if (!beamable(chord)) {
-          flush();
-          continue;
-        }
-        const group = Math.floor((column.timeMs - measureStartMs) / groupMs + 1e-6);
-        if (run.length > 0 && (chord.symbol.base !== runBase || group !== runGroup)) flush();
-        run.push({ column, chord });
-        runBase = chord.symbol.base;
-        runGroup = group;
-      }
-      flush();
+  }
+  for (const run of runs.values()) {
+    // A run the sheet only received part of has nothing to span; it flags.
+    if (run.length < 2) {
+      for (const member of run) member.chord.beamId = null;
+      continue;
     }
+    emitBeam(measure, run);
   }
 }
 
-function emitBeam(measure: SheetMeasure, staff: StaffKind, run: BeamMember[]): void {
-  // Where the run meets a second voice, that column has already stemmed its
-  // voices apart to keep both readable, and its direction binds the whole run.
-  // The majority vote only settles runs that are free to point either way.
-  const polyphonic = run.find((member) => chordsOn(member.column, staff).length > 1);
-  const downVotes = run.filter((member) => member.chord.stemDown).length;
-  const stemDown = polyphonic ? polyphonic.chord.stemDown : downVotes * 2 >= run.length;
-  const dir = stemDown ? 1 : -1;
+function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
+  const first = run[0] as BeamMember;
+  const staff = first.chord.staff;
+  const stemDown = first.chord.stemDown;
 
   const xs = run.map((member) => stemXPt(member.column.xPt, stemDown));
   const anchors = run.map((member) => {
@@ -847,42 +901,19 @@ function emitBeam(measure: SheetMeasure, staff: StaffKind, run: BeamMember[]): v
       : member.chord.notes[member.chord.notes.length - 1]!;
     return staffYRel(note.step);
   });
-  const tipFirst = anchors[0]! + dir * STEM_LENGTH_G * G;
-  const tipLast = anchors[anchors.length - 1]! + dir * STEM_LENGTH_G * G;
-  const slant = clamp(tipLast - tipFirst, -BEAM_SLANT_MAX_G * G, BEAM_SLANT_MAX_G * G);
-  const x1 = xs[0]!;
-  const x2 = xs[xs.length - 1]!;
-
-  // Shift the whole beam outward until every member keeps a minimum stem.
-  let shift = 0;
-  for (let i = 0; i < run.length; i += 1) {
-    const lineY = tipFirst + ((xs[i]! - x1) / (x2 - x1)) * slant;
-    const required = anchors[i]! + dir * MIN_BEAM_STEM_G * G;
-    const violation = dir === 1 ? required - lineY : lineY - required;
-    if (violation > shift) shift = violation;
-  }
-  const y1 = tipFirst + dir * shift;
+  const span = beamSpanFor(xs, anchors, stemDown, G);
 
   const beamId = measure.beams.length;
   measure.beams.push({
     staff,
     stemDown,
     beamCount: run[0]!.chord.symbol.base === 'sixteenth' ? 2 : 1,
-    x1Pt: x1,
-    y1Pt: y1,
-    x2Pt: x2,
-    y2Pt: y1 + slant,
+    x1Pt: xs[0]!,
+    y1Pt: span.y1,
+    x2Pt: xs[xs.length - 1]!,
+    y2Pt: span.y2,
   });
-  for (const member of run) {
-    if (member.chord.stemDown !== stemDown) {
-      // Beaming is the last word on stem direction, and a chord's seconds are
-      // placed relative to its stem — so a chord the run turns around has to
-      // place them again, or its heads sit on the wrong side of the new stem.
-      member.chord.stemDown = stemDown;
-      displaceSeconds(member.chord);
-    }
-    member.chord.beamId = beamId;
-  }
+  for (const member of run) member.chord.beamId = beamId;
 }
 
 /** Space needed above the treble staff and below the bass staff (pt). */
@@ -927,7 +958,10 @@ function paginate(
   metrics: SheetPageMetrics,
   options: SheetLayoutOptions,
 ): SheetPage[] {
-  const corePt = metrics.staffHeightPt * 2 + metrics.interStaffGapPt;
+  // The inter-staff gap is per system now: one carrying dynamics opens up to
+  // make room for them, and one without keeps the layout it always had.
+  const interStaffFor = (system: WorkSystem): number =>
+    metrics.interStaffGapPt + system.interStaffExtraPt;
   const contentBottom = metrics.pageHeightPt - metrics.marginBottomPt - metrics.footerHeightPt;
   const pages: SheetPage[] = [];
   let currentSystems: SheetSystem[] = [];
@@ -957,11 +991,12 @@ function paginate(
 
   for (let s = 0; s < systems.length; s += 1) {
     const system = systems[s]!;
-    const totalH = system.abovePt + corePt + system.belowPt;
+    const interStaffPt = interStaffFor(system);
+    const totalH = system.abovePt + metrics.staffHeightPt * 2 + interStaffPt + system.belowPt;
     if (currentSystems.length > 0 && cursorY + totalH > contentBottom) finalizePage();
 
     const trebleTopPt = cursorY + system.abovePt;
-    const bassTopPt = trebleTopPt + metrics.staffHeightPt + metrics.interStaffGapPt;
+    const bassTopPt = trebleTopPt + metrics.staffHeightPt + interStaffPt;
     for (const measure of system.measures) {
       for (const beam of measure.beams) {
         const staffTop = beam.staff === 'treble' ? trebleTopPt : bassTopPt;
@@ -985,6 +1020,11 @@ function paginate(
       pedals: system.pedals,
       // The row sits under everything the music itself needed.
       pedalRowPt: bassTopPt + metrics.staffHeightPt + system.belowPt - PEDAL_ROW_PT * 0.45,
+      dynamics: system.dynamics,
+      hairpins: system.hairpins,
+      // Marks sit low in the gap, nearer the bass staff, which is where a
+      // pianist looks for them and where the treble's own stems are not.
+      dynamicsRowPt: bassTopPt - interStaffPt * 0.3,
       clefs: system.clefs,
       firstMeasureNumber: system.measures[0]!.index + 1,
       showTimeSignature: s === 0,

@@ -1,9 +1,17 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import { drawAccidentalGlyph } from './accidentalGlyph';
+import {
+  beamSpanFor,
+  beamYAt,
+  BEAM_SPACING_G,
+  BEAM_THICKNESS_G,
+  STEM_LENGTH_G,
+} from './beamGeometry';
 import { normalizeFifths, signatureAccidental, signatureSteps } from './keySignature';
 import {
   firstChordIndexAt,
   measureIndexAt,
+  type BeamGroup,
   type ChordGroup,
   type LaidOutNote,
   type ScoreLayout,
@@ -44,6 +52,25 @@ export function gutterWidthFor(fifths: number): number {
 /** Horizontal pitch of stacked accidental columns, left of the chord. */
 const ACCIDENTAL_COLUMN_PX = GAP * 1.4;
 
+// Beam proportions come from `beamGeometry`, so a run groups and slants the
+// same way on screen as it does on paper — only the unit differs.
+const STEM_LENGTH_PX = GAP * STEM_LENGTH_G;
+const BEAM_THICKNESS_PX = GAP * BEAM_THICKNESS_G;
+const BEAM_SPACING_PX = GAP * BEAM_SPACING_G;
+/** Stem x offset from the head centre, inset from the head edge. */
+const STEM_INSET_PX = GAP * 0.64 - 0.8;
+
+/** One beam's line across the view, in pixels; keyed by `ChordGroup.beamId`. */
+interface BeamLine {
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  stemDown: boolean;
+  beamCount: 1 | 2;
+}
+type BeamLines = Map<number, BeamLine>;
+
 /** What a bar of silence takes, whatever the meter is. */
 const WHOLE_REST: DurationSymbol = { base: 'whole', dotted: false };
 const WHOLE_REST_STEP = restStep(WHOLE_REST);
@@ -52,6 +79,10 @@ const WHOLE_REST_STEP = restStep(WHOLE_REST);
 const HEAD_CLEARANCE = GAP * 0.5 + 6;
 /** Least room the pedal bracket keeps under the bass staff. */
 const PEDAL_ROW_PX = 15;
+/** Extra room between the staves when the take carries dynamics. */
+const DYNAMICS_ROW_PX = 14;
+/** Half-height of a hairpin's open end. */
+const HAIRPIN_MOUTH_PX = GAP * 0.55;
 /** Bottom margin below the bass staff at the default geometry. */
 const BOTTOM_MARGIN = SCORE_MIN_HEIGHT - BASS_TOP - STAFF_H;
 
@@ -62,6 +93,8 @@ export interface ScoreGeometry {
   minHeight: number;
   /** y of the pedal row, under everything the bass staff reaches down to. */
   pedalRow: number;
+  /** Baseline of the dynamics row, in the gap between the staves. */
+  dynamicsRow: number;
 }
 
 /**
@@ -71,7 +104,10 @@ export interface ScoreGeometry {
  * notes, so heads and their ledger lines set the required clearance. Takes
  * in the normal range get exactly the default constants.
  */
-export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeometry {
+export function computeScoreGeometry(
+  chords: readonly ChordGroup[],
+  hasDynamics = false,
+): ScoreGeometry {
   let maxTrebleStep = Number.NEGATIVE_INFINITY;
   let minBassStep = Number.POSITIVE_INFINITY;
   for (const chord of chords) {
@@ -85,7 +121,10 @@ export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeomet
       ? 0
       : (maxTrebleStep * GAP) / 2 - STAFF_H + HEAD_CLEARANCE;
   const trebleTop = Math.max(TREBLE_TOP, Math.ceil(topExtent));
-  const bassTop = trebleTop + STAFF_H + STAFF_SPACING;
+  // Nothing else reserves the gap between the staves, so a take with dynamics
+  // opens it up for them; one without keeps the geometry it always had.
+  const staffSpacing = STAFF_SPACING + (hasDynamics ? DYNAMICS_ROW_PX : 0);
+  const bassTop = trebleTop + STAFF_H + staffSpacing;
   const bottomExtent =
     minBassStep === Number.POSITIVE_INFINITY
       ? BOTTOM_MARGIN
@@ -98,6 +137,9 @@ export function computeScoreGeometry(chords: readonly ChordGroup[]): ScoreGeomet
     // so it clears the low notes hanging under it instead of running through
     // them. On a take that stays in range that is the default bottom margin.
     pedalRow: bassTop + STAFF_H + Math.max(PEDAL_ROW_PX, bottomExtent - PEDAL_ROW_PX * 0.6),
+    // Marks sit low in the gap, nearer the bass staff — where a pianist looks
+    // for them, and where the treble's own stems are not.
+    dynamicsRow: bassTop - staffSpacing * 0.3,
   };
 }
 
@@ -161,6 +203,8 @@ export interface ScoreView {
   bassTop: number;
   /** y of the pedal row; see `ScoreGeometry.pedalRow`. */
   pedalRow: number;
+  /** y of the dynamics row; see `ScoreGeometry.dynamicsRow`. */
+  dynamicsRow: number;
   /** Width of the fixed prefix; `gutterWidthFor` the take's key signature. */
   gutterPx: number;
 }
@@ -211,8 +255,13 @@ export function drawScore(
   drawMeasures(ctx, view, input.layout, palette);
   drawRests(ctx, view, input.layout, palette);
   drawPedals(ctx, view, input.layout, palette);
+  drawDynamics(ctx, view, input.layout, palette);
   drawTies(ctx, view, input.layout, palette);
-  drawChords(ctx, view, input, palette);
+  // Beams before the chords that hang from them: a stem has to know where its
+  // beam ended up before it can reach for it.
+  const beamLines = computeBeamLines(view, input.layout);
+  drawBeams(ctx, beamLines, palette);
+  drawChords(ctx, view, input, palette, beamLines);
   drawOpenNotes(ctx, view, input.openNotes, input.recording, palette);
   drawGhosts(ctx, view, input, palette);
   // Clefs go on last: this view is time-proportional, so nothing can reserve
@@ -394,6 +443,59 @@ function drawPedals(
 }
 
 /**
+ * Dynamic marks and hairpins, between the staves.
+ *
+ * The velocity behind them has been recorded all along; this is the first time
+ * either view has said anything about it. Both draw from the same reading, so
+ * the screen and the page agree about where the music swells.
+ */
+function drawDynamics(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  layout: ScoreLayout,
+  palette: ScorePalette,
+): void {
+  if (layout.dynamics.length === 0 && layout.hairpins.length === 0) return;
+  const fromMs = view.scrollMs;
+  const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs;
+  const rowY = view.dynamicsRow;
+
+  ctx.strokeStyle = palette.noteDim;
+  ctx.lineWidth = 1.2;
+  for (const hairpin of layout.hairpins) {
+    if (hairpin.toMs <= fromMs) continue;
+    if (hairpin.fromMs >= toMs) break; // sorted by start
+    const openLeft = hairpin.fromMs < fromMs;
+    const openRight = hairpin.toMs > toMs;
+    const x1 = openLeft ? view.gutterPx : xForMs(view, hairpin.fromMs);
+    const x2 = openRight ? view.widthPx : xForMs(view, hairpin.toMs);
+    if (x2 - x1 < GAP * 2) continue;
+    const midY = rowY - GAP * 0.8;
+    const closed = hairpin.grow ? x1 : x2;
+    const open = hairpin.grow ? x2 : x1;
+    ctx.beginPath();
+    ctx.moveTo(open, midY - HAIRPIN_MOUTH_PX);
+    ctx.lineTo(closed, midY);
+    ctx.lineTo(open, midY + HAIRPIN_MOUTH_PX);
+    ctx.stroke();
+  }
+
+  ctx.fillStyle = palette.noteDim;
+  ctx.font = `bold italic ${GAP * 2.1}px Georgia, "Times New Roman", Times, serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  for (const mark of layout.dynamics) {
+    if (mark.atMs < fromMs) continue;
+    if (mark.atMs > toMs) break; // sorted by time
+    // Marks are centred, so one at the very start of the piece sits half under
+    // the gutter — which is painted last, and would swallow it. Nudge it clear.
+    const x = Math.max(view.gutterPx + GAP * 1.2, xForMs(view, mark.atMs));
+    ctx.fillText(mark.mark, x, rowY);
+  }
+  ctx.textAlign = 'left';
+}
+
+/**
  * Ties, under the heads they join. This view is time-proportional and scrolls
  * freely, so a tie is drawn wherever both of its ends happen to be: the pieces
  * of one note are the same staff and the same line, and the layout emits them
@@ -453,11 +555,75 @@ function drawTieArc(
   ctx.fill();
 }
 
+/** Where a chord's stem stands, and the head the beam springs from. */
+function stemXFor(view: ScoreView, chord: ChordGroup): number {
+  return xForMs(view, chord.displayStartMs) + (chord.stemDown ? -1 : 1) * STEM_INSET_PX;
+}
+
+function beamAnchorY(view: ScoreView, chord: ChordGroup): number {
+  const note = chord.stemDown ? chord.notes[0]! : chord.notes[chord.notes.length - 1]!;
+  return yForStep(view, chord.staff, note.step);
+}
+
+/**
+ * Place each beam across the view.
+ *
+ * Which chords share a beam, and which way they stem, came from the layout —
+ * this is only the line they hang on. The run tilts with its outer notes,
+ * clamped so it never reads as a ramp, and then shifts bodily outward until
+ * the shortest stem in it is still worth calling a stem.
+ */
+function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
+  const lines: BeamLines = new Map();
+  if (layout.beams.length === 0) return lines;
+  const fromMs = view.scrollMs - 2000;
+  const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
+
+  for (let id = 0; id < layout.beams.length; id += 1) {
+    const beam = layout.beams[id] as BeamGroup;
+    const first = beam.members[0] as ChordGroup;
+    const last = beam.members[beam.members.length - 1] as ChordGroup;
+    if (last.displayStartMs < fromMs || first.displayStartMs > toMs) continue;
+
+    const xs = beam.members.map((chord) => stemXFor(view, chord));
+    const anchors = beam.members.map((chord) => beamAnchorY(view, chord));
+    const span = beamSpanFor(xs, anchors, beam.stemDown, GAP);
+    lines.set(id, {
+      x1: xs[0] as number,
+      y1: span.y1,
+      x2: xs[xs.length - 1] as number,
+      y2: span.y2,
+      stemDown: beam.stemDown,
+      beamCount: beam.beamCount,
+    });
+  }
+  return lines;
+}
+
+function drawBeams(ctx: CanvasRenderingContext2D, lines: BeamLines, palette: ScorePalette): void {
+  ctx.fillStyle = palette.note;
+  for (const line of lines.values()) {
+    const toward = line.stemDown ? -1 : 1; // further beams stack toward the heads
+    for (let i = 0; i < line.beamCount; i += 1) {
+      const dy = i * toward * BEAM_SPACING_PX;
+      const half = BEAM_THICKNESS_PX / 2;
+      ctx.beginPath();
+      ctx.moveTo(line.x1, line.y1 + dy - half);
+      ctx.lineTo(line.x2, line.y2 + dy - half);
+      ctx.lineTo(line.x2, line.y2 + dy + half);
+      ctx.lineTo(line.x1, line.y1 + dy + half);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
 function drawChords(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
   input: ScoreRenderInput,
   palette: ScorePalette,
+  beamLines: BeamLines,
 ): void {
   const { layout, playheadMs } = input;
   const fromMs = view.scrollMs - 2000;
@@ -467,7 +633,7 @@ function drawChords(
   for (let i = start; i < layout.chords.length; i += 1) {
     const chord = layout.chords[i] as ChordGroup;
     if (chord.displayStartMs > toMs) break;
-    drawChord(ctx, view, chord, playheadMs, palette);
+    drawChord(ctx, view, chord, playheadMs, palette, beamLines);
   }
 }
 
@@ -477,6 +643,7 @@ function drawChord(
   chord: ChordGroup,
   playheadMs: number,
   palette: ScorePalette,
+  beamLines: BeamLines,
 ): void {
   const x = xForMs(view, chord.displayStartMs);
   if (x < view.gutterPx - 40) return;
@@ -551,25 +718,25 @@ function drawChord(
     }
   }
 
-  // Stem and flags (whole notes have neither).
+  // Stem and flags (whole notes have neither). A beamed chord stems to its
+  // beam and takes no flag — the beam is the flag, shared.
   if (chord.symbol.base !== 'whole') {
-    const stemLength = GAP * 3.4;
+    const beam = chord.beamId === null ? undefined : beamLines.get(chord.beamId);
+    const sx = chord.stemDown ? x - rx + 0.8 : x + rx - 0.8;
+    const headEnd = chord.stemDown ? minY : maxY;
+    const tipY = beam
+      ? beamYAt(beam, beam.x1, beam.x2, sx)
+      : chord.stemDown
+        ? maxY + STEM_LENGTH_PX
+        : minY - STEM_LENGTH_PX;
+
     ctx.strokeStyle = palette.note;
     ctx.lineWidth = 1.6;
     ctx.beginPath();
-    if (chord.stemDown) {
-      const sx = x - rx + 0.8;
-      ctx.moveTo(sx, minY);
-      ctx.lineTo(sx, maxY + stemLength);
-      ctx.stroke();
-      drawFlags(ctx, chord, sx, maxY + stemLength, 1, palette);
-    } else {
-      const sx = x + rx - 0.8;
-      ctx.moveTo(sx, maxY);
-      ctx.lineTo(sx, minY - stemLength);
-      ctx.stroke();
-      drawFlags(ctx, chord, sx, minY - stemLength, -1, palette);
-    }
+    ctx.moveTo(sx, headEnd);
+    ctx.lineTo(sx, tipY);
+    ctx.stroke();
+    if (!beam) drawFlags(ctx, chord, sx, tipY, chord.stemDown ? 1 : -1, palette);
   }
 }
 

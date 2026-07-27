@@ -1,18 +1,18 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import {
   ACCIDENTAL_COLUMN_W_G,
-  BEAM_SPACING_G,
-  BEAM_THICKNESS_G,
+  HAIRPIN_MOUTH_G,
   HEAD_RX_G,
   KEY_ACCIDENTAL_W_G,
   keySignatureWidthPt,
   PEDAL_HOOK_G,
   SHEET_GAP_PT,
-  STEM_LENGTH_G,
   staffYRel,
   stemXPt,
   type SheetBeam,
   type SheetChord,
+  type SheetDynamic,
+  type SheetHairpin,
   type SheetMeasure,
   type SheetNote,
   type SheetPage,
@@ -22,6 +22,7 @@ import {
   type SheetTie,
 } from './sheetLayout';
 import { drawAccidentalGlyph } from './accidentalGlyph';
+import { BEAM_SPACING_G, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
 import {
   normalizeFifths,
   signatureAccidental,
@@ -199,6 +200,46 @@ function drawSystem(ctx: CanvasRenderingContext2D, system: SheetSystem, page: Sh
   }
   for (const tie of system.ties) drawTie(ctx, tie);
   for (const pedal of system.pedals) drawPedal(ctx, pedal, system.pedalRowPt);
+  for (const hairpin of system.hairpins) drawHairpin(ctx, hairpin, system.dynamicsRowPt);
+  for (const dynamic of system.dynamics) drawDynamic(ctx, dynamic, system.dynamicsRowPt);
+}
+
+/**
+ * A dynamic mark, in the bold italic serif that editions have set them in
+ * since long before music fonts. These are letters, so the renderer's rule
+ * about drawing its glyphs rather than typesetting them does not apply —
+ * `p` and `f` are text, and always were.
+ */
+function drawDynamic(ctx: CanvasRenderingContext2D, dynamic: SheetDynamic, rowY: number): void {
+  ctx.font = `bold italic ${2.4 * G}px ${SERIF}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(dynamic.mark, dynamic.xPt, rowY);
+  ctx.textAlign = 'left';
+}
+
+/**
+ * A hairpin: two lines meeting at a point and opening toward the loud end. An
+ * end that runs off the system stays open at full mouth, which says the swell
+ * carries on rather than arriving here.
+ */
+function drawHairpin(ctx: CanvasRenderingContext2D, hairpin: SheetHairpin, rowY: number): void {
+  const mouth = HAIRPIN_MOUTH_G * G;
+  // The wedge sits on the marks' own line, lifted to their middle.
+  const midY = rowY - 0.8 * G;
+  const closed = hairpin.grow ? hairpin.x1Pt : hairpin.x2Pt;
+  const open = hairpin.grow ? hairpin.x2Pt : hairpin.x1Pt;
+  // A tip that is really a continuation is cut off rather than pointed.
+  const tipCut = (hairpin.grow ? hairpin.continuesLeft : hairpin.continuesRight) ? mouth * 0.5 : 0;
+
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(open, midY - mouth);
+  ctx.lineTo(closed, midY - tipCut);
+  if (tipCut > 0) ctx.lineTo(closed, midY + tipCut);
+  else ctx.moveTo(closed, midY);
+  ctx.lineTo(open, midY + mouth);
+  ctx.stroke();
 }
 
 /**

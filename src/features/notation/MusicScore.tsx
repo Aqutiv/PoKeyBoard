@@ -91,7 +91,10 @@ export function MusicScore() {
       }),
     [notes, tempo.bpm, tempo.timeSignature, tempo.changes, quantization, keySignature, pedalEvents],
   );
-  const geometry = useMemo(() => computeScoreGeometry(layout.chords), [layout]);
+  const geometry = useMemo(
+    () => computeScoreGeometry(layout.chords, layout.dynamics.length + layout.hairpins.length > 0),
+    [layout],
+  );
 
   // Everything the rAF loop reads lives in refs, written from effects only.
   const sizeRef = useRef({ width: 0, height: 0, dpr: 1 });
@@ -236,6 +239,7 @@ export function MusicScore() {
         trebleTop: box.geometry.trebleTop,
         bassTop: box.geometry.bassTop,
         pedalRow: box.geometry.pedalRow,
+        dynamicsRow: box.geometry.dynamicsRow,
         gutterPx,
       };
       drawScore(
