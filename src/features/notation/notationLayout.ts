@@ -11,6 +11,8 @@ import {
   beatsForSymbol,
   quantizeGridBeats,
   symbolForBeats,
+  TRIPLET,
+  tupletSymbolForBeats,
   type DurationSymbol,
 } from './quantization';
 import { readDynamics, type DynamicEvent, type HairpinEvent } from './dynamics';
@@ -19,6 +21,7 @@ import {
   barUnits,
   restStep,
   restsForGap,
+  SMALLEST_UNITS,
   symbolForUnits,
   unitsPerBeat,
   valuesForSpan,
@@ -29,9 +32,11 @@ import {
   ledgerLineSteps,
   midiToStaffPosition,
   stemGoesDown,
+  TREBLE_SPLIT_MIDI,
   type ClefKind,
   type StaffKind,
 } from './staffMapping';
+import { fitsDivision, MIN_ONSETS_TO_DECIDE, ternaryDivisionOf } from './tuplets';
 
 /**
  * Whether a notehead is drawn on its chord's column (0) or one head-width to
@@ -107,6 +112,8 @@ export interface BeamGroup {
   /** 1 for eighths, 2 for sixteenths. */
   beamCount: 1 | 2;
   members: ChordGroup[];
+  /** How many notes the run squeezes in, where it is a tuplet — the numeral. */
+  tupletCount: number | null;
 }
 
 /**
@@ -135,6 +142,40 @@ export interface MeasureInfo {
   clefs: Record<StaffKind, ClefKind>;
 }
 
+/** Beats within this of a whole one are on it; see the note in `layoutScore`. */
+const BEAT_EPSILON = 1e-3;
+
+/**
+ * The value that states a length exactly, plain or tupleted, or null when none
+ * does. A plain value wins wherever there is one: three triplet eighths are
+ * exactly a quarter, and a note that merely begins on a triplet beat is a half
+ * note rather than a "triplet half".
+ */
+function exactValueForUnits(units: number): DurationSymbol | null {
+  const plain = symbolForUnits(units);
+  if (plain) return plain;
+  const asPlain = (units * TRIPLET.actual) / TRIPLET.normal;
+  if (!Number.isInteger(asPlain)) return null;
+  const base = symbolForUnits(asPlain);
+  return base ? { ...base, tuplet: TRIPLET } : null;
+}
+
+/**
+ * A stretch drawn an octave in, under an `8va` or `8vb` line.
+ *
+ * The notes inside it are written where they can be read and the line says to
+ * play them an octave away, which is the whole purpose: a piano reaches far
+ * enough past both staves that the alternative is a ladder of ledger lines
+ * nobody can count at speed.
+ */
+export interface OctaveSpan {
+  staff: StaffKind;
+  fromMs: number;
+  toMs: number;
+  /** True for 8va above the treble, false for 8vb below the bass. */
+  up: boolean;
+}
+
 /** A stretch the sustain pedal is held down for, in take milliseconds. */
 export interface PedalSpan {
   fromMs: number;
@@ -153,6 +194,8 @@ export interface ScoreLayout {
   hairpins: HairpinEvent[];
   /** Sorted, non-overlapping; see `PedalSpan`. */
   pedals: PedalSpan[];
+  /** Passages drawn an octave in; see `OctaveSpan`. */
+  octaves: OctaveSpan[];
   measures: MeasureInfo[];
   /** The FIRST measure's length; later measures can differ (tempo changes). */
   barMs: number;
@@ -400,9 +443,18 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
 
   const out: LaidOutNote[] = [];
   for (const note of laidOut) {
+    // A tuplet note is written in units the binary values cannot express — a
+    // triplet eighth is eight ninety-sixths and no standard value is — so
+    // re-deriving it here would round it away. It also lives inside one beat
+    // by construction, and a beat never crosses a bar line, so there is
+    // nothing here for it to be split at.
+    if (note.symbol.tuplet) {
+      out.push(note);
+      continue;
+    }
     const from = unitsAt(note.displayStartMs);
     const heldBeats = Math.max(1, Math.round(beatsHeld(note) / gridBeats)) * gridBeats;
-    const to = from + Math.max(2, Math.round(heldBeats * perBeat));
+    const to = from + Math.max(SMALLEST_UNITS, Math.round(heldBeats * perBeat));
 
     // Bar lines first, then the value or values that fill each piece between
     // them — one where a single symbol is exactly that long, which is the
@@ -516,11 +568,19 @@ function buildBeamGroups(
             const downVotes = run.filter((chord) => chord.stemDown).length;
             const stemDown = polyphonic ? polyphonic.stemDown : downVotes * 2 >= run.length;
             const id = beams.length;
+            // A run of tuplet values carries its numeral — but only where the
+            // run is whole tuplets. A figure split between the hands leaves a
+            // fragment on each staff, and "2" over two thirds of a triplet does
+            // not mean a shorter triplet, it means a duplet: a different rhythm
+            // altogether. Better to say nothing and let the beam speak.
+            const ratio = (run[0] as ChordGroup).symbol.tuplet;
+            const tupletCount = ratio && run.length % ratio.actual === 0 ? run.length : null;
             beams.push({
               staff,
               stemDown,
               beamCount: (run[0] as ChordGroup).symbol.base === 'sixteenth' ? 2 : 1,
               members: run,
+              tupletCount,
             });
             for (const chord of run) {
               chord.stemDown = stemDown;
@@ -542,7 +602,10 @@ function buildBeamGroups(
             flush();
             continue;
           }
-          const group = Math.floor((timeMs - measure.startMs) / groupMs + 1e-6);
+          // The same hair's-breadth tolerance the ternary reading needs: a beat
+          // is rarely a whole number of milliseconds, so a note written on one
+          // lands just before it and would otherwise beam with the group before.
+          const group = Math.floor((timeMs - measure.startMs) / groupMs + BEAT_EPSILON);
           if (run.length > 0 && (chord.symbol.base !== runBase || group !== runGroup)) flush();
           run.push(chord);
           runBase = chord.symbol.base;
@@ -647,6 +710,35 @@ function mergeSpans(spans: SoundingSpan[]): SoundingSpan[] {
   return merged;
 }
 
+/**
+ * Fill a silence that lies inside a beat played in three.
+ *
+ * The ordinary filler works from the binary values, and a triplet slot is not
+ * one of them — a triplet eighth is eight ninety-sixths and nothing standard
+ * is. Left to it, the rests come out a shade short and the bar stops adding
+ * up, which is the very thing rests were added to fix. So a ternary beat is
+ * filled a slot at a time, in the same value its notes are written in.
+ */
+function pushTupletRests(
+  out: LaidOutRest[],
+  staff: StaffKind,
+  fromUnits: number,
+  toUnits: number,
+  slotUnits: number,
+  denominator: number,
+  msAtUnits: (units: number) => number,
+): void {
+  const symbol = tupletSymbolForBeats(slotUnits / unitsPerBeat(denominator), denominator, TRIPLET);
+  for (let at = fromUnits; at + slotUnits <= toUnits + 1e-6; at += slotUnits) {
+    out.push({
+      staff,
+      displayStartMs: msAtUnits(at),
+      symbol,
+      step: restStep(symbol),
+    });
+  }
+}
+
 function pushRests(
   out: LaidOutRest[],
   staff: StaffKind,
@@ -682,6 +774,7 @@ function deriveRests(
   measures: readonly MeasureInfo[],
   timeSignature: TimeSignature,
   tempoMap: TempoMap,
+  divisionAt: (staff: StaffKind, measureIndex: number, beatInBar: number) => number | null,
 ): LaidOutRest[] {
   const { denominator } = timeSignature;
   const perBeat = unitsPerBeat(denominator);
@@ -712,6 +805,39 @@ function deriveRests(
     const msAtUnits = (units: number): number =>
       Math.round(tempoMap.msAtBeat(startBeat + units / perBeat));
 
+    /**
+     * Fill a gap, beat by beat, so a beat played in three is filled in threes
+     * and its neighbours are filled as they always were.
+     */
+    const fill = (staff: StaffKind, fromUnits: number, toUnits: number): void => {
+      const beatUnits = perBeat;
+      const firstBeat = Math.floor(fromUnits / beatUnits + 1e-9);
+      const lastBeat = Math.ceil(toUnits / beatUnits - 1e-9) - 1;
+      let anyTernary = false;
+      for (let b = firstBeat; b <= lastBeat && !anyTernary; b += 1) {
+        if (divisionAt(staff, measure.index, b) !== null) anyTernary = true;
+      }
+      // Where nothing in the gap is played in three, fill it whole. Splitting
+      // it beat by beat would forbid the rests that span several — a silent
+      // bar is one whole rest, not four quarters.
+      if (!anyTernary) {
+        pushRests(rests, staff, fromUnits, toUnits, timeSignature, msAtUnits);
+        return;
+      }
+      let at = fromUnits;
+      while (at < toUnits) {
+        const beatIndex = Math.floor(at / beatUnits + 1e-9);
+        const beatEnd = Math.min(toUnits, (beatIndex + 1) * beatUnits);
+        const division = divisionAt(staff, measure.index, beatIndex);
+        if (division !== null) {
+          pushTupletRests(rests, staff, at, beatEnd, beatUnits / division, denominator, msAtUnits);
+        } else {
+          pushRests(rests, staff, at, beatEnd, timeSignature, msAtUnits);
+        }
+        at = beatEnd;
+      }
+    };
+
     for (const staff of ['treble', 'bass'] as const) {
       const list = sounding[staff];
       // Only spans that finish before this bar can be retired; one that runs
@@ -730,15 +856,74 @@ function deriveRests(
         if (from >= bar) break;
         const to = unitsAt(span.toMs);
         if (to <= cursor) continue;
-        if (from > cursor) pushRests(rests, staff, cursor, from, timeSignature, msAtUnits);
+        if (from > cursor) fill(staff, cursor, from);
         cursor = to;
         if (cursor >= bar) break;
       }
-      if (cursor < bar) pushRests(rests, staff, cursor, bar, timeSignature, msAtUnits);
+      if (cursor < bar) fill(staff, cursor, bar);
     }
   }
   rests.sort((a, b) => a.displayStartMs - b.displayStartMs);
   return rests;
+}
+
+/** Steps beyond a staff at which its ledger lines stop being countable. */
+const OCTAVE_LINE_STEP_ABOVE = 12; // C6, three ledger lines over the treble
+const OCTAVE_LINE_STEP_BELOW = -4; // C2, three under the bass
+/** One octave, in diatonic steps. */
+const OCTAVE_STEPS = 7;
+/** Chords in a row that must all be out there before a line is worth drawing. */
+const MIN_OCTAVE_CHORDS = 4;
+
+/**
+ * Find the passages that sit so far outside a staff that they are better
+ * written an octave in, and move them there.
+ *
+ * Only whole chords qualify: half a chord shifted would be a different chord.
+ * And only runs of them, because a line drawn over one note costs a reader
+ * more attention than the ledger lines it saves.
+ */
+function deriveOctaveSpans(chords: readonly ChordGroup[]): OctaveSpan[] {
+  const spans: OctaveSpan[] = [];
+
+  for (const staff of ['treble', 'bass'] as const) {
+    const up = staff === 'treble';
+    const limit = up ? OCTAVE_LINE_STEP_ABOVE : OCTAVE_LINE_STEP_BELOW;
+    const beyond = (chord: ChordGroup): boolean =>
+      chord.notes.every((note) => (up ? note.step >= limit : note.step <= limit));
+
+    const onStaff = chords.filter((chord) => chord.staff === staff);
+    let run: ChordGroup[] = [];
+    const flush = (): void => {
+      if (run.length >= MIN_OCTAVE_CHORDS) {
+        const shift = up ? -OCTAVE_STEPS : OCTAVE_STEPS;
+        for (const chord of run) {
+          for (const note of chord.notes) {
+            note.step += shift;
+            note.ledger = ledgerLineSteps(note.step);
+          }
+        }
+        spans.push({
+          staff,
+          fromMs: (run[0] as ChordGroup).displayStartMs,
+          toMs: (run[run.length - 1] as ChordGroup).displayStartMs,
+          up,
+        });
+      }
+      run = [];
+    };
+    for (const chord of onStaff) {
+      if (beyond(chord)) run.push(chord);
+      else flush();
+    }
+    flush();
+  }
+  // In time order, not staff order. The live score walks these and stops at the
+  // first one past the view, so a late treble line ahead of an early bass one
+  // would hide the bass line while its notes stayed shifted — the wrong pitch
+  // on screen with nothing to explain it.
+  spans.sort((a, b) => a.fromMs - b.fromMs);
+  return spans;
 }
 
 export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
@@ -755,13 +940,103 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   // tempo would only line up when the change happens to fall on one of its
   // multiples, and would otherwise drag a downbeat off its own bar line.
   const gridBeats = quantizeGridBeats(options.quantization, options.timeSignature.denominator);
-  const snapToGrid = (startMs: number): number => {
+  const { denominator } = options.timeSignature;
+
+  /**
+   * Which beats were played in three, by staff.
+   *
+   * Read before anything is placed, because it decides both where a note is
+   * drawn and what value it is drawn as. Per staff rather than per bar: a piano
+   * piece routinely runs triplets in one hand over straight notes in the other,
+   * which is the whole texture of the Moonlight Sonata.
+   */
+  const ternaryBeats = new Map<string, number>();
+  {
+    /**
+     * How close to a bar or beat line counts as being on it.
+     *
+     * Note times are whole milliseconds but a beat rarely is — at 54bpm in 2/2
+     * it is 2222.2 of them — so a note written exactly on the beat lands a
+     * hair *before* it. Floored without this, it joins the beat before and
+     * takes an offset of almost 1, which reads as a division the beat does not
+     * have and can talk a genuinely ternary beat out of it.
+     */
+    const offsetsPerBeat = new Map<string, number[]>();
+    /** The same offsets with the hands pooled, for beats neither can read alone. */
+    const offsetsPerBeatBothHands = new Map<number, number[]>();
+    for (const note of notes) {
+      const staff = note.staff ?? (note.midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
+      const beat = tempoMap.beatAtMs(note.startMs);
+      const whole = Math.floor(beat + BEAT_EPSILON);
+      const key = `${staff}|${whole}`;
+      const offsets = offsetsPerBeat.get(key);
+      const offset = Math.max(0, beat - whole);
+      if (offsets) {
+        if (!offsets.some((seen) => Math.abs(seen - offset) < 1e-6)) offsets.push(offset);
+      } else {
+        offsetsPerBeat.set(key, [offset]);
+      }
+      const pooled = offsetsPerBeatBothHands.get(whole);
+      if (pooled) {
+        if (!pooled.some((seen) => Math.abs(seen - offset) < 1e-6)) pooled.push(offset);
+      } else {
+        offsetsPerBeatBothHands.set(whole, [offset]);
+      }
+    }
+    for (const [key, offsets] of offsetsPerBeat) {
+      const division = ternaryDivisionOf(offsets);
+      if (division !== null) ternaryBeats.set(key, division);
+    }
+    // A hand with too little in a beat to say anything takes the other hand's
+    // answer. This is not a guess: an arpeggio that crosses the middle of the
+    // keyboard is split between the staves, leaving one or two of its notes
+    // alone on the far side — too few to decide by themselves, and belonging
+    // to the very figure the other staff has already read as triplets. Both
+    // hands keeping their own decided reading is what preserves a genuine
+    // three-against-two, where each has enough notes to speak for itself.
+    for (const [key, offsets] of offsetsPerBeat) {
+      if (ternaryBeats.has(key)) continue;
+      if (offsets.length >= MIN_ONSETS_TO_DECIDE) continue; // it spoke, and said no
+      const [staff, beat] = key.split('|');
+      const other = staff === 'treble' ? 'bass' : 'treble';
+      // The other hand's answer where it has one; otherwise the two hands
+      // pooled, which is the only way to read a figure so evenly divided
+      // between them that neither holds enough of it to tell.
+      const neighbour = ternaryBeats.get(`${other}|${beat}`);
+      const division =
+        neighbour ?? ternaryDivisionOf(offsetsPerBeatBothHands.get(Number(beat)) ?? []);
+      if (division === null || division === undefined) continue;
+      // Only if this hand's own notes actually sit on that division. Too few
+      // onsets to claim a division is still plenty to rule one out, and three
+      // against two is a texture, not a mistake: a hand playing two straight
+      // eighths under the other's triplets must be left playing them.
+      if (!fitsDivision(offsets, division)) continue;
+      ternaryBeats.set(key, division);
+    }
+  }
+
+  /** The ternary division in force where a note falls, if any. */
+  const divisionFor = (note: NoteEvent): number | null => {
+    const staff = note.staff ?? (note.midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
+    const whole = Math.floor(tempoMap.beatAtMs(note.startMs) + BEAT_EPSILON);
+    return ternaryBeats.get(`${staff}|${whole}`) ?? null;
+  };
+
+  const snapToGrid = (startMs: number, division: number | null): number => {
+    // A beat played in three is snapped to its own thirds. The binary grid has
+    // no position to offer a triplet, so rounding one onto it is what turned
+    // them into sixteenths in the first place.
+    if (division !== null) {
+      const beat = tempoMap.beatAtMs(startMs);
+      const whole = Math.floor(beat + BEAT_EPSILON);
+      const slot = Math.round(Math.max(0, beat - whole) * division) / division;
+      return Math.round(tempoMap.msAtBeat(whole + slot));
+    }
     if (gridBeats === null) return startMs;
     const beat = Math.round(tempoMap.beatAtMs(startMs) / gridBeats) * gridBeats;
     return Math.round(tempoMap.msAtBeat(beat));
   };
 
-  const { denominator } = options.timeSignature;
   /** Beats between a note's endpoints, tempo map and all. */
   const beatsHeld = (note: { startMs: number; durationMs: number }): number =>
     tempoMap.beatAtMs(note.startMs + note.durationMs) - tempoMap.beatAtMs(note.startMs);
@@ -778,8 +1053,26 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
    * still gets the shortest value the grid can express. With the grid off —
    * only the live score offers that — lengths stay exactly as played.
    */
-  const symbolFor = (note: NoteEvent): DurationSymbol => {
+  const symbolFor = (note: NoteEvent, division: number | null): DurationSymbol => {
     const held = beatsHeld(note);
+    if (division !== null) {
+      // Inside a tuplet the slot is a third (or a sixth) of the beat, and that
+      // is the unit the value rounds to — never the binary grid, whatever the
+      // score's grid setting says.
+      const slot = 1 / division;
+      const slotUnits = slot * unitsPerBeat(denominator);
+      const wanted = Math.max(1, Math.round(held / slot));
+      // Only lengths a symbol can state exactly. Five triplet slots are not one
+      // — the nearest is six, which would overfill the beat by a slot, and a
+      // tuplet is never split into tied pieces to make up the difference. So
+      // the value steps *down* to the longest it can say, and what is left
+      // becomes a rest, which is how the bar keeps adding up.
+      for (let slots = wanted; slots >= 1; slots -= 1) {
+        const exact = exactValueForUnits(Math.round(slots * slotUnits));
+        if (exact) return exact;
+      }
+      return tupletSymbolForBeats(slot, denominator, TRIPLET);
+    }
     if (gridBeats === null) return symbolForBeats(held, denominator);
     return symbolForBeats(Math.max(1, Math.round(held / gridBeats)) * gridBeats, denominator);
   };
@@ -787,19 +1080,20 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   const fifths = normalizeFifths(options.keySignature ?? 0);
   const laidOut: LaidOutNote[] = notes.map((note) => {
     const position = midiToStaffPosition(note.midi, note.staff, note.clef, fifths);
+    const division = divisionFor(note);
     return {
       id: note.id,
       midi: note.midi,
       startMs: note.startMs,
       durationMs: note.durationMs,
-      displayStartMs: snapToGrid(note.startMs),
+      displayStartMs: snapToGrid(note.startMs, division),
       staff: position.staff,
       clef: position.clef,
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
       step: position.step,
       accidental: position.accidental,
       alter: position.alter,
-      symbol: symbolFor(note),
+      symbol: symbolFor(note, division),
       ledger: ledgerLineSteps(position.step),
       headShift: 0,
       accidentalColumn: 0,
@@ -880,7 +1174,18 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     };
   });
 
-  const rests = deriveRests(chords, measures, options.timeSignature, tempoMap);
+  const rests = deriveRests(
+    chords,
+    measures,
+    options.timeSignature,
+    tempoMap,
+    (staff, measureIndex, beatInBar) => {
+      const span = spans[measureIndex];
+      if (!span) return null;
+      const beat = Math.floor(tempoMap.beatAtMs(span.startMs) + BEAT_EPSILON) + beatInBar;
+      return ternaryBeats.get(`${staff}|${beat}`) ?? null;
+    },
+  );
 
   // Beaming has the last word on stem direction, so it runs before anything
   // that reads one: the heads a stem displaces, and the columns their
@@ -897,6 +1202,9 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   const last = measures[measures.length - 1];
   const totalMs = last ? last.endMs : 0;
   const pedals = pedalSpans(options.pedals ?? [], totalMs);
+  // After the heads have been placed and their accidentals given columns: the
+  // shift moves whole chords bodily, so nothing about their arrangement changes.
+  const octaves = deriveOctaveSpans(chords);
   // Read from the notes as played, not from where they are drawn: how hard a
   // key went down is performance, and quantizing it would only blur it. The
   // thresholds are counted in bars, which the tempo map knows how to find
@@ -911,6 +1219,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     dynamics: marks,
     hairpins,
     pedals,
+    octaves,
     measures,
     barMs,
     totalMs,

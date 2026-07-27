@@ -5,16 +5,21 @@ import { beatsForSymbol, DURATION_SYMBOLS, type DurationSymbol } from './quantiz
  * Choosing the rests that fill a silence, in the one place both renderers can
  * share. Pure arithmetic — no timing, no geometry.
  *
- * Positions here are counted in 32nd notes rather than beats. Every value the
- * app writes is a whole number of them (a dotted sixteenth is three), so
- * "does this rest start where a rest of its length may start" is exact integer
- * arithmetic instead of a float comparison against beats that arrived by way of
- * rounded milliseconds.
+ * Positions here are counted in ninety-sixths of a whole note rather than in
+ * beats. Every value the app writes is a whole number of them, so "does this
+ * rest start where a rest of its length may start" is exact integer arithmetic
+ * instead of a float comparison against beats that arrived by way of rounded
+ * milliseconds.
+ *
+ * Ninety-six and not thirty-two, which would be enough for the binary values
+ * alone: it is the smallest count that also divides into three, and a tuplet is
+ * a division into three. A thirty-second is 3 units, a sixteenth 6, a quarter
+ * 24 — and a triplet eighth is 8, exactly.
  */
-export const UNITS_PER_WHOLE = 32;
+export const UNITS_PER_WHOLE = 96;
 
 /** The shortest rest that can be written; anything less is not drawn. */
-const SMALLEST_UNITS = 2;
+export const SMALLEST_UNITS = UNITS_PER_WHOLE / 16;
 
 export interface RestSpan {
   /** 32nd notes from the start of the measure. */

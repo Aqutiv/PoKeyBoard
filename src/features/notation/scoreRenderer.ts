@@ -68,6 +68,7 @@ interface BeamLine {
   y2: number;
   stemDown: boolean;
   beamCount: 1 | 2;
+  tupletCount: number | null;
 }
 type BeamLines = Map<number, BeamLine>;
 
@@ -255,6 +256,7 @@ export function drawScore(
   drawMeasures(ctx, view, input.layout, palette);
   drawRests(ctx, view, input.layout, palette);
   drawPedals(ctx, view, input.layout, palette);
+  drawOctaves(ctx, view, input.layout, palette);
   drawDynamics(ctx, view, input.layout, palette);
   drawTies(ctx, view, input.layout, palette);
   // Beams before the chords that hang from them: a stem has to know where its
@@ -443,6 +445,65 @@ function drawPedals(
 }
 
 /**
+ * 8va and 8vb lines, above the treble staff and below the bass.
+ *
+ * A piano reaches far enough past both staves that the alternative is a ladder
+ * of ledger lines nobody can count at speed, so the notes are drawn an octave
+ * in and the line says to play them an octave away.
+ */
+function drawOctaves(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  layout: ScoreLayout,
+  palette: ScorePalette,
+): void {
+  if (layout.octaves.length === 0) return;
+  const fromMs = view.scrollMs;
+  const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs;
+
+  ctx.strokeStyle = palette.noteDim;
+  ctx.fillStyle = palette.noteDim;
+  ctx.font = `italic 600 ${GAP * 1.6}px Georgia, "Times New Roman", Times, serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+
+  for (const octave of layout.octaves) {
+    if (octave.toMs < fromMs) continue;
+    if (octave.fromMs >= toMs) break; // sorted by staff then time
+    const openLeft = octave.fromMs < fromMs;
+    const openRight = octave.toMs > toMs;
+    const x1 = openLeft ? view.gutterPx : xForMs(view, octave.fromMs) - GAP * 0.64;
+    const x2 = openRight ? view.widthPx : xForMs(view, octave.toMs) + GAP * 1.3;
+    if (x2 <= x1) continue;
+    const y = octave.up
+      ? staffTopFor(view, 'treble') - GAP * 2.4
+      : staffTopFor(view, 'bass') + STAFF_H + GAP * 2.4;
+
+    let lineFrom = x1;
+    if (!openLeft) {
+      const label = octave.up ? '8va' : '8vb';
+      ctx.fillText(label, x1, y + GAP * 0.55);
+      lineFrom = x1 + ctx.measureText(label).width + GAP * 0.4;
+    }
+    ctx.save();
+    ctx.setLineDash([3, 2.6]);
+    ctx.lineWidth = 1.1;
+    ctx.beginPath();
+    ctx.moveTo(lineFrom, y);
+    ctx.lineTo(x2, y);
+    ctx.stroke();
+    ctx.restore();
+    if (!openRight) {
+      ctx.lineWidth = 1.1;
+      ctx.beginPath();
+      ctx.moveTo(x2, y);
+      ctx.lineTo(x2, y + (octave.up ? 1 : -1) * GAP);
+      ctx.stroke();
+    }
+  }
+}
+
+/**
  * Dynamic marks and hairpins, between the staves.
  *
  * The velocity behind them has been recorded all along; this is the first time
@@ -595,6 +656,7 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
       y2: span.y2,
       stemDown: beam.stemDown,
       beamCount: beam.beamCount,
+      tupletCount: beam.tupletCount,
     });
   }
   return lines;
@@ -603,6 +665,16 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
 function drawBeams(ctx: CanvasRenderingContext2D, lines: BeamLines, palette: ScorePalette): void {
   ctx.fillStyle = palette.note;
   for (const line of lines.values()) {
+    if (line.tupletCount !== null) {
+      // The numeral goes on the side away from the heads, as on paper.
+      const midX = (line.x1 + line.x2) / 2;
+      const midY = (line.y1 + line.y2) / 2;
+      ctx.font = `italic 600 ${GAP * 1.7}px Georgia, "Times New Roman", Times, serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText(String(line.tupletCount), midX, midY + (line.stemDown ? GAP * 1.5 : -GAP * 0.8));
+      ctx.textAlign = 'left';
+    }
     const toward = line.stemDown ? -1 : 1; // further beams stack toward the heads
     for (let i = 0; i < line.beamCount; i += 1) {
       const dy = i * toward * BEAM_SPACING_PX;

@@ -15,6 +15,7 @@ import {
   type SheetHairpin,
   type SheetMeasure,
   type SheetNote,
+  type SheetOctave,
   type SheetPage,
   type SheetPageMetrics,
   type SheetPedal,
@@ -200,8 +201,52 @@ function drawSystem(ctx: CanvasRenderingContext2D, system: SheetSystem, page: Sh
   }
   for (const tie of system.ties) drawTie(ctx, tie);
   for (const pedal of system.pedals) drawPedal(ctx, pedal, system.pedalRowPt);
+  for (const octave of system.octaves) drawOctave(ctx, octave, system, metrics);
   for (const hairpin of system.hairpins) drawHairpin(ctx, hairpin, system.dynamicsRowPt);
   for (const dynamic of system.dynamics) drawDynamic(ctx, dynamic, system.dynamicsRowPt);
+}
+
+/**
+ * An 8va or 8vb: the label, then a dashed line running to a hook that turns
+ * down onto the music it covers. The hook is what says where it stops, so an
+ * end that runs off the system has none — the passage carries on.
+ */
+function drawOctave(
+  ctx: CanvasRenderingContext2D,
+  octave: SheetOctave,
+  system: SheetSystem,
+  metrics: SheetPageMetrics,
+): void {
+  const y = octave.up
+    ? system.trebleTopPt - 2.6 * G
+    : system.bassTopPt + metrics.staffHeightPt + 2.6 * G;
+  const label = octave.up ? '8va' : '8vb';
+
+  ctx.font = `italic 600 ${1.9 * G}px ${SERIF}`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  let lineFrom = octave.x1Pt;
+  if (!octave.continuesLeft) {
+    ctx.fillText(label, octave.x1Pt, y + 0.6 * G);
+    lineFrom = octave.x1Pt + ctx.measureText(label).width + 0.5 * G;
+  }
+
+  ctx.save();
+  ctx.setLineDash([2.2, 2]);
+  ctx.lineWidth = 0.7;
+  ctx.beginPath();
+  ctx.moveTo(lineFrom, y);
+  ctx.lineTo(octave.x2Pt, y);
+  ctx.stroke();
+  ctx.restore();
+
+  if (!octave.continuesRight) {
+    ctx.lineWidth = 0.7;
+    ctx.beginPath();
+    ctx.moveTo(octave.x2Pt, y);
+    ctx.lineTo(octave.x2Pt, y + (octave.up ? 1 : -1) * 0.9 * G);
+    ctx.stroke();
+  }
 }
 
 /**
@@ -351,7 +396,10 @@ function drawMeasure(
       );
     }
   }
-  for (const beam of measure.beams) drawBeam(ctx, beam);
+  for (const beam of measure.beams) {
+    drawBeam(ctx, beam);
+    drawTupletNumeral(ctx, beam);
+  }
 }
 
 function drawChord(
@@ -483,6 +531,23 @@ function drawFlag(ctx: CanvasRenderingContext2D, x: number, tipY: number, stemDo
   );
   ctx.closePath();
   ctx.fill();
+}
+
+/**
+ * The tuplet numeral, centred over its beam on the side away from the heads.
+ * Italic, as editions set it, and small enough not to compete with the notes.
+ */
+function drawTupletNumeral(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {
+  if (beam.tupletCount === null) return;
+  const midX = (beam.x1Pt + beam.x2Pt) / 2;
+  const midY = (beam.y1Pt + beam.y2Pt) / 2;
+  // Clear of the beam on the stem side: below a down-stem run, above an up one.
+  const away = beam.stemDown ? 1.5 * G : -0.9 * G;
+  ctx.font = `italic 600 ${1.9 * G}px ${SERIF}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillText(String(beam.tupletCount), midX, midY + away);
+  ctx.textAlign = 'left';
 }
 
 function drawBeam(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {

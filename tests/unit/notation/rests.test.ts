@@ -1,16 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent, TimeSignature } from '@/domain/takeTypes';
 import { layoutScore } from '@/features/notation/notationLayout';
-import { barUnits, restsForGap, restStep } from '@/features/notation/rests';
+import { barUnits, restsForGap, restStep, UNITS_PER_WHOLE } from '@/features/notation/rests';
 
 const FOUR_FOUR: TimeSignature = { numerator: 4, denominator: 4 };
 const THREE_FOUR: TimeSignature = { numerator: 3, denominator: 4 };
 const SIX_EIGHT: TimeSignature = { numerator: 6, denominator: 8 };
 
-/** Compact "value@position" form, positions in 32nd notes. */
+// Written in note values rather than raw units, so these say what they mean
+// and stay true if the unit the layout counts in ever changes.
+/** One quarter note, in units. */
+const Q = UNITS_PER_WHOLE / 4;
+/** One sixteenth, and one thirty-second — the short ends of the range. */
+const S = UNITS_PER_WHOLE / 16;
+const T = UNITS_PER_WHOLE / 32;
+
+/** Compact "value@position" form, positions counted in quarter notes. */
 function shape(gap: ReturnType<typeof restsForGap>): string[] {
   return gap.map(
-    (span) => `${span.symbol.dotted ? 'dotted ' : ''}${span.symbol.base}@${span.startUnits}`,
+    (span) => `${span.symbol.dotted ? 'dotted ' : ''}${span.symbol.base}@${span.startUnits / Q}`,
   );
 }
 
@@ -22,45 +30,46 @@ describe('restsForGap', () => {
   });
 
   it('gives each beat of 4/4 its own quarter rest', () => {
-    expect(shape(restsForGap(8, 16, FOUR_FOUR))).toEqual(['quarter@8']);
-    expect(shape(restsForGap(0, 8, FOUR_FOUR))).toEqual(['quarter@0']);
+    expect(shape(restsForGap(Q, 2 * Q, FOUR_FOUR))).toEqual(['quarter@1']);
+    expect(shape(restsForGap(0, Q, FOUR_FOUR))).toEqual(['quarter@0']);
   });
 
   it('never lets a rest swallow the middle of the bar', () => {
     // Beats 1-3 of 4/4. A dotted half would fit exactly, but it hides the
     // half-bar division a reader counts from: half + quarter is how it reads.
-    expect(shape(restsForGap(0, 24, FOUR_FOUR))).toEqual(['half@0', 'quarter@16']);
+    expect(shape(restsForGap(0, 3 * Q, FOUR_FOUR))).toEqual(['half@0', 'quarter@2']);
   });
 
   it('merges whole beats into a half rest once past the middle', () => {
     // Beats 2-4: quarter on beat 2, then the whole second half of the bar.
-    expect(shape(restsForGap(8, 32, FOUR_FOUR))).toEqual(['quarter@8', 'half@16']);
+    expect(shape(restsForGap(Q, 4 * Q, FOUR_FOUR))).toEqual(['quarter@1', 'half@2']);
   });
 
   it('groups a compound meter by its dotted beat', () => {
     // 6/8 counts in two dotted quarters; the first half is one of them.
-    expect(shape(restsForGap(0, 12, SIX_EIGHT))).toEqual(['dotted quarter@0']);
+    expect(shape(restsForGap(0, 1.5 * Q, SIX_EIGHT))).toEqual(['dotted quarter@0']);
   });
 
   it('lets an odd meter rest across its centre', () => {
     // 3/4 has no half-bar division to protect, so beats 1-2 are one half rest.
-    expect(shape(restsForGap(0, 16, THREE_FOUR))).toEqual(['half@0']);
+    expect(shape(restsForGap(0, 2 * Q, THREE_FOUR))).toEqual(['half@0']);
   });
 
   it('starts a rest only where one of its length could start', () => {
     // A silence beginning a sixteenth into the beat takes the sixteenth that
     // reaches the next eighth before it can use longer values.
-    expect(shape(restsForGap(2, 8, FOUR_FOUR))).toEqual(['sixteenth@2', 'eighth@4']);
+    expect(shape(restsForGap(S, Q, FOUR_FOUR))).toEqual(['sixteenth@0.25', 'eighth@0.5']);
   });
 
   it('drops a remainder too short to write', () => {
     // One 32nd left over: no symbol covers it, and it is invisible at any size.
-    expect(shape(restsForGap(0, 9, FOUR_FOUR))).toEqual(['quarter@0']);
+    expect(shape(restsForGap(0, Q + T, FOUR_FOUR))).toEqual(['quarter@0']);
   });
 
   it('always terminates on a ragged span', () => {
-    for (let from = 0; from < 32; from += 1) {
-      for (let to = from; to <= 32; to += 1) {
+    const bar = barUnits(FOUR_FOUR);
+    for (let from = 0; from < bar; from += 1) {
+      for (let to = from; to <= bar; to += 1) {
         const spans = restsForGap(from, to, FOUR_FOUR);
         const filled = spans.reduce((sum, span) => sum + span.lengthUnits, 0);
         expect(filled).toBeLessThanOrEqual(to - from);

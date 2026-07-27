@@ -6,6 +6,7 @@ import {
   type HeadShift,
   type LaidOutRest,
   type MeasureInfo,
+  type OctaveSpan,
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
@@ -198,6 +199,8 @@ export interface SheetBeam {
   stemDown: boolean;
   /** 1 for eighths, 2 for sixteenths. */
   beamCount: 1 | 2;
+  /** The tuplet numeral over the beam, where the run is one. */
+  tupletCount: number | null;
   x1Pt: number;
   y1Pt: number;
   x2Pt: number;
@@ -261,6 +264,16 @@ export interface SheetHairpin {
   continuesRight: boolean;
 }
 
+/** An 8va or 8vb line over or under a system's music. */
+export interface SheetOctave {
+  staff: StaffKind;
+  up: boolean;
+  x1Pt: number;
+  x2Pt: number;
+  continuesLeft: boolean;
+  continuesRight: boolean;
+}
+
 export interface SheetSystem {
   xPt: number;
   /** Staff-line extent from xPt (clef area + measures). */
@@ -276,6 +289,8 @@ export interface SheetSystem {
   pedals: SheetPedal[];
   /** y of the pedal row, below the bass staff (absolute page pt). */
   pedalRowPt: number;
+  /** Octave lines above the treble or below the bass; see `SheetOctave`. */
+  octaves: SheetOctave[];
   /** Dynamic marks between the staves; see `SheetDynamic`. */
   dynamics: SheetDynamic[];
   /** Hairpins between the staves; see `SheetHairpin`. */
@@ -371,6 +386,7 @@ interface WorkSystem {
   measures: SheetMeasure[];
   ties: SheetTie[];
   pedals: SheetPedal[];
+  octaves: SheetOctave[];
   dynamics: SheetDynamic[];
   hairpins: SheetHairpin[];
   /** Extra room this system needs between its staves, for the dynamics row. */
@@ -621,25 +637,34 @@ function packSystems(
     const ties = buildTies(measures, metrics.marginLeftPt, x);
     const pedals = buildPedals(measures, score.pedals);
     const marks = buildDynamics(measures, score.dynamics, score.hairpins);
+    const octaves = buildOctaves(measures, score.octaves);
     const extents = systemExtents(measures);
     const carriesDynamics = marks.dynamics.length > 0 || marks.hairpins.length > 0;
     return {
       measures,
       ties,
       pedals,
+      octaves,
       dynamics: marks.dynamics,
       hairpins: marks.hairpins,
       interStaffExtraPt: carriesDynamics ? DYNAMICS_ROW_PT : 0,
       widthPt: x - metrics.marginLeftPt,
-      abovePt: extents.abovePt,
+      // An octave line sits outside the staff it covers, so each side reserves
+      // room only when a line actually goes there.
+      abovePt: extents.abovePt + (octaves.some((o) => o.up) ? OCTAVE_ROW_PT : 0),
       // A pedal bracket gets a row of its own under the staff, so it can never
       // be pushed into by a low note or land on one.
-      belowPt: extents.belowPt + (pedals.length > 0 ? PEDAL_ROW_PT : 0),
+      belowPt:
+        extents.belowPt +
+        (pedals.length > 0 ? PEDAL_ROW_PT : 0) +
+        (octaves.some((o) => !o.up) ? OCTAVE_ROW_PT : 0),
       clefs: (row.measures[0] as WorkMeasure).clefs,
     };
   });
 }
 
+/** Room an octave line takes outside the staff it belongs to (pt). */
+export const OCTAVE_ROW_PT = 15;
 /** Vertical room under the bass staff for a pedal bracket (pt). */
 export const PEDAL_ROW_PT = 13;
 /** The bracket's own height, measured up from its line. */
@@ -701,6 +726,36 @@ function timeAnchorsFor(measures: readonly SheetMeasure[]): TimeAnchor[] {
   if (last) anchors.push({ timeMs: last.endMs, xPt: last.xPt + last.widthPt });
   anchors.sort((a, b) => a.timeMs - b.timeMs);
   return anchors;
+}
+
+/** The octave lines a system carries, clipped to the music it holds. */
+function buildOctaves(
+  measures: readonly SheetMeasure[],
+  spans: readonly OctaveSpan[],
+): SheetOctave[] {
+  const first = measures[0];
+  const last = measures[measures.length - 1];
+  if (!first || !last || spans.length === 0) return [];
+  const anchors = timeAnchorsFor(measures);
+  const fromMs = first.startMs;
+  const toMs = last.endMs;
+
+  const octaves: SheetOctave[] = [];
+  for (const span of spans) {
+    if (span.toMs < fromMs || span.fromMs >= toMs) continue;
+    const x1Pt = xAtTime(anchors, Math.max(span.fromMs, fromMs));
+    // Reach past the last head so the line covers the note it applies to.
+    const x2Pt = xAtTime(anchors, Math.min(span.toMs, toMs)) + HEAD_RX_G * G * 2;
+    octaves.push({
+      staff: span.staff,
+      up: span.up,
+      x1Pt: x1Pt - HEAD_RX_G * G,
+      x2Pt,
+      continuesLeft: span.fromMs < fromMs,
+      continuesRight: span.toMs > toMs,
+    });
+  }
+  return octaves;
 }
 
 /** The pedal brackets a system carries, clipped to the music it holds. */
@@ -889,6 +944,12 @@ function buildBeams(measure: SheetMeasure): void {
   }
 }
 
+/** The numeral a beamed run carries, or null where it is not a whole tuplet. */
+function tupletCountFor(symbol: DurationSymbol, runLength: number): number | null {
+  const ratio = symbol.tuplet;
+  return ratio && runLength % ratio.actual === 0 ? runLength : null;
+}
+
 function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
   const first = run[0] as BeamMember;
   const staff = first.chord.staff;
@@ -908,6 +969,10 @@ function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
     staff,
     stemDown,
     beamCount: run[0]!.chord.symbol.base === 'sixteenth' ? 2 : 1,
+    // Only whole tuplets are numbered; see `buildBeamGroups`, which decides
+    // the same way. A number over a fragment would name a rhythm that is not
+    // being played.
+    tupletCount: tupletCountFor(run[0]!.chord.symbol, run.length),
     x1Pt: xs[0]!,
     y1Pt: span.y1,
     x2Pt: xs[xs.length - 1]!,
@@ -1018,6 +1083,7 @@ function paginate(
       measures: system.measures,
       ties: system.ties,
       pedals: system.pedals,
+      octaves: system.octaves,
       // The row sits under everything the music itself needed.
       pedalRowPt: bassTopPt + metrics.staffHeightPt + system.belowPt - PEDAL_ROW_PT * 0.45,
       dynamics: system.dynamics,

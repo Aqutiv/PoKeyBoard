@@ -4,10 +4,24 @@ import type { QuantizationSetting } from '@/domain/takeTypes';
  * Visual quantization only: raw performance timing is never modified, these
  * helpers just decide where a note is DRAWN and which symbol it gets.
  */
+/**
+ * How many notes are squeezed into the time of how many — three in the time of
+ * two for a triplet. Absent on every ordinary value, so a symbol that is not
+ * part of a tuplet compares equal to one written before tuplets existed.
+ */
+export interface TupletRatio {
+  actual: number;
+  normal: number;
+}
+
 export interface DurationSymbol {
   base: 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth';
   dotted: boolean;
+  tuplet?: TupletRatio;
 }
+
+/** Three in the time of two, which is all but a rounding error of tuplet use. */
+export const TRIPLET: TupletRatio = { actual: 3, normal: 2 };
 
 const SYMBOLS: Array<{ fraction: number; symbol: DurationSymbol }> = [
   { fraction: 1, symbol: { base: 'whole', dotted: false } },
@@ -39,7 +53,27 @@ const BASE_FRACTION: Record<DurationSymbol['base'], number> = {
  * how long a key happened to be held.
  */
 export function beatsForSymbol(symbol: DurationSymbol, denominator: number): number {
-  return BASE_FRACTION[symbol.base] * (symbol.dotted ? 1.5 : 1) * denominator;
+  const plain = BASE_FRACTION[symbol.base] * (symbol.dotted ? 1.5 : 1) * denominator;
+  // Three eighths in the time of two means each is two thirds of an eighth.
+  return symbol.tuplet ? (plain * symbol.tuplet.normal) / symbol.tuplet.actual : plain;
+}
+
+/**
+ * The tuplet value closest to a length, given the ratio in force.
+ *
+ * Separate from `symbolForBeats` rather than an argument to it: the plain one
+ * is called wherever no tuplet is possible, and it should keep saying so.
+ */
+export function tupletSymbolForBeats(
+  beats: number,
+  denominator: number,
+  tuplet: TupletRatio,
+): DurationSymbol {
+  // Read the length as though it were untupleted, pick the value for that, and
+  // put the ratio back on — a triplet eighth is an eighth that happens to be
+  // squeezed, and it is written with an eighth's head, stem and beam.
+  const asPlain = (beats * tuplet.actual) / tuplet.normal;
+  return { ...symbolForBeats(asPlain, denominator), tuplet };
 }
 
 /**

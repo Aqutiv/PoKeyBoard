@@ -100,12 +100,25 @@ takes seconds and never touches the audio engine.
 
 ## Known limitations
 
-- Visual quantization to a 1/8 or 1/16 grid; ternary rhythms (triplets) land on
-  the nearest binary slot. Now that rests fill what notes leave over, a triplet
-  passage engraves as a note and a rest per slot rather than as a triplet — the
-  bar adds up, but it reads as detached eighths. Tuplets are the fix, and
-  nothing short of them is one.
+- Triplets are read from the playing rather than declared: per staff, per beat,
+  the onsets are scored against a binary division and a ternary one, and the
+  ternary reading has to be substantially better before it is believed —
+  writing straight quavers as triplets puts a wrong rhythm on the page, while
+  missing a triplet leaves the page as it was. A hand holding too little of a
+  beat to tell takes the other hand's answer, and where neither can speak the
+  two are pooled; a hand with enough notes keeps its own reading, which is what
+  preserves a real three-against-two. Only whole tuplets are numbered: "2" over
+  two thirds of a triplet would name a duplet, a different rhythm.
+- Octave lines are derived from pitch alone. A run of chords sitting three
+  ledger lines or more beyond a staff is drawn an octave in under an `8va` or
+  `8vb`; a single stray note is left where it is, since a line and a label cost
+  a reader more than the ledger lines they save.
 - Articulations, slurs, ornaments and repeats are still not drawn.
+- A tuplet split between the hands — an arpeggio crossing the middle of the
+  keyboard — is written with the right values on both staves and no numeral on
+  either, because neither holds a whole one. The figure would need to be
+  assigned to a single staff for that, which is the same middle-C limitation
+  noted below.
 - A dynamic mark sits at a fixed height in the inter-staff gap and nothing
   moves it, so a bass note stemming up into that gap can crowd one. It stays
   legible; engraving software nudges marks per-collision, and this does not.
