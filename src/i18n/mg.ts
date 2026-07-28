@@ -142,6 +142,8 @@ export const mg: Messages = {
     meta: ({ notes, duration, bpm }) => `naoty ${notes} · ${duration} · ${bpm} BPM`,
     forkHint:
       'Tsy miova mihitsy ireto hira ireto — raketo eo amboniny dia ho voatahiry ho rakitra vaovao ny dikanao.',
+    opening: 'Manokatra…',
+    openFailed: 'Tsy afaka nosokafana io hira io. Jereo ny fifandraisanao dia andramo indray.',
     descriptions: {
       aBeautifulDay:
         'Hira noforonina, mafana sy malefaka, mipetraka manontolo eo amin’ny kitendry hita — tsara hanombohana.',

@@ -10,6 +10,8 @@ package-lock.json
 public/piano/
 public/metronome/
 public/icons/
+public/scores/
+src/features/library/classicsManifest.ts
 assets/
 .agents/
 *.plan

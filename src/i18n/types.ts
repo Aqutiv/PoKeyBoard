@@ -197,6 +197,8 @@ export interface Messages {
     openLabel: (p: { title: string }) => string;
     meta: (p: { notes: number; duration: string; bpm: number }) => string;
     forkHint: string;
+    opening: string;
+    openFailed: string;
     descriptions: {
       aBeautifulDay: string;
       eveningTide: string;

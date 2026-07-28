@@ -1,7 +1,7 @@
 import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { createEmptyTake } from '@/domain/noteEvents';
-import { getLibraryTake } from '@/features/library/catalog';
+import { resolveLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
 import { applySystemLanguageIfUnpinned } from '@/i18n/languagePreference';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -71,8 +71,12 @@ class PersistenceService {
       const lastId = await getMetadata<string>(META_LAST_OPEN_TAKE);
       if (lastId) {
         // Library takes have no stored row — rebuild pristine from the
-        // bundled catalog (in-session tweaks to them are ephemeral).
-        const take = isLibraryTakeId(lastId) ? getLibraryTake(lastId) : await getTake(lastId);
+        // catalog (in-session tweaks to them are ephemeral). A vendored score
+        // has to be fetched, so this can fail offline; the catch below then
+        // leaves restoredTake false and an empty take is opened instead.
+        const take = isLibraryTakeId(lastId)
+          ? await resolveLibraryTake(lastId)
+          : await getTake(lastId);
         if (take) {
           useTakeStore.getState().setTake(take);
           transportController.restorePlayhead(take.display.playheadMs);

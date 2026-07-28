@@ -8,7 +8,7 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
-import { PIANO_SAMPLE_CACHE, STALE_PIANO_SAMPLE_CACHES } from './cacheNames';
+import { LIBRARY_SCORE_CACHE, PIANO_SAMPLE_CACHE, STALE_PIANO_SAMPLE_CACHES } from './cacheNames';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>;
@@ -29,6 +29,19 @@ registerRoute(
   new CacheFirst({
     cacheName: PIANO_SAMPLE_CACHE,
     plugins: [new ExpirationPlugin({ maxEntries: 256, purgeOnQuotaError: true })],
+  }),
+);
+
+// Vendored library scores: same Cache First treatment as the samples, and for
+// the same reason — the files are immutable under a versioned path, so a score
+// stays playable offline once it has been opened. Deliberately left out of the
+// precache: 1.2 MB of scores would otherwise ride along with every install and
+// every app update, for tracks most users never open.
+registerRoute(
+  ({ url }) => url.pathname.includes('/scores/'),
+  new CacheFirst({
+    cacheName: LIBRARY_SCORE_CACHE,
+    plugins: [new ExpirationPlugin({ maxEntries: 128, purgeOnQuotaError: true })],
   }),
 );
 

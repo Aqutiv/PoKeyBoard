@@ -35,11 +35,18 @@ describe('library catalog', () => {
       'blues-in-c',
       'good-night',
     ]);
-    expect(LIBRARY_FOLDER_SUMMARIES.classics.map((track) => track.trackId)).toEqual([
-      'fur-elise',
-      'gymnopedie-1',
-      'moonlight-sonata',
-    ]);
+    // Classics leads with the authored transcriptions, then the vendored pack.
+    expect(
+      LIBRARY_FOLDER_SUMMARIES.classics
+        .filter((track) => track.source === 'authored')
+        .map((track) => track.trackId),
+    ).toEqual(['fur-elise', 'gymnopedie-1', 'moonlight-sonata']);
+    expect(
+      LIBRARY_FOLDER_SUMMARIES.classics.slice(0, 3).every((t) => t.source === 'authored'),
+    ).toBe(true);
+    expect(LIBRARY_FOLDER_SUMMARIES.classics.slice(3).every((t) => t.source === 'score')).toBe(
+      true,
+    );
     // The default folder is the one shown before the user has chosen.
     expect(LIBRARY_FOLDER_SUMMARIES[DEFAULT_LIBRARY_FOLDER]).toBe(
       LIBRARY_FOLDER_SUMMARIES.originals,
@@ -48,11 +55,14 @@ describe('library catalog', () => {
 
   it('partitions the catalog exactly — every track filed once', () => {
     const filed = LIBRARY_FOLDER_IDS.flatMap((folder) => [...LIBRARY_FOLDER_SUMMARIES[folder]]);
-    expect(filed).toHaveLength(LIBRARY_TRACK_SUMMARIES.length);
+    const authored = filed.filter((track) => track.source === 'authored');
+    expect(authored).toHaveLength(LIBRARY_TRACK_SUMMARIES.length);
+    // No id may repeat across the two sources: a vendored score wearing an
+    // authored track's id would shadow it in getLibraryTake.
     expect(new Set(filed.map((track) => track.trackId)).size).toBe(filed.length);
     // Order inside a folder follows the catalog's display order.
     for (const folder of LIBRARY_FOLDER_IDS) {
-      expect(LIBRARY_FOLDER_SUMMARIES[folder]).toEqual(
+      expect(authored.filter((track) => track.folder === folder)).toEqual(
         LIBRARY_TRACK_SUMMARIES.filter((track) => track.folder === folder),
       );
     }

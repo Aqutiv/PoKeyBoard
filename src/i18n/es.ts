@@ -140,6 +140,8 @@ export const es: Messages = {
     meta: ({ notes, duration, bpm }) => `${notes} notas · ${duration} · ${bpm} BPM`,
     forkHint:
       'Las pistas de la biblioteca nunca cambian — graba sobre una y tu versión se guardará como una toma nueva.',
+    opening: 'Abriendo…',
+    openFailed: 'No se pudo abrir esa pista. Comprueba tu conexión e inténtalo de nuevo.',
     descriptions: {
       aBeautifulDay:
         'Una melodía original cálida y suave que cabe entera en las teclas visibles — una primera pieza fácil de seguir.',

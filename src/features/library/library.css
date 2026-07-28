@@ -78,6 +78,17 @@
   color: var(--text-dim);
 }
 
+/* Reserves no space when empty, so the list does not shift on a failed open. */
+.library-status:not(:empty) {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--record);
+}
+
+.library-status:empty {
+  margin: 0;
+}
+
 .library-fork-hint {
   margin-top: auto;
   padding-top: 12px;

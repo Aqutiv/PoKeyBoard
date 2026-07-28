@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -17,13 +18,25 @@ export function LibraryPage() {
   const folder = useSettingsStore((s) => s.libraryFolder);
   const setFolder = useSettingsStore((s) => s.setLibraryFolder);
 
+  // A vendored score is fetched and parsed on open, so the tap is no longer
+  // instant and can fail — both states have to be visible.
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
   const open = (trackId: string): void => {
+    if (openingId !== null) return;
+    setOpeningId(trackId);
+    setFailed(false);
     openLibraryTrack(trackId)
       .then((opened) => {
+        setOpeningId(null);
         if (opened) navigate('play');
+        else setFailed(true);
       })
       .catch((error: unknown) => {
         console.error('Opening library track failed:', error);
+        setOpeningId(null);
+        setFailed(true);
       });
   };
 
@@ -49,6 +62,7 @@ export function LibraryPage() {
       <ul className="library-list">
         {LIBRARY_FOLDER_SUMMARIES[folder].map((track) => {
           const isActive = track.takeId === activeTakeId;
+          const isOpening = track.trackId === openingId;
           return (
             <li key={track.trackId} className={`library-item${isActive ? ' is-active' : ''}`}>
               <button
@@ -63,20 +77,27 @@ export function LibraryPage() {
                   {m.library.byline({ composer: track.composer })}
                 </span>
                 <span className="library-item__meta">
-                  {m.library.meta({
-                    notes: track.noteCount,
-                    duration: formatDurationMs(track.durationMs),
-                    bpm: track.bpm,
-                  })}
+                  {isOpening
+                    ? m.library.opening
+                    : m.library.meta({
+                        notes: track.noteCount,
+                        duration: formatDurationMs(track.durationMs),
+                        bpm: track.bpm,
+                      })}
                 </span>
-                <span className="library-item__description">
-                  {m.library.descriptions[track.descriptionKey]}
-                </span>
+                {track.descriptionKey ? (
+                  <span className="library-item__description">
+                    {m.library.descriptions[track.descriptionKey]}
+                  </span>
+                ) : null}
               </button>
             </li>
           );
         })}
       </ul>
+      <p role="status" className="library-status">
+        {failed ? m.library.openFailed : ''}
+      </p>
       <p className="page__hint library-fork-hint">{m.library.forkHint}</p>
     </section>
   );

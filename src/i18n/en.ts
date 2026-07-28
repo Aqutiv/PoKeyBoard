@@ -141,6 +141,8 @@ export const en: Messages = {
     meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,
     forkHint:
       'Library tracks never change — record over one and your version is saved as a new take.',
+    opening: 'Opening…',
+    openFailed: 'That track could not be opened. Check your connection and try again.',
     descriptions: {
       aBeautifulDay:
         'A warm, gentle original tune that sits entirely on the visible keys — an easy first piece to follow.',
