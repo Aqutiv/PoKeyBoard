@@ -131,6 +131,11 @@ export const en: Messages = {
     title: 'Library',
     hint: 'Curated tracks to play, learn from, and build on.',
     chip: 'Library',
+    folderLabel: 'Library folder',
+    folders: {
+      originals: 'Originals',
+      classics: 'Classics',
+    },
     byline: ({ composer }) => `by ${composer}`,
     openLabel: ({ title }) => `Open ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,

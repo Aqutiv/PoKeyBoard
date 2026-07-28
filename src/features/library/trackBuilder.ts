@@ -12,6 +12,7 @@ import type {
 } from '@/domain/takeTypes';
 import type { Messages } from '@/i18n/types';
 import { noteNameToMidi } from '@/utils/midi';
+import type { LibraryFolderId } from './folders';
 
 /**
  * One authored event: `[beat, note(s), durationBeats, velocity?, staff?]`.
@@ -36,6 +37,8 @@ export interface LibraryTrackDef {
   trackId: string;
   title: string;
   composer: string;
+  /** Which library folder shelves this track. */
+  folder: LibraryFolderId;
   descriptionKey: keyof Messages['library']['descriptions'];
   bpm: number;
   timeSignature: TimeSignature;

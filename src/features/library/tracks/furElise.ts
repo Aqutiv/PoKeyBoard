@@ -155,6 +155,7 @@ export const FUR_ELISE: LibraryTrackDef = {
   trackId: 'fur-elise',
   title: 'Für Elise',
   composer: 'Ludwig van Beethoven',
+  folder: 'classics',
   descriptionKey: 'furElise',
   bpm: 70,
   timeSignature: { numerator: 3, denominator: 8 },

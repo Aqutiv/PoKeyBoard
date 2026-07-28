@@ -6,6 +6,7 @@ import {
   type QuantizationSetting,
 } from '@/domain/takeTypes';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
+import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
 import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
 
@@ -27,6 +28,8 @@ export interface SettingsState {
   displayQuantization: QuantizationSetting;
   keyboardAnchorMidi: number;
   sheetPaperSize: PaperSize;
+  /** The library folder last opened, restored on the next visit. */
+  libraryFolder: LibraryFolderId;
 
   setLanguage(language: SupportedLanguage): void;
   setTheme(theme: ThemePreference): void;
@@ -40,6 +43,7 @@ export interface SettingsState {
   setDisplayQuantization(value: QuantizationSetting): void;
   setKeyboardAnchorMidi(midi: number): void;
   setSheetPaperSize(size: PaperSize): void;
+  setLibraryFolder(folder: LibraryFolderId): void;
   resetSettings(): void;
 }
 
@@ -56,6 +60,7 @@ export const SETTINGS_DEFAULTS = {
   displayQuantization: '1/16' as QuantizationSetting,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
   sheetPaperSize: 'a4' as PaperSize,
+  libraryFolder: DEFAULT_LIBRARY_FOLDER,
 };
 
 /**
@@ -84,6 +89,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setDisplayQuantization: (displayQuantization) => set({ displayQuantization }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),
+  setLibraryFolder: (libraryFolder) => set({ libraryFolder }),
   resetSettings: () => {
     audioEngine.setMasterVolume(SETTINGS_DEFAULTS.masterVolume);
     audioEngine.setReverbMix(SETTINGS_DEFAULTS.reverbMix);

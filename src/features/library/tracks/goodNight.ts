@@ -280,6 +280,7 @@ export const GOOD_NIGHT: LibraryTrackDef = {
   trackId: 'good-night',
   title: 'Good Night',
   composer: 'GPT 5.6 Sol Ultra',
+  folder: 'originals',
   descriptionKey: 'goodNight',
   bpm: 72,
   timeSignature: { numerator: 6, denominator: 8 },

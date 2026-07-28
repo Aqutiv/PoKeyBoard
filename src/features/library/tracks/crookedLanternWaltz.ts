@@ -448,6 +448,7 @@ export const CROOKED_LANTERN_WALTZ: LibraryTrackDef = {
   trackId: 'crooked-lantern-waltz',
   title: 'The Crooked Lantern Waltz',
   composer: 'GPT 5.6 Sol Pro',
+  folder: 'originals',
   descriptionKey: 'crookedLanternWaltz',
   bpm: 112,
   timeSignature: { numerator: 3, denominator: 4 },

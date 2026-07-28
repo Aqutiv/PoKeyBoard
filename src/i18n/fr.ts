@@ -131,6 +131,11 @@ export const fr: Messages = {
     title: 'Bibliothèque',
     hint: 'Des morceaux choisis à jouer, à apprendre et à réinventer.',
     chip: 'Bibliothèque',
+    folderLabel: 'Dossier de la bibliothèque',
+    folders: {
+      originals: 'Originaux',
+      classics: 'Classiques',
+    },
     byline: ({ composer }) => `de ${composer}`,
     openLabel: ({ title }) => `Ouvrir ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,

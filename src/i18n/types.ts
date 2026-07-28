@@ -188,6 +188,11 @@ export interface Messages {
     title: string;
     hint: string;
     chip: string;
+    folderLabel: string;
+    folders: {
+      originals: string;
+      classics: string;
+    };
     byline: (p: { composer: string }) => string;
     openLabel: (p: { title: string }) => string;
     meta: (p: { notes: number; duration: string; bpm: number }) => string;

@@ -65,6 +65,7 @@ export const BLUES_IN_C: LibraryTrackDef = {
   trackId: 'blues-in-c',
   title: 'Blues Bass in C',
   composer: 'Claude Fable 5',
+  folder: 'originals',
   descriptionKey: 'bluesInC',
   bpm: 104,
   timeSignature: { numerator: 4, denominator: 4 },

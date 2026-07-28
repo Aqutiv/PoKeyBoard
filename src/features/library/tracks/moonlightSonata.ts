@@ -1261,6 +1261,7 @@ export const MOONLIGHT_SONATA: LibraryTrackDef = {
   trackId: 'moonlight-sonata',
   title: 'Moonlight Sonata (1st Movement)',
   composer: 'Ludwig van Beethoven',
+  folder: 'classics',
   descriptionKey: 'moonlightSonata',
   bpm: 54,
   timeSignature: { numerator: 2, denominator: 2 },

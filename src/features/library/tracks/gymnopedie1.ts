@@ -70,6 +70,7 @@ export const GYMNOPEDIE_1: LibraryTrackDef = {
   trackId: 'gymnopedie-1',
   title: 'Gymnopédie No. 1',
   composer: 'Erik Satie',
+  folder: 'classics',
   descriptionKey: 'gymnopedie1',
   bpm: 66,
   timeSignature: { numerator: 3, denominator: 4 },
