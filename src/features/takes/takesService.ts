@@ -353,8 +353,11 @@ export async function previewImportUrl(
   signal?.addEventListener('abort', forwardAbort, { once: true });
 
   try {
-    // The service worker runtime-caches only /piano/, so this passes straight
-    // through to the network — do not add a catch-all route without revisiting.
+    // The service worker runtime-caches only /piano/ and this origin's own
+    // /scores/classics-v1/, so this passes straight through to the network —
+    // do not add a catch-all route without revisiting. A route matching
+    // "/scores/" on any origin would swallow links to the upstream score
+    // library, whose paths look exactly like ours.
     const response = await fetch(url, {
       signal: controller.signal,
       mode: 'cors',

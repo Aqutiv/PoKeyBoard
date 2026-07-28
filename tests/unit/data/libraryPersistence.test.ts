@@ -84,4 +84,32 @@ describe('startup restore of library takes', () => {
     expect(active.id).not.toBe('library:retired-track');
     expect(active.notes).toHaveLength(0);
   });
+
+  it('bounds the score download so an unreachable one cannot hang boot', async () => {
+    try {
+      const g = await freshGraph();
+      const { CLASSIC_SCORES } = await import('@/features/library/classicsManifest');
+      const scoreId = libraryTakeId(CLASSIC_SCORES[0]?.trackId ?? '');
+      await g.setMetadata(g.metaLastOpen, scoreId);
+
+      // Nothing renders until init() settles, and a stalled connection can
+      // leave fetch pending forever rather than rejecting — so the request has
+      // to carry a deadline. Capture the signal to prove one is attached.
+      let signal: AbortSignal | undefined;
+      vi.stubGlobal('fetch', (_url: string, options?: { signal?: AbortSignal }) => {
+        signal = options?.signal;
+        return Promise.reject(new TypeError('Failed to fetch'));
+      });
+
+      await g.persistenceService.init();
+
+      expect(signal).toBeInstanceOf(AbortSignal);
+      // Unreachable score, so boot opens an empty take rather than waiting.
+      const active = g.useTakeStore.getState().take;
+      expect(active.id).not.toBe(scoreId);
+      expect(active.notes).toHaveLength(0);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });

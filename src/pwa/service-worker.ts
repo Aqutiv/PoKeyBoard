@@ -37,8 +37,13 @@ registerRoute(
 // stays playable offline once it has been opened. Deliberately left out of the
 // precache: 1.2 MB of scores would otherwise ride along with every install and
 // every app update, for tracks most users never open.
+//
+// Matched narrowly, on purpose. URL import fetches arbitrary links, and the
+// obvious one to paste is this pack's own upstream — musetrainer.github.io,
+// whose paths also contain "/scores/". A looser match would serve those from
+// cache instead of letting the import run its own CORS and size checks.
 registerRoute(
-  ({ url }) => url.pathname.includes('/scores/'),
+  ({ url, sameOrigin }) => sameOrigin && url.pathname.includes('/scores/classics-v1/'),
   new CacheFirst({
     cacheName: LIBRARY_SCORE_CACHE,
     plugins: [new ExpirationPlugin({ maxEntries: 128, purgeOnQuotaError: true })],

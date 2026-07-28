@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { nav } from './helpers';
 
 /** The folder switch (its option names would otherwise clash with track titles). */
 function folders(page: Page) {
@@ -157,8 +158,8 @@ test.describe('vendored classics', () => {
 
 // With the service worker active a score is fetched *by* the worker, which
 // page.route cannot intercept — blocking it puts the request back on the page
-// so the failure can be simulated at all.
-test.describe('vendored classics offline', () => {
+// so a slow or failing download can be simulated at all.
+test.describe('vendored classics on a bad network', () => {
   test.use({ serviceWorkers: 'block' });
 
   test('says so when a score cannot be fetched', async ({ page }) => {
@@ -169,5 +170,23 @@ test.describe('vendored classics offline', () => {
     await expect(page.getByRole('status')).toHaveText(/could not be opened/);
     // Still on the Library, not stranded on an empty Play screen.
     await expect(folders(page)).toBeVisible();
+  });
+
+  test('a score that lands after you leave does not drag you to Play', async ({ page }) => {
+    await openClassics(page);
+    await page.route('**/scores/**', async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+      await route.continue();
+    });
+
+    await page.getByRole('button', { name: 'Open La campanella' }).click();
+    // Walk away mid-download; the later choice is the one that should stand.
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    await expect(page).toHaveURL(/#\/takes/);
+
+    // Long enough for the download to have finished and activated the score.
+    await page.waitForTimeout(2500);
+    await expect(page).toHaveURL(/#\/takes/);
+    await expect(page.locator('.play-header__title')).toHaveCount(0);
   });
 });

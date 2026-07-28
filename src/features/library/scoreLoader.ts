@@ -45,8 +45,15 @@ function toLibraryTake(entry: ClassicScoreEntry, take: Take): Take {
  * Fetch and parse a vendored classic. Resolves undefined when the track is
  * unknown; throws when the score is there but cannot be fetched or read, so
  * the caller can tell "no such track" from "offline".
+ *
+ * `signal` aborts the download. A stalled connection can leave `fetch` pending
+ * indefinitely rather than rejecting, so every caller that cannot wait forever
+ * — startup restore, and a page the user may navigate away from — passes one.
  */
-export async function loadClassicTake(trackId: string): Promise<Take | undefined> {
+export async function loadClassicTake(
+  trackId: string,
+  signal?: AbortSignal,
+): Promise<Take | undefined> {
   const entry = byTrackId.get(trackId);
   if (!entry) return undefined;
 
@@ -55,7 +62,9 @@ export async function loadClassicTake(trackId: string): Promise<Take | undefined
   // whatever the transport did to a previous copy stays with that copy.
   if (cached) return structuredClone(cached);
 
-  const response = await fetch(`${import.meta.env.BASE_URL}${SCORE_PACK_PATH}${entry.file}`);
+  const response = await fetch(`${import.meta.env.BASE_URL}${SCORE_PACK_PATH}${entry.file}`, {
+    signal,
+  });
   if (!response.ok) {
     throw new Error(`Score "${entry.file}" could not be fetched: ${response.status}`);
   }

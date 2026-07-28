@@ -64,6 +64,26 @@ describe('loadClassicTake', () => {
     expect(spy.mock.calls.length).toBe(callsAfterFirst);
   });
 
+  it('abandons a download when its signal aborts', async () => {
+    // A stalled connection leaves fetch pending rather than failing; the abort
+    // is the only thing that ends it.
+    vi.stubGlobal('fetch', (_url: string, options?: { signal?: AbortSignal }) => {
+      return new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener('abort', () =>
+          reject(new DOMException('Aborted', 'AbortError')),
+        );
+      });
+    });
+
+    const controller = new AbortController();
+    // An id the earlier tests have not already cached, or it would resolve.
+    const uncached = CLASSIC_SCORES.find((entry) => entry.noteCount > SAMPLE.noteCount);
+    const pending = loadClassicTake(uncached?.trackId ?? '', controller.signal);
+    controller.abort();
+
+    await expect(pending).rejects.toThrow(/abort/i);
+  });
+
   it('knows which ids it owns, and reports an unreachable score', async () => {
     expect(isClassicScoreId(SAMPLE.trackId)).toBe(true);
     expect(isClassicScoreId('a-beautiful-day')).toBe(false);

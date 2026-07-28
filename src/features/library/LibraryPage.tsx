@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -44,17 +44,27 @@ export function LibraryPage() {
     filterInput.current?.focus();
   };
 
+  // A download outlives the page if the user navigates away mid-open. Abort it
+  // on unmount: a score that arrives late must not activate itself and pull the
+  // user back to Play, overriding wherever they went instead.
+  const openAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => openAbort.current?.abort(), []);
+
   const open = (trackId: string): void => {
     if (openingId !== null) return;
+    const controller = new AbortController();
+    openAbort.current = controller;
     setOpeningId(trackId);
     setFailed(false);
-    openLibraryTrack(trackId)
+    openLibraryTrack(trackId, controller.signal)
       .then((opened) => {
+        if (controller.signal.aborted) return;
         setOpeningId(null);
         if (opened) navigate('play');
         else setFailed(true);
       })
       .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
         console.error('Opening library track failed:', error);
         setOpeningId(null);
         setFailed(true);

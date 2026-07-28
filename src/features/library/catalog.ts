@@ -190,11 +190,15 @@ export function getLibraryTake(takeId: string): Take | undefined {
 /**
  * The take behind any library id, authored or vendored. Async because a score
  * has to be fetched and parsed; it throws when the fetch fails, so callers can
- * tell an unknown track from an unreachable one.
+ * tell an unknown track from an unreachable one. `signal` bounds that fetch —
+ * authored tracks are built synchronously and ignore it.
  */
-export async function resolveLibraryTake(takeId: string): Promise<Take | undefined> {
+export async function resolveLibraryTake(
+  takeId: string,
+  signal?: AbortSignal,
+): Promise<Take | undefined> {
   const authored = getLibraryTake(takeId);
   if (authored) return authored;
   if (!isLibraryTakeId(takeId)) return undefined;
-  return loadClassicTake(takeId.slice(LIBRARY_ID_PREFIX.length));
+  return loadClassicTake(takeId.slice(LIBRARY_ID_PREFIX.length), signal);
 }

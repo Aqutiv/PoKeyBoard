@@ -1,6 +1,7 @@
 import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { createEmptyTake } from '@/domain/noteEvents';
+import type { Take } from '@/domain/takeTypes';
 import { resolveLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
 import { applySystemLanguageIfUnpinned } from '@/i18n/languagePreference';
@@ -28,6 +29,13 @@ export interface SaveStatusSnapshot {
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
 const SETTINGS_DEBOUNCE_MS = 500;
+/**
+ * How long startup will wait for a vendored score to download before giving up
+ * and opening an empty take. The app does not render until init() settles, and
+ * a stalled connection can leave `fetch` pending forever rather than failing,
+ * so restoring the last take must never be the thing that blocks boot.
+ */
+const SCORE_RESTORE_TIMEOUT_MS = 8_000;
 
 /**
  * Autosave and restore glue: watches the stores, debounces writes, forces
@@ -72,10 +80,10 @@ class PersistenceService {
       if (lastId) {
         // Library takes have no stored row — rebuild pristine from the
         // catalog (in-session tweaks to them are ephemeral). A vendored score
-        // has to be fetched, so this can fail offline; the catch below then
-        // leaves restoredTake false and an empty take is opened instead.
+        // has to be fetched, so this can fail offline or hang; either way the
+        // catch below leaves restoredTake false and an empty take is opened.
         const take = isLibraryTakeId(lastId)
-          ? await resolveLibraryTake(lastId)
+          ? await this.restoreLibraryTake(lastId)
           : await getTake(lastId);
         if (take) {
           useTakeStore.getState().setTake(take);
@@ -121,6 +129,22 @@ class PersistenceService {
       void this.flushSave();
       void this.flushSettingsSave();
     });
+  }
+
+  /**
+   * Rebuild a library take for startup, under a deadline. Authored tracks
+   * resolve synchronously and never reach the timer; a vendored score that has
+   * not been cached yet is a network round trip standing between the user and
+   * a usable app, so it gets bounded rather than awaited indefinitely.
+   */
+  private async restoreLibraryTake(takeId: string): Promise<Take | undefined> {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SCORE_RESTORE_TIMEOUT_MS);
+    try {
+      return await resolveLibraryTake(takeId, controller.signal);
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   getStatus(): SaveStatusSnapshot {
