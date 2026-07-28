@@ -196,6 +196,7 @@ export interface Messages {
     byline: (p: { composer: string }) => string;
     openLabel: (p: { title: string }) => string;
     meta: (p: { notes: number; duration: string; bpm: number }) => string;
+    groupCount: (p: { count: number }) => string;
     forkHint: string;
     opening: string;
     openFailed: string;

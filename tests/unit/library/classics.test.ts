@@ -43,6 +43,16 @@ describe('vendored classics', () => {
     }
   });
 
+  it('credits every score to a name the composer sort can file', () => {
+    for (const [trackId, name] of Object.entries(CLASSIC_SCORE_NAMES)) {
+      // The sort keys off the last word, so a trailing arranger or a comma
+      // would file the piece under the wrong composer.
+      expect(name.composer, trackId).not.toMatch(/,|\barr\./);
+      expect(name.composer.trim(), trackId).toBe(name.composer);
+      expect(name.composer, trackId).not.toBe('');
+    }
+  });
+
   it('shelves the whole pack into Classics with rounded tempi', () => {
     const scores = LIBRARY_FOLDER_SUMMARIES.classics.filter((track) => track.source === 'score');
     expect(scores).toHaveLength(CLASSIC_SCORES.length);

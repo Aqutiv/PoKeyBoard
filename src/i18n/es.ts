@@ -138,6 +138,7 @@ export const es: Messages = {
     byline: ({ composer }) => `de ${composer}`,
     openLabel: ({ title }) => `Abrir ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notas · ${duration} · ${bpm} BPM`,
+    groupCount: ({ count }) => (count === 1 ? '1 pista' : `${count} pistas`),
     forkHint:
       'Las pistas de la biblioteca nunca cambian — graba sobre una y tu versión se guardará como una toma nueva.',
     opening: 'Abriendo…',

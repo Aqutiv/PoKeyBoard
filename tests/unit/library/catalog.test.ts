@@ -3,6 +3,7 @@ import { isLibraryTakeId, libraryTakeId } from '@/domain/libraryTakes';
 import { parseTakeJsonString } from '@/domain/takeSchema';
 import {
   getLibraryTake,
+  LIBRARY_FOLDER_SECTIONS,
   LIBRARY_FOLDER_SUMMARIES,
   LIBRARY_TRACK_SUMMARIES,
   LIBRARY_TRACKS,
@@ -64,6 +65,44 @@ describe('library catalog', () => {
     for (const folder of LIBRARY_FOLDER_IDS) {
       expect(authored.filter((track) => track.folder === folder)).toEqual(
         LIBRARY_TRACK_SUMMARIES.filter((track) => track.folder === folder),
+      );
+    }
+  });
+
+  it('lays each folder out as a pinned run then composer groups', () => {
+    // Originals is six tracks; grouping it would be noise.
+    expect(LIBRARY_FOLDER_SECTIONS.originals).toHaveLength(1);
+    expect(LIBRARY_FOLDER_SECTIONS.originals[0]?.composer).toBeNull();
+
+    const [pinned, ...groups] = LIBRARY_FOLDER_SECTIONS.classics;
+    expect(pinned?.composer).toBeNull();
+    expect(pinned?.tracks.map((track) => track.trackId)).toEqual([
+      'fur-elise',
+      'gymnopedie-1',
+      'moonlight-sonata',
+    ]);
+    expect(groups.length).toBeGreaterThan(1);
+    // Every later section is a real composer holding only their own tracks.
+    for (const group of groups) {
+      expect(group.composer).not.toBeNull();
+      expect(group.tracks.every((track) => track.composer === group.composer)).toBe(true);
+      expect(group.tracks.length).toBeGreaterThan(0);
+    }
+    // Groups run by surname — the last word of the credit.
+    const surnames = groups.map((group) => (group.composer ?? '').split(' ').at(-1) ?? '');
+    expect(surnames).toEqual([...surnames].sort((a, b) => a.localeCompare(b)));
+    // Beethoven files under B, not V.
+    expect(groups[0]?.composer).toBe('Johann Sebastian Bach');
+  });
+
+  it('sections hold every track in the folder, exactly once', () => {
+    for (const folder of LIBRARY_FOLDER_IDS) {
+      const sectioned = LIBRARY_FOLDER_SECTIONS[folder].flatMap((section) => [...section.tracks]);
+      expect(sectioned).toHaveLength(LIBRARY_FOLDER_SUMMARIES[folder].length);
+      expect(new Set(sectioned.map((track) => track.trackId)).size).toBe(sectioned.length);
+      // Same set as the flat view, regardless of the order grouping imposes.
+      expect(sectioned.map((track) => track.trackId).sort()).toEqual(
+        LIBRARY_FOLDER_SUMMARIES[folder].map((track) => track.trackId).sort(),
       );
     }
   });

@@ -139,6 +139,7 @@ export const en: Messages = {
     byline: ({ composer }) => `by ${composer}`,
     openLabel: ({ title }) => `Open ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,
+    groupCount: ({ count }) => (count === 1 ? '1 track' : `${count} tracks`),
     forkHint:
       'Library tracks never change — record over one and your version is saved as a new take.',
     opening: 'Opening…',

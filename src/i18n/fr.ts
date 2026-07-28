@@ -139,6 +139,7 @@ export const fr: Messages = {
     byline: ({ composer }) => `de ${composer}`,
     openLabel: ({ title }) => `Ouvrir ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,
+    groupCount: ({ count }) => (count === 1 ? '1 morceau' : `${count} morceaux`),
     forkHint:
       'Les morceaux de la bibliothèque ne changent jamais — enregistrez par-dessus l’un d’eux et votre version sera sauvegardée comme une nouvelle prise.',
     opening: 'Ouverture…',

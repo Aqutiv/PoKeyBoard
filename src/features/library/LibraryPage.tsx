@@ -4,7 +4,7 @@ import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
-import { LIBRARY_FOLDER_SUMMARIES } from './catalog';
+import { LIBRARY_FOLDER_SECTIONS } from './catalog';
 import { LIBRARY_FOLDER_IDS } from './folders';
 import { openLibraryTrack } from './libraryService';
 import './library.css';
@@ -59,42 +59,62 @@ export function LibraryPage() {
           </button>
         ))}
       </div>
-      <ul className="library-list">
-        {LIBRARY_FOLDER_SUMMARIES[folder].map((track) => {
-          const isActive = track.takeId === activeTakeId;
-          const isOpening = track.trackId === openingId;
+      <div className="library-groups">
+        {LIBRARY_FOLDER_SECTIONS[folder].map((section) => {
+          const list = (
+            <ul className="library-list">
+              {section.tracks.map((track) => {
+                const isActive = track.takeId === activeTakeId;
+                const isOpening = track.trackId === openingId;
+                return (
+                  <li key={track.trackId} className={`library-item${isActive ? ' is-active' : ''}`}>
+                    <button
+                      type="button"
+                      className="library-item__main"
+                      aria-label={m.library.openLabel({ title: track.title })}
+                      aria-current={isActive ? 'true' : undefined}
+                      onClick={() => open(track.trackId)}
+                    >
+                      <span className="library-item__title">{track.title}</span>
+                      <span className="library-item__byline">
+                        {m.library.byline({ composer: track.composer })}
+                      </span>
+                      <span className="library-item__meta">
+                        {isOpening
+                          ? m.library.opening
+                          : m.library.meta({
+                              notes: track.noteCount,
+                              duration: formatDurationMs(track.durationMs),
+                              bpm: track.bpm,
+                            })}
+                      </span>
+                      {track.descriptionKey ? (
+                        <span className="library-item__description">
+                          {m.library.descriptions[track.descriptionKey]}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+          // The pinned run above the first heading carries no composer of its own.
+          if (section.composer === null) return <div key="pinned">{list}</div>;
+          const headingId = `library-group-${section.composer.replace(/\W+/g, '-').toLowerCase()}`;
           return (
-            <li key={track.trackId} className={`library-item${isActive ? ' is-active' : ''}`}>
-              <button
-                type="button"
-                className="library-item__main"
-                aria-label={m.library.openLabel({ title: track.title })}
-                aria-current={isActive ? 'true' : undefined}
-                onClick={() => open(track.trackId)}
-              >
-                <span className="library-item__title">{track.title}</span>
-                <span className="library-item__byline">
-                  {m.library.byline({ composer: track.composer })}
+            <section className="library-group" key={section.composer} aria-labelledby={headingId}>
+              <h2 className="library-group__heading" id={headingId}>
+                <span>{section.composer}</span>
+                <span className="library-group__count">
+                  {m.library.groupCount({ count: section.tracks.length })}
                 </span>
-                <span className="library-item__meta">
-                  {isOpening
-                    ? m.library.opening
-                    : m.library.meta({
-                        notes: track.noteCount,
-                        duration: formatDurationMs(track.durationMs),
-                        bpm: track.bpm,
-                      })}
-                </span>
-                {track.descriptionKey ? (
-                  <span className="library-item__description">
-                    {m.library.descriptions[track.descriptionKey]}
-                  </span>
-                ) : null}
-              </button>
-            </li>
+              </h2>
+              {list}
+            </section>
           );
         })}
-      </ul>
+      </div>
       <p role="status" className="library-status">
         {failed ? m.library.openFailed : ''}
       </p>

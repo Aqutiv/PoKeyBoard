@@ -214,8 +214,10 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
     composer: 'Franz Liszt',
   },
   'score-schubert-serenade-standchen-by-lizst': {
-    title: 'Ständchen (Serenade)',
-    composer: 'Franz Schubert, arr. Liszt',
+    // The arranger belongs in the title: as a composer string it would strand
+    // the piece in a group of one and sort the list under "Liszt".
+    title: 'Ständchen (Serenade), arr. Liszt',
+    composer: 'Franz Schubert',
   },
   'score-lacrimosa-requiem': {
     title: 'Lacrimosa, from the Requiem',

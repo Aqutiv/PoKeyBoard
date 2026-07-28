@@ -107,6 +107,54 @@ export const LIBRARY_FOLDER_SUMMARIES: Record<LibraryFolderId, readonly LibraryT
   classics: [...summariesIn('classics'), ...CLASSIC_SCORE_SUMMARIES],
 };
 
+export interface LibrarySection {
+  /** Composer heading, or null for the pinned run above the first heading. */
+  composer: string | null;
+  tracks: readonly LibraryTrackSummary[];
+}
+
+/**
+ * Surname to file a composer under: the last word of the credit, which puts
+ * "Ludwig van Beethoven" under B the way a classical index would. Every
+ * credit in the catalog ends in a surname — a test holds that true.
+ */
+function surnameOf(composer: string): string {
+  return composer.slice(composer.lastIndexOf(' ') + 1);
+}
+
+/** One section per composer, surnames in order, titles in order within each. */
+function byComposer(tracks: readonly LibraryTrackSummary[]): LibrarySection[] {
+  const groups = new Map<string, LibraryTrackSummary[]>();
+  for (const track of tracks) {
+    const group = groups.get(track.composer);
+    if (group) group.push(track);
+    else groups.set(track.composer, [track]);
+  }
+  return [...groups.entries()]
+    .sort(
+      ([a], [b]) => surnameOf(a).localeCompare(surnameOf(b)) || a.localeCompare(b),
+      // Ties on surname fall back to the full credit, so the order is total.
+    )
+    .map(([composer, group]) => ({
+      composer,
+      tracks: group.sort((a, b) => a.title.localeCompare(b.title)),
+    }));
+}
+
+/**
+ * How each folder is laid out: a run of ungrouped tracks, then any composer
+ * groups. Originals is six tracks and stays flat; Classics leads with the
+ * authored transcriptions — the only ones carrying a description — and files
+ * the vendored pack under its composers.
+ */
+export const LIBRARY_FOLDER_SECTIONS: Record<LibraryFolderId, readonly LibrarySection[]> = {
+  originals: [{ composer: null, tracks: LIBRARY_FOLDER_SUMMARIES.originals }],
+  classics: [
+    { composer: null, tracks: summariesIn('classics') },
+    ...byComposer(CLASSIC_SCORE_SUMMARIES),
+  ],
+};
+
 /**
  * Build a pristine `Take` for an authored library take id. A fresh object
  * every call: whatever the transport or stores did to a previous copy can

@@ -140,6 +140,8 @@ export const mg: Messages = {
     byline: ({ composer }) => `nataon’i ${composer}`,
     openLabel: ({ title }) => `Sokafy ${title}`,
     meta: ({ notes, duration, bpm }) => `naoty ${notes} · ${duration} · ${bpm} BPM`,
+    // Malagasy nouns do not inflect for number; the numeral carries it.
+    groupCount: ({ count }) => `hira ${count}`,
     forkHint:
       'Tsy miova mihitsy ireto hira ireto — raketo eo amboniny dia ho voatahiry ho rakitra vaovao ny dikanao.',
     opening: 'Manokatra…',

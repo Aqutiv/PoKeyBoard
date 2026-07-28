@@ -74,6 +74,25 @@ test.describe('vendored classics', () => {
     expect(await page.locator('.library-item__description').count()).toBe(3);
   });
 
+  test('files the pack under composer headings, authored tracks on top', async ({ page }) => {
+    await gotoLibrary(page);
+    // Six tracks need no grouping.
+    await expect(page.locator('.library-group__heading')).toHaveCount(0);
+
+    await folders(page).getByRole('button', { name: 'Classics' }).click();
+    const headings = page.locator('.library-group__heading');
+    expect(await headings.count()).toBeGreaterThan(10);
+    await expect(headings.first()).toContainText('Johann Sebastian Bach');
+    await expect(headings.first()).toContainText('tracks');
+
+    // The three authored tracks sit above the first heading.
+    const firstHeadingTop = (await headings.first().boundingBox())?.y ?? 0;
+    const authoredTop =
+      (await page.getByRole('button', { name: 'Open Für Elise', exact: true }).boundingBox())?.y ??
+      Number.MAX_SAFE_INTEGER;
+    expect(authoredTop).toBeLessThan(firstHeadingTop);
+  });
+
   test('fetches and parses a score on open', async ({ page }) => {
     const scoreRequests: string[] = [];
     page.on('request', (request) => {
