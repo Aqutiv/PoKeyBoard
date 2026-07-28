@@ -55,7 +55,8 @@ export interface LibraryTrackDef {
   events: TrackEvent[];
 }
 
-const LIBRARY_TIMESTAMP = '2026-07-18T00:00:00.000Z';
+/** Frozen so a rebuilt library take is byte-identical to the last one. */
+export const LIBRARY_TIMESTAMP = '2026-07-18T00:00:00.000Z';
 const DEFAULT_VELOCITY = 0.7;
 /** Pedal lifts this long before the next bar line so harmonies stay clean. */
 const PEDAL_LIFT_MS = 40;

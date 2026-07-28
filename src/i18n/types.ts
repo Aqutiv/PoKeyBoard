@@ -196,7 +196,14 @@ export interface Messages {
     byline: (p: { composer: string }) => string;
     openLabel: (p: { title: string }) => string;
     meta: (p: { notes: number; duration: string; bpm: number }) => string;
+    groupCount: (p: { count: number }) => string;
+    filterLabel: string;
+    filterPlaceholder: string;
+    filterClear: string;
+    filterEmpty: (p: { query: string }) => string;
     forkHint: string;
+    opening: string;
+    openFailed: string;
     descriptions: {
       aBeautifulDay: string;
       eveningTide: string;

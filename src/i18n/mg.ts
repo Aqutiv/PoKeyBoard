@@ -140,8 +140,16 @@ export const mg: Messages = {
     byline: ({ composer }) => `nataon’i ${composer}`,
     openLabel: ({ title }) => `Sokafy ${title}`,
     meta: ({ notes, duration, bpm }) => `naoty ${notes} · ${duration} · ${bpm} BPM`,
+    // Malagasy nouns do not inflect for number; the numeral carries it.
+    groupCount: ({ count }) => `hira ${count}`,
+    filterLabel: 'Sivano ny klasika',
+    filterPlaceholder: 'Lohateny na mpamoron-kira',
+    filterClear: 'Fafao ny sivana',
+    filterEmpty: ({ query }) => `Tsy misy mifanaraka amin’ny “${query}”.`,
     forkHint:
       'Tsy miova mihitsy ireto hira ireto — raketo eo amboniny dia ho voatahiry ho rakitra vaovao ny dikanao.',
+    opening: 'Manokatra…',
+    openFailed: 'Tsy afaka nosokafana io hira io. Jereo ny fifandraisanao dia andramo indray.',
     descriptions: {
       aBeautifulDay:
         'Hira noforonina, mafana sy malefaka, mipetraka manontolo eo amin’ny kitendry hita — tsara hanombohana.',

@@ -1,10 +1,11 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
-import { LIBRARY_FOLDER_SUMMARIES } from './catalog';
-import { LIBRARY_FOLDER_IDS } from './folders';
+import { filterLibrarySections, LIBRARY_FOLDER_SECTIONS } from './catalog';
+import { LIBRARY_FOLDER_IDS, type LibraryFolderId } from './folders';
 import { openLibraryTrack } from './libraryService';
 import './library.css';
 
@@ -17,13 +18,56 @@ export function LibraryPage() {
   const folder = useSettingsStore((s) => s.libraryFolder);
   const setFolder = useSettingsStore((s) => s.setLibraryFolder);
 
+  // A vendored score is fetched and parsed on open, so the tap is no longer
+  // instant and can fail — both states have to be visible.
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+
+  // Classics runs to 63 tracks; Originals is six and needs no filter.
+  const [query, setQuery] = useState('');
+  const filterInput = useRef<HTMLInputElement>(null);
+  const showFilter = folder === 'classics';
+  const sections = useMemo(
+    () => filterLibrarySections(LIBRARY_FOLDER_SECTIONS[folder], showFilter ? query : ''),
+    [folder, query, showFilter],
+  );
+
+  const chooseFolder = (id: LibraryFolderId): void => {
+    // A filter left behind in a hidden folder would silently shorten the list
+    // the next time it is opened.
+    setQuery('');
+    setFolder(id);
+  };
+
+  const clearFilter = (): void => {
+    setQuery('');
+    filterInput.current?.focus();
+  };
+
+  // A download outlives the page if the user navigates away mid-open. Abort it
+  // on unmount: a score that arrives late must not activate itself and pull the
+  // user back to Play, overriding wherever they went instead.
+  const openAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => openAbort.current?.abort(), []);
+
   const open = (trackId: string): void => {
-    openLibraryTrack(trackId)
+    if (openingId !== null) return;
+    const controller = new AbortController();
+    openAbort.current = controller;
+    setOpeningId(trackId);
+    setFailed(false);
+    openLibraryTrack(trackId, controller.signal)
       .then((opened) => {
+        if (controller.signal.aborted) return;
+        setOpeningId(null);
         if (opened) navigate('play');
+        else setFailed(true);
       })
       .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
         console.error('Opening library track failed:', error);
+        setOpeningId(null);
+        setFailed(true);
       });
   };
 
@@ -40,43 +84,120 @@ export function LibraryPage() {
             type="button"
             className={`library-folders__option${id === folder ? ' is-selected' : ''}`}
             aria-pressed={id === folder}
-            onClick={() => setFolder(id)}
+            onClick={() => chooseFolder(id)}
           >
             {m.library.folders[id]}
           </button>
         ))}
       </div>
-      <ul className="library-list">
-        {LIBRARY_FOLDER_SUMMARIES[folder].map((track) => {
-          const isActive = track.takeId === activeTakeId;
-          return (
-            <li key={track.trackId} className={`library-item${isActive ? ' is-active' : ''}`}>
-              <button
-                type="button"
-                className="library-item__main"
-                aria-label={m.library.openLabel({ title: track.title })}
-                aria-current={isActive ? 'true' : undefined}
-                onClick={() => open(track.trackId)}
+      {showFilter ? (
+        <div className="library-filter">
+          <svg
+            className="library-filter__icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          >
+            <circle cx="11" cy="11" r="6" />
+            <path d="M15.5 15.5 20 20" />
+          </svg>
+          <input
+            ref={filterInput}
+            type="search"
+            className="library-filter__input"
+            aria-label={m.library.filterLabel}
+            placeholder={m.library.filterPlaceholder}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {query !== '' ? (
+            <button
+              type="button"
+              className="library-filter__clear"
+              aria-label={m.library.filterClear}
+              onClick={clearFilter}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
               >
-                <span className="library-item__title">{track.title}</span>
-                <span className="library-item__byline">
-                  {m.library.byline({ composer: track.composer })}
+                <path d="M7 7l10 10M17 7 7 17" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {sections.length === 0 ? (
+        <p role="status" className="page__hint library-empty">
+          {m.library.filterEmpty({ query })}
+        </p>
+      ) : null}
+      <div className="library-groups">
+        {sections.map((section) => {
+          const list = (
+            <ul className="library-list">
+              {section.tracks.map((track) => {
+                const isActive = track.takeId === activeTakeId;
+                const isOpening = track.trackId === openingId;
+                return (
+                  <li key={track.trackId} className={`library-item${isActive ? ' is-active' : ''}`}>
+                    <button
+                      type="button"
+                      className="library-item__main"
+                      aria-label={m.library.openLabel({ title: track.title })}
+                      aria-current={isActive ? 'true' : undefined}
+                      onClick={() => open(track.trackId)}
+                    >
+                      <span className="library-item__title">{track.title}</span>
+                      <span className="library-item__byline">
+                        {m.library.byline({ composer: track.composer })}
+                      </span>
+                      <span className="library-item__meta">
+                        {isOpening
+                          ? m.library.opening
+                          : m.library.meta({
+                              notes: track.noteCount,
+                              duration: formatDurationMs(track.durationMs),
+                              bpm: track.bpm,
+                            })}
+                      </span>
+                      {track.descriptionKey ? (
+                        <span className="library-item__description">
+                          {m.library.descriptions[track.descriptionKey]}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          );
+          // The pinned run above the first heading carries no composer of its own.
+          if (section.composer === null) return <div key="pinned">{list}</div>;
+          const headingId = `library-group-${section.composer.replace(/\W+/g, '-').toLowerCase()}`;
+          return (
+            <section className="library-group" key={section.composer} aria-labelledby={headingId}>
+              <h2 className="library-group__heading" id={headingId}>
+                <span>{section.composer}</span>
+                <span className="library-group__count">
+                  {m.library.groupCount({ count: section.tracks.length })}
                 </span>
-                <span className="library-item__meta">
-                  {m.library.meta({
-                    notes: track.noteCount,
-                    duration: formatDurationMs(track.durationMs),
-                    bpm: track.bpm,
-                  })}
-                </span>
-                <span className="library-item__description">
-                  {m.library.descriptions[track.descriptionKey]}
-                </span>
-              </button>
-            </li>
+              </h2>
+              {list}
+            </section>
           );
         })}
-      </ul>
+      </div>
+      <p role="status" className="library-status">
+        {failed ? m.library.openFailed : ''}
+      </p>
       <p className="page__hint library-fork-hint">{m.library.forkHint}</p>
     </section>
   );

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import { isLibraryTakeId, libraryTakeId } from '@/domain/libraryTakes';
 import { parseTakeJsonString } from '@/domain/takeSchema';
 import {
+  filterLibrarySections,
   getLibraryTake,
+  LIBRARY_FOLDER_SECTIONS,
   LIBRARY_FOLDER_SUMMARIES,
   LIBRARY_TRACK_SUMMARIES,
   LIBRARY_TRACKS,
@@ -35,11 +37,18 @@ describe('library catalog', () => {
       'blues-in-c',
       'good-night',
     ]);
-    expect(LIBRARY_FOLDER_SUMMARIES.classics.map((track) => track.trackId)).toEqual([
-      'fur-elise',
-      'gymnopedie-1',
-      'moonlight-sonata',
-    ]);
+    // Classics leads with the authored transcriptions, then the vendored pack.
+    expect(
+      LIBRARY_FOLDER_SUMMARIES.classics
+        .filter((track) => track.source === 'authored')
+        .map((track) => track.trackId),
+    ).toEqual(['fur-elise', 'gymnopedie-1', 'moonlight-sonata']);
+    expect(
+      LIBRARY_FOLDER_SUMMARIES.classics.slice(0, 3).every((t) => t.source === 'authored'),
+    ).toBe(true);
+    expect(LIBRARY_FOLDER_SUMMARIES.classics.slice(3).every((t) => t.source === 'score')).toBe(
+      true,
+    );
     // The default folder is the one shown before the user has chosen.
     expect(LIBRARY_FOLDER_SUMMARIES[DEFAULT_LIBRARY_FOLDER]).toBe(
       LIBRARY_FOLDER_SUMMARIES.originals,
@@ -48,14 +57,85 @@ describe('library catalog', () => {
 
   it('partitions the catalog exactly — every track filed once', () => {
     const filed = LIBRARY_FOLDER_IDS.flatMap((folder) => [...LIBRARY_FOLDER_SUMMARIES[folder]]);
-    expect(filed).toHaveLength(LIBRARY_TRACK_SUMMARIES.length);
+    const authored = filed.filter((track) => track.source === 'authored');
+    expect(authored).toHaveLength(LIBRARY_TRACK_SUMMARIES.length);
+    // No id may repeat across the two sources: a vendored score wearing an
+    // authored track's id would shadow it in getLibraryTake.
     expect(new Set(filed.map((track) => track.trackId)).size).toBe(filed.length);
     // Order inside a folder follows the catalog's display order.
     for (const folder of LIBRARY_FOLDER_IDS) {
-      expect(LIBRARY_FOLDER_SUMMARIES[folder]).toEqual(
+      expect(authored.filter((track) => track.folder === folder)).toEqual(
         LIBRARY_TRACK_SUMMARIES.filter((track) => track.folder === folder),
       );
     }
+  });
+
+  it('lays each folder out as a pinned run then composer groups', () => {
+    // Originals is six tracks; grouping it would be noise.
+    expect(LIBRARY_FOLDER_SECTIONS.originals).toHaveLength(1);
+    expect(LIBRARY_FOLDER_SECTIONS.originals[0]?.composer).toBeNull();
+
+    const [pinned, ...groups] = LIBRARY_FOLDER_SECTIONS.classics;
+    expect(pinned?.composer).toBeNull();
+    expect(pinned?.tracks.map((track) => track.trackId)).toEqual([
+      'fur-elise',
+      'gymnopedie-1',
+      'moonlight-sonata',
+    ]);
+    expect(groups.length).toBeGreaterThan(1);
+    // Every later section is a real composer holding only their own tracks.
+    for (const group of groups) {
+      expect(group.composer).not.toBeNull();
+      expect(group.tracks.every((track) => track.composer === group.composer)).toBe(true);
+      expect(group.tracks.length).toBeGreaterThan(0);
+    }
+    // Groups run by surname — the last word of the credit.
+    const surnames = groups.map((group) => (group.composer ?? '').split(' ').at(-1) ?? '');
+    expect(surnames).toEqual([...surnames].sort((a, b) => a.localeCompare(b)));
+    // Beethoven files under B, not V.
+    expect(groups[0]?.composer).toBe('Johann Sebastian Bach');
+  });
+
+  it('sections hold every track in the folder, exactly once', () => {
+    for (const folder of LIBRARY_FOLDER_IDS) {
+      const sectioned = LIBRARY_FOLDER_SECTIONS[folder].flatMap((section) => [...section.tracks]);
+      expect(sectioned).toHaveLength(LIBRARY_FOLDER_SUMMARIES[folder].length);
+      expect(new Set(sectioned.map((track) => track.trackId)).size).toBe(sectioned.length);
+      // Same set as the flat view, regardless of the order grouping imposes.
+      expect(sectioned.map((track) => track.trackId).sort()).toEqual(
+        LIBRARY_FOLDER_SUMMARIES[folder].map((track) => track.trackId).sort(),
+      );
+    }
+  });
+
+  it('narrows the sections to what matches, headings and all', () => {
+    const classics = LIBRARY_FOLDER_SECTIONS.classics;
+    // A blank query is not a filter: same array back, so nothing re-renders.
+    expect(filterLibrarySections(classics, '')).toBe(classics);
+    expect(filterLibrarySections(classics, '   ')).toBe(classics);
+
+    const nocturnes = filterLibrarySections(classics, 'nocturne');
+    const matched = nocturnes.flatMap((section) => [...section.tracks]);
+    expect(matched.length).toBeGreaterThan(2);
+    expect(matched.every((track) => /nocturne/i.test(track.title))).toBe(true);
+    // Emptied sections drop out rather than leaving a bare heading.
+    expect(nocturnes.every((section) => section.tracks.length > 0)).toBe(true);
+    // Surviving sections keep the order they were built in.
+    const order = nocturnes.map((section) => section.composer);
+    expect(order).toEqual(classics.map((s) => s.composer).filter((c) => order.includes(c)));
+
+    // Searching a composer returns that composer's whole group — and the
+    // pinned run is filtered too, so the authored Gymnopédie comes along.
+    const satie = filterLibrarySections(classics, 'satie');
+    expect(satie.map((section) => section.composer)).toEqual([null, 'Erik Satie']);
+    expect(satie[0]?.tracks.map((track) => track.trackId)).toEqual(['gymnopedie-1']);
+    expect(satie[1]?.tracks).toEqual(
+      classics.find((section) => section.composer === 'Erik Satie')?.tracks,
+    );
+
+    // Accents are optional, and a miss is empty rather than everything.
+    expect(filterLibrarySections(classics, 'fur elise').length).toBeGreaterThan(0);
+    expect(filterLibrarySections(classics, 'zzzz nothing')).toEqual([]);
   });
 
   it('credits Good Night to its requested artist', () => {

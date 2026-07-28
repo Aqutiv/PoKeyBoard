@@ -139,8 +139,15 @@ export const fr: Messages = {
     byline: ({ composer }) => `de ${composer}`,
     openLabel: ({ title }) => `Ouvrir ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,
+    groupCount: ({ count }) => (count === 1 ? '1 morceau' : `${count} morceaux`),
+    filterLabel: 'Filtrer les classiques',
+    filterPlaceholder: 'Titre ou compositeur',
+    filterClear: 'Effacer le filtre',
+    filterEmpty: ({ query }) => `Aucun résultat pour « ${query} ».`,
     forkHint:
       'Les morceaux de la bibliothèque ne changent jamais — enregistrez par-dessus l’un d’eux et votre version sera sauvegardée comme une nouvelle prise.',
+    opening: 'Ouverture…',
+    openFailed: 'Ce morceau n’a pas pu être ouvert. Vérifiez votre connexion et réessayez.',
     descriptions: {
       aBeautifulDay:
         'Une mélodie originale, chaleureuse et douce, qui tient entièrement sur les touches visibles — une première pièce facile à suivre.',
