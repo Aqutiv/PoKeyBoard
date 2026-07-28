@@ -93,6 +93,49 @@ test.describe('vendored classics', () => {
     expect(authoredTop).toBeLessThan(firstHeadingTop);
   });
 
+  test('filters by title or composer, without fetching anything', async ({ page }) => {
+    const scoreRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/scores/')) scoreRequests.push(request.url());
+    });
+
+    await gotoLibrary(page);
+    // Six tracks need no filter.
+    await expect(page.getByRole('searchbox', { name: 'Filter classics' })).toHaveCount(0);
+
+    await folders(page).getByRole('button', { name: 'Classics' }).click();
+    const filter = page.getByRole('searchbox', { name: 'Filter classics' });
+    await expect(filter).toBeVisible();
+    const unfiltered = await trackButtons(page).count();
+
+    await filter.fill('nocturne');
+    expect(await trackButtons(page).count()).toBeLessThan(unfiltered);
+    await expect(page.getByRole('button', { name: /Open Nocturne/ }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open Canon in D', exact: true })).toHaveCount(0);
+
+    // Accents are optional: "fur elise" reaches "Für Elise".
+    await filter.fill('fur elise');
+    await expect(page.getByRole('button', { name: 'Open Für Elise', exact: true })).toBeVisible();
+
+    // Both tokens count, in either order.
+    await filter.fill('chopin waltz');
+    const headings = page.locator('.library-group__heading');
+    await expect(headings).toHaveCount(1);
+    await expect(headings.first()).toContainText('Frédéric Chopin');
+
+    await filter.fill('zzzz nothing here');
+    await expect(trackButtons(page)).toHaveCount(0);
+    await expect(page.locator('.library-empty')).toContainText('Nothing matches');
+
+    // The clear button restores the full list.
+    await page.getByRole('button', { name: 'Clear filter' }).click();
+    await expect(filter).toHaveValue('');
+    expect(await trackButtons(page).count()).toBe(unfiltered);
+
+    // None of that touched the network.
+    expect(scoreRequests).toEqual([]);
+  });
+
   test('fetches and parses a score on open', async ({ page }) => {
     const scoreRequests: string[] = [];
     page.on('request', (request) => {

@@ -139,6 +139,10 @@ export const es: Messages = {
     openLabel: ({ title }) => `Abrir ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notas · ${duration} · ${bpm} BPM`,
     groupCount: ({ count }) => (count === 1 ? '1 pista' : `${count} pistas`),
+    filterLabel: 'Filtrar clásicas',
+    filterPlaceholder: 'Título o compositor',
+    filterClear: 'Borrar el filtro',
+    filterEmpty: ({ query }) => `Nada coincide con «${query}».`,
     forkHint:
       'Las pistas de la biblioteca nunca cambian — graba sobre una y tu versión se guardará como una toma nueva.',
     opening: 'Abriendo…',

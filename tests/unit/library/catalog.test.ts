@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { isLibraryTakeId, libraryTakeId } from '@/domain/libraryTakes';
 import { parseTakeJsonString } from '@/domain/takeSchema';
 import {
+  filterLibrarySections,
   getLibraryTake,
   LIBRARY_FOLDER_SECTIONS,
   LIBRARY_FOLDER_SUMMARIES,
@@ -105,6 +106,36 @@ describe('library catalog', () => {
         LIBRARY_FOLDER_SUMMARIES[folder].map((track) => track.trackId).sort(),
       );
     }
+  });
+
+  it('narrows the sections to what matches, headings and all', () => {
+    const classics = LIBRARY_FOLDER_SECTIONS.classics;
+    // A blank query is not a filter: same array back, so nothing re-renders.
+    expect(filterLibrarySections(classics, '')).toBe(classics);
+    expect(filterLibrarySections(classics, '   ')).toBe(classics);
+
+    const nocturnes = filterLibrarySections(classics, 'nocturne');
+    const matched = nocturnes.flatMap((section) => [...section.tracks]);
+    expect(matched.length).toBeGreaterThan(2);
+    expect(matched.every((track) => /nocturne/i.test(track.title))).toBe(true);
+    // Emptied sections drop out rather than leaving a bare heading.
+    expect(nocturnes.every((section) => section.tracks.length > 0)).toBe(true);
+    // Surviving sections keep the order they were built in.
+    const order = nocturnes.map((section) => section.composer);
+    expect(order).toEqual(classics.map((s) => s.composer).filter((c) => order.includes(c)));
+
+    // Searching a composer returns that composer's whole group — and the
+    // pinned run is filtered too, so the authored Gymnopédie comes along.
+    const satie = filterLibrarySections(classics, 'satie');
+    expect(satie.map((section) => section.composer)).toEqual([null, 'Erik Satie']);
+    expect(satie[0]?.tracks.map((track) => track.trackId)).toEqual(['gymnopedie-1']);
+    expect(satie[1]?.tracks).toEqual(
+      classics.find((section) => section.composer === 'Erik Satie')?.tracks,
+    );
+
+    // Accents are optional, and a miss is empty rather than everything.
+    expect(filterLibrarySections(classics, 'fur elise').length).toBeGreaterThan(0);
+    expect(filterLibrarySections(classics, 'zzzz nothing')).toEqual([]);
   });
 
   it('credits Good Night to its requested artist', () => {

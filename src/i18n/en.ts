@@ -140,6 +140,10 @@ export const en: Messages = {
     openLabel: ({ title }) => `Open ${title}`,
     meta: ({ notes, duration, bpm }) => `${notes} notes · ${duration} · ${bpm} BPM`,
     groupCount: ({ count }) => (count === 1 ? '1 track' : `${count} tracks`),
+    filterLabel: 'Filter classics',
+    filterPlaceholder: 'Title or composer',
+    filterClear: 'Clear filter',
+    filterEmpty: ({ query }) => `Nothing matches “${query}”.`,
     forkHint:
       'Library tracks never change — record over one and your version is saved as a new take.',
     opening: 'Opening…',

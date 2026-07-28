@@ -1,5 +1,6 @@
 import { isLibraryTakeId, LIBRARY_ID_PREFIX, libraryTakeId } from '@/domain/libraryTakes';
 import type { Take } from '@/domain/takeTypes';
+import { matchesSearch } from '@/utils/search';
 import { CLASSIC_SCORES } from './classicsManifest';
 import { CLASSIC_SCORE_NAMES } from './classicsNames';
 import type { LibraryFolderId } from './folders';
@@ -154,6 +155,27 @@ export const LIBRARY_FOLDER_SECTIONS: Record<LibraryFolderId, readonly LibrarySe
     ...byComposer(CLASSIC_SCORE_SUMMARIES),
   ],
 };
+
+/**
+ * The sections narrowed to tracks matching `query`, against title and
+ * composer together. Sections left with nothing drop out, so the headings
+ * follow the results; the order the sections were built in is untouched.
+ *
+ * A blank query hands back the very same array, so the page re-renders
+ * nothing while the field is empty.
+ */
+export function filterLibrarySections(
+  sections: readonly LibrarySection[],
+  query: string,
+): readonly LibrarySection[] {
+  if (query.trim() === '') return sections;
+  return sections.flatMap((section) => {
+    const tracks = section.tracks.filter((track) =>
+      matchesSearch(`${track.title} ${track.composer}`, query),
+    );
+    return tracks.length > 0 ? [{ ...section, tracks }] : [];
+  });
+}
 
 /**
  * Build a pristine `Take` for an authored library take id. A fresh object

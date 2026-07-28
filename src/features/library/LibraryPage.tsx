@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
-import { LIBRARY_FOLDER_SECTIONS } from './catalog';
-import { LIBRARY_FOLDER_IDS } from './folders';
+import { filterLibrarySections, LIBRARY_FOLDER_SECTIONS } from './catalog';
+import { LIBRARY_FOLDER_IDS, type LibraryFolderId } from './folders';
 import { openLibraryTrack } from './libraryService';
 import './library.css';
 
@@ -22,6 +22,27 @@ export function LibraryPage() {
   // instant and can fail — both states have to be visible.
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+
+  // Classics runs to 63 tracks; Originals is six and needs no filter.
+  const [query, setQuery] = useState('');
+  const filterInput = useRef<HTMLInputElement>(null);
+  const showFilter = folder === 'classics';
+  const sections = useMemo(
+    () => filterLibrarySections(LIBRARY_FOLDER_SECTIONS[folder], showFilter ? query : ''),
+    [folder, query, showFilter],
+  );
+
+  const chooseFolder = (id: LibraryFolderId): void => {
+    // A filter left behind in a hidden folder would silently shorten the list
+    // the next time it is opened.
+    setQuery('');
+    setFolder(id);
+  };
+
+  const clearFilter = (): void => {
+    setQuery('');
+    filterInput.current?.focus();
+  };
 
   const open = (trackId: string): void => {
     if (openingId !== null) return;
@@ -53,14 +74,63 @@ export function LibraryPage() {
             type="button"
             className={`library-folders__option${id === folder ? ' is-selected' : ''}`}
             aria-pressed={id === folder}
-            onClick={() => setFolder(id)}
+            onClick={() => chooseFolder(id)}
           >
             {m.library.folders[id]}
           </button>
         ))}
       </div>
+      {showFilter ? (
+        <div className="library-filter">
+          <svg
+            className="library-filter__icon"
+            viewBox="0 0 24 24"
+            aria-hidden="true"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          >
+            <circle cx="11" cy="11" r="6" />
+            <path d="M15.5 15.5 20 20" />
+          </svg>
+          <input
+            ref={filterInput}
+            type="search"
+            className="library-filter__input"
+            aria-label={m.library.filterLabel}
+            placeholder={m.library.filterPlaceholder}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+          {query !== '' ? (
+            <button
+              type="button"
+              className="library-filter__clear"
+              aria-label={m.library.filterClear}
+              onClick={clearFilter}
+            >
+              <svg
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              >
+                <path d="M7 7l10 10M17 7 7 17" />
+              </svg>
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {sections.length === 0 ? (
+        <p role="status" className="page__hint library-empty">
+          {m.library.filterEmpty({ query })}
+        </p>
+      ) : null}
       <div className="library-groups">
-        {LIBRARY_FOLDER_SECTIONS[folder].map((section) => {
+        {sections.map((section) => {
           const list = (
             <ul className="library-list">
               {section.tracks.map((track) => {

@@ -25,6 +25,68 @@
   color: var(--accent-contrast);
 }
 
+/* Filter field: icon and clear button sit inside the input's own padding. */
+.library-filter {
+  position: relative;
+  flex-shrink: 0;
+  margin-bottom: 10px;
+}
+
+.library-filter__input {
+  width: 100%;
+  min-height: var(--touch-target);
+  padding: 0 calc(var(--touch-target) - 4px) 0 38px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.library-filter__input:focus-visible {
+  border-color: var(--accent);
+}
+
+/* WebKit's own clear affordance would sit beside ours. */
+.library-filter__input::-webkit-search-cancel-button,
+.library-filter__input::-webkit-search-decoration {
+  appearance: none;
+  display: none;
+}
+
+.library-filter__icon {
+  position: absolute;
+  top: 50%;
+  left: 11px;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+.library-filter__clear {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  transform: translateY(-50%);
+  color: var(--text-dim);
+}
+
+.library-filter__clear svg {
+  width: 17px;
+  height: 17px;
+}
+
+.library-empty {
+  flex-shrink: 0;
+}
+
 /* The scroller sits above the lists, not on them: with a list per composer,
    each would otherwise scroll on its own and no heading could stick.
    min-height: 0 lets this flex child shrink instead of pushing the page. */
