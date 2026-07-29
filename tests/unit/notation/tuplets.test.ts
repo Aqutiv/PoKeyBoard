@@ -8,6 +8,8 @@ import { FUR_ELISE } from '@/features/library/tracks/furElise';
 import { GOOD_NIGHT } from '@/features/library/tracks/goodNight';
 import { MOONLIGHT_SONATA } from '@/features/library/tracks/moonlightSonata';
 import { layoutScore } from '@/features/notation/notationLayout';
+import { beatsForSymbol, TRIPLET, type DurationSymbol } from '@/features/notation/quantization';
+import { UNITS_PER_WHOLE } from '@/features/notation/rests';
 import { layoutSheet } from '@/features/notation/sheetLayout';
 import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
 import { fitsDivision, isTernaryBeat } from '@/features/notation/tuplets';
@@ -24,6 +26,15 @@ describe('isTernaryBeat', () => {
 
   it('does not read straight sixteenths as ternary', () => {
     expect(isTernaryBeat([0, 0.25, 0.5, 0.75])).toBe(false);
+  });
+
+  it('does not read a run of 32nds or 64ths as ternary', () => {
+    // The divisions read only as far as quarters of the beat, so a run finer
+    // than that fits neither grid well; the absolute bound is what rejects it
+    // rather than letting ternary win by being the less bad of two.
+    const run = (count: number): number[] => Array.from({ length: count }, (_, i) => i / count);
+    expect(isTernaryBeat(run(8))).toBe(false); // 32nds through a quarter beat
+    expect(isTernaryBeat(run(16))).toBe(false); // 64ths
   });
 
   it('does not read straight quavers as ternary', () => {
@@ -455,16 +466,10 @@ describe('tuplet lengths a symbol cannot state', () => {
     const layout = layoutScore(notes, OPTS);
     const held = layout.chords.find((chord) => chord.notes[0]!.id === 'c');
     expect(held).toBeDefined();
-    const units = (symbol: {
-      base: string;
-      dotted: boolean;
-      tuplet?: { actual: number; normal: number };
-    }): number => {
-      const base = { whole: 96, half: 48, quarter: 24, eighth: 12, sixteenth: 6 }[symbol.base]!;
-      const dotted = base * (symbol.dotted ? 1.5 : 1);
-      return symbol.tuplet ? (dotted * symbol.tuplet.normal) / symbol.tuplet.actual : dotted;
-    };
-    // Five slots of eight units is forty; the value written must not exceed it.
-    expect(units(held!.symbol)).toBeLessThanOrEqual(40);
+    // Said in note values rather than raw counts, so it stays true whatever the
+    // unit the layout counts in: five triplet-eighth slots, and no more.
+    const units = (symbol: DurationSymbol): number => beatsForSymbol(symbol, UNITS_PER_WHOLE);
+    const slot = units({ base: 'eighth', dotted: false, tuplet: TRIPLET });
+    expect(units(held!.symbol)).toBeLessThanOrEqual(5 * slot);
   });
 });

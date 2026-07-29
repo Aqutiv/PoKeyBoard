@@ -1,4 +1,4 @@
-import type { TimeSignature } from '@/domain/takeTypes';
+import type { QuantizationSetting, TimeSignature } from '@/domain/takeTypes';
 import { clamp, wholeNoteDurationMs } from '@/utils/timing';
 import {
   measureIndexAt,
@@ -10,10 +10,10 @@ import {
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
-import { beamSpanFor, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
+import { beamSpanFor, extraStemG, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
 import { normalizeFifths, type AccidentalKind } from './keySignature';
-import type { DurationSymbol } from './quantization';
+import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
 import type { ClefKind, StaffKind } from './staffMapping';
 
 /**
@@ -23,7 +23,7 @@ import type { ClefKind, StaffKind } from './staffMapping';
  */
 export type PaperSize = 'a4' | 'letter';
 /** Sheet output always snaps to a grid ('off' would give one column per note). */
-export type SheetGrid = '1/8' | '1/16';
+export type SheetGrid = Exclude<QuantizationSetting, 'off'>;
 
 /** Staff space on paper (pt); all engraving dimensions scale from this. */
 export const SHEET_GAP_PT = 5.4;
@@ -197,8 +197,8 @@ export interface SheetColumn {
 export interface SheetBeam {
   staff: StaffKind;
   stemDown: boolean;
-  /** 1 for eighths, 2 for sixteenths. */
-  beamCount: 1 | 2;
+  /** 1 for eighths, 2 for sixteenths, 3 for 32nds, 4 for 64ths. */
+  beamCount: BeamCount;
   /** The tuplet numeral over the beam, where the run is one. */
   tupletCount: number | null;
   x1Pt: number;
@@ -962,13 +962,14 @@ function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
       : member.chord.notes[member.chord.notes.length - 1]!;
     return staffYRel(note.step);
   });
-  const span = beamSpanFor(xs, anchors, stemDown, G);
+  const beamCount = beamCountFor(run[0]!.chord.symbol.base) || 1;
+  const span = beamSpanFor(xs, anchors, stemDown, G, beamCount);
 
   const beamId = measure.beams.length;
   measure.beams.push({
     staff,
     stemDown,
-    beamCount: run[0]!.chord.symbol.base === 'sixteenth' ? 2 : 1,
+    beamCount,
     // Only whole tuplets are numbered; see `buildBeamGroups`, which decides
     // the same way. A number over a fragment would name a rhythm that is not
     // being played.
@@ -993,8 +994,11 @@ function systemExtents(measures: SheetMeasure[]): { abovePt: number; belowPt: nu
         let top = staffYRel(chord.notes[chord.notes.length - 1]!.step) - headPad;
         let bottom = staffYRel(chord.notes[0]!.step) + headPad;
         if (chord.symbol.base !== 'whole' && chord.beamId === null) {
-          if (chord.stemDown) bottom = Math.max(bottom, stemAnchorYRel(chord) + STEM_LENGTH_G * G);
-          else top = Math.min(top, stemAnchorYRel(chord) - STEM_LENGTH_G * G);
+          // A lone 32nd or 64th stacks more flags than an ordinary stem holds,
+          // so it reaches further and the system has to leave room for it.
+          const stem = (STEM_LENGTH_G + extraStemG(beamCountFor(chord.symbol.base))) * G;
+          if (chord.stemDown) bottom = Math.max(bottom, stemAnchorYRel(chord) + stem);
+          else top = Math.min(top, stemAnchorYRel(chord) - stem);
         }
         if (chord.staff === 'treble') abovePt = Math.max(abovePt, -top);
         else belowPt = Math.max(belowPt, bottom - 4 * G);

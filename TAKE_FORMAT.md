@@ -35,7 +35,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 - `midi` 0–127 integer; `velocity` 0–1; `startMs ≥ 0`; `durationMs ≥ 1` (≤ 2 min per note); take timeline capped at 6 h; ≤ 50 000 notes. `NaN`/`Infinity` anywhere is rejected.
 - `bpm` 40–240; `countInBars` 0|1|2; denominator 2|4|8|16.
 - `tempo.changes` is **optional** (absent means one tempo throughout): sorted, `atMs ≥ 1`, `bpm` 40–240, ≤ 1024 entries. Note timing is always absolute ms, so a tempo map never moves a note — it tells the notation where bar lines fall and which note values to draw. Added without a schema bump: older takes parse untouched, and an older build drops the field.
-- `quantization` `off | 1/8 | 1/16` — **display only**; raw performance timing is never quantized.
+- `quantization` `off | 1/8 | 1/16 | 1/32 | 1/64` — **display only**; raw performance timing is never quantized. An imported score arrives on the finest grid its own shortest value needs (1/16 floor).
 - A note's `staff` (`treble | bass`), `voice` (integer 0–15) and `clef` (`treble | bass`) are
   **optional engraving hints from an imported score**, never audible: `staff` is the hand the
   source wrote the note on and overrides the notation's middle-C split, `voice` says which notes

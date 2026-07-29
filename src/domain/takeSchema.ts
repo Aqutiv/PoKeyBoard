@@ -21,6 +21,7 @@ import {
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
   MAX_TEMPO_CHANGES,
+  QUANTIZATION_SETTINGS,
   type Take,
 } from './takeTypes';
 
@@ -74,7 +75,7 @@ export const instrumentSchema = z.object({
 });
 
 export const displaySchema = z.object({
-  quantization: z.enum(['off', '1/8', '1/16']),
+  quantization: z.enum(QUANTIZATION_SETTINGS),
   zoom: z.number().min(0.25).max(4),
   playheadMs: timelineMs,
 });
@@ -283,7 +284,7 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
     if (input.display !== undefined) repairs.push({ code: 'displayReset' });
   } else {
     const display = { ...(data.display as RawTakeData) };
-    if (!['off', '1/8', '1/16'].includes(display.quantization as string)) {
+    if (!(QUANTIZATION_SETTINGS as readonly string[]).includes(display.quantization as string)) {
       display.quantization = '1/16';
     }
     if (!isFiniteNumber(display.zoom)) display.zoom = 1;

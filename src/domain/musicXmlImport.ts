@@ -15,6 +15,7 @@ import {
   type NoteEvent,
   type NoteStaff,
   type PedalEvent,
+  type QuantizationSetting,
   type Take,
   type TimeSignature,
 } from './takeTypes';
@@ -77,6 +78,8 @@ interface CollectedScore {
   notes: QNote[];
   pedals: QPedal[];
   tempi: TempoEntry[];
+  /** The shortest written value anywhere in the score, in quarters. */
+  shortestQ: number | null;
   timeSignature: TimeSignature | null;
   /** Fifths from the score's own <key>, or null when it never declared one. */
   keySignature: number | null;
@@ -353,6 +356,11 @@ function collectPart(
           const isCue = childByTag(el, 'cue') !== null;
           const pitch = childByTag(el, 'pitch');
           const durQ = quartersOf(el);
+          // Rests count as much as notes: the grid has to be fine enough to
+          // write the silences too, and a cue note is not engraved at all.
+          if (durQ > 0 && !isCue && (out.shortestQ === null || durQ < out.shortestQ)) {
+            out.shortestQ = durQ;
+          }
           const onsetQ = isChord ? (chordAnchorQ ?? cursorQ) : cursorQ;
           if (!isChord) {
             chordAnchorQ = isRest ? null : cursorQ;
@@ -469,6 +477,7 @@ function collectScore(root: Element): CollectedScore {
     notes: [],
     pedals: [],
     tempi: [],
+    shortestQ: null,
     timeSignature: null,
     keySignature: null,
     title: null,
@@ -481,6 +490,29 @@ function collectScore(root: Element): CollectedScore {
     if (part.tagName === 'part') divisions = collectPart(part, divisions, out);
   }
   return out;
+}
+
+/**
+ * The display grid an imported score should arrive with: the finest one it
+ * needs, and no finer.
+ *
+ * The notation rounds a note's written length to the grid, so a score full of
+ * 32nds read on a 1/16 grid loses them — every pair collapses into one
+ * sixteenth and the bar is padded out with rests. Nobody should have to know
+ * that, so the score itself decides: the shortest value it contains picks the
+ * grid, measured in quarters (a 32nd is an eighth of one).
+ *
+ * 1/16 stays the floor. A score of nothing but quarters gains nothing from a
+ * coarser grid, and takes written before this existed all carried 1/16.
+ */
+export function gridForShortestQ(shortestQ: number | null): QuantizationSetting {
+  if (shortestQ === null) return '1/16';
+  // Half-way in log space between neighbouring values, so a length that is not
+  // quite exact — a triplet, or a division this file rounds oddly — lands on
+  // whichever grid is nearer rather than always on the finer one.
+  if (shortestQ < 0.125 / Math.SQRT2) return '1/64';
+  if (shortestQ < 0.25 / Math.SQRT2) return '1/32';
+  return '1/16';
 }
 
 function fileTitle(fileName: string | undefined): string | null {
@@ -580,6 +612,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       },
       notes,
       pedalEvents,
+      display: { quantization: gridForShortestQ(collected.shortestQ), zoom: 1, playheadMs: 0 },
     }),
   );
 }

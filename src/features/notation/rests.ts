@@ -5,24 +5,25 @@ import { beatsForSymbol, DURATION_SYMBOLS, type DurationSymbol } from './quantiz
  * Choosing the rests that fill a silence, in the one place both renderers can
  * share. Pure arithmetic — no timing, no geometry.
  *
- * Positions here are counted in ninety-sixths of a whole note rather than in
- * beats. Every value the app writes is a whole number of them, so "does this
- * rest start where a rest of its length may start" is exact integer arithmetic
- * instead of a float comparison against beats that arrived by way of rounded
- * milliseconds.
+ * Positions here are counted in three-hundred-and-eighty-fourths of a whole
+ * note rather than in beats. Every value the app writes is a whole number of
+ * them, so "does this rest start where a rest of its length may start" is exact
+ * integer arithmetic instead of a float comparison against beats that arrived
+ * by way of rounded milliseconds.
  *
- * Ninety-six and not thirty-two, which would be enough for the binary values
- * alone: it is the smallest count that also divides into three, and a tuplet is
- * a division into three. A thirty-second is 3 units, a sixteenth 6, a quarter
- * 24 — and a triplet eighth is 8, exactly.
+ * 384 and not 32, which would be enough for the binary values alone: it also
+ * divides into three, and a tuplet is a division into three. It is not 192
+ * either, which reaches the 64th but leaves a *dotted* 64th at four and a half.
+ * So: a 64th is 6 units, a sixteenth 24, a quarter 96 — and a triplet eighth is
+ * 32, a triplet 64th 4, exactly.
  */
-export const UNITS_PER_WHOLE = 96;
+export const UNITS_PER_WHOLE = 384;
 
 /** The shortest rest that can be written; anything less is not drawn. */
-export const SMALLEST_UNITS = UNITS_PER_WHOLE / 16;
+export const SMALLEST_UNITS = UNITS_PER_WHOLE / 64;
 
 export interface RestSpan {
-  /** 32nd notes from the start of the measure. */
+  /** Units (see `UNITS_PER_WHOLE`) from the start of the measure. */
   startUnits: number;
   lengthUnits: number;
   symbol: DurationSymbol;
@@ -34,12 +35,12 @@ const VALUES: readonly { symbol: DurationSymbol; units: number }[] = DURATION_SY
 
 const WHOLE_REST: DurationSymbol = { base: 'whole', dotted: false };
 
-/** A measure's length in 32nd notes. */
+/** A measure's length in units. */
 export function barUnits(timeSignature: TimeSignature): number {
   return (timeSignature.numerator * UNITS_PER_WHOLE) / timeSignature.denominator;
 }
 
-/** Convert time-signature beats to 32nd notes. */
+/** Convert time-signature beats to units. */
 export function unitsPerBeat(denominator: number): number {
   return UNITS_PER_WHOLE / denominator;
 }
@@ -51,15 +52,20 @@ export function unitsPerBeat(denominator: number): number {
  * which is the division a reader counts from. Where nothing qualifies — a
  * silence that starts off the grid — the longest value that fits is better
  * than nothing.
+ *
+ * Nothing shorter than `minUnits` is ever chosen; the caller's grid says how
+ * fine the reading is meant to be, and a value under it would claim a precision
+ * the rest of the page does not have.
  */
 function choose(
   p: number,
   remaining: number,
   midpoint: number | null,
+  minUnits: number,
 ): { symbol: DurationSymbol; units: number } | null {
   let fallback: { symbol: DurationSymbol; units: number } | null = null;
   for (const value of VALUES) {
-    if (value.units > remaining) continue;
+    if (value.units > remaining || value.units < minUnits) continue;
     fallback ??= value;
     if (p % value.units !== 0) continue;
     if (midpoint !== null && p < midpoint && p + value.units > midpoint) continue;
@@ -74,20 +80,28 @@ function choose(
  * Used for silence and for sound alike: the rests inside a gap, and the tied
  * pieces a held note is written as. Both answer the same question — which
  * standard values add up to this span, laid out so the bar still reads.
+ *
+ * `minUnits` is the shortest value that may appear, which is the display grid's
+ * own step where there is one: a page written on a 1/16 grid says nothing
+ * happens between sixteenths, so a sliver left over by rounding is dropped
+ * exactly as it was before shorter values existed, rather than surfacing as a
+ * 32nd rest nothing else on the page could have produced.
  */
 export function valuesForSpan(
   fromUnits: number,
   toUnits: number,
   timeSignature: TimeSignature,
+  minUnits: number = SMALLEST_UNITS,
 ): RestSpan[] {
   // Only an even meter has a middle to protect; 3/4 counts in threes and a
   // value across its centre is how it is written.
   const midpoint = timeSignature.numerator % 2 === 0 ? barUnits(timeSignature) / 2 : null;
+  const floor = Math.max(SMALLEST_UNITS, minUnits);
 
   const spans: RestSpan[] = [];
   let p = fromUnits;
-  while (toUnits - p >= SMALLEST_UNITS) {
-    const pick = choose(p, toUnits - p, midpoint);
+  while (toUnits - p >= floor) {
+    const pick = choose(p, toUnits - p, midpoint, floor);
     if (pick === null) break;
     spans.push({ startUnits: p, lengthUnits: pick.units, symbol: pick.symbol });
     p += pick.units;
@@ -105,12 +119,13 @@ export function restsForGap(
   fromUnits: number,
   toUnits: number,
   timeSignature: TimeSignature,
+  minUnits: number = SMALLEST_UNITS,
 ): RestSpan[] {
   const bar = barUnits(timeSignature);
   if (fromUnits <= 0 && toUnits >= bar) {
     return [{ startUnits: 0, lengthUnits: bar, symbol: WHOLE_REST }];
   }
-  return valuesForSpan(fromUnits, toUnits, timeSignature);
+  return valuesForSpan(fromUnits, toUnits, timeSignature, minUnits);
 }
 
 /**

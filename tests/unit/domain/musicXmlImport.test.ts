@@ -584,6 +584,58 @@ describe('pedal, pitch spelling, and time signatures', () => {
   });
 });
 
+describe('the display grid an import arrives with', () => {
+  /** `divisions` per quarter; 8 makes a 32nd one unit and a 64th a half. */
+  const DIV8 =
+    '<attributes><divisions>8</divisions>' +
+    '<time><beats>4</beats><beat-type>4</beat-type></time></attributes>';
+
+  it('leaves an ordinary score on the 1/16 floor', () => {
+    // Quarters and sixteenths only: 1/16 writes both, and a coarser grid is
+    // never chosen, so takes engrave exactly as they did before short values.
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV8 + note('C', 4, 8) + note('D', 4, 2) + note('E', 4, 2))),
+    );
+    expect(take.display.quantization).toBe('1/16');
+  });
+
+  it('goes to 1/32 for a score that contains 32nds', () => {
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV8 + note('C', 4, 8) + note('D', 4, 1) + note('E', 4, 1))),
+    );
+    expect(take.display.quantization).toBe('1/32');
+  });
+
+  it('goes to 1/64 for a score that contains 64ths', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          '<attributes><divisions>16</divisions></attributes>' +
+            note('C', 4, 16) +
+            note('D', 4, 1) +
+            note('E', 4, 1),
+        ),
+      ),
+    );
+    expect(take.display.quantization).toBe('1/64');
+  });
+
+  it('counts a rest as much as a note', () => {
+    // The grid has to be fine enough to write the silences too, or a 32nd of
+    // rest is rounded away and the bar stops adding up.
+    const take = musicXmlToTake(scoreWith(measure(1, DIV8 + note('C', 4, 8) + rest(1))));
+    expect(take.display.quantization).toBe('1/32');
+  });
+
+  it('re-imports through parseTakeJson without repairs on the finer grids', () => {
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV8 + note('C', 4, 8) + note('D', 4, 1) + note('E', 4, 1))),
+    );
+    expect(parseTakeJson(take).repairs).toEqual([]);
+  });
+});
+
 describe('rejections', () => {
   it('rejects score-timewise documents', () => {
     expect(() => musicXmlToTake('<score-timewise version="3.1"></score-timewise>')).toThrow(

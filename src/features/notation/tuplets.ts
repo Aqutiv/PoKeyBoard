@@ -32,11 +32,14 @@ function misfit(offsets: readonly BeatOffset[], divisions: number): number {
 /**
  * Binary divisions of a beat, and ternary ones.
  *
- * Only as fine as the app can actually write: halves and quarters of the beat
+ * Only as fine as a reading can be believed: halves and quarters of the beat
  * are eighths and sixteenths, thirds and sixths are their triplets. Offering
  * finer divisions than that does not make the reading more sensitive, it makes
  * it meaningless — a division into twelfths sits within a thirty-second of
- * almost any moment, so it fits everything and the test stops testing.
+ * almost any moment, so it fits everything and the test stops testing. Values
+ * shorter than these divisions are still *written*; what they cannot do is be
+ * evidence of a tuplet, and `MAX_MISFIT` is what keeps a run of 32nds from
+ * being read as one.
  */
 const BINARY_DIVISIONS = [2, 4];
 const TERNARY_DIVISIONS = [3, 6];

@@ -19,7 +19,10 @@ export const MAX_NOTE_VOICE = 15;
 /** Furthest a key signature goes round the circle of fifths (C sharp/flat major). */
 export const MAX_FIFTHS = 7;
 
-export type QuantizationSetting = 'off' | '1/8' | '1/16';
+/** Every grid the notation offers, coarsest first; the type follows from it. */
+export const QUANTIZATION_SETTINGS = ['off', '1/8', '1/16', '1/32', '1/64'] as const;
+
+export type QuantizationSetting = (typeof QUANTIZATION_SETTINGS)[number];
 
 export type CountInBars = 0 | 1 | 2;
 

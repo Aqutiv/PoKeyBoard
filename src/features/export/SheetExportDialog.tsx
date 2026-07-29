@@ -31,6 +31,15 @@ type Phase =
 
 const PREVIEW_CSS_WIDTH = 250;
 
+/** The grids offered, coarsest first, and the label each one carries. */
+const SHEET_GRIDS = ['1/8', '1/16', '1/32', '1/64'] as const satisfies readonly SheetGrid[];
+const GRID_LABEL_KEYS = {
+  '1/8': 'grid8',
+  '1/16': 'grid16',
+  '1/32': 'grid32',
+  '1/64': 'grid64',
+} as const satisfies Record<SheetGrid, keyof Messages['sheetDialog']>;
+
 function formatBytes(bytes: number): string {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1000))} KB`;
@@ -257,24 +266,17 @@ export function SheetExportDialog() {
             </fieldset>
             <fieldset className="export-options">
               <legend>{m.sheetDialog.grid}</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="sheet-grid"
-                  checked={grid === '1/8'}
-                  onChange={() => setGrid('1/8')}
-                />
-                {m.sheetDialog.grid8}
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="sheet-grid"
-                  checked={grid === '1/16'}
-                  onChange={() => setGrid('1/16')}
-                />
-                {m.sheetDialog.grid16}
-              </label>
+              {SHEET_GRIDS.map((option) => (
+                <label key={option}>
+                  <input
+                    type="radio"
+                    name="sheet-grid"
+                    checked={grid === option}
+                    onChange={() => setGrid(option)}
+                  />
+                  {m.sheetDialog[GRID_LABEL_KEYS[option]]}
+                </label>
+              ))}
             </fieldset>
             <p className="export-note">{m.sheetDialog.gridHint}</p>
             <fieldset className="export-options">

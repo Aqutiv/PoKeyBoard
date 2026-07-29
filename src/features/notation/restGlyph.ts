@@ -60,19 +60,23 @@ function drawQuarter(ctx: CanvasRenderingContext2D, x: number, midY: number, gap
 }
 
 /**
- * Eighth and sixteenth rests: a slanted stroke carrying one hook per flag,
+ * The rests from an eighth down: a slanted stroke carrying one hook per flag,
  * each hook a filled blob on the left of the stroke. The stroke leans the same
- * way for both; a sixteenth simply starts a space higher.
+ * way whatever the value, and each shorter one starts a space higher to carry
+ * the hook it has gained. Past two hooks the stroke also drops a little, so a
+ * 64th rest stays roughly centred on the staff rather than climbing out of it —
+ * the eighth and the sixteenth are untouched by that and read exactly as before.
  */
 function drawHooked(
   ctx: CanvasRenderingContext2D,
   x: number,
   midY: number,
   gap: number,
-  hooks: 1 | 2,
+  hooks: 1 | 2 | 3 | 4,
 ): void {
-  const topY = midY - (hooks === 2 ? 1.6 : 0.6) * gap;
-  const bottomY = midY + 1.5 * gap;
+  const drop = Math.max(0, hooks - 2) * 0.5;
+  const topY = midY - (0.6 + (hooks - 1) - drop) * gap;
+  const bottomY = midY + (1.5 + drop) * gap;
   const topX = x + 0.45 * gap;
 
   ctx.lineWidth = Math.max(0.7, gap * 0.13);
@@ -136,6 +140,12 @@ export function drawRestGlyph(
       break;
     case 'eighth':
       drawHooked(ctx, x, y, gap, 1);
+      break;
+    case '32nd':
+      drawHooked(ctx, x, y, gap, 3);
+      break;
+    case '64th':
+      drawHooked(ctx, x, y, gap, 4);
       break;
     default:
       drawHooked(ctx, x, y, gap, 2);
