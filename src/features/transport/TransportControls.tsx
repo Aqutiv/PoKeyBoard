@@ -125,7 +125,10 @@ export function TransportControls() {
         </button>
 
         <span className="transport__time" aria-live="off">
-          {formatDurationMs(playheadMs, true)} / {formatDurationMs(durationMs, true)}
+          {formatDurationMs(playheadMs, true)}
+          {/* Dropped on a phone, where the row is needed for the mode select
+              and the seek slider already shows how much take there is. */}
+          <span className="transport__total"> / {formatDurationMs(durationMs, true)}</span>
         </span>
 
         {canUndoPass && !recording && !playing ? (

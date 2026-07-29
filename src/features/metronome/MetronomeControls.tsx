@@ -72,6 +72,8 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
 
   const [bpmText, setBpmText] = useState(String(shownBpm));
   const [lastBpm, setLastBpm] = useState(shownBpm);
+  /** Phone only: time signature, count-in and volume fold away behind "⋯". */
+  const [secondaryOpen, setSecondaryOpen] = useState(false);
 
   // Adjust-during-render pattern: reflect external BPM changes in the field.
   if (shownBpm !== lastBpm) {
@@ -201,41 +203,56 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
 
       {compact ? null : (
         <>
-          <select
-            aria-label={m.metronome.timeSignatureLabel}
-            value={currentSignature}
-            onChange={(event) => onTimeSignature(event.target.value)}
+          {/* On a phone the settings below fold away behind this, so the
+              metronome keeps to one row. Everywhere else the button is
+              hidden and the group lays out inline, exactly as before. */}
+          <button
+            type="button"
+            className="metronome__more"
+            aria-expanded={secondaryOpen}
+            aria-label={m.metronome.moreControls}
+            onClick={() => setSecondaryOpen((open) => !open)}
           >
-            {signatureOptions.map((ts) => (
-              <option key={ts} value={ts}>
-                {ts}
-              </option>
-            ))}
-          </select>
+            ⋯
+          </button>
 
-          <select
-            aria-label={m.metronome.countInLabel}
-            value={String(tempo.countInBars)}
-            onChange={(event) => onCountIn(event.target.value)}
-          >
-            <option value="0">{m.metronome.noCountIn}</option>
-            <option value="1">{m.metronome.oneBar}</option>
-            <option value="2">{m.metronome.twoBars}</option>
-          </select>
+          <div className="metronome__secondary" data-open={secondaryOpen}>
+            <select
+              aria-label={m.metronome.timeSignatureLabel}
+              value={currentSignature}
+              onChange={(event) => onTimeSignature(event.target.value)}
+            >
+              {signatureOptions.map((ts) => (
+                <option key={ts} value={ts}>
+                  {ts}
+                </option>
+              ))}
+            </select>
 
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={metronomeVolume}
-            onChange={(event) => {
-              setMetronomeVolume(Number(event.target.value));
-              transportController.refreshMetronomeConfig();
-            }}
-            aria-label={m.metronome.volumeLabel}
-            className="metronome__volume"
-          />
+            <select
+              aria-label={m.metronome.countInLabel}
+              value={String(tempo.countInBars)}
+              onChange={(event) => onCountIn(event.target.value)}
+            >
+              <option value="0">{m.metronome.noCountIn}</option>
+              <option value="1">{m.metronome.oneBar}</option>
+              <option value="2">{m.metronome.twoBars}</option>
+            </select>
+
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.05}
+              value={metronomeVolume}
+              onChange={(event) => {
+                setMetronomeVolume(Number(event.target.value));
+                transportController.refreshMetronomeConfig();
+              }}
+              aria-label={m.metronome.volumeLabel}
+              className="metronome__volume"
+            />
+          </div>
         </>
       )}
 

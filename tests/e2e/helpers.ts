@@ -20,7 +20,12 @@ export async function gotoAppReady(page: Page): Promise<void> {
 
 /** Set the count-in selector (recording tests want zero). */
 export async function setCountIn(page: Page, value: '0' | '1' | '2'): Promise<void> {
-  await page.getByLabel('Count-in length').selectOption(value);
+  const select = page.getByLabel('Count-in length');
+  // Portrait phones fold count-in away behind the metronome's "⋯" button.
+  if (!(await select.isVisible())) {
+    await page.getByRole('button', { name: 'More metronome settings' }).click();
+  }
+  await select.selectOption(value);
 }
 
 /**

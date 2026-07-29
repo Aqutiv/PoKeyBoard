@@ -47,6 +47,26 @@
   padding: 0 6px;
 }
 
+/* Portrait phones: the grid select sits over the music, so it keeps out of
+   the way until it is touched. Keep the query in sync with src/index.css. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .score__quant {
+    top: 4px;
+    right: 5px;
+  }
+
+  .score__quant select {
+    min-height: 26px;
+    font-size: 11px;
+    padding: 0 4px;
+    opacity: 0.75;
+  }
+
+  .score__quant select:focus {
+    opacity: 1;
+  }
+}
+
 .score__empty {
   position: absolute;
   inset: 0;

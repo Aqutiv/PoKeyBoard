@@ -38,6 +38,42 @@ describe('layoutKeyboard', () => {
     expect(cSharp!.x).toBeGreaterThan(0.4);
     expect(cSharp!.x + cSharp!.width).toBeLessThan(1.6);
   });
+
+  /**
+   * Black-key offsets are measured from their octave's C. When the range
+   * starts above that C the C sits off the left edge, at a negative white
+   * index — counting it as zero slid the whole first octave's black keys to
+   * the right, where they piled onto the next octave's.
+   */
+  it('places black keys of a range that starts above its octave C', () => {
+    const layout = layoutKeyboard(76, 96); // E5 .. C7
+    // A black key sits over the seam between the two whites it divides.
+    const straddles = (midi: number, seam: number) => {
+      const key = layout.keys.find((k) => k.midi === midi);
+      expect(key, `midi ${midi}`).toBeDefined();
+      expect(key!.x, `midi ${midi}`).toBeLessThan(seam);
+      expect(key!.x + key!.width, `midi ${midi}`).toBeGreaterThan(seam);
+    };
+    // Whites are E5 F5 G5 A5 B5 C6 D6 at indices 0 1 2 3 4 5 6.
+    straddles(78, 2); // F#5, over the F5/G5 seam
+    straddles(80, 3); // G#5
+    straddles(82, 4); // A#5
+    straddles(85, 6); // C#6, the first of the next octave
+  });
+
+  it('never overlaps two black keys onto one', () => {
+    // Every start, not just the C anchors the octave shifter used to produce.
+    for (let low = FULL_RANGE_LOW; low <= 96; low += 1) {
+      const layout = layoutKeyboard(low, Math.min(FULL_RANGE_HIGH, low + 24));
+      const blacks = layout.keys.filter((k) => k.isBlack);
+      for (let i = 1; i < blacks.length; i += 1) {
+        const previous = blacks[i - 1]!;
+        expect(blacks[i]!.x, `low ${low}, midi ${blacks[i]!.midi}`).toBeGreaterThan(
+          previous.x + previous.width,
+        );
+      }
+    }
+  });
 });
 
 describe('hitTestKey', () => {
@@ -56,6 +92,21 @@ describe('hitTestKey', () => {
     // The same x below the black key belongs to a white key.
     const below = hitTestKey(layout, centerX, 0.95);
     expect([60, 62]).toContain(below);
+  });
+
+  /**
+   * Overlapping black keys sounded whichever came first in the layout, so a
+   * key could answer with a pitch below the one it was drawn as.
+   */
+  it('sounds the black key that was pressed, wherever the range starts', () => {
+    for (let low = FULL_RANGE_LOW; low <= 96; low += 1) {
+      const shifted = layoutKeyboard(low, Math.min(FULL_RANGE_HIGH, low + 24));
+      for (const key of shifted.keys) {
+        if (!key.isBlack) continue;
+        const center = key.x + key.width / 2;
+        expect(hitTestKey(shifted, center, BLACK_KEY_HEIGHT / 2), `low ${low}`).toBe(key.midi);
+      }
+    }
   });
 
   it('returns null outside the keyboard', () => {

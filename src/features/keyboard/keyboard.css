@@ -39,6 +39,18 @@
   margin-left: auto;
 }
 
+/*
+ * The take's pedal is down under the playhead. Read as a cue, not a press:
+ * accent outline and lettering over the resting surface, so it never looks
+ * like the user's own sustain toggle (`.is-on`, which wins below).
+ */
+.piano__sustain.is-playback:not(.is-on) {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 .piano__sustain.is-on {
   background: var(--accent);
   border-color: var(--accent);
@@ -137,4 +149,29 @@
   font-size: 10px;
   color: var(--key-label);
   pointer-events: none;
+}
+
+/* Portrait phones: four shift buttons, the range readout and Sustain do not
+   fit a 390px row at the full touch-target width. Keep the query in sync
+   with src/index.css. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .piano__controls {
+    gap: 6px;
+    /* Six controls do not fit 320px at a 46px touch target however they are
+       trimmed, and the shell hides horizontal overflow. Wrapping keeps
+       Sustain reachable on the narrowest phones instead of clipping it. */
+    flex-wrap: wrap;
+  }
+
+  .piano__shift {
+    min-width: 38px;
+    padding: 0 8px;
+  }
+
+  /* Both ends of the range are white keys, so the label is at most eight
+     characters — 84px of fixed width is a luxury at this size. Still fixed,
+     so shifting the range does not jog the row. */
+  .piano__range {
+    min-width: 62px;
+  }
 }
