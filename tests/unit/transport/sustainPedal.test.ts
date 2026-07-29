@@ -3,6 +3,8 @@ import {
   applySustainToNotes,
   effectivePlaybackDurationMs,
   isPedalDownAt,
+  isPedalDownIn,
+  sustainIntervals,
 } from '@/features/transport/sustainPedal';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { MAX_NOTE_DURATION_MS, type NoteEvent, type PedalEvent } from '@/domain/takeTypes';
@@ -147,5 +149,20 @@ describe('isPedalDownAt', () => {
     expect(isPedalDownAt(shuffled, 250)).toBe(true);
     expect(isPedalDownAt(shuffled, 500)).toBe(false);
     expect(isPedalDownAt(shuffled, 900)).toBe(true);
+  });
+
+  it('agrees with the reusable-intervals form callers poll through', () => {
+    const intervals = sustainIntervals(cycles);
+    for (const timeMs of [0, 99, 100, 250, 400, 500, 600, 1_200, 9_000]) {
+      expect(isPedalDownIn(intervals, timeMs)).toBe(isPedalDownAt(cycles, timeMs));
+    }
+  });
+
+  it('agrees with the durations playback actually schedules', () => {
+    // A note released while the button is lit must be one that rings on, or
+    // the cue would be telling the player something playback does not do.
+    const [extended] = applySustainToNotes([note({ startMs: 150, durationMs: 100 })], cycles);
+    expect(isPedalDownAt(cycles, 250)).toBe(true);
+    expect(extended!.durationMs).toBe(250); // rings to the 400ms pedal-up
   });
 });

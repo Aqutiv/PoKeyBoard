@@ -1,6 +1,11 @@
 import { useCallback, useSyncExternalStore } from 'react';
+import type { PedalEvent } from '@/domain/takeTypes';
 import { scrubController } from '@/features/notation/scrubController';
-import { isPedalDownAt } from '@/features/transport/sustainPedal';
+import {
+  isPedalDownIn,
+  sustainIntervals,
+  type SustainInterval,
+} from '@/features/transport/sustainPedal';
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -71,13 +76,31 @@ export function usePlaybackActiveMidis(): ReadonlySet<number> {
   return useSyncExternalStore(subscribe, computeSnapshot);
 }
 
+let pedalSource: readonly PedalEvent[] | null = null;
+let pedalIntervals: readonly SustainInterval[] = [];
+
+/**
+ * The take's pedal intervals, derived once per `pedalEvents` array. The
+ * snapshot below runs ~11 times a second, and a take may carry tens of
+ * thousands of pedal events — far too much sorting to redo per tick. Takes are
+ * immutable in the store, so array identity is a sound cache key.
+ */
+function intervalsFor(pedals: readonly PedalEvent[]): readonly SustainInterval[] {
+  if (pedals !== pedalSource) {
+    pedalSource = pedals;
+    pedalIntervals = sustainIntervals(pedals);
+  }
+  return pedalIntervals;
+}
+
 function pedalSnapshot(): boolean {
   const state = transportController.getState();
   // The take's own pedal marks, shown while the playhead moves — the same
   // states the note lights follow, so an overdub pass and a scrub show them.
   if (!isCuePolling(state)) return false;
   const pedals = useTakeStore.getState().take.pedalEvents;
-  return isPedalDownAt(pedals, transportController.getPlayheadMs());
+  if (pedals.length === 0) return false;
+  return isPedalDownIn(intervalsFor(pedals), transportController.getPlayheadMs());
 }
 
 /**

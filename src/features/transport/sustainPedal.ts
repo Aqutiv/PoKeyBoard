@@ -48,12 +48,19 @@ function intervalAt(intervals: readonly SustainInterval[], timeMs: number): Sust
 }
 
 /**
- * Whether the pedal is down at `timeMs`. Drives the playback pedal cue on the
- * keyboard, so the player can see when to pedal along with a take.
+ * Whether the pedal is down at `timeMs`, over intervals already derived by
+ * `sustainIntervals`. Drives the playback pedal cue on the keyboard, which is
+ * sampled many times a second and so keeps the intervals rather than rebuilding
+ * them per query.
  */
+export function isPedalDownIn(intervals: readonly SustainInterval[], timeMs: number): boolean {
+  return intervalAt(intervals, timeMs) !== null;
+}
+
+/** Whether the pedal is down at `timeMs`, deriving the intervals in place. */
 export function isPedalDownAt(pedals: readonly PedalEvent[], timeMs: number): boolean {
   if (pedals.length === 0) return false;
-  return intervalAt(sustainIntervals(pedals), timeMs) !== null;
+  return isPedalDownIn(sustainIntervals(pedals), timeMs);
 }
 
 /**
