@@ -145,10 +145,21 @@
 @media (orientation: portrait) and (max-width: 600px) {
   .piano__controls {
     gap: 6px;
+    /* Six controls do not fit 320px at a 46px touch target however they are
+       trimmed, and the shell hides horizontal overflow. Wrapping keeps
+       Sustain reachable on the narrowest phones instead of clipping it. */
+    flex-wrap: wrap;
   }
 
   .piano__shift {
     min-width: 38px;
     padding: 0 8px;
+  }
+
+  /* Both ends of the range are white keys, so the label is at most eight
+     characters — 84px of fixed width is a luxury at this size. Still fixed,
+     so shifting the range does not jog the row. */
+  .piano__range {
+    min-width: 62px;
   }
 }

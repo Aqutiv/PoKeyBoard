@@ -125,8 +125,10 @@
    cost the score a row. Dropping the total duration buys back the width.
    Keep the query in sync with src/index.css and the other feature sheets. */
 @media (orientation: portrait) and (max-width: 600px) {
+  /* Dropping the total is what buys the row; the wrap stays as the safety
+     valve, because Undo joins this row after a recording pass and the shell
+     hides horizontal overflow — a second line beats a clipped select. */
   .transport__buttons {
-    flex-wrap: nowrap;
     gap: 6px;
   }
 
