@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { gotoAppReady } from './helpers';
 
 test.describe('full piano on a 4K viewport', () => {

@@ -1,4 +1,5 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { nav } from './helpers';
 
 /** The folder switch (its option names would otherwise clash with track titles). */
@@ -18,6 +19,37 @@ async function gotoLibrary(page: Page): Promise<void> {
 async function openClassics(page: Page): Promise<void> {
   await gotoLibrary(page);
   await folders(page).getByRole('button', { name: 'Classics' }).click();
+}
+
+/**
+ * A persisted setting, read straight out of IndexedDB (db.ts: database
+ * `pokeyboard`, store `settings`, keyed by name). Settings writes are debounced,
+ * so a reload-based test waits for the write itself rather than for a guessed
+ * interval to elapse.
+ */
+function persistedSetting(page: Page, key: string): Promise<unknown> {
+  return page.evaluate(
+    (settingKey) =>
+      new Promise<unknown>((resolve, reject) => {
+        const open = indexedDB.open('pokeyboard');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const database = open.result;
+          if (!database.objectStoreNames.contains('settings')) {
+            database.close();
+            resolve(undefined);
+            return;
+          }
+          const request = database.transaction('settings').objectStore('settings').get(settingKey);
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            resolve((request.result as { value?: unknown } | undefined)?.value);
+            database.close();
+          };
+        };
+      }),
+    key,
+  );
 }
 
 test.describe('library folders', () => {
@@ -41,7 +73,7 @@ test.describe('library folders', () => {
     await openClassics(page);
     // The settings writer debounces 500 ms; a reload inside that window would
     // race the write rather than test the restore.
-    await page.waitForTimeout(900);
+    await expect.poll(() => persistedSetting(page, 'libraryFolder')).toBe('classics');
 
     await page.reload();
     await expect(folders(page).getByRole('button', { name: 'Classics' })).toHaveAttribute(
@@ -158,7 +190,8 @@ test.describe('vendored classics', () => {
 
 // With the service worker active a score is fetched *by* the worker, which
 // page.route cannot intercept — blocking it puts the request back on the page
-// so a slow or failing download can be simulated at all.
+// so a slow or failing download can be simulated at all. Stated explicitly
+// rather than left to the suite default, which real-pack runs flip.
 test.describe('vendored classics on a bad network', () => {
   test.use({ serviceWorkers: 'block' });
 

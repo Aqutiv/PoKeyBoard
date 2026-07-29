@@ -1,4 +1,4 @@
-﻿import { expect, test } from '@playwright/test';
+﻿import { expect, test } from './fixtures';
 import { gotoAppReady, nav, recordShortTake } from './helpers';
 
 const VALID_TAKE = {
@@ -142,9 +142,9 @@ test.describe('takes library', () => {
 
   test('imports a score from a pasted link', async ({ page }) => {
     await gotoAppReady(page);
-    // Same-origin, so CORS is out of the picture; the service worker routes
-    // only navigations, /piano/ and /scores/classics-v1/, so this reaches
-    // Playwright's interception.
+    // Same-origin, so CORS is out of the picture; the worker is blocked and in
+    // any case routes only navigations, /piano/ and /scores/classics-v1/, so
+    // this reaches Playwright's interception.
     await page.route('**/fixtures/linked.musicxml', (route) =>
       route.fulfill({ status: 200, contentType: 'application/xml', body: SCORE_XML }),
     );

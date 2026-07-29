@@ -28,18 +28,23 @@ export async function setCountIn(page: Page, value: '0' | '1' | '2'): Promise<vo
   await select.selectOption(value);
 }
 
-/** Record a short two-note pass with the computer keyboard. */
-export async function recordShortTake(page: Page): Promise<void> {
+/**
+ * Record a short two-note pass with the computer keyboard. `noteMs` is how long
+ * each key is held — the only unavoidable real time in the suite, since a take
+ * has to have a duration. The default is the shortest hold that still reads as
+ * a staccato note; tests that need to watch playback advance mid-flight pass
+ * something longer.
+ */
+export async function recordShortTake(page: Page, noteMs = 120): Promise<void> {
   await setCountIn(page, '0');
   await transport(page).getByRole('button', { name: 'Record, inactive' }).click();
   await expect(page.getByText('● Recording')).toBeVisible();
   await page.keyboard.down('KeyA'); // C4
-  await page.waitForTimeout(350);
+  await page.waitForTimeout(noteMs);
   await page.keyboard.up('KeyA');
   await page.keyboard.down('KeyD'); // E4
-  await page.waitForTimeout(300);
+  await page.waitForTimeout(noteMs);
   await page.keyboard.up('KeyD');
-  await page.waitForTimeout(120);
   await transport(page).getByRole('button', { name: 'Stop', exact: true }).click();
   await expect(page.getByText('● Recording')).toHaveCount(0);
   // Autosave confirmation so reload-based tests are safe.

@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import {
   gotoAppReady,
   nav,
@@ -11,7 +11,9 @@ import {
 test.describe('recording and playback', () => {
   test('records notes, plays back, pauses, and persists across reload', async ({ page }) => {
     await gotoAppReady(page);
-    await recordShortTake(page);
+    // Longer notes than the default: this is the one test that has to observe
+    // playback in flight, so the take must outlast a poll interval.
+    await recordShortTake(page, 350);
 
     // Duration is non-zero after recording.
     const duration = await totalDurationText(page);
@@ -21,9 +23,11 @@ test.describe('recording and playback', () => {
     await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
     await transport(page).getByRole('button', { name: 'Play' }).click();
     await expect(transport(page).getByRole('button', { name: 'Pause' })).toBeVisible();
-    await page.waitForTimeout(400);
-    const midText = (await transportTime(page).textContent()) ?? '';
-    expect(midText.startsWith('0:00.0')).toBe(false);
+    // The first non-zero reading is the proof the clock is running; polling for
+    // it beats sleeping a guessed interval and reading once.
+    await expect
+      .poll(async () => (await transportTime(page).textContent()) ?? '', { timeout: 5_000 })
+      .not.toMatch(/^0:00\.0/);
 
     // Playback auto-pauses at the end of the short take.
     await expect(transport(page).getByRole('button', { name: 'Play' })).toBeVisible({

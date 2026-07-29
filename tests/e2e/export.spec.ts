@@ -1,7 +1,12 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { gotoAppReady, recordShortTake } from './helpers';
 
 test.describe('MP3 export', () => {
+  // The suite's guarantee that the real 42-file core pack still decodes and
+  // renders audible audio through the wasm encoder: the size and header
+  // assertions below fail on a silent or empty render.
+  test.use({ samplePack: 'real' });
+
   test('renders a take to a real MP3 and downloads it', async ({ page }) => {
     await gotoAppReady(page);
     await recordShortTake(page);
