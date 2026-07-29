@@ -504,7 +504,12 @@ describe('beam grouping', () => {
       );
 
     const short = layoutScore(run(), { ...OPTS, bpm: 60, quantization: '1/32' });
-    expect(short.chords.map((chord) => chord.symbol.base)).toEqual(['32nd', '32nd', '32nd', '32nd']);
+    expect(short.chords.map((chord) => chord.symbol.base)).toEqual([
+      '32nd',
+      '32nd',
+      '32nd',
+      '32nd',
+    ]);
     expect(short.beams).toHaveLength(1);
     expect(short.beams[0]!.beamCount).toBe(3);
 
