@@ -1,4 +1,6 @@
 import { defineConfig, devices } from '@playwright/test';
+// The .js extension is what nodenext resolution wants; it maps to the .ts file.
+import { PREVIEW_URL } from './tests/e2e/previewServer.js';
 
 /**
  * E2E tests run against the production preview build — the same artifact that
@@ -22,7 +24,8 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4173',
+    // POKEYBOARD_E2E_PORT moves this, for running two checkouts at once.
+    baseURL: PREVIEW_URL,
     // Locally (retries: 0) nothing is recorded; `--trace on` when debugging.
     trace: 'on-first-retry',
     // The worker CacheFirsts /piano/ and claims the page, and Playwright cannot

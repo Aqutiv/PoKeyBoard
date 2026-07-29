@@ -14,6 +14,17 @@ npm run lint && npm run typecheck && npm run format:check
 build has to exist. `test:e2e:fast` skips that check for when you know it is
 current.
 
+The preview runs on port 4173 and an already-running one is reused, which makes
+re-runs quick. Every worktree defaults to that same port, though, so `globalSetup`
+compares the served `index.html` against this checkout's before trusting it and
+refuses anything else — reusing another checkout's server would test its build
+while these tests write to yours, which is exactly how `dist/service-worker.js`
+once ended up truncated. To run two checkouts at once, give one its own port:
+
+```bash
+POKEYBOARD_E2E_PORT=4273 npx playwright test
+```
+
 **Two speed defaults you should know about**, both in `tests/e2e/fixtures.ts` and
 `playwright.config.ts`. Every test starts from a fresh browser context with an
 empty cache, so a plain visit costs 5.4 MB and 42 `decodeAudioData` calls before
