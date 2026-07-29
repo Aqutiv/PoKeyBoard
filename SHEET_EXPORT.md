@@ -76,6 +76,12 @@ takes seconds and never touches the audio engine.
   following beat, and the bar stops adding up. Nothing shorter than the grid's
   own step is ever written, so a page read on a 1/16 grid shows no 32nd rest: a
   sliver that survives rounding is residue, not music.
+  A length rounds to a _whole_ number of steps, so a **dotted value needs a grid
+  one level finer than its base**: a dotted sixteenth on a 1/16 grid rounds up to
+  an eighth, and on 1/32 it is itself. An import therefore picks the grid that can
+  state its shortest value rather than the one nearest to it
+  (`gridForShortestQ`). The floor of the range is a dotted 64th, which would take
+  a 1/128 grid and is written as a 32nd instead.
 - **Key signatures** decide spelling: `tempo.keySignature` when the score
   declared one (MusicXML `<key><fifths>`), otherwise a key read from the
   take's own pitches (`keyDetection.ts`, a duration-weighted

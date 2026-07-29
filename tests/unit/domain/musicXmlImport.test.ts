@@ -634,6 +634,60 @@ describe('the display grid an import arrives with', () => {
     );
     expect(parseTakeJson(take).repairs).toEqual([]);
   });
+
+  it('gives a dotted value the grid that can state it, not the nearest one', () => {
+    // A dot is half again, so a dotted value is one and a half grid steps of its
+    // own base — and a length rounds to a *whole* number of steps. So the base's
+    // own grid rounds it up: a dotted sixteenth on 1/16 becomes an eighth, and a
+    // dotted 32nd on 1/32 becomes a sixteenth. Each needs one level finer.
+    // divisions=16 per quarter: a sixteenth is 4, a dotted sixteenth 6, a 32nd 2,
+    // a dotted 32nd 3.
+    const DIV16 = '<attributes><divisions>16</divisions></attributes>';
+    const dottedSixteenth = musicXmlToTake(
+      scoreWith(measure(1, DIV16 + note('C', 4, 16) + note('D', 4, 6) + note('E', 4, 6))),
+    );
+    expect(dottedSixteenth.display.quantization).toBe('1/32');
+
+    const dotted32nd = musicXmlToTake(
+      scoreWith(measure(1, DIV16 + note('C', 4, 16) + note('D', 4, 3) + note('E', 4, 3))),
+    );
+    expect(dotted32nd.display.quantization).toBe('1/64');
+  });
+
+  it('gives a dotted 64th the finest grid there is', () => {
+    // Nothing on offer states it — it would take a 1/128 grid — so it is written
+    // as a 32nd either way. 1/64 is still right: the grid places onsets too, and
+    // a figure this short puts them on 64ths that a coarser grid would move.
+    // divisions=32 per quarter: a 64th is 2, a dotted 64th 3.
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          '<attributes><divisions>32</divisions></attributes>' +
+            note('C', 4, 32) +
+            note('D', 4, 3) +
+            note('E', 4, 3),
+        ),
+      ),
+    );
+    expect(take.display.quantization).toBe('1/64');
+  });
+
+  it('reads a tuplet score as the nearest grid, since none states a third', () => {
+    // divisions=6 per quarter: a triplet eighth is 2 units, a triplet sixteenth
+    // 1. No binary grid divides either, so the nearest one wins — which is what
+    // the tuplet machinery expects, and what these scores got before.
+    const DIV6 = '<attributes><divisions>6</divisions></attributes>';
+    const tripletEighths = musicXmlToTake(
+      scoreWith(measure(1, DIV6 + note('C', 4, 2) + note('D', 4, 2) + note('E', 4, 2))),
+    );
+    expect(tripletEighths.display.quantization).toBe('1/16');
+
+    const tripletSixteenths = musicXmlToTake(
+      scoreWith(measure(1, DIV6 + note('C', 4, 6) + note('D', 4, 1) + note('E', 4, 1))),
+    );
+    expect(tripletSixteenths.display.quantization).toBe('1/32');
+  });
 });
 
 describe('rejections', () => {
