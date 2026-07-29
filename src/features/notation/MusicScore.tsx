@@ -14,6 +14,7 @@ import {
   computeScoreGeometry,
   drawScore,
   gutterWidthFor,
+  SCORE_LEAD_IN,
   SCORE_PALETTES,
   type ScoreGeometry,
   type ScoreView,
@@ -23,6 +24,15 @@ import type { TransportState } from '@/features/transport/transportMachine';
 import './notation.css';
 
 const BASE_PX_PER_MS = 0.09;
+/**
+ * How far the score may be scaled down to fit the height it is given.
+ *
+ * The layout is written in design pixels (`GAP`) and scaled at draw time, so
+ * a short view shrinks the staves rather than clipping them — and sees
+ * proportionally more music. The container's min-height is this fraction of
+ * the layout's, so the scale can never fall below the floor either.
+ */
+const MIN_SCORE_SCALE = 0.62;
 const GHOST_LIFE_MS = 1300;
 /** Playhead rests at this fraction of the scrolling region while moving. */
 const PLAYHEAD_ANCHOR = 0.42;
@@ -91,10 +101,7 @@ export function MusicScore() {
       }),
     [notes, tempo.bpm, tempo.timeSignature, tempo.changes, quantization, keySignature, pedalEvents],
   );
-  const geometry = useMemo(
-    () => computeScoreGeometry(layout.chords, layout.dynamics.length + layout.hairpins.length > 0),
-    [layout],
-  );
+  const geometry = useMemo(() => computeScoreGeometry(layout), [layout]);
 
   // Everything the rAF loop reads lives in refs, written from effects only.
   const sizeRef = useRef({ width: 0, height: 0, dpr: 1 });
@@ -105,6 +112,8 @@ export function MusicScore() {
   const zoomRef = useRef(zoom);
   const ghostsRef = useRef<LiveGhost[]>([]);
   const scrollMsRef = useRef(0);
+  /** Design pixels → screen pixels; written by the render loop. */
+  const fitRef = useRef(1);
   const lastSignatureRef = useRef('');
   const durationRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
@@ -200,20 +209,28 @@ export function MusicScore() {
       const ghosts = ghostsRef.current;
       const openNotes = transportController.getOpenRecordingNotes();
 
+      const box = layoutBoxRef.current;
+      // Everything below is in design pixels; `fit` is the only bridge to the
+      // screen. Capped at 1, so a view with room to spare draws life size.
+      const fit =
+        height > 0 ? Math.min(1, Math.max(MIN_SCORE_SCALE, height / box.geometry.minHeight)) : 1;
+      fitRef.current = fit;
+      const viewWidth = width / fit;
+
       const pxPerMs = BASE_PX_PER_MS * zoomRef.current;
       const gutterPx = gutterWidthFor(keyRef.current);
-      const anchorOffsetMs = ((width - gutterPx) * PLAYHEAD_ANCHOR) / pxPerMs;
+      const musicLeft = gutterPx + SCORE_LEAD_IN;
+      const anchorOffsetMs = ((viewWidth - musicLeft) * PLAYHEAD_ANCHOR) / pxPerMs;
       const moving = currentState === 'playing' || currentState === 'recording';
       if (moving) {
         scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
       } else {
-        const x = gutterPx + (playheadMs - scrollMsRef.current) * pxPerMs;
-        if (x < gutterPx - 1 || x > width - 20) {
+        const x = musicLeft + (playheadMs - scrollMsRef.current) * pxPerMs;
+        if (x < gutterPx - 1 || x > viewWidth - 20) {
           scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
         }
       }
 
-      const box = layoutBoxRef.current;
       const theme = themeController.getResolved();
       const signature = [
         currentState,
@@ -222,6 +239,7 @@ export function MusicScore() {
         box.version,
         width,
         height,
+        fit.toFixed(3),
         ghosts.length,
         openNotes.length,
         theme,
@@ -230,10 +248,10 @@ export function MusicScore() {
       if (signature === lastSignatureRef.current && !animating) return;
       lastSignatureRef.current = signature;
 
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.setTransform(dpr * fit, 0, 0, dpr * fit, 0, 0);
       const view: ScoreView = {
-        widthPx: width,
-        heightPx: height,
+        widthPx: viewWidth,
+        heightPx: height / fit,
         pxPerMs,
         scrollMs: scrollMsRef.current,
         trebleTop: box.geometry.trebleTop,
@@ -282,7 +300,9 @@ export function MusicScore() {
   const onScorePointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
-    const pxPerMs = BASE_PX_PER_MS * zoomRef.current;
+    // The drag is in screen pixels, so the rate has to be too — the music
+    // must keep up with the finger whatever the score is scaled to.
+    const pxPerMs = BASE_PX_PER_MS * zoomRef.current * fitRef.current;
     const dx = event.clientX - drag.startClientX;
     scrubController.update(drag.playhead0 - dx / pxPerMs);
     const clampedTime = transportController.getPlayheadMs();
@@ -300,7 +320,7 @@ export function MusicScore() {
     const last = drag.samples[drag.samples.length - 1];
     let velocity = 0;
     if (first && last && last.t > first.t && performance.now() - last.t < 120) {
-      const pxPerMs = BASE_PX_PER_MS * zoomRef.current;
+      const pxPerMs = BASE_PX_PER_MS * zoomRef.current * fitRef.current;
       velocity = -((last.x - first.x) / (last.t - first.t)) / pxPerMs;
     }
     if (Math.abs(velocity) > INERTIA_MIN_VELOCITY) {
@@ -321,7 +341,11 @@ export function MusicScore() {
   const showEmptyHint = notes.length === 0 && state === 'idle';
 
   return (
-    <div ref={containerRef} className="score" style={{ minHeight: geometry.minHeight }}>
+    <div
+      ref={containerRef}
+      className="score"
+      style={{ minHeight: Math.round(geometry.minHeight * MIN_SCORE_SCALE) }}
+    >
       <canvas
         ref={canvasRef}
         className="score__canvas"

@@ -52,6 +52,17 @@ export function gutterWidthFor(fifths: number): number {
 /** Horizontal pitch of stacked accidental columns, left of the chord. */
 const ACCIDENTAL_COLUMN_PX = GAP * 1.4;
 
+/**
+ * Clear space between the gutter and the music standing at `scrollMs`.
+ *
+ * The gutter is painted last, over everything, so that the music can scroll
+ * away underneath it. At the top of a take there is nothing earlier to scroll
+ * under it, and a note sitting flush against its edge loses the left half of
+ * its head — and all of its accidental — to that overpaint. It is also about
+ * what an engraver leaves after a time signature before the first note.
+ */
+export const SCORE_LEAD_IN = GAP * 2.2;
+
 // Beam proportions come from `beamGeometry`, so a run groups and slants the
 // same way on screen as it does on paper — only the unit differs.
 const STEM_LENGTH_PX = GAP * STEM_LENGTH_G;
@@ -59,6 +70,8 @@ const BEAM_THICKNESS_PX = GAP * BEAM_THICKNESS_G;
 const BEAM_SPACING_PX = GAP * BEAM_SPACING_G;
 /** Stem x offset from the head centre, inset from the head edge. */
 const STEM_INSET_PX = GAP * 0.64 - 0.8;
+/** Type size of the numeral over a tuplet's beam. */
+const TUPLET_FONT_PX = GAP * 1.7;
 
 /** One beam's line across the view, in pixels; keyed by `ChordGroup.beamId`. */
 interface BeamLine {
@@ -78,10 +91,12 @@ const WHOLE_REST_STEP = restStep(WHOLE_REST);
 
 /** Clearance above/below an extreme note head: half-height plus padding. */
 const HEAD_CLEARANCE = GAP * 0.5 + 6;
+/** The same padding, for ink whose own extent is already exact. */
+const INK_CLEARANCE = 6;
 /** Least room the pedal bracket keeps under the bass staff. */
 const PEDAL_ROW_PX = 15;
 /** Extra room between the staves when the take carries dynamics. */
-const DYNAMICS_ROW_PX = 14;
+export const DYNAMICS_ROW_PX = 14;
 /** Half-height of a hairpin's open end. */
 const HAIRPIN_MOUTH_PX = GAP * 0.55;
 /** Bottom margin below the bass staff at the default geometry. */
@@ -98,38 +113,131 @@ export interface ScoreGeometry {
   dynamicsRow: number;
 }
 
+/** y of a step relative to its own staff's top, mirroring `yForStep`. */
+function yRel(step: number): number {
+  return STAFF_H - (step * GAP) / 2;
+}
+
+/**
+ * How far a tie arcs off its head, on the side away from the stem.
+ *
+ * `drawTies` starts the arc `GAP * 0.85` off the head and `drawTieArc` pulls
+ * it a further half of its deepest control offset — a quadratic reaches half
+ * way to its control point.
+ */
+const TIE_REACH_PX = GAP * 0.85 + (GAP * 1.1) / 2;
+
+/**
+ * How far a chord's own stem reaches past its heads, relative to its staff.
+ *
+ * Only unbeamed chords answer here — a beamed one hangs from the beam, which
+ * is measured whole. The flag grows from the tip back toward the head, so the
+ * tip is the whole reach.
+ */
+function stemExtentRel(chord: ChordGroup): number | null {
+  if (chord.symbol.base === 'whole' || chord.beamId !== null) return null;
+  const anchor = chord.stemDown ? chord.notes[0] : chord.notes[chord.notes.length - 1];
+  if (!anchor) return null;
+  return yRel(anchor.step) + (chord.stemDown ? 1 : -1) * STEM_LENGTH_PX;
+}
+
+/**
+ * The band a beam claims, relative to its staff.
+ *
+ * This is the line the renderer will actually draw, not an upper bound: the
+ * span depends on the stem positions only through where each one falls along
+ * the run, and x is affine in ms, so the chords' display times stand in for
+ * their pixels. Every member shares a stem direction, so the stem inset is a
+ * constant that cancels.
+ */
+function beamExtentRel(beam: BeamGroup): { top: number; bottom: number } | null {
+  if (beam.members.length === 0) return null;
+  const xs = beam.members.map((chord) => chord.displayStartMs);
+  const anchors = beam.members.map((chord) => {
+    const note = chord.stemDown ? chord.notes[0] : chord.notes[chord.notes.length - 1];
+    return note ? yRel(note.step) : yRel(0);
+  });
+  const span = beamSpanFor(xs, anchors, beam.stemDown, GAP);
+  const half = BEAM_THICKNESS_PX / 2;
+  let top = Math.min(span.y1, span.y2) - half;
+  let bottom = Math.max(span.y1, span.y2) + half;
+  // The tuplet numeral sits outside the beam, on the side away from the heads.
+  if (beam.tupletCount !== null) {
+    if (beam.stemDown) bottom += GAP * 1.5 + TUPLET_FONT_PX * 0.25;
+    else top -= GAP * 0.8 + TUPLET_FONT_PX * 0.8;
+  }
+  return { top, bottom };
+}
+
 /**
  * Content-aware vertical geometry: the staves shift down and the view grows
  * only when the take reaches far enough beyond the staves that the default
- * margins would clip note heads. Stems point toward the staff on extreme
- * notes, so heads and their ledger lines set the required clearance. Takes
- * in the normal range get exactly the default constants.
+ * margins would clip the music. Heads set the clearance where stems point
+ * back toward the staff, but a beamed run commits every member to one
+ * direction, so the top voice can stem *away* from the staff however high it
+ * sits — the stems and beams are measured too, or they get sheared off.
+ * Takes in the normal range get exactly the default constants.
  */
-export function computeScoreGeometry(
-  chords: readonly ChordGroup[],
-  hasDynamics = false,
-): ScoreGeometry {
-  let maxTrebleStep = Number.NEGATIVE_INFINITY;
-  let minBassStep = Number.POSITIVE_INFINITY;
-  for (const chord of chords) {
+export function computeScoreGeometry(layout: ScoreLayout): ScoreGeometry {
+  const hasDynamics = layout.dynamics.length + layout.hairpins.length > 0;
+  // Relative to each staff's own top: above the treble staff is negative,
+  // below the bass staff is greater than STAFF_H.
+  let trebleReach = Number.POSITIVE_INFINITY;
+  let bassReach = Number.NEGATIVE_INFINITY;
+  const reachUp = (value: number) => {
+    trebleReach = Math.min(trebleReach, value);
+  };
+  const reachDown = (value: number) => {
+    bassReach = Math.max(bassReach, value);
+  };
+
+  for (const chord of layout.chords) {
+    const top = chord.notes[chord.notes.length - 1];
+    const bottom = chord.notes[0];
+    if (chord.staff === 'treble') {
+      if (top) reachUp(yRel(top.step) - HEAD_CLEARANCE);
+    } else if (bottom) {
+      reachDown(yRel(bottom.step) + HEAD_CLEARANCE);
+    }
+    // A tie arcs on the side the stem is not, so it can clear the head by
+    // more than the head clearance allows for.
     for (const note of chord.notes) {
-      if (note.staff === 'treble') maxTrebleStep = Math.max(maxTrebleStep, note.step);
-      else minBassStep = Math.min(minBassStep, note.step);
+      if (!note.tiedFromPrev && !note.tiedToNext) continue;
+      if (chord.staff === 'treble') {
+        if (chord.stemDown) reachUp(yRel(note.step) - TIE_REACH_PX - INK_CLEARANCE);
+      } else if (!chord.stemDown) {
+        reachDown(yRel(note.step) + TIE_REACH_PX + INK_CLEARANCE);
+      }
+    }
+    const stem = stemExtentRel(chord);
+    if (stem === null) continue;
+    if (chord.staff === 'treble') {
+      if (!chord.stemDown) reachUp(stem - INK_CLEARANCE);
+    } else if (chord.stemDown) {
+      reachDown(stem + INK_CLEARANCE);
     }
   }
-  const topExtent =
-    maxTrebleStep === Number.NEGATIVE_INFINITY
-      ? 0
-      : (maxTrebleStep * GAP) / 2 - STAFF_H + HEAD_CLEARANCE;
+
+  for (const beam of layout.beams) {
+    const extent = beamExtentRel(beam);
+    if (!extent) continue;
+    if (beam.staff === 'treble') {
+      if (!beam.stemDown) reachUp(extent.top - INK_CLEARANCE);
+    } else if (beam.stemDown) {
+      reachDown(extent.bottom + INK_CLEARANCE);
+    }
+  }
+
+  const topExtent = trebleReach === Number.POSITIVE_INFINITY ? 0 : -trebleReach;
   const trebleTop = Math.max(TREBLE_TOP, Math.ceil(topExtent));
   // Nothing else reserves the gap between the staves, so a take with dynamics
   // opens it up for them; one without keeps the geometry it always had.
   const staffSpacing = STAFF_SPACING + (hasDynamics ? DYNAMICS_ROW_PX : 0);
   const bassTop = trebleTop + STAFF_H + staffSpacing;
   const bottomExtent =
-    minBassStep === Number.POSITIVE_INFINITY
+    bassReach === Number.NEGATIVE_INFINITY
       ? BOTTOM_MARGIN
-      : Math.max(BOTTOM_MARGIN, Math.ceil((-minBassStep * GAP) / 2 + HEAD_CLEARANCE));
+      : Math.max(BOTTOM_MARGIN, Math.ceil(bassReach - STAFF_H));
   return {
     trebleTop,
     bassTop,
@@ -242,7 +350,7 @@ function yForStep(view: ScoreView, staff: StaffKind, step: number): number {
 }
 
 function xForMs(view: ScoreView, ms: number): number {
-  return view.gutterPx + (ms - view.scrollMs) * view.pxPerMs;
+  return view.gutterPx + SCORE_LEAD_IN + (ms - view.scrollMs) * view.pxPerMs;
 }
 
 export function drawScore(
@@ -669,7 +777,7 @@ function drawBeams(ctx: CanvasRenderingContext2D, lines: BeamLines, palette: Sco
       // The numeral goes on the side away from the heads, as on paper.
       const midX = (line.x1 + line.x2) / 2;
       const midY = (line.y1 + line.y2) / 2;
-      ctx.font = `italic 600 ${GAP * 1.7}px Georgia, "Times New Roman", Times, serif`;
+      ctx.font = `italic 600 ${TUPLET_FONT_PX}px Georgia, "Times New Roman", Times, serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'alphabetic';
       ctx.fillText(String(line.tupletCount), midX, midY + (line.stemDown ? GAP * 1.5 : -GAP * 0.8));
@@ -808,7 +916,10 @@ function drawChord(
     ctx.moveTo(sx, headEnd);
     ctx.lineTo(sx, tipY);
     ctx.stroke();
-    if (!beam) drawFlags(ctx, chord, sx, tipY, chord.stemDown ? 1 : -1, palette);
+    // Flags hang from the tip back toward the head, as on paper — see
+    // `drawFlag` in sheetRenderer. Drawn the other way they reach a further
+    // two staff spaces past the stem, off the top of the view.
+    if (!beam) drawFlags(ctx, chord, sx, tipY, chord.stemDown ? -1 : 1, palette);
   }
 }
 

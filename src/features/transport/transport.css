@@ -121,6 +121,29 @@
 
 /* .visually-hidden lives in index.css so every chunk can rely on it. */
 
+/* Portrait phones: the mode select was wrapping onto a line of its own, which
+   cost the score a row. Dropping the total duration buys back the width.
+   Keep the query in sync with src/index.css and the other feature sheets. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .transport__buttons {
+    flex-wrap: nowrap;
+    gap: 6px;
+  }
+
+  .transport__total {
+    display: none;
+  }
+
+  .transport__time {
+    margin-left: 0;
+  }
+
+  .transport__mode select {
+    font-size: 12px;
+    padding: 0 6px;
+  }
+}
+
 /* Short landscape: seek slider joins the buttons row to save a line. */
 @media (orientation: landscape) and (max-height: 500px) {
   .transport {

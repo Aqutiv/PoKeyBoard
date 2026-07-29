@@ -69,6 +69,7 @@ export const en: Messages = {
     oneBar: '1 bar',
     twoBars: '2 bars',
     volumeLabel: 'Metronome volume',
+    moreControls: 'More metronome settings',
     tempoFromBar: ({ bar }) => `from bar ${bar}`,
   },
   piano: {
