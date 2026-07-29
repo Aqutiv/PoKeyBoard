@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { gotoAppReady, nav, transport } from './helpers';
 
 test.describe('app shell and piano', () => {
@@ -53,18 +53,11 @@ test.describe('app shell and piano', () => {
     await sustain.click();
     await expect(sustain).toHaveAttribute('aria-pressed', 'false');
   });
-
-  test('service worker activates and the shell loads offline', async ({ page, context }) => {
-    await gotoAppReady(page);
-    await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, undefined, {
-      timeout: 15_000,
-    });
-    await context.setOffline(true);
-    await page.reload();
-    await expect(nav(page)).toBeVisible({ timeout: 15_000 });
-    await context.setOffline(false);
-  });
 });
+
+// The offline-shell test lives in serviceWorker.spec.ts: it needs the real
+// worker, and a real install cannot be timed reliably from inside the parallel
+// pool.
 
 test.describe('compact landscape play view', () => {
   test.use({ viewport: { width: 844, height: 390 } });

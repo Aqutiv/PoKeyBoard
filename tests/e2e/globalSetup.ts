@@ -1,4 +1,5 @@
 import { preview, type PreviewServer } from 'vite';
+import { restoreServiceWorkerIfNeeded } from './serviceWorkerFile';
 
 const PREVIEW_URL = 'http://127.0.0.1:4173';
 
@@ -17,6 +18,9 @@ async function existingLocalPreview(): Promise<boolean> {
  * server.close() instead of waiting on child-process tree termination.
  */
 export default async function globalSetup(): Promise<() => Promise<void>> {
+  if (restoreServiceWorkerIfNeeded()) {
+    console.warn('globalSetup: repaired dist/service-worker.js from a run that was killed.');
+  }
   if (await existingLocalPreview()) return async () => undefined;
 
   let server: PreviewServer | null = await preview({

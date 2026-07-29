@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test } from './fixtures';
 import { gotoAppReady, nav, recordShortTake } from './helpers';
 
 test.describe('Sheet music export', () => {

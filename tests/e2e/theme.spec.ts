@@ -1,10 +1,12 @@
-import { expect, test, type Page } from '@playwright/test';
+import type { Page } from '@playwright/test';
+import { expect, test } from './fixtures';
 
 const DARK_BG = 'rgb(20, 17, 16)'; // --surface-0 #141110
 const LIGHT_BG = 'rgb(247, 243, 234)'; // --surface-0 #f7f3ea
 
 // The service worker would satisfy blocked asset requests from its precache
-// and defeat the pre-paint isolation below; none of these tests need it.
+// and defeat the pre-paint isolation below; none of these tests need it. Stated
+// explicitly rather than left to the suite default, which real-pack runs flip.
 test.use({ serviceWorkers: 'block' });
 
 function html(page: Page) {
