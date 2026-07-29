@@ -123,7 +123,13 @@ export function layoutKeyboard(lowMidiRaw: number, highMidiRaw: number): Keyboar
     } else {
       const pitchClass = midi % 12;
       const octaveC = midi - pitchClass;
-      const whitesBeforeOctaveC = whiteKeyCount(lowMidi, octaveC - 1);
+      // A range that starts above its first octave's C leaves that C off the
+      // left edge, at a negative white index. Reading it as zero slides the
+      // whole leading octave's black keys right, onto the next octave's.
+      const whitesBeforeOctaveC =
+        octaveC >= lowMidi
+          ? whiteKeyCount(lowMidi, octaveC - 1)
+          : -whiteKeyCount(octaveC, lowMidi - 1);
       const center = whitesBeforeOctaveC + (BLACK_CENTER_FROM_C[pitchClass] ?? 0);
       keys.push({ midi, isBlack: true, x: center - BLACK_KEY_WIDTH / 2, width: BLACK_KEY_WIDTH });
     }

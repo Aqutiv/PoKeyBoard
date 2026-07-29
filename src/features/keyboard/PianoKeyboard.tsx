@@ -159,10 +159,18 @@ export function PianoKeyboard({
     [tracker],
   );
 
+  /**
+   * A step is one white key, because the bed always starts and ends on a
+   * whole one — `stepWhites` counts its white start, so 2 is the next along.
+   * Black keys still come into view as the window slides.
+   */
   const shiftRange = useCallback(
-    (direction: 1 | -1) => {
+    (direction: 1 | -1, step: 'key' | 'octave') => {
       tracker.releaseAll();
-      const next = layout.lowMidi + direction * 12;
+      const next =
+        step === 'octave'
+          ? layout.lowMidi + direction * 12
+          : stepWhites(layout.lowMidi, 2, direction);
       setAnchorMidi(Math.min(maxLowMidiFor(visibleWhites), Math.max(FULL_RANGE_LOW, next)));
     },
     [layout.lowMidi, setAnchorMidi, tracker, visibleWhites],
@@ -189,9 +197,18 @@ export function PianoKeyboard({
         <button
           type="button"
           className="piano__shift"
-          onClick={() => shiftRange(-1)}
+          onClick={() => shiftRange(-1, 'octave')}
           disabled={layout.lowMidi <= FULL_RANGE_LOW}
           aria-label={m.piano.shiftDown}
+        >
+          ‹‹
+        </button>
+        <button
+          type="button"
+          className="piano__shift"
+          onClick={() => shiftRange(-1, 'key')}
+          disabled={layout.lowMidi <= FULL_RANGE_LOW}
+          aria-label={m.piano.shiftDownKey}
         >
           ‹
         </button>
@@ -201,11 +218,20 @@ export function PianoKeyboard({
         <button
           type="button"
           className="piano__shift"
-          onClick={() => shiftRange(1)}
+          onClick={() => shiftRange(1, 'key')}
+          disabled={layout.highMidi >= FULL_RANGE_HIGH}
+          aria-label={m.piano.shiftUpKey}
+        >
+          ›
+        </button>
+        <button
+          type="button"
+          className="piano__shift"
+          onClick={() => shiftRange(1, 'octave')}
           disabled={layout.highMidi >= FULL_RANGE_HIGH}
           aria-label={m.piano.shiftUp}
         >
-          ›
+          ››
         </button>
         {controlsExtra}
         <button

@@ -119,3 +119,61 @@
   flex-wrap: nowrap;
   margin-left: auto; /* balances against Sustain's auto margin */
 }
+
+/* The disclosure is a phone affordance. Everywhere else the button is gone
+   and the wrapper is transparent to layout, so the settings sit in the row
+   exactly where they always have. */
+.metronome__more {
+  display: none;
+}
+
+.metronome__secondary {
+  display: contents;
+}
+
+/* Portrait phones: one row, with the settings on a second row only when
+   asked for. Keep the query in sync with src/index.css. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .metronome__more {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 40px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    background: var(--surface-2);
+    color: var(--text-dim);
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .metronome__more[aria-expanded='true'] {
+    background: var(--surface-3);
+    color: var(--text);
+  }
+
+  .metronome__secondary {
+    display: none;
+  }
+
+  /* Last in the flex order, so it wraps to a row of its own and leaves the
+     beat dots — which follow it in the DOM — up on the first row. */
+  .metronome__secondary[data-open='true'] {
+    display: flex;
+    order: 1;
+    flex-basis: 100%;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .metronome__volume {
+    flex: 1;
+    width: auto;
+  }
+
+  /* The beat dots keep their place at the end of the first row. */
+  .metronome__beats {
+    margin-left: auto;
+  }
+}
