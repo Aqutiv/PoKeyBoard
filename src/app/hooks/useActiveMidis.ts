@@ -1,6 +1,8 @@
 import { useCallback, useSyncExternalStore } from 'react';
 import { scrubController } from '@/features/notation/scrubController';
+import { isPedalDownAt } from '@/features/transport/sustainPedal';
 import { transportController } from '@/features/transport/transportController';
+import type { TransportState } from '@/features/transport/transportMachine';
 import { useTakeStore } from '@/state/useTakeStore';
 import { useTransportState } from './useTransport';
 
@@ -39,18 +41,14 @@ function computeSnapshot(): ReadonlySet<number> {
   return cache;
 }
 
-/**
- * Keys the keyboard should light beyond live input: notes sounding under
- * the playhead during playback, and scrub-audition flashes while scrubbing.
- */
-export function usePlaybackActiveMidis(): ReadonlySet<number> {
-  const state = useTransportState();
-  const polling = state === 'playing' || state === 'scrubbing' || state === 'recording';
+const POLL_MS = 90;
 
-  const subscribe = useCallback(
+/** Same cadence for every playhead-driven keyboard cue; see `computeSnapshot`. */
+function usePlayheadCueSubscribe(polling: boolean): (onStoreChange: () => void) => () => void {
+  return useCallback(
     (onStoreChange: () => void) => {
       const unsubscribe = transportController.subscribeState(onStoreChange);
-      const timer = polling ? setInterval(onStoreChange, 90) : null;
+      const timer = polling ? setInterval(onStoreChange, POLL_MS) : null;
       return () => {
         unsubscribe();
         if (timer !== null) clearInterval(timer);
@@ -58,6 +56,36 @@ export function usePlaybackActiveMidis(): ReadonlySet<number> {
     },
     [polling],
   );
+}
 
+function isCuePolling(state: TransportState): boolean {
+  return state === 'playing' || state === 'scrubbing' || state === 'recording';
+}
+
+/**
+ * Keys the keyboard should light beyond live input: notes sounding under
+ * the playhead during playback, and scrub-audition flashes while scrubbing.
+ */
+export function usePlaybackActiveMidis(): ReadonlySet<number> {
+  const subscribe = usePlayheadCueSubscribe(isCuePolling(useTransportState()));
   return useSyncExternalStore(subscribe, computeSnapshot);
+}
+
+function pedalSnapshot(): boolean {
+  const state = transportController.getState();
+  // The take's own pedal marks, shown while the playhead moves — the same
+  // states the note lights follow, so an overdub pass and a scrub show them.
+  if (!isCuePolling(state)) return false;
+  const pedals = useTakeStore.getState().take.pedalEvents;
+  return isPedalDownAt(pedals, transportController.getPlayheadMs());
+}
+
+/**
+ * Whether the take's sustain pedal is down under the playhead, so the pedal
+ * cue can light alongside the keys. A plain boolean, so no snapshot caching
+ * is needed for the `useSyncExternalStore` contract.
+ */
+export function usePlaybackPedalDown(): boolean {
+  const subscribe = usePlayheadCueSubscribe(isCuePolling(useTransportState()));
+  return useSyncExternalStore(subscribe, pedalSnapshot);
 }

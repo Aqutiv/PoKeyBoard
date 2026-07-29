@@ -1,23 +1,16 @@
 import type { NoteEvent, PedalEvent, Take } from '@/domain/takeTypes';
 import { MAX_NOTE_DURATION_MS } from '@/domain/takeTypes';
 
-interface SustainInterval {
+export interface SustainInterval {
   startMs: number;
   endMs: number | null;
 }
 
 /**
- * Apply sustain-pedal events to note durations for playback and offline
- * rendering: while the pedal is down at a note's release, the note rings on
- * until the next pedal-up (or the note's max length). Pure and testable —
- * playback then schedules plain fixed-duration notes.
+ * The stretches the pedal is held down for, sorted and non-overlapping. A
+ * press that is never released stays open (`endMs: null`).
  */
-export function applySustainToNotes(
-  notes: readonly NoteEvent[],
-  pedals: readonly PedalEvent[],
-): NoteEvent[] {
-  if (pedals.length === 0) return [...notes];
-
+export function sustainIntervals(pedals: readonly PedalEvent[]): SustainInterval[] {
   const sortedPedals = [...pedals].sort(
     (a, b) => a.atMs - b.atMs || Number(a.down) - Number(b.down),
   );
@@ -33,27 +26,53 @@ export function applySustainToNotes(
     }
   }
   if (downAt !== null) intervals.push({ startMs: downAt, endMs: null });
+  return intervals;
+}
 
-  const intervalAt = (timeMs: number): SustainInterval | null => {
-    let low = 0;
-    let high = intervals.length - 1;
-    let candidate: SustainInterval | null = null;
-    while (low <= high) {
-      const middle = (low + high) >>> 1;
-      const interval = intervals[middle] as SustainInterval;
-      if (interval.startMs <= timeMs) {
-        candidate = interval;
-        low = middle + 1;
-      } else {
-        high = middle - 1;
-      }
+/** The interval holding `timeMs` (half-open: down at its start, up at its end). */
+function intervalAt(intervals: readonly SustainInterval[], timeMs: number): SustainInterval | null {
+  let low = 0;
+  let high = intervals.length - 1;
+  let candidate: SustainInterval | null = null;
+  while (low <= high) {
+    const middle = (low + high) >>> 1;
+    const interval = intervals[middle] as SustainInterval;
+    if (interval.startMs <= timeMs) {
+      candidate = interval;
+      low = middle + 1;
+    } else {
+      high = middle - 1;
     }
-    return candidate && (candidate.endMs === null || timeMs < candidate.endMs) ? candidate : null;
-  };
+  }
+  return candidate && (candidate.endMs === null || timeMs < candidate.endMs) ? candidate : null;
+}
+
+/**
+ * Whether the pedal is down at `timeMs`. Drives the playback pedal cue on the
+ * keyboard, so the player can see when to pedal along with a take.
+ */
+export function isPedalDownAt(pedals: readonly PedalEvent[], timeMs: number): boolean {
+  if (pedals.length === 0) return false;
+  return intervalAt(sustainIntervals(pedals), timeMs) !== null;
+}
+
+/**
+ * Apply sustain-pedal events to note durations for playback and offline
+ * rendering: while the pedal is down at a note's release, the note rings on
+ * until the next pedal-up (or the note's max length). Pure and testable —
+ * playback then schedules plain fixed-duration notes.
+ */
+export function applySustainToNotes(
+  notes: readonly NoteEvent[],
+  pedals: readonly PedalEvent[],
+): NoteEvent[] {
+  if (pedals.length === 0) return [...notes];
+
+  const intervals = sustainIntervals(pedals);
 
   return notes.map((note) => {
     const releaseAt = note.startMs + note.durationMs;
-    const interval = intervalAt(releaseAt);
+    const interval = intervalAt(intervals, releaseAt);
     if (!interval) return note;
     if (interval.endMs === null) {
       // Pedal never released: ring to the cap.

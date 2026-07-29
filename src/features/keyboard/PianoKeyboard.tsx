@@ -25,11 +25,17 @@ import './keyboard.css';
 interface PianoKeyboardProps {
   /** Extra keys to light up (playback / scrub animation). */
   extraActiveMidis?: ReadonlySet<number>;
+  /** The take's pedal is down under the playhead (playback / scrub cue). */
+  playbackPedalDown?: boolean;
   /** Extra controls rendered between the range shifter and Sustain. */
   controlsExtra?: ReactNode;
 }
 
-export function PianoKeyboard({ extraActiveMidis, controlsExtra }: PianoKeyboardProps) {
+export function PianoKeyboard({
+  extraActiveMidis,
+  playbackPedalDown = false,
+  controlsExtra,
+}: PianoKeyboardProps) {
   const m = useMessages();
   const keysRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
@@ -204,7 +210,9 @@ export function PianoKeyboard({ extraActiveMidis, controlsExtra }: PianoKeyboard
         {controlsExtra}
         <button
           type="button"
-          className={`piano__sustain${sustainOn ? ' is-on' : ''}`}
+          className={`piano__sustain${playbackPedalDown ? ' is-playback' : ''}${sustainOn ? ' is-on' : ''}`}
+          // The control's own state: playback lights the button as a cue but
+          // never presses it, so this stays the user's sustain toggle.
           aria-pressed={sustainOn}
           onClick={toggleSustain}
         >

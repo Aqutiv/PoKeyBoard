@@ -39,6 +39,18 @@
   margin-left: auto;
 }
 
+/*
+ * The take's pedal is down under the playhead. Read as a cue, not a press:
+ * accent outline and lettering over the resting surface, so it never looks
+ * like the user's own sustain toggle (`.is-on`, which wins below).
+ */
+.piano__sustain.is-playback:not(.is-on) {
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 .piano__sustain.is-on {
   background: var(--accent);
   border-color: var(--accent);
