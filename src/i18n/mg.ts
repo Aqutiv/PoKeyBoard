@@ -75,6 +75,8 @@ export const mg: Messages = {
   piano: {
     shiftDown: 'Ampidino iray oktava ny elanelan’ny klavie',
     shiftUp: 'Akaro iray oktava ny elanelan’ny klavie',
+    shiftDownKey: 'Ampidino kitendry iray ny elanelan’ny klavie',
+    shiftUpKey: 'Akaro kitendry iray ny elanelan’ny klavie',
     sustain: 'Sustain',
     keyLabel: ({ note }) => `Kitendry ${note}`,
   },

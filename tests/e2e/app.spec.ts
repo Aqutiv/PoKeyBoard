@@ -54,6 +54,31 @@ test.describe('app shell and piano', () => {
     await expect(sustain).toHaveAttribute('aria-pressed', 'false');
   });
 
+  test('range shifts by a single white key or by a whole octave', async ({ page }) => {
+    await gotoAppReady(page);
+    const range = page.locator('.piano__range');
+    const upKey = page.getByRole('button', { name: 'Shift keyboard range up one key' });
+    const downKey = page.getByRole('button', { name: 'Shift keyboard range down one key' });
+    const upOctave = page.getByRole('button', { name: 'Shift keyboard range up one octave' });
+
+    // The high end depends on how many keys the viewport fits, so assert the
+    // anchor the buttons actually move.
+    await expect(range).toHaveText(/^C3\s/);
+    // Single steps walk white keys, stepping over C#3 and D#3.
+    await upKey.click();
+    await expect(range).toHaveText(/^D3\s/);
+    // The bed moved past C#3 rather than onto it, and D#3 came along.
+    await expect(page.getByRole('button', { name: 'C#3 key' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'D#3 key' })).toBeVisible();
+    await upKey.click();
+    await expect(range).toHaveText(/^E3\s/);
+
+    await upOctave.click();
+    await expect(range).toHaveText(/^E4\s/);
+    await downKey.click();
+    await expect(range).toHaveText(/^D4\s/);
+  });
+
   test('service worker activates and the shell loads offline', async ({ page, context }) => {
     await gotoAppReady(page);
     await page.waitForFunction(() => navigator.serviceWorker?.controller !== null, undefined, {

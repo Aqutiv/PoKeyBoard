@@ -73,6 +73,8 @@ export const es: Messages = {
   piano: {
     shiftDown: 'Bajar el rango del teclado una octava',
     shiftUp: 'Subir el rango del teclado una octava',
+    shiftDownKey: 'Bajar el rango del teclado una tecla',
+    shiftUpKey: 'Subir el rango del teclado una tecla',
     sustain: 'Sostenido',
     keyLabel: ({ note }) => `Tecla ${note}`,
   },

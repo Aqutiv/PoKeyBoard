@@ -138,3 +138,17 @@
   color: var(--key-label);
   pointer-events: none;
 }
+
+/* Portrait phones: four shift buttons, the range readout and Sustain do not
+   fit a 390px row at the full touch-target width. Keep the query in sync
+   with src/index.css. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .piano__controls {
+    gap: 6px;
+  }
+
+  .piano__shift {
+    min-width: 38px;
+    padding: 0 8px;
+  }
+}

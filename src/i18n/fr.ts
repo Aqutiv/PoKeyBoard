@@ -74,6 +74,8 @@ export const fr: Messages = {
   piano: {
     shiftDown: 'Descendre la tessiture du clavier d’une octave',
     shiftUp: 'Monter la tessiture du clavier d’une octave',
+    shiftDownKey: 'Descendre la tessiture du clavier d’une touche',
+    shiftUpKey: 'Monter la tessiture du clavier d’une touche',
     sustain: 'Sustain',
     keyLabel: ({ note }) => `Touche ${note}`,
   },

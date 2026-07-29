@@ -75,6 +75,8 @@ export const en: Messages = {
   piano: {
     shiftDown: 'Shift keyboard range down one octave',
     shiftUp: 'Shift keyboard range up one octave',
+    shiftDownKey: 'Shift keyboard range down one key',
+    shiftUpKey: 'Shift keyboard range up one key',
     sustain: 'Sustain',
     keyLabel: ({ note }) => `${note} key`,
   },

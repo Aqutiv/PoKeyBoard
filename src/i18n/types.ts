@@ -136,6 +136,8 @@ export interface Messages {
   piano: {
     shiftDown: string;
     shiftUp: string;
+    shiftDownKey: string;
+    shiftUpKey: string;
     sustain: string;
     keyLabel: (p: { note: string }) => string;
   };
