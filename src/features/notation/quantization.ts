@@ -15,10 +15,13 @@ export interface TupletRatio {
 }
 
 export interface DurationSymbol {
-  base: 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth';
+  base: 'whole' | 'half' | 'quarter' | 'eighth' | 'sixteenth' | '32nd' | '64th';
   dotted: boolean;
   tuplet?: TupletRatio;
 }
+
+/** Beams on a beamed run, or flags on a lone stem. */
+export type BeamCount = 1 | 2 | 3 | 4;
 
 /** Three in the time of two, which is all but a rounding error of tuplet use. */
 export const TRIPLET: TupletRatio = { actual: 3, normal: 2 };
@@ -33,6 +36,10 @@ const SYMBOLS: Array<{ fraction: number; symbol: DurationSymbol }> = [
   { fraction: 0.125, symbol: { base: 'eighth', dotted: false } },
   { fraction: 0.09375, symbol: { base: 'sixteenth', dotted: true } },
   { fraction: 0.0625, symbol: { base: 'sixteenth', dotted: false } },
+  { fraction: 0.046875, symbol: { base: '32nd', dotted: true } },
+  { fraction: 0.03125, symbol: { base: '32nd', dotted: false } },
+  { fraction: 0.0234375, symbol: { base: '64th', dotted: true } },
+  { fraction: 0.015625, symbol: { base: '64th', dotted: false } },
 ];
 
 /** Every standard symbol, longest first — the values a note or rest may take. */
@@ -44,7 +51,26 @@ const BASE_FRACTION: Record<DurationSymbol['base'], number> = {
   quarter: 0.25,
   eighth: 0.125,
   sixteenth: 0.0625,
+  '32nd': 0.03125,
+  '64th': 0.015625,
 };
+
+/**
+ * How many beams a run of this value carries, which is also how many flags a
+ * single one of it grows. Read by both layouts and both renderers so the four
+ * cannot drift apart; a value longer than an eighth carries none.
+ */
+const BEAM_COUNTS: Partial<Record<DurationSymbol['base'], BeamCount>> = {
+  eighth: 1,
+  sixteenth: 2,
+  '32nd': 3,
+  '64th': 4,
+};
+
+/** The beam/flag count for a value, or 0 for the ones drawn without any. */
+export function beamCountFor(base: DurationSymbol['base']): BeamCount | 0 {
+  return BEAM_COUNTS[base] ?? 0;
+}
 
 /**
  * A symbol's written length in time-signature beats — the inverse of
@@ -76,6 +102,14 @@ export function tupletSymbolForBeats(
   return { ...symbolForBeats(asPlain, denominator), tuplet };
 }
 
+/** The note the grid divides a whole into, by its name. */
+const GRID_DIVISORS: Record<Exclude<QuantizationSetting, 'off'>, number> = {
+  '1/8': 8,
+  '1/16': 16,
+  '1/32': 32,
+  '1/64': 64,
+};
+
 /**
  * Grid size in time-signature beats; null when off. The grid lives in beat
  * space so that it stays anchored to the music — bar lines and the tempo
@@ -88,7 +122,7 @@ export function quantizeGridBeats(
   denominator: number,
 ): number | null {
   if (setting === 'off') return null;
-  return denominator / (setting === '1/8' ? 8 : 16);
+  return denominator / GRID_DIVISORS[setting];
 }
 
 /**

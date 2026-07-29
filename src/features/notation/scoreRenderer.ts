@@ -3,6 +3,7 @@ import { drawAccidentalGlyph } from './accidentalGlyph';
 import {
   beamSpanFor,
   beamYAt,
+  extraStemG,
   BEAM_SPACING_G,
   BEAM_THICKNESS_G,
   STEM_LENGTH_G,
@@ -16,7 +17,7 @@ import {
   type LaidOutNote,
   type ScoreLayout,
 } from './notationLayout';
-import type { DurationSymbol } from './quantization';
+import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
 import { drawRestGlyph } from './restGlyph';
 import { restStep } from './rests';
 import {
@@ -80,7 +81,7 @@ interface BeamLine {
   x2: number;
   y2: number;
   stemDown: boolean;
-  beamCount: 1 | 2;
+  beamCount: BeamCount;
   tupletCount: number | null;
 }
 type BeamLines = Map<number, BeamLine>;
@@ -756,7 +757,7 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
 
     const xs = beam.members.map((chord) => stemXFor(view, chord));
     const anchors = beam.members.map((chord) => beamAnchorY(view, chord));
-    const span = beamSpanFor(xs, anchors, beam.stemDown, GAP);
+    const span = beamSpanFor(xs, anchors, beam.stemDown, GAP, beam.beamCount);
     lines.set(id, {
       x1: xs[0] as number,
       y1: span.y1,
@@ -904,11 +905,14 @@ function drawChord(
     const beam = chord.beamId === null ? undefined : beamLines.get(chord.beamId);
     const sx = chord.stemDown ? x - rx + 0.8 : x + rx - 0.8;
     const headEnd = chord.stemDown ? minY : maxY;
+    // Flags stack back toward the head, so three or four of them need a longer
+    // stem than an eighth's to sit on.
+    const stemPx = STEM_LENGTH_PX + extraStemG(beamCountFor(chord.symbol.base)) * GAP;
     const tipY = beam
       ? beamYAt(beam, beam.x1, beam.x2, sx)
       : chord.stemDown
-        ? maxY + STEM_LENGTH_PX
-        : minY - STEM_LENGTH_PX;
+        ? maxY + stemPx
+        : minY - stemPx;
 
     ctx.strokeStyle = palette.note;
     ctx.lineWidth = 1.6;
@@ -931,7 +935,7 @@ function drawFlags(
   direction: 1 | -1,
   palette: ScorePalette,
 ): void {
-  const flags = chord.symbol.base === 'eighth' ? 1 : chord.symbol.base === 'sixteenth' ? 2 : 0;
+  const flags = beamCountFor(chord.symbol.base);
   ctx.strokeStyle = palette.note;
   ctx.lineWidth = 1.6;
   for (let i = 0; i < flags; i += 1) {
