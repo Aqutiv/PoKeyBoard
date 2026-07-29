@@ -9,7 +9,7 @@
  * check entirely.
  */
 import { spawn } from 'node:child_process';
-import { readdir, stat } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
 /** Everything whose change should invalidate dist/. */
@@ -29,6 +29,16 @@ const WATCHED = [
 
 const WITNESS = path.join('dist', 'index.html');
 
+/**
+ * Build-time configuration that lives in no watched file. vite.config.ts turns
+ * POKEYBOARD_BASE into asset URLs, the web manifest and the service-worker
+ * scope, so changing it has to invalidate dist/ even when every source file is
+ * older than the build — otherwise `POKEYBOARD_BASE=/subpath/ npm run test:e2e`
+ * would quietly test the previous root build.
+ */
+const BUILD_ENV = JSON.stringify({ base: process.env.POKEYBOARD_BASE ?? '/' });
+const BUILD_ENV_STAMP = path.join('dist', '.buildIfStale-env');
+
 /** The newest mtime at or under `target`, with the file that carries it. */
 async function newest(target) {
   let entry;
@@ -39,15 +49,28 @@ async function newest(target) {
   }
   if (!entry.isDirectory()) return { path: target, mtimeMs: entry.mtimeMs };
 
-  let best = null;
+  // A directory's own mtime counts, not just its children's: it moves when an
+  // entry is added, renamed or *deleted*, and a deletion leaves every surviving
+  // file's mtime untouched. Without this, removing a source file would leave its
+  // output stranded in dist/ while the build was skipped as current.
+  let best = { path: target, mtimeMs: entry.mtimeMs };
   for (const child of await readdir(target, { withFileTypes: true })) {
     const found = await newest(path.join(target, child.name));
-    if (found && (!best || found.mtimeMs > best.mtimeMs)) best = found;
+    if (found && found.mtimeMs > best.mtimeMs) best = found;
   }
   return best;
 }
 
-function build() {
+/** The BUILD_ENV recorded by the last build here, or null if there is none. */
+async function recordedBuildEnv() {
+  try {
+    return await readFile(BUILD_ENV_STAMP, 'utf8');
+  } catch {
+    return null; // No stamp: a dist/ from before this check, so rebuild.
+  }
+}
+
+function runBuild() {
   return new Promise((resolve, reject) => {
     const child = spawn('npm', ['run', 'build'], { stdio: 'inherit', shell: true });
     child.on('error', reject);
@@ -58,10 +81,18 @@ function build() {
   });
 }
 
+async function build(reason) {
+  console.log(`buildIfStale: ${reason} — building.`);
+  await runBuild();
+  // Written after the build so a failed one leaves no misleading stamp.
+  await writeFile(BUILD_ENV_STAMP, BUILD_ENV);
+}
+
 const witness = await newest(WITNESS);
 if (!witness) {
-  console.log('buildIfStale: no dist/index.html — building.');
-  await build();
+  await build('no dist/index.html');
+} else if ((await recordedBuildEnv()) !== BUILD_ENV) {
+  await build('dist/ was built with a different POKEYBOARD_BASE');
 } else {
   const candidates = await Promise.all(WATCHED.map(newest));
   const stale = candidates
@@ -72,7 +103,6 @@ if (!witness) {
   if (stale.length === 0) {
     console.log('buildIfStale: dist/ is current — skipping the build.');
   } else {
-    console.log(`buildIfStale: ${stale[0].path} is newer than dist/ — building.`);
-    await build();
+    await build(`${stale[0].path} is newer than dist/`);
   }
 }
