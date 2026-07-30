@@ -46,9 +46,37 @@ describe('file name builders', () => {
   it('builds the spec-format names', () => {
     expect(takeJsonFileName('My Take')).toBe('PoKeyBoard - My Take.pokeyboard.json');
     expect(takeAudioFileName('My Take')).toBe('PoKeyBoard - My Take.mp3');
+    expect(takeAudioFileName('My Take', { piano: 'Salamander' })).toBe(
+      'PoKeyBoard - My Take (Salamander).mp3',
+    );
     expect(takeSheetFileName('My<Take>')).toBe('PoKeyBoard - My Take.pdf');
+    expect(
+      takeAudioFileName('Gymnopedie No. 1', { composer: 'Erik Satie', piano: 'Salamander' }),
+    ).toBe('PoKeyBoard - Erik Satie - Gymnopedie No. 1 (Salamander).mp3');
+    expect(takeAudioFileName('My Take', { composer: 'A/B', piano: 'Headroom' })).toBe(
+      'PoKeyBoard - A B - My Take (Headroom).mp3',
+    );
     expect(backupFileName(new Date('2026-07-17T12:00:00Z'))).toBe(
       'PoKeyBoard Backup - 2026-07-17.json',
     );
+  });
+
+  it('keeps the whole name inside the 255-byte limit, decorations included', () => {
+    const bytes = (name: string) => new TextEncoder().encode(name).length;
+    // Three bytes a character: under the 120-character clamp, far over 255 bytes.
+    const cjk = '音'.repeat(120);
+    for (const name of [
+      takeJsonFileName(cjk),
+      takeSheetFileName(cjk),
+      takeAudioFileName(cjk),
+      takeAudioFileName(cjk, { composer: 'Erik Satie', piano: 'Salamander' }),
+    ]) {
+      expect(bytes(name)).toBeLessThanOrEqual(255);
+    }
+
+    // The decorations survive the trim; only the title is shortened.
+    const audio = takeAudioFileName(cjk, { composer: 'Erik Satie', piano: 'Salamander' });
+    expect(audio.startsWith('PoKeyBoard - Erik Satie - 音')).toBe(true);
+    expect(audio.endsWith(' (Salamander).mp3')).toBe(true);
   });
 });

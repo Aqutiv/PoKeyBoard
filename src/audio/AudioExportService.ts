@@ -2,9 +2,11 @@ import { getCachedAudio, invalidateCachedAudio, putCachedAudio } from '@/data/au
 import { persistenceService } from '@/data/persistence';
 import { computeExportHash } from '@/domain/takeHash';
 import type { Take } from '@/domain/takeTypes';
+import { libraryTrackSummary } from '@/features/library/catalog';
 import { ExportError } from '@/utils/errors';
 import { takeAudioFileName } from '@/utils/filenames';
 import type { EncoderResponse } from '@/workers/mp3Encoder.worker';
+import { instrumentForPackVersion } from './instruments';
 import { encodePcmToMp3, type ExportBitrateKbps } from './mp3Encode';
 import { renderTakeToBuffer } from './OfflineTakeRenderer';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
@@ -90,7 +92,12 @@ class AudioExportService {
           metronomeVolume: options.metronomeVolume,
         }),
       );
-      const fileName = takeAudioFileName(take.title);
+      // Every export names the piano it was rendered with; a library track is
+      // credited to its composer as well.
+      const fileName = takeAudioFileName(take.title, {
+        composer: libraryTrackSummary(take.id)?.composer,
+        piano: instrumentForPackVersion(take.samplePackVersion).name,
+      });
 
       const cached = await this.awaitJob(job, getCachedAudio(take.id));
       if (cached && cached.hash === hash) {

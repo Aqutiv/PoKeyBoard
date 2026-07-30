@@ -25,6 +25,7 @@ npm-debug.log*
 !.env.example
 
 # Editor and OS
+.claude/settings.local.json
 .vscode/*
 !.vscode/extensions.json
 .idea/
