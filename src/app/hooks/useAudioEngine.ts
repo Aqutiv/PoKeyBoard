@@ -15,7 +15,7 @@ export function useEngineStatus(): EngineStatus {
 
 const subscribeProgress = (onStoreChange: () => void) =>
   audioEngine.subscribeLoadProgress(onStoreChange);
-const getProgress = () => audioEngine.bank.getProgress();
+const getProgress = () => audioEngine.getLoadProgress();
 
 export function useSampleLoadProgress(): SampleLoadProgress {
   return useSyncExternalStore(subscribeProgress, getProgress);

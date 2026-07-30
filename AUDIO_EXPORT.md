@@ -4,7 +4,7 @@ Goal: a rendered take must be sendable through WhatsApp and similar apps and pla
 
 ## Pipeline (src/audio/AudioExportService.ts)
 
-1. **Hash** the audible content (`takeHash`): notes/pedals (id-independent), tempo, instrument gains, sample-pack version + exporter version, bitrate, metronome inclusion. A cache hit in the `audioCache` table returns the stored MP3 instantly.
+1. **Hash** the audible content (`takeHash`): notes/pedals (id-independent), tempo, instrument gains, sample-pack version + exporter version, bitrate, metronome inclusion. A cache hit in the `audioCache` table returns the stored MP3 instantly. The sample-pack version is how choosing a different piano invalidates a cached export: the take is re-stamped when the selection changes, so the render always uses the piano the user just heard.
 2. **Save** the take (forced autosave flush).
 3. **Render** via `OfflineTakeRenderer`: `OfflineAudioContext` (2ch/48kHz, take + 3 s tail), the same `PianoGraphFactory` graph, `SampleBank` buffers, and envelope constants as live playback; sustain pedal pre-applied to durations; optional metronome clicks; rescale only if the peak would clip (dynamics are never flattened).
 4. **Encode** in `mp3Encoder.worker`: channel copies are **transferred** (no clones), LAME encodes in ~2 s chunks with progress messages, and the finished buffer transfers back.

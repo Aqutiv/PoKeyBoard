@@ -20,6 +20,24 @@ PoKeyBoard bundles the following third-party assets and libraries.
 
 Attribution is also shown in the app's About view.
 
+## Headroom Piano (piano samples)
+
+- **Author:** Bengt Nilsson (Yamaha C3 grand); SFZ mapping by kinwie
+- **License:** Creative Commons Attribution 4.0 International (CC-BY 4.0),
+  <https://creativecommons.org/licenses/by/4.0/>
+- **Source:** <https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano>
+- **Files:** `public/piano/headroom-grand-v1/*.sample` (MP3 audio under the same
+  neutral extension as the Salamander pack).
+- **Modifications:** subset of the original 5 velocity levels (LEVEL1, LEVEL3,
+  and LEVEL5) across the 30 minor-third root pitches, close-mic position only
+  (the Decca Tree position is not shipped); converted from 44.1 kHz/16-bit
+  stereo FLAC to 48 kHz mono MP3 at 128 kbps; trimmed to 7–12 seconds with a
+  fade-out; a per-layer gain is applied at playback time so the pack sits at the
+  Salamander pack's loudness (see `scripts/build-sample-pack.mjs` for the exact
+  pipeline and the measured values in the pack's `manifest.json`).
+
+Attribution is also shown in the app's About view.
+
 ## LAME MP3 encoder (via wasm-media-encoders)
 
 - **Package:** `wasm-media-encoders` (MIT license) bundling the LAME MP3

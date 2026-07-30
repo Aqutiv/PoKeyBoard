@@ -67,12 +67,16 @@ class PersistenceService {
       const settings = useSettingsStore.getState();
       audioEngine.setMasterVolume(settings.masterVolume);
       audioEngine.setReverbMix(settings.reverbMix);
+      void audioEngine.setInstrument(settings.pianoInstrument);
       // Default to the OS language unless the user has pinned one. Runs before
       // the autosave subscription below so an unpinned language isn't written
       // back — it stays re-derived from the OS on each launch.
       await applySystemLanguageIfUnpinned();
     } catch (error) {
       console.error('Settings restore failed:', error);
+    } finally {
+      // Even a failed restore must let the piano start loading.
+      audioEngine.markInstrumentRestored();
     }
 
     try {
@@ -114,7 +118,20 @@ class PersistenceService {
     useTakeStore.subscribe((state, previous) => {
       if (state.take !== previous.take && state.dirty) this.scheduleSave();
     });
-    useSettingsStore.subscribe(() => this.scheduleSettingsSave());
+    useSettingsStore.subscribe((state, previous) => {
+      // Owned here rather than in the store's setter so that every route to a
+      // new piano is covered — the Settings radio, Reset settings, and a
+      // restored backup, which writes the store with setState and bypasses the
+      // setters entirely.
+      if (state.pianoInstrument !== previous.pianoInstrument) {
+        void audioEngine.setInstrument(state.pianoInstrument);
+        // setInstrument re-points the engine synchronously, so the take can be
+        // stamped now; waiting for the samples to decode would leave a window
+        // where the take names a piano that is not the one playing.
+        useTakeStore.getState().stampActiveInstrument();
+      }
+      this.scheduleSettingsSave();
+    });
     transportController.onRecordingFinalized.add(() => {
       void this.flushSave();
     });

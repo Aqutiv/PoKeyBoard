@@ -44,6 +44,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   Recorded takes omit all three and the notation falls back to pitch, written note value, and the
   staff's own clef. Added the same way `tempo.changes` was — no schema bump, older takes parse
   untouched, an older build drops them.
+- `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v2`, `headroom-grand-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 
 ## Import pipeline

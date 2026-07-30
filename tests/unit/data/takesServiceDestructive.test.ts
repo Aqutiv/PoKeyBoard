@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { DEFAULT_PIANO_INSTRUMENT_ID, pianoInstrument } from '@/audio/instruments';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { QuotaExceededStorageError } from '@/utils/errors';
 import type { Take } from '@/domain/takeTypes';
@@ -41,7 +42,13 @@ describe('deleting the active take while saving fails', () => {
       invalidateCachedAudio: vi.fn(async () => undefined),
     }));
     vi.doMock('@/audio/AudioEngine', () => ({
-      audioEngine: { allNotesOff: vi.fn(), setMasterVolume: vi.fn(), setReverbMix: vi.fn() },
+      audioEngine: {
+        allNotesOff: vi.fn(),
+        setMasterVolume: vi.fn(),
+        setReverbMix: vi.fn(),
+        // useTakeStore.setTake stamps the take with the selected piano.
+        activeInstrument: pianoInstrument(DEFAULT_PIANO_INSTRUMENT_ID),
+      },
     }));
     vi.doMock('@/features/transport/transportController', () => ({
       transportController: { handleInterruption: vi.fn(), restorePlayhead: vi.fn() },

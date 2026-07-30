@@ -22,11 +22,13 @@ PoKeyBoard deploys to **any static HTTPS host** (no backend). The reference CI i
 - [ ] Fresh profile: app loads, piano ready, a key sounds after first tap
 - [ ] DevTools → Application: manifest parsed (installable), service worker **activated**
 - [ ] Reload offline: shell loads
-- [ ] Settings → Download piano for offline use completes; airplane-mode launch plays all keys
+- [ ] Settings → Download piano for offline use completes for **each** piano; airplane-mode launch plays all keys
+- [ ] Settings → Piano: switching sounds different, survives a reload, and leaves no stuck key when a note is held across the switch
 - [ ] Record → Share audio → MP3 renders; share sheet (mobile) or download (desktop)
 - [ ] Second deploy later: "Update available" appears and applies on request
 
 ## Version bump
 
 - [ ] Update `version` in `package.json` (shown in Settings/About)
-- [ ] If piano samples ever change, bump the pack directory name (`salamander-grand-vN`) and `PIANO_SAMPLE_CACHE` in `src/pwa/cacheNames.ts` — never mutate a published pack in place
+- [ ] **Changing** a published pack's audio: bump its directory name (`<name>-vN`) and `PIANO_SAMPLE_CACHE` in `src/pwa/cacheNames.ts` — never mutate a published pack in place
+- [ ] **Adding** a pack needs neither bump — the files live at new immutable URLs, and bumping the cache name would make every existing user re-download samples they already have. Do check the `ExpirationPlugin` `maxEntries` headroom in `src/pwa/service-worker.ts`: it is 512 against 91 entries per pack, and LRU eviction is silent

@@ -11,10 +11,10 @@
 
 ```
 src/
-  audio/        AudioEngine (facade singleton), SampleBank, VoiceManager,
-                PianoGraphFactory (+ procedural reverb IR), MetronomeEngine,
-                OfflineTakeRenderer, AudioExportService, audioCapabilities,
-                iosAudioSession
+  audio/        AudioEngine (facade singleton), instruments (the piano
+                registry), SampleBank, VoiceManager, PianoGraphFactory
+                (+ procedural reverb IR), MetronomeEngine, OfflineTakeRenderer,
+                AudioExportService, audioCapabilities, iosAudioSession
   workers/      mp3Encoder.worker (LAME wasm, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
@@ -34,7 +34,8 @@ src/
                 remoteImportMessage
     export/     AudioExportDialog, SheetExportDialog, sheetPdfService
                 (pdf-lib, dynamic import — see SHEET_EXPORT.md)
-    settings/   SettingsPage (offline pack, diagnostics, install, updates)
+    settings/   SettingsPage (piano choice, offline packs, diagnostics,
+                install, updates)
     play/       PlayPage, SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
@@ -56,6 +57,40 @@ Clicks come from a `ClickGrid`, not from one bpm: while the transport moves, the
 ## Recording
 
 The engine emits input events (`on/off/sustain`, audio-clock stamped) for live sources. The controller keeps per-`sourceId` open notes, commits each on release (prompt score display), finalizes leftovers on stop, appends pedal events, and tracks the pass's note ids for undo. Overdub is the default; replace deletes-from-playhead only after explicit confirmation. A recording interrupted by backgrounding finalizes, saves, and explains itself.
+
+## Choosing a piano
+
+`audio/instruments.ts` lists the selectable pianos, each one a versioned sample
+pack directory under `public/piano/`. The engine keeps a `SampleBank` per
+instrument but lets only the active one hold decoded buffers — a full pack of
+mono float32 PCM is ~150 MB, so two resident packs is not an option on a phone.
+
+Switching (`AudioEngine.setInstrument`) releases sounding notes rather than
+cross-fading two different pianos, re-points the load-progress fan-out at the new
+bank (which is why `data-piano-ready` drops to false), decodes the new core pack,
+replays the last requested keyboard range, and only then frees the outgoing
+bank's buffers — so a rapid A→B→A toggle never re-decodes, and there is no window
+where nothing is playable. A generation counter stops an out-of-order switch from
+freeing the bank that just became active.
+
+Progress subscription lives on the engine, not the bank: `useSyncExternalStore`
+captures its subscribe callback once, so a per-bank subscription would go deaf
+the first time the piano changed.
+
+On a cold start `loadCoreSamples` waits (≤1.5 s, then gives up) for the
+persistence layer to apply the stored instrument, so a user on the second piano
+never decodes 5.7 MB of the first one first.
+
+Packs are mastered at different levels — Headroom sits ~15 dB below Salamander —
+so the build script measures each pack against the default one and writes a
+per-layer `levelMatch` into its manifest. `SampleBank` applies it _outside_
+`velocityGain`'s clamp, keyed on the layer actually resolved rather than the one
+requested, because it describes how loudly that file was recorded.
+
+The selected piano is authoritative everywhere, including export: `setTake`
+stamps the take's `samplePackVersion` from the active instrument, so live
+playback and the rendered MP3 always agree, and since `takeHash` already hashes
+that field, a switch invalidates cached exports on its own.
 
 ## Live/offline engine reuse
 
@@ -81,4 +116,4 @@ The export service copies the rendered buffer's channels, **transfers** them to 
 
 ## PWA
 
-Workbox `injectManifest`: shell precache (~1.2 MB), SPA navigation fallback, Cache First runtime caching for the versioned sample pack in a named cache shared with the explicit "Download piano for offline use" flow. Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.
+Workbox `injectManifest`: shell precache (~1.2 MB), SPA navigation fallback, Cache First runtime caching for every versioned sample pack in one named cache shared with the explicit "Download piano for offline use" flow (which downloads and deletes per piano, enumerating the cache by pack path). Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.

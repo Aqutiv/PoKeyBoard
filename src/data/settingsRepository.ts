@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
 import { QUANTIZATION_SETTINGS } from '@/domain/takeTypes';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { SETTINGS_DEFAULTS, type SettingsState } from '@/state/useSettingsStore';
@@ -9,6 +10,7 @@ const SETTING_KEYS = Object.keys(SETTINGS_DEFAULTS) as Array<keyof PersistableSe
 const SETTING_SCHEMAS = {
   language: z.enum(['en', 'es', 'fr', 'mg']),
   theme: z.enum(['dark', 'light', 'system']),
+  pianoInstrument: z.enum(PIANO_INSTRUMENT_IDS),
   masterVolume: z.number().min(0).max(1),
   reverbMix: z.number().min(0).max(1),
   velocityMode: z.enum(['touch', 'fixed']),

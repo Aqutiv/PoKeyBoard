@@ -322,6 +322,11 @@ export interface Messages {
     updates: string;
     diagnostics: string;
     reset: string;
+    piano: string;
+    pianoSalamander: string;
+    pianoHeadroom: string;
+    pianoSwitching: string;
+    offlinePianoHint: string;
     pianoVolume: string;
     reverb: string;
     velocity: string;

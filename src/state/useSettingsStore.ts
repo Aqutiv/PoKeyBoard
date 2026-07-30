@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { audioEngine } from '@/audio/AudioEngine';
+import { DEFAULT_PIANO_INSTRUMENT_ID, type PianoInstrumentId } from '@/audio/instruments';
 import {
   DEFAULT_MASTER_VOLUME,
   DEFAULT_REVERB_MIX,
@@ -18,6 +19,8 @@ export type ThemePreference = 'dark' | 'light' | 'system';
 export interface SettingsState {
   language: SupportedLanguage;
   theme: ThemePreference;
+  /** Which sampled piano plays; see src/audio/instruments.ts. */
+  pianoInstrument: PianoInstrumentId;
   masterVolume: number;
   reverbMix: number;
   velocityMode: VelocityMode;
@@ -33,6 +36,7 @@ export interface SettingsState {
 
   setLanguage(language: SupportedLanguage): void;
   setTheme(theme: ThemePreference): void;
+  setPianoInstrument(id: PianoInstrumentId): void;
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
   setVelocityMode(mode: VelocityMode): void;
@@ -50,6 +54,7 @@ export interface SettingsState {
 export const SETTINGS_DEFAULTS = {
   language: DEFAULT_LANGUAGE as SupportedLanguage,
   theme: 'dark' as ThemePreference,
+  pianoInstrument: DEFAULT_PIANO_INSTRUMENT_ID as PianoInstrumentId,
   masterVolume: DEFAULT_MASTER_VOLUME,
   reverbMix: DEFAULT_REVERB_MIX,
   velocityMode: 'touch' as VelocityMode,
@@ -73,6 +78,10 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
 
   setLanguage: (language) => set({ language }),
   setTheme: (theme) => set({ theme }),
+  setPianoInstrument: (pianoInstrument) => {
+    set({ pianoInstrument });
+    void audioEngine.setInstrument(pianoInstrument);
+  },
   setMasterVolume: (value) => {
     audioEngine.setMasterVolume(value);
     set({ masterVolume: value });
@@ -93,6 +102,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   resetSettings: () => {
     audioEngine.setMasterVolume(SETTINGS_DEFAULTS.masterVolume);
     audioEngine.setReverbMix(SETTINGS_DEFAULTS.reverbMix);
+    void audioEngine.setInstrument(SETTINGS_DEFAULTS.pianoInstrument);
     set({ ...SETTINGS_DEFAULTS });
   },
 }));
