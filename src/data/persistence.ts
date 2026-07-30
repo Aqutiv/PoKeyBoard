@@ -130,6 +130,22 @@ class PersistenceService {
         // where the take names a piano that is not the one playing.
         useTakeStore.getState().stampActiveInstrument();
       }
+      // The levels are owned here for the same reason: a restored backup moves
+      // the sliders with setState, so the setters never run and the piano would
+      // keep playing at the old levels until the next launch.
+      if (state.masterVolume !== previous.masterVolume || state.reverbMix !== previous.reverbMix) {
+        audioEngine.setMasterVolume(state.masterVolume);
+        audioEngine.setReverbMix(state.reverbMix);
+        // The take carries its own copy — the export renderer reads the levels
+        // off it and the export cache key hashes them — so it has to follow
+        // what is actually being heard.
+        const { take, setInstrumentSettings } = useTakeStore.getState();
+        setInstrumentSettings({
+          ...take.instrument,
+          masterVolume: state.masterVolume,
+          reverbMix: state.reverbMix,
+        });
+      }
       this.scheduleSettingsSave();
     });
     transportController.onRecordingFinalized.add(() => {
