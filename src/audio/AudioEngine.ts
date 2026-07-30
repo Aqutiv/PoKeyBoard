@@ -276,6 +276,11 @@ export class AudioEngine {
    * piano when given an id, which is enumerated from the cache rather than the
    * manifest so the pack's manifest.json goes too and the offline state cannot
    * disagree with what is actually stored.
+   *
+   * Matches *every* generation of that piano, not just the one currently
+   * selected: pack directories are `<instrument id>-vN`, and after an upgrade a
+   * superseded generation can still be sitting in the cache. Deleting a piano
+   * should reclaim all of its bytes, or the number the user is shown is a lie.
    */
   async deleteDownloadedSamples(instrumentId?: PianoInstrumentId): Promise<void> {
     if (!('caches' in globalThis)) return;
@@ -284,7 +289,9 @@ export class AudioEngine {
       return;
     }
     const cache = await caches.open(PIANO_SAMPLE_CACHE);
-    const marker = `/${pianoInstrument(instrumentId).packVersion}/`;
+    // The leading slash anchors this to the pack directory segment, so one
+    // instrument id can never match another's path.
+    const marker = `/${instrumentId}-v`;
     for (const request of await cache.keys()) {
       if (new URL(request.url).pathname.includes(marker)) await cache.delete(request);
     }
