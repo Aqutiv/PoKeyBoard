@@ -690,6 +690,135 @@ describe('the display grid an import arrives with', () => {
   });
 });
 
+describe('the tuplets a score declares', () => {
+  /** `divisions` 6 per quarter, so a triplet eighth is 2 units and fits exactly. */
+  const DIV6 =
+    '<attributes><divisions>6</divisions>' +
+    '<time><beats>4</beats><beat-type>4</beat-type></time></attributes>';
+  /** A `<time-modification>`, written as MuseScore writes it: no normal-type. */
+  const mod = (actual: number, normal: number): string =>
+    `<time-modification><actual-notes>${actual}</actual-notes>` +
+    `<normal-notes>${normal}</normal-notes></time-modification>`;
+  const bracket = (type: string, number = 1): string =>
+    `<notations><tuplet type="${type}" number="${number}"/></notations>`;
+
+  it('keeps the ratio and the note it is counted in', () => {
+    // Three eighths in the time of two, each written as an eighth: the unit is
+    // read from the note's own <type> because no <normal-type> is given.
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV6 +
+            note('C', 4, 2, '<type>eighth</type>' + mod(3, 2)) +
+            note('D', 4, 2, '<type>eighth</type>' + mod(3, 2)) +
+            note('E', 4, 2, '<type>eighth</type>' + mod(3, 2)),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => n.tuplet)).toEqual([
+      { actual: 3, normal: 2, unit: 8 },
+      { actual: 3, normal: 2, unit: 8 },
+      { actual: 3, normal: 2, unit: 8 },
+    ]);
+  });
+
+  it('prefers <normal-type> over the note it is written as', () => {
+    // A triplet quarter inside a group counted in eighths: the ratio applies to
+    // eighths, and the note's own type would say something different.
+    const declared =
+      '<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes>' +
+      '<normal-type>eighth</normal-type></time-modification>';
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV6 + note('C', 4, 4, '<type>quarter</type>' + declared))),
+    );
+    expect(take.notes[0]!.tuplet).toEqual({ actual: 3, normal: 2, unit: 8 });
+  });
+
+  it('reads a type that carries an attribute', () => {
+    // <type size="cue"> occurs in the corpus; reading by tag rather than by
+    // pattern is what keeps it legible.
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV6 + note('C', 4, 2, '<type size="cue">eighth</type>' + mod(3, 2)))),
+    );
+    expect(take.notes[0]!.tuplet?.unit).toBe(8);
+  });
+
+  it('declares nothing where the normal note is dotted', () => {
+    // One and a half of a value is not a value, and storing it would take a
+    // fourth field; the beat is read from the rest of the figure instead.
+    const dotted =
+      '<time-modification><actual-notes>3</actual-notes><normal-notes>2</normal-notes>' +
+      '<normal-type>eighth</normal-type><normal-dot/></time-modification>';
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV6 + note('C', 4, 2, '<type>eighth</type>' + dotted))),
+    );
+    expect(take.notes[0]!.tuplet).toBeUndefined();
+  });
+
+  it('leaves the field off entirely where a score declares none', () => {
+    // Takes from silent sources have to stay byte-identical to what they were.
+    const take = musicXmlToTake(scoreWith(measure(1, DIV6 + note('C', 4, 6))));
+    expect('tuplet' in take.notes[0]!).toBe(false);
+  });
+
+  it('numbers the written brackets, and a chord takes its anchor’s', () => {
+    // Two groups of three, the second starting on a chord. Only a chord's anchor
+    // carries notations, so the notes stacked on it must inherit the group — and
+    // the anchor may have closed one on its way past.
+    const triplet = (step: string, extra = ''): string =>
+      note(step, 4, 2, '<type>eighth</type>' + mod(3, 2) + extra);
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV6 +
+            triplet('C', bracket('start')) +
+            triplet('D') +
+            triplet('E', bracket('stop')) +
+            triplet('F', bracket('start')) +
+            triplet('G') +
+            triplet('A', bracket('stop')) +
+            note('C', 5, 2, '<chord/><type>eighth</type>' + mod(3, 2)),
+        ),
+      ),
+    );
+    const groups = take.notes.map((n) => n.tuplet?.group);
+    expect(groups.slice(0, 3)).toEqual([0, 0, 0]);
+    expect(groups.slice(3, 6)).toEqual([1, 1, 1]);
+    // The chord sits on the last note of the second group and shares its id.
+    expect(groups[6]).toBe(1);
+  });
+
+  it('carries the declaration through a tie chain', () => {
+    // A tie sounds as one note, so the whole chain belongs where it started —
+    // the same rule the staff, voice and clef hints already follow.
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV6 +
+            note('C', 4, 2, '<type>eighth</type>' + mod(3, 2) + '<tie type="start"/>') +
+            note('C', 4, 2, '<type>eighth</type>' + mod(3, 2) + '<tie type="stop"/>'),
+        ),
+      ),
+    );
+    expect(take.notes).toHaveLength(1);
+    expect(take.notes[0]!.tuplet).toEqual({ actual: 3, normal: 2, unit: 8 });
+  });
+
+  it('survives a round trip through parseTakeJson', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(1, DIV6 + note('C', 4, 2, '<type>eighth</type>' + mod(3, 2) + bracket('start'))),
+      ),
+    );
+    const parsed = parseTakeJson(take);
+    expect(parsed.repairs).toEqual([]);
+    expect(parsed.take.notes[0]!.tuplet).toEqual({ actual: 3, normal: 2, unit: 8, group: 0 });
+  });
+});
+
 describe('rejections', () => {
   it('rejects score-timewise documents', () => {
     expect(() => musicXmlToTake('<score-timewise version="3.1"></score-timewise>')).toThrow(

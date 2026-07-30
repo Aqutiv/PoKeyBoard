@@ -11,9 +11,11 @@ import {
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
   MAX_TEMPO_CHANGES,
+  MAX_TUPLET_NOTES,
   type NoteClef,
   type NoteEvent,
   type NoteStaff,
+  type NoteTuplet,
   type PedalEvent,
   type QuantizationSetting,
   type Take,
@@ -41,6 +43,23 @@ const METRONOME_UNIT_QUARTERS: Record<string, number> = {
   '32nd': 0.125,
 };
 
+/**
+ * `<type>` values as the number a whole note divides into, which is how a
+ * `NoteTuplet` counts its normal note. `breve` and `long` are left out on
+ * purpose: they are longer than a whole note, so their divisor is not a whole
+ * number, and nothing is written as a tuplet of them.
+ */
+const TUPLET_TYPE_UNITS: Record<string, number> = {
+  whole: 1,
+  half: 2,
+  quarter: 4,
+  eighth: 8,
+  '16th': 16,
+  '32nd': 32,
+  '64th': 64,
+  '128th': 128,
+};
+
 /** All positions/durations in quarter-note units until tempo integration. */
 interface QNote {
   midi: number;
@@ -51,6 +70,7 @@ interface QNote {
   staff: NoteStaff | undefined;
   voice: number | undefined;
   clef: NoteClef | undefined;
+  tuplet: NoteTuplet | undefined;
 }
 
 interface QPedal {
@@ -72,6 +92,7 @@ interface PendingTie {
   staff: NoteStaff | undefined;
   voice: number | undefined;
   clef: NoteClef | undefined;
+  tuplet: NoteTuplet | undefined;
 }
 
 interface CollectedScore {
@@ -80,6 +101,8 @@ interface CollectedScore {
   tempi: TempoEntry[];
   /** The shortest written value anywhere in the score, in quarters. */
   shortestQ: number | null;
+  /** Ids for written tuplet brackets, handed out across the whole score. */
+  nextTupletGroup: number;
   timeSignature: TimeSignature | null;
   /** Fifths from the score's own <key>, or null when it never declared one. */
   keySignature: number | null;
@@ -126,6 +149,7 @@ function pendingToNote(pending: PendingTie): QNote {
     staff: pending.staff,
     voice: pending.voice,
     clef: pending.clef,
+    tuplet: pending.tuplet,
   };
 }
 
@@ -182,6 +206,8 @@ function collectPart(
   let cursorQ = 0;
   let measureStartQ = 0;
   let chordAnchorQ: number | null = null;
+  /** The written tuplet group the chord being read belongs to, if any. */
+  let chordGroup: number | undefined = undefined;
   let dynamicsPercent: number | null = null;
   let currentTs: TimeSignature | null = null;
   let staffCount = 1;
@@ -245,6 +271,85 @@ function collectPart(
     if (declared === undefined) return undefined;
     const normal: NoteClef = staff === 'bass' ? 'bass' : 'treble';
     return declared === normal ? undefined : declared;
+  };
+
+  /**
+   * The tuplet a note declares, as written.
+   *
+   * `<normal-type>` says what the normal notes are; per the spec, leaving it out
+   * means they are the note's own `<type>`, which is how every score in the
+   * vendored corpus writes it. A `<normal-dot>` would make the normal note one
+   * and a half of itself — nothing in the corpus does, and storing it would take
+   * a fourth field, so such a note declares nothing and the beat is read from
+   * the rest of its figure.
+   *
+   * Read through `childByTag`, not by pattern: `<type size="cue">32nd</type>`
+   * occurs, and a `<time-modification>` sits beside its note's other children
+   * rather than at a fixed place among them.
+   */
+  const tupletOf = (note: Element): NoteTuplet | undefined => {
+    const mod = childByTag(note, 'time-modification');
+    if (mod === null) return undefined;
+    if (childByTag(mod, 'normal-dot') !== null) return undefined;
+    const actual = numberByTag(mod, 'actual-notes');
+    const normal = numberByTag(mod, 'normal-notes');
+    if (actual === null || normal === null) return undefined;
+    if (!Number.isInteger(actual) || !Number.isInteger(normal)) return undefined;
+    if (actual < 1 || normal < 1 || actual > MAX_TUPLET_NOTES || normal > MAX_TUPLET_NOTES) {
+      return undefined;
+    }
+    const typeName = textByTag(mod, 'normal-type') ?? textByTag(note, 'type');
+    const unit = typeName === null ? undefined : TUPLET_TYPE_UNITS[typeName];
+    if (unit === undefined) return undefined;
+    return { actual, normal, unit };
+  };
+
+  /**
+   * Which written bracket a note belongs to, tracked as the part is read.
+   *
+   * `<notations><tuplet type="start">` opens a group and `"stop"` closes it, and
+   * a score may nest them, so open brackets are held per voice and `number`.
+   * Ids come from the whole score rather than this part, because a beam is built
+   * per staff across the take and two parts numbering their own groups from zero
+   * could have two figures read as one.
+   *
+   * A note that declares a ratio while no bracket is open keeps no group at all,
+   * and its beat's own grouping stands in — which is most of the Pathétique,
+   * whose brackets cover only part of what it declares.
+   */
+  const openGroups = new Map<string, number>();
+  const groupKey = (note: Element, tuplet: Element | null): string => {
+    const number = tuplet === null ? null : attrNumber(tuplet, 'number');
+    return `${textByTag(note, 'voice') ?? '1'}|${number === null ? 1 : Math.round(number)}`;
+  };
+  const groupOf = (note: Element): number | undefined => {
+    let started: Element | null = null;
+    let stopped: Element | null = null;
+    for (const child of note.children) {
+      if (child.tagName !== 'notations') continue;
+      for (const notation of child.children) {
+        if (notation.tagName !== 'tuplet') continue;
+        const type = notation.getAttribute('type');
+        if (type === 'start') started = notation;
+        else if (type === 'stop') stopped = notation;
+      }
+    }
+    if (started !== null) {
+      // Past the cap two distant groups could share an id and be read as one
+      // figure; better to say nothing and let the beat group them.
+      if (out.nextTupletGroup >= MAX_NOTE_COUNT) return undefined;
+      const id = out.nextTupletGroup;
+      out.nextTupletGroup += 1;
+      openGroups.set(groupKey(note, started), id);
+      return id;
+    }
+    if (stopped !== null) {
+      const key = groupKey(note, stopped);
+      const id = openGroups.get(key);
+      openGroups.delete(key);
+      return id;
+    }
+    return openGroups.get(groupKey(note, null));
   };
 
   const applySound = (sound: Element, atQ: number): void => {
@@ -361,9 +466,14 @@ function collectPart(
           if (durQ > 0 && !isCue && (out.shortestQ === null || durQ < out.shortestQ)) {
             out.shortestQ = durQ;
           }
+          // Brackets are read even on a rest, which can carry one and close a
+          // group; the notes stacked on a chord take the group its anchor
+          // resolved, since the anchor may have closed it on its way past.
+          const group: number | undefined = isChord ? chordGroup : groupOf(el);
           const onsetQ = isChord ? (chordAnchorQ ?? cursorQ) : cursorQ;
           if (!isChord) {
             chordAnchorQ = isRest ? null : cursorQ;
+            chordGroup = group;
             cursorQ += durQ;
             maxQ = Math.max(maxQ, cursorQ);
           }
@@ -387,6 +497,13 @@ function collectPart(
           const staff = staffOf(el);
           const voice = voiceOf(el, staff);
           const clef = clefOf(staff, staffNumber);
+          const declared = tupletOf(el);
+          const tuplet =
+            declared === undefined
+              ? undefined
+              : group === undefined
+                ? declared
+                : { ...declared, group };
           const tieTypes = collectTieTypes(el);
           const hasStart = tieTypes.has('start');
           const hasStop = tieTypes.has('stop');
@@ -403,16 +520,17 @@ function collectPart(
                 pendingTies.set(key, pending); // middle of a chain
               else out.notes.push(pendingToNote(pending));
             } else if (hasStart) {
-              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef });
+              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef, tuplet });
             } else {
-              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef }); // orphan stop
+              // orphan stop
+              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet });
             }
           } else if (hasStart) {
             const stale = pendingTies.get(key);
             if (stale) out.notes.push(pendingToNote(stale));
-            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef });
+            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef, tuplet });
           } else {
-            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef });
+            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet });
           }
           break;
         }
@@ -478,6 +596,7 @@ function collectScore(root: Element): CollectedScore {
     pedals: [],
     tempi: [],
     shortestQ: null,
+    nextTupletGroup: 0,
     timeSignature: null,
     keySignature: null,
     title: null,
@@ -602,6 +721,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       ...(note.staff !== undefined ? { staff: note.staff } : {}),
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
       ...(note.clef !== undefined ? { clef: note.clef } : {}),
+      ...(note.tuplet !== undefined ? { tuplet: note.tuplet } : {}),
     };
   });
   let maxEndMs = 0;

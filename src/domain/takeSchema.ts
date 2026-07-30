@@ -21,11 +21,32 @@ import {
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
   MAX_TEMPO_CHANGES,
+  MAX_TUPLET_NOTES,
+  MAX_TUPLET_UNIT,
   QUANTIZATION_SETTINGS,
   type Take,
 } from './takeTypes';
 
 const timelineMs = z.number().int().min(0).max(MAX_TAKE_MS);
+
+/**
+ * A note's declared tuplet. `unit` is a note value as a whole-note divisor, so
+ * it is a power of two the way `timeSignature.denominator` is — a ratio counted
+ * in some other unit is not a note value and cannot have been written.
+ */
+export const noteTupletSchema = z.object({
+  actual: z.number().int().min(1).max(MAX_TUPLET_NOTES),
+  normal: z.number().int().min(1).max(MAX_TUPLET_NOTES),
+  unit: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_TUPLET_UNIT)
+    .refine((value) => (value & (value - 1)) === 0, {
+      message: 'unit must be a power of two',
+    }),
+  group: z.number().int().min(0).max(MAX_NOTE_COUNT).optional(),
+});
 
 export const noteEventSchema = z.object({
   id: z.string().min(1).max(128),
@@ -40,6 +61,7 @@ export const noteEventSchema = z.object({
   staff: z.enum(['treble', 'bass']).optional(),
   voice: z.number().int().min(0).max(MAX_NOTE_VOICE).optional(),
   clef: z.enum(['treble', 'bass']).optional(),
+  tuplet: noteTupletSchema.optional(),
 });
 
 export const pedalEventSchema = z.object({

@@ -41,7 +41,7 @@ function histogram(symbols: { base: string; dotted: boolean }[]): Record<string,
  * runs of identical code. The set of notes is what this is asking about.
  */
 function notesDigest(take: Take): string {
-  const lines = take.notes.map(({ id: _id, ...rest }) => JSON.stringify(rest)).sort();
+  const lines = take.notes.map((note) => JSON.stringify({ ...note, id: undefined })).sort();
   return createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16);
 }
 

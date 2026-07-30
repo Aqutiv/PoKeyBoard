@@ -69,6 +69,19 @@ describe('computeExportHash', () => {
     );
   });
 
+  it('ignores a declared tuplet, which is engraving and not sound', async () => {
+    // A cached MP3 must survive the notation learning something new about how a
+    // note was written. The tuplet says how the beat divides, not what is heard.
+    const base = takeWithNotes();
+    const engraved: Take = {
+      ...base,
+      notes: base.notes.map((n) => ({ ...n, tuplet: { actual: 3, normal: 2, unit: 8, group: 1 } })),
+    };
+    expect(await computeExportHash({ ...baseInput, take: engraved })).toBe(
+      await computeExportHash({ ...baseInput, take: base }),
+    );
+  });
+
   it('changes when a note changes', async () => {
     const base = takeWithNotes();
     const edited: Take = {

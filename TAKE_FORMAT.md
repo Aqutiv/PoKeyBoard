@@ -44,6 +44,14 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   Recorded takes omit all three and the notation falls back to pitch, written note value, and the
   staff's own clef. Added the same way `tempo.changes` was — no schema bump, older takes parse
   untouched, an older build drops them.
+- A note's `tuplet` is a fourth such hint: the `<time-modification>` the source declared, as
+  `{ actual, normal, unit, group? }` — `actual` notes in the time of `normal`, counted in the note
+  `unit` divides a whole note into (8 = eighth; a power of two, like a time signature's
+  denominator), with `group` numbering the written `<tuplet>` bracket it belongs to so beams break
+  where the score breaks them. It says how the beat this note falls in is _divided_, which the
+  notation would otherwise have to infer from where the onsets landed — and inferring it wrong
+  writes a sextuplet sixteenth as a dotted 32nd. Never audible: exports hash the same with it and
+  without it. Recorded takes omit it and inference takes over.
 - `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v2`, `headroom-grand-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 
