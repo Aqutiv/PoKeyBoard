@@ -84,6 +84,8 @@ export const es: Messages = {
     noGrid: 'Sin cuadrícula',
     grid8: 'Cuadrícula 1/8',
     grid16: 'Cuadrícula 1/16',
+    grid32: 'Cuadrícula 1/32',
+    grid64: 'Cuadrícula 1/64',
     emptyHint: 'Toca las teclas o pulsa grabar para capturar una toma.',
   },
   takes: {
@@ -235,6 +237,8 @@ export const es: Messages = {
     grid: 'Nota más pequeña',
     grid8: 'Corcheas (1/8)',
     grid16: 'Semicorcheas (1/16)',
+    grid32: 'Fusas (1/32)',
+    grid64: 'Semifusas (1/64)',
     gridHint:
       'La interpretación libre se ajusta a esta cuadrícula en el papel. La reproducción no cambia.',
     keySignature: 'Armadura',

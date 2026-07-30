@@ -85,6 +85,8 @@ export const fr: Messages = {
     noGrid: 'Aucune grille',
     grid8: 'Grille 1/8',
     grid16: 'Grille 1/16',
+    grid32: 'Grille 1/32',
+    grid64: 'Grille 1/64',
     emptyHint: 'Jouez les touches, ou appuyez sur enregistrer pour capturer une prise.',
   },
   takes: {
@@ -234,6 +236,8 @@ export const fr: Messages = {
     grid: 'Plus petite note',
     grid8: 'Croches (1/8)',
     grid16: 'Doubles croches (1/16)',
+    grid32: 'Triples croches (1/32)',
+    grid64: 'Quadruples croches (1/64)',
     gridHint:
       'Le jeu libre est aligné sur cette grille sur le papier. La lecture n’est jamais modifiée.',
     keySignature: 'Armure',

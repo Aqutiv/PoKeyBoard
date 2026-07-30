@@ -56,6 +56,36 @@ describe('ties', () => {
     expect(shape(layout)).toEqual(['half>', 'eighth<']);
   });
 
+  // At 30bpm a beat is two seconds, so a sixteenth is 500ms, a 32nd 250 and a
+  // 64th 125 — every short value lands on a whole millisecond, which is what
+  // makes the shortest end of the range testable at all.
+  const SHORT = { ...OPTS, bpm: 30, quantization: '1/64' as const };
+
+  it('ties a length no short symbol can express either', () => {
+    // Five 64ths: a sixteenth tied to a 64th, the same reasoning as five
+    // eighths, one end of the range further down.
+    const layout = layoutScore([note({ durationMs: 5 * 125 })], SHORT);
+    expect(shape(layout)).toEqual(['sixteenth>', '64th<']);
+  });
+
+  it('leaves a dotted short value whole', () => {
+    // Three 64ths is exactly a dotted 32nd, and a dotted value is written as
+    // one — splitting it into a tied 32nd and 64th would be wrong. This is what
+    // 384ths of a whole note buy: at 192 a dotted 64th is four and a half.
+    expect(shape(layoutScore([note({ durationMs: 3 * 125 })], SHORT))).toEqual(['dotted 32nd']);
+    expect(shape(layoutScore([note({ durationMs: 6 * 125 })], SHORT))).toEqual([
+      'dotted sixteenth',
+    ]);
+  });
+
+  it('splits a 64th across the bar line it crosses', () => {
+    // Struck one 64th before the bar line and held two: the shortest value
+    // there is, tied across the bar, where before it was a pair of sixteenths.
+    const barMs = 4 * 2000;
+    const layout = layoutScore([note({ startMs: barMs - 125, durationMs: 250 })], SHORT);
+    expect(shape(layout)).toEqual(['64th>', '64th<']);
+  });
+
   it('keeps every piece sounding for the whole note under the playhead', () => {
     const layout = layoutScore([note({ startMs: 0, durationMs: 4000 })], OPTS);
     for (const chord of layout.chords) {

@@ -86,6 +86,8 @@ export const en: Messages = {
     noGrid: 'No grid',
     grid8: '1/8 grid',
     grid16: '1/16 grid',
+    grid32: '1/32 grid',
+    grid64: '1/64 grid',
     emptyHint: 'Play the keys, or press record to capture a take.',
   },
   takes: {
@@ -235,6 +237,8 @@ export const en: Messages = {
     grid: 'Smallest note',
     grid8: 'Eighth notes (1/8)',
     grid16: 'Sixteenth notes (1/16)',
+    grid32: 'Thirty-second notes (1/32)',
+    grid64: 'Sixty-fourth notes (1/64)',
     gridHint: 'Free playing is snapped to this grid on paper. Playback is never changed.',
     keySignature: 'Key signature',
     keyName: ({ major, minor }) => `${major} major / ${minor} minor`,

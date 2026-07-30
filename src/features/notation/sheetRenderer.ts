@@ -23,14 +23,14 @@ import {
   type SheetTie,
 } from './sheetLayout';
 import { drawAccidentalGlyph } from './accidentalGlyph';
-import { BEAM_SPACING_G, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
+import { extraStemG, BEAM_SPACING_G, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
 import {
   normalizeFifths,
   signatureAccidental,
   signatureSteps,
   type AccidentalKind,
 } from './keySignature';
-import type { DurationSymbol } from './quantization';
+import { beamCountFor, type DurationSymbol } from './quantization';
 import { drawRestGlyph } from './restGlyph';
 import { restStep } from './rests';
 import type { ClefKind } from './staffMapping';
@@ -491,7 +491,10 @@ function drawChord(
     const dx = beam.x2Pt - beam.x1Pt;
     tipY = dx === 0 ? beam.y1Pt : beam.y1Pt + ((stemX - beam.x1Pt) / dx) * (beam.y2Pt - beam.y1Pt);
   } else {
-    tipY = chord.stemDown ? bottomHeadY + STEM_LENGTH_G * G : topHeadY - STEM_LENGTH_G * G;
+    // Flags stack back toward the head, so three or four of them need a longer
+    // stem than an eighth's to sit on.
+    const stem = (STEM_LENGTH_G + extraStemG(beamCountFor(chord.symbol.base))) * G;
+    tipY = chord.stemDown ? bottomHeadY + stem : topHeadY - stem;
   }
 
   ctx.lineWidth = STEM_W;
@@ -501,7 +504,7 @@ function drawChord(
   ctx.stroke();
 
   if (chord.beamId === null) {
-    const flags = chord.symbol.base === 'eighth' ? 1 : chord.symbol.base === 'sixteenth' ? 2 : 0;
+    const flags = beamCountFor(chord.symbol.base);
     for (let i = 0; i < flags; i += 1) {
       drawFlag(ctx, stemX, tipY + (chord.stemDown ? -1 : 1) * i * 0.9 * G, chord.stemDown);
     }

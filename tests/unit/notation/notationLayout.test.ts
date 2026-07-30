@@ -495,6 +495,35 @@ describe('beam grouping', () => {
     expect(beam.members.every((chord) => chord.stemDown === beam.stemDown)).toBe(true);
   });
 
+  it('carries three beams on a run of 32nds and four on a run of 64ths', () => {
+    // At 60bpm a beat is a second, so a 32nd is 125ms; at 30bpm a 64th is.
+    // Both runs sit inside one beat, so each is a single beam.
+    const run = (): NoteEvent[] =>
+      [0, 125, 250, 375].map((startMs, i) =>
+        note({ id: `x${i}`, midi: 72, startMs, durationMs: 125 }),
+      );
+
+    const short = layoutScore(run(), { ...OPTS, bpm: 60, quantization: '1/32' });
+    expect(short.chords.map((chord) => chord.symbol.base)).toEqual([
+      '32nd',
+      '32nd',
+      '32nd',
+      '32nd',
+    ]);
+    expect(short.beams).toHaveLength(1);
+    expect(short.beams[0]!.beamCount).toBe(3);
+
+    const shorter = layoutScore(run(), { ...OPTS, bpm: 30, quantization: '1/64' });
+    expect(shorter.chords.map((chord) => chord.symbol.base)).toEqual([
+      '64th',
+      '64th',
+      '64th',
+      '64th',
+    ]);
+    expect(shorter.beams).toHaveLength(1);
+    expect(shorter.beams[0]!.beamCount).toBe(4);
+  });
+
   it('groups a compound meter by its dotted beat', () => {
     // 6/8 at 120bpm: the beat is the eighth at 250ms, so a dotted-quarter beat
     // unit lasts 750ms. Six eighths make two beams of three, the way 6/8 is

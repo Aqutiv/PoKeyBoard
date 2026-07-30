@@ -86,6 +86,8 @@ export const mg: Messages = {
     noGrid: 'Tsy misy makarakara',
     grid8: 'Makarakara 1/8',
     grid16: 'Makarakara 1/16',
+    grid32: 'Makarakara 1/32',
+    grid64: 'Makarakara 1/64',
     emptyHint: 'Tendreo ny kitendry, na tsindrio ny fandraketana mba hahazoana rakitra.',
   },
   takes: {
@@ -237,6 +239,8 @@ export const mg: Messages = {
     grid: 'Naoty kely indrindra',
     grid8: 'Naoty 1/8',
     grid16: 'Naoty 1/16',
+    grid32: 'Naoty 1/32',
+    grid64: 'Naoty 1/64',
     gridHint:
       'Ahitsy amin’io makarakara io eo amin’ny taratasy ny fitendrena malalaka. Tsy miova mihitsy ny famerenana.',
     keySignature: 'Famantarana lakile',

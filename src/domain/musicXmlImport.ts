@@ -15,6 +15,7 @@ import {
   type NoteEvent,
   type NoteStaff,
   type PedalEvent,
+  type QuantizationSetting,
   type Take,
   type TimeSignature,
 } from './takeTypes';
@@ -77,6 +78,8 @@ interface CollectedScore {
   notes: QNote[];
   pedals: QPedal[];
   tempi: TempoEntry[];
+  /** The shortest written value anywhere in the score, in quarters. */
+  shortestQ: number | null;
   timeSignature: TimeSignature | null;
   /** Fifths from the score's own <key>, or null when it never declared one. */
   keySignature: number | null;
@@ -353,6 +356,11 @@ function collectPart(
           const isCue = childByTag(el, 'cue') !== null;
           const pitch = childByTag(el, 'pitch');
           const durQ = quartersOf(el);
+          // Rests count as much as notes: the grid has to be fine enough to
+          // write the silences too, and a cue note is not engraved at all.
+          if (durQ > 0 && !isCue && (out.shortestQ === null || durQ < out.shortestQ)) {
+            out.shortestQ = durQ;
+          }
           const onsetQ = isChord ? (chordAnchorQ ?? cursorQ) : cursorQ;
           if (!isChord) {
             chordAnchorQ = isRest ? null : cursorQ;
@@ -469,6 +477,7 @@ function collectScore(root: Element): CollectedScore {
     notes: [],
     pedals: [],
     tempi: [],
+    shortestQ: null,
     timeSignature: null,
     keySignature: null,
     title: null,
@@ -481,6 +490,61 @@ function collectScore(root: Element): CollectedScore {
     if (part.tagName === 'part') divisions = collectPart(part, divisions, out);
   }
   return out;
+}
+
+/** The offered grids as a length in quarter notes, coarsest first. */
+const GRID_STEPS_Q: readonly { setting: QuantizationSetting; stepQ: number }[] = [
+  { setting: '1/16', stepQ: 0.25 },
+  { setting: '1/32', stepQ: 0.125 },
+  { setting: '1/64', stepQ: 0.0625 },
+];
+
+/** Lengths this close in ratio are the same length; durations here are dyadic. */
+const GRID_EXACT_EPSILON = 1e-6;
+
+/**
+ * The display grid an imported score should arrive with: the finest one it
+ * needs, and no finer.
+ *
+ * The notation rounds a note's written length to a whole number of grid steps,
+ * so a score full of 32nds read on a 1/16 grid loses them — every pair
+ * collapses into one sixteenth and the bar is padded out with rests. Nobody
+ * should have to know that, so the score itself decides, from the shortest
+ * value it contains, measured in quarters (a 32nd is an eighth of one).
+ *
+ * The test is whether the grid can *state* that value, not which grid is
+ * nearest to it. A dotted value is one and a half of its base, so it needs a
+ * grid one level finer than the base does: a dotted 32nd is three 64ths, and on
+ * a 1/32 grid it would round up to a sixteenth. Asking about divisibility says
+ * so without having to name the dot.
+ *
+ * 1/16 stays the floor. A score of nothing but quarters gains nothing from a
+ * coarser grid, and takes written before this existed all carried 1/16.
+ */
+export function gridForShortestQ(shortestQ: number | null): QuantizationSetting {
+  if (shortestQ === null || shortestQ <= 0) return '1/16';
+  const finest = GRID_STEPS_Q[GRID_STEPS_Q.length - 1] as {
+    setting: QuantizationSetting;
+    stepQ: number;
+  };
+
+  for (const { setting, stepQ } of GRID_STEPS_Q) {
+    const steps = shortestQ / stepQ;
+    if (steps < 1 - GRID_EXACT_EPSILON) continue;
+    if (Math.abs(steps - Math.round(steps)) < GRID_EXACT_EPSILON) return setting;
+  }
+  // A dotted 64th is one and a half of the finest step, so no grid states it and
+  // it is written as a 32nd whichever one is in force. The finest is still the
+  // right answer: the grid places *onsets* as well as lengths, and this figure's
+  // fall on 64ths, which a coarser grid would move.
+  if (Math.abs(shortestQ / finest.stepQ - 1.5) < GRID_EXACT_EPSILON) return finest.setting;
+
+  // Nothing binary states it — a tuplet slot, or a file with its own rounding.
+  // Half-way in log space between neighbouring values, so a length that is not
+  // quite exact lands on whichever grid is nearer rather than always the finer.
+  if (shortestQ < 0.125 / Math.SQRT2) return '1/64';
+  if (shortestQ < 0.25 / Math.SQRT2) return '1/32';
+  return '1/16';
 }
 
 function fileTitle(fileName: string | undefined): string | null {
@@ -580,6 +644,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       },
       notes,
       pedalEvents,
+      display: { quantization: gridForShortestQ(collected.shortestQ), zoom: 1, playheadMs: 0 },
     }),
   );
 }

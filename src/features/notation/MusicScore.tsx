@@ -371,6 +371,8 @@ export function MusicScore() {
           <option value="off">{m.score.noGrid}</option>
           <option value="1/8">{m.score.grid8}</option>
           <option value="1/16">{m.score.grid16}</option>
+          <option value="1/32">{m.score.grid32}</option>
+          <option value="1/64">{m.score.grid64}</option>
         </select>
       </label>
       {showEmptyHint ? <div className="score__empty">{m.score.emptyHint}</div> : null}

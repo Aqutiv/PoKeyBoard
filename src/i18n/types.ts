@@ -147,6 +147,8 @@ export interface Messages {
     noGrid: string;
     grid8: string;
     grid16: string;
+    grid32: string;
+    grid64: string;
     emptyHint: string;
   };
   takes: {
@@ -280,6 +282,8 @@ export interface Messages {
     grid: string;
     grid8: string;
     grid16: string;
+    grid32: string;
+    grid64: string;
     gridHint: string;
     keySignature: string;
     /** Both tonics already carry their own accidental signs, e.g. "E♭". */

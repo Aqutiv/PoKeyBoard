@@ -40,8 +40,9 @@ getTakeForExport(id)
 
 `SheetExportDialog` (mounted in `App.tsx`, driven by `useExportUiStore.
 openSheetExport(takeId)`) mirrors the audio export dialog: options (paper
-size A4/US Letter — persisted via `settings.sheetPaperSize`, a 1/8 or 1/16
-snap grid defaulting from the take's display quantization, and a key signature
+size A4/US Letter — persisted via `settings.sheetPaperSize`, a 1/8, 1/16, 1/32 or
+1/64 snap grid defaulting from the take's display quantization, which an import
+sets from the shortest value its score contains, and a key signature
 defaulting to the declared or detected one, per piece and not persisted) with a live
 page-1 preview and page estimate → progress with cancel (`AbortSignal`) →
 ready with Download PDF / Share PDF. Entry points: the Play header and each
@@ -58,13 +59,29 @@ takes seconds and never touches the audio engine.
 
 ## Rests, keys, ties, pedal
 
+- **Note values** run from a whole note down to a **64th**, plain or dotted, and
+  they are counted in 384ths of a whole note (`rests.ts`) so that every one of
+  them — a dotted 64th included, which is what 384 rather than 192 buys — is a
+  whole number of units and "may a value of this length start here" stays exact
+  integer arithmetic. A 32nd carries three beams or flags and a 64th four
+  (`beamCountFor`, read by both layouts and both renderers), and their stems
+  lengthen by the depth the extra beams take up (`extraStemG`) so the innermost
+  never arrives at the notehead.
 - **Rests** are derived, never stored: a staff is occupied for as long as its
   notes are _written_, and the silence left over is filled with rests, split at
   beat boundaries and never across the middle of an even bar. A wholly silent
   bar takes one whole rest whatever the meter is. Because onsets snap to the
   grid, note _lengths_ snap to it too — otherwise a quarter played detached
   reads as a dotted eighth against a grid that already put the next note on the
-  following beat, and the bar stops adding up.
+  following beat, and the bar stops adding up. Nothing shorter than the grid's
+  own step is ever written, so a page read on a 1/16 grid shows no 32nd rest: a
+  sliver that survives rounding is residue, not music.
+  A length rounds to a _whole_ number of steps, so a **dotted value needs a grid
+  one level finer than its base**: a dotted sixteenth on a 1/16 grid rounds up to
+  an eighth, and on 1/32 it is itself. An import therefore picks the grid that can
+  state its shortest value rather than the one nearest to it
+  (`gridForShortestQ`). The floor of the range is a dotted 64th, which would take
+  a 1/128 grid and is written as a 32nd instead.
 - **Key signatures** decide spelling: `tempo.keySignature` when the score
   declared one (MusicXML `<key><fifths>`), otherwise a key read from the
   take's own pitches (`keyDetection.ts`, a duration-weighted

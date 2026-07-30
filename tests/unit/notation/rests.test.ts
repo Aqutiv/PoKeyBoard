@@ -11,9 +11,11 @@ const SIX_EIGHT: TimeSignature = { numerator: 6, denominator: 8 };
 // and stay true if the unit the layout counts in ever changes.
 /** One quarter note, in units. */
 const Q = UNITS_PER_WHOLE / 4;
-/** One sixteenth, and one thirty-second — the short ends of the range. */
+/** A sixteenth, a 32nd, a 64th, and half of one — the short end of the range. */
 const S = UNITS_PER_WHOLE / 16;
 const T = UNITS_PER_WHOLE / 32;
+const SF = UNITS_PER_WHOLE / 64;
+const HALF_SF = SF / 2;
 
 /** Compact "value@position" form, positions counted in quarter notes. */
 function shape(gap: ReturnType<typeof restsForGap>): string[] {
@@ -61,9 +63,20 @@ describe('restsForGap', () => {
     expect(shape(restsForGap(S, Q, FOUR_FOUR))).toEqual(['sixteenth@0.25', 'eighth@0.5']);
   });
 
+  it('writes the short values too, down to a 64th', () => {
+    // A 32nd of silence after a beat, then a 64th after that: both exist now,
+    // and each still starts only where one of its own length may.
+    expect(shape(restsForGap(Q, Q + T, FOUR_FOUR))).toEqual(['32nd@1']);
+    expect(shape(restsForGap(Q, Q + SF, FOUR_FOUR))).toEqual(['64th@1']);
+    // Three 64ths of silence on the beat: a dotted 32nd is exactly that long,
+    // but a dotted value starts only on a multiple of itself, and the beat is
+    // not one — so it reads as the two plain values it divides into.
+    expect(shape(restsForGap(Q, Q + T + SF, FOUR_FOUR))).toEqual(['32nd@1', '64th@1.125']);
+  });
+
   it('drops a remainder too short to write', () => {
-    // One 32nd left over: no symbol covers it, and it is invisible at any size.
-    expect(shape(restsForGap(0, Q + T, FOUR_FOUR))).toEqual(['quarter@0']);
+    // Half a 64th left over: no symbol covers it, and it is invisible anyway.
+    expect(shape(restsForGap(0, Q + HALF_SF, FOUR_FOUR))).toEqual(['quarter@0']);
   });
 
   it('always terminates on a ragged span', () => {
@@ -161,6 +174,38 @@ describe('layoutScore rests', () => {
         .filter((rest) => rest.staff === 'treble' && inBarOne(rest.displayStartMs))
         .reduce((sum, rest) => sum + written(rest.symbol), 0);
     expect(filled).toBe(32); // one 4/4 bar in 32nd notes
+  });
+
+  it('fills a 32nd of silence with a 32nd rest', () => {
+    // At 60bpm a beat is a second, so a 32nd is 125ms: one sounding, one silent,
+    // read on a grid fine enough to have an opinion about either.
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 125 }),
+        note({ id: 'b', midi: 72, startMs: 250, durationMs: 125 }),
+      ],
+      { ...OPTS, bpm: 60, quantization: '1/32' },
+    );
+    const treble = layout.rests.filter((rest) => rest.staff === 'treble');
+    expect(treble[0]!.symbol).toEqual({ base: '32nd', dotted: false });
+    expect(treble[0]!.displayStartMs).toBe(125);
+  });
+
+  it('writes no rest finer than the grid the page is read on', () => {
+    // The same 32nd of silence on a 1/16 grid. A page whose notes are rounded
+    // to sixteenths has no business showing a 32nd rest: the reader was told
+    // nothing finer happens, and a sliver left by rounding is not music. So
+    // this reads as it did before the short values existed — two sixteenths.
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 125 }),
+        note({ id: 'b', midi: 72, startMs: 250, durationMs: 125 }),
+      ],
+      { ...OPTS, bpm: 60, quantization: '1/16' },
+    );
+    const treble = layout.rests.filter((rest) => rest.staff === 'treble');
+    expect(treble.map((rest) => rest.symbol.base)).not.toContain('32nd');
+    expect(layout.chords.map((chord) => chord.symbol.base)).toEqual(['sixteenth', 'sixteenth']);
   });
 
   it('leaves a wholly silent bar to the empty-measure whole rest', () => {

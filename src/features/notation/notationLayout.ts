@@ -8,11 +8,13 @@ import type {
 } from '@/domain/takeTypes';
 import { barDurationMs, beatDurationMs } from '@/utils/timing';
 import {
+  beamCountFor,
   beatsForSymbol,
   quantizeGridBeats,
   symbolForBeats,
   TRIPLET,
   tupletSymbolForBeats,
+  type BeamCount,
   type DurationSymbol,
 } from './quantization';
 import { readDynamics, type DynamicEvent, type HairpinEvent } from './dynamics';
@@ -109,8 +111,8 @@ export interface ChordGroup {
 export interface BeamGroup {
   staff: StaffKind;
   stemDown: boolean;
-  /** 1 for eighths, 2 for sixteenths. */
-  beamCount: 1 | 2;
+  /** 1 for eighths, 2 for sixteenths, 3 for 32nds, 4 for 64ths. */
+  beamCount: BeamCount;
   members: ChordGroup[];
   /** How many notes the run squeezes in, where it is a tuplet — the numeral. */
   tupletCount: number | null;
@@ -437,7 +439,9 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
 
   const perBeat = unitsPerBeat(timeSignature.denominator);
   const bar = barUnits(timeSignature);
-  /** Absolute 32nd notes from the start of the piece. */
+  /** The grid's own step: no piece of a tied note is written shorter than one. */
+  const minUnits = Math.max(SMALLEST_UNITS, Math.round(gridBeats * perBeat));
+  /** Absolute units (see `UNITS_PER_WHOLE`) from the start of the piece. */
   const unitsAt = (ms: number): number => Math.round(tempoMap.beatAtMs(ms) * perBeat);
   const msAtUnits = (units: number): number => Math.round(tempoMap.msAtBeat(units / perBeat));
 
@@ -454,7 +458,7 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
     }
     const from = unitsAt(note.displayStartMs);
     const heldBeats = Math.max(1, Math.round(beatsHeld(note) / gridBeats)) * gridBeats;
-    const to = from + Math.max(SMALLEST_UNITS, Math.round(heldBeats * perBeat));
+    const to = from + Math.max(minUnits, Math.round(heldBeats * perBeat));
 
     // Bar lines first, then the value or values that fill each piece between
     // them — one where a single symbol is exactly that long, which is the
@@ -472,6 +476,7 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
           edge - measureStart,
           nextBarLine - measureStart,
           timeSignature,
+          minUnits,
         )) {
           pieces.push({ startUnits: measureStart + span.startUnits, symbol: span.symbol });
         }
@@ -500,13 +505,11 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
 }
 
 function beamable(chord: ChordGroup): boolean {
-  return (
-    !chord.symbol.dotted && (chord.symbol.base === 'eighth' || chord.symbol.base === 'sixteenth')
-  );
+  return !chord.symbol.dotted && beamCountFor(chord.symbol.base) > 0;
 }
 
 /**
- * Beam runs of equal undotted eighths and sixteenths sharing a beat group on
+ * Beam runs of equal undotted eighths and shorter values sharing a beat group on
  * one voice of one staff. Compound meters (6/8, 9/8, …) group per dotted
  * beat-unit trio. A beam never crosses a rest, a change of note value, a beat
  * group, or a voice — so a run under a held note stays one beam.
@@ -578,7 +581,7 @@ function buildBeamGroups(
             beams.push({
               staff,
               stemDown,
-              beamCount: (run[0] as ChordGroup).symbol.base === 'sixteenth' ? 2 : 1,
+              beamCount: beamCountFor((run[0] as ChordGroup).symbol.base) || 1,
               members: run,
               tupletCount,
             });
@@ -745,9 +748,10 @@ function pushRests(
   fromUnits: number,
   toUnits: number,
   timeSignature: TimeSignature,
+  minUnits: number,
   msAtUnits: (units: number) => number,
 ): void {
-  for (const span of restsForGap(fromUnits, toUnits, timeSignature)) {
+  for (const span of restsForGap(fromUnits, toUnits, timeSignature, minUnits)) {
     out.push({
       staff,
       displayStartMs: msAtUnits(span.startUnits),
@@ -774,11 +778,16 @@ function deriveRests(
   measures: readonly MeasureInfo[],
   timeSignature: TimeSignature,
   tempoMap: TempoMap,
+  gridBeats: number | null,
   divisionAt: (staff: StaffKind, measureIndex: number, beatInBar: number) => number | null,
 ): LaidOutRest[] {
   const { denominator } = timeSignature;
   const perBeat = unitsPerBeat(denominator);
   const bar = barUnits(timeSignature);
+  // No rest finer than the grid the page is read on: onsets and lengths are
+  // rounded to it, so a shorter silence is rounding residue rather than music.
+  const minUnits =
+    gridBeats === null ? SMALLEST_UNITS : Math.max(SMALLEST_UNITS, Math.round(gridBeats * perBeat));
 
   const spans: Record<StaffKind, SoundingSpan[]> = { treble: [], bass: [] };
   for (const chord of chords) {
@@ -821,7 +830,7 @@ function deriveRests(
       // it beat by beat would forbid the rests that span several — a silent
       // bar is one whole rest, not four quarters.
       if (!anyTernary) {
-        pushRests(rests, staff, fromUnits, toUnits, timeSignature, msAtUnits);
+        pushRests(rests, staff, fromUnits, toUnits, timeSignature, minUnits, msAtUnits);
         return;
       }
       let at = fromUnits;
@@ -832,7 +841,7 @@ function deriveRests(
         if (division !== null) {
           pushTupletRests(rests, staff, at, beatEnd, beatUnits / division, denominator, msAtUnits);
         } else {
-          pushRests(rests, staff, at, beatEnd, timeSignature, msAtUnits);
+          pushRests(rests, staff, at, beatEnd, timeSignature, minUnits, msAtUnits);
         }
         at = beatEnd;
       }
@@ -1179,6 +1188,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     measures,
     options.timeSignature,
     tempoMap,
+    gridBeats,
     (staff, measureIndex, beatInBar) => {
       const span = spans[measureIndex];
       if (!span) return null;
