@@ -103,6 +103,8 @@ interface CollectedScore {
   tempi: TempoEntry[];
   /** The shortest written value anywhere in the score, in quarters. */
   shortestQ: number | null;
+  /** The same, counting only values that are not part of a declared tuplet. */
+  shortestPlainQ: number | null;
   /** Ids for written tuplet brackets, handed out across the whole score. */
   nextTupletGroup: number;
   timeSignature: TimeSignature | null;
@@ -465,8 +467,17 @@ function collectPart(
           const durQ = quartersOf(el);
           // Rests count as much as notes: the grid has to be fine enough to
           // write the silences too, and a cue note is not engraved at all.
-          if (durQ > 0 && !isCue && (out.shortestQ === null || durQ < out.shortestQ)) {
-            out.shortestQ = durQ;
+          if (durQ > 0 && !isCue) {
+            if (out.shortestQ === null || durQ < out.shortestQ) out.shortestQ = durQ;
+            // The display grid is a binary one, and a tuplet slot is by
+            // definition not on it — a note the score declared is snapped to its
+            // own division and written from its own slot, so it never asks the
+            // grid for anything. Letting one choose the grid drags the whole
+            // piece finer for a resolution only it needs.
+            const declaresTuplet = childByTag(el, 'time-modification') !== null;
+            if (!declaresTuplet && (out.shortestPlainQ === null || durQ < out.shortestPlainQ)) {
+              out.shortestPlainQ = durQ;
+            }
           }
           // Brackets are read even on a rest, which can carry one and close a
           // group; the notes stacked on a chord take the group its anchor
@@ -598,6 +609,7 @@ function collectScore(root: Element): CollectedScore {
     pedals: [],
     tempi: [],
     shortestQ: null,
+    shortestPlainQ: null,
     nextTupletGroup: 0,
     timeSignature: null,
     keySignature: null,
@@ -781,7 +793,14 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       },
       notes,
       pedalEvents,
-      display: { quantization: gridForShortestQ(collected.shortestQ), zoom: 1, playheadMs: 0 },
+      display: {
+        // A tuplet slot never asks the binary grid for anything, so it does not
+        // get to choose it; a score of nothing but tuplets falls back to what it
+        // has.
+        quantization: gridForShortestQ(collected.shortestPlainQ ?? collected.shortestQ),
+        zoom: 1,
+        playheadMs: 0,
+      },
     }),
   );
 }
