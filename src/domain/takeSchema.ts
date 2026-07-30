@@ -20,7 +20,9 @@ import {
   MAX_NOTE_DURATION_MS,
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
+  MAX_TEMPO_BPM,
   MAX_TEMPO_CHANGES,
+  MIN_TEMPO_BPM,
   MAX_TUPLET_NOTES,
   MAX_TUPLET_UNIT,
   QUANTIZATION_SETTINGS,
@@ -71,11 +73,11 @@ export const pedalEventSchema = z.object({
 
 export const tempoChangeSchema = z.object({
   atMs: z.number().int().min(1).max(MAX_TAKE_MS),
-  bpm: z.number().min(40).max(240),
+  bpm: z.number().min(MIN_TEMPO_BPM).max(MAX_TEMPO_BPM),
 });
 
 export const tempoSchema = z.object({
-  bpm: z.number().min(40).max(240),
+  bpm: z.number().min(MIN_TEMPO_BPM).max(MAX_TEMPO_BPM),
   timeSignature: z.object({
     numerator: z.number().int().min(1).max(16),
     denominator: z.union([z.literal(2), z.literal(4), z.literal(8), z.literal(16)]),
@@ -171,7 +173,7 @@ function repairTempoChanges(input: readonly unknown[]): {
       dropped = true;
       continue;
     }
-    const clamped = Math.min(240, Math.max(40, bpm));
+    const clamped = Math.min(MAX_TEMPO_BPM, Math.max(MIN_TEMPO_BPM, bpm));
     if (clamped !== bpm || at !== atMs) dropped = true;
     // A later mark at the same millisecond wins, as it does during playback.
     kept.set(at, clamped);
@@ -218,8 +220,8 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
     repairs.push({ code: 'tempoDefaulted' });
   } else if (typeof data.tempo === 'object' && data.tempo !== null) {
     const tempo = { ...(data.tempo as RawTakeData) };
-    if (isFiniteNumber(tempo.bpm) && (tempo.bpm < 40 || tempo.bpm > 240)) {
-      tempo.bpm = Math.min(240, Math.max(40, tempo.bpm));
+    if (isFiniteNumber(tempo.bpm) && (tempo.bpm < MIN_TEMPO_BPM || tempo.bpm > MAX_TEMPO_BPM)) {
+      tempo.bpm = Math.min(MAX_TEMPO_BPM, Math.max(MIN_TEMPO_BPM, tempo.bpm));
       repairs.push({ code: 'bpmClamped' });
     }
     if (

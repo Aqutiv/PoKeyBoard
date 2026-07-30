@@ -10,7 +10,9 @@ import {
   MAX_FIFTHS,
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
+  MAX_TEMPO_BPM,
   MAX_TEMPO_CHANGES,
+  MIN_TEMPO_BPM,
   MAX_TUPLET_NOTES,
   type NoteClef,
   type NoteEvent,
@@ -703,7 +705,22 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
 
   // Quarter-note positions become milliseconds through the score's tempo map;
   // its changes ride along on the take so the notation can draw them.
-  const tempoMap = createQuarterTempoMap(collected.tempi);
+  //
+  // Clamped *here*, before a single millisecond is computed, and not on the way
+  // out. A take can only carry a tempo inside its own range, so a score marked
+  // outside it has to be stored at some tempo it can hold — and if the notes
+  // were timed at the marked one anyway, the take says one thing and its
+  // milliseconds say another. Everything downstream then reads every note as
+  // longer (or shorter) than written: Beethoven's ♩=31.5 stored as 40 made
+  // every duration 27% long, which is what wrote a third of that movement as
+  // dotted 32nds. Clamping first costs the piece its marked speed, which is a
+  // thing the reader can see and change; the alternative corrupts the notation.
+  const tempoMap = createQuarterTempoMap(
+    collected.tempi.map((entry) => ({
+      ...entry,
+      bpm: clamp(entry.bpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM),
+    })),
+  );
   const msAt = (q: number): number => tempoMap.msAtBeat(q);
   const firstBpm = tempoMap.baseBpm;
   // Rounding endpoints (not durations) keeps adjacent notes seamless.
@@ -750,13 +767,13 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
   const tempoChanges = tempoChangesFrom(tempoMap)
     .filter((change) => change.atMs <= MAX_TAKE_MS)
     .slice(0, MAX_TEMPO_CHANGES)
-    .map((change) => ({ ...change, bpm: clamp(change.bpm, 40, 240) }));
+    .map((change) => ({ ...change, bpm: clamp(change.bpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM) }));
 
   return normalizeTake(
     createEmptyTake({
       title,
       tempo: {
-        bpm: clamp(firstBpm, 40, 240),
+        bpm: clamp(firstBpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM),
         timeSignature,
         countInBars: 1,
         ...(tempoChanges.length > 0 ? { changes: tempoChanges } : {}),

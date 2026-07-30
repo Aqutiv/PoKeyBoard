@@ -14,6 +14,17 @@ export const MAX_NOTE_DURATION_MS = 2 * 60 * 1000;
 export const MAX_NOTE_COUNT = 50_000;
 /** Upper bound on a take's tempo map; scores rarely mark more than a few. */
 export const MAX_TEMPO_CHANGES = 1_024;
+/**
+ * The tempos a take may carry.
+ *
+ * The floor is not a musical opinion, it is the slowest a metronome is worth
+ * following. It reaches below the slow end of the repertoire on purpose:
+ * Beethoven's Adagio cantabile is marked ♩=31.5, and a take that cannot hold
+ * that has to store the music at some other speed — which is how the notation
+ * and the sound come to disagree.
+ */
+export const MIN_TEMPO_BPM = 20;
+export const MAX_TEMPO_BPM = 240;
 /** Highest voice number a note may claim; engravings never need more. */
 export const MAX_NOTE_VOICE = 15;
 /** Most notes a tuplet may squeeze in; the widest in the vendored corpus is 39. */

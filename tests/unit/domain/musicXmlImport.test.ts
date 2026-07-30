@@ -412,6 +412,29 @@ describe('tempo and dynamics', () => {
     expect(take.tempo.bpm).toBe(60);
   });
 
+  it('keeps a slow score’s tempo instead of flooring it', () => {
+    // Beethoven's Adagio cantabile is marked ♩=31.5. A take that cannot hold
+    // that has to store the music at some other speed, and the notation then
+    // reads every note as longer than it is.
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + '<sound tempo="31.5"/>' + note('C', 4, 1))),
+    );
+    expect(take.tempo.bpm).toBe(31.5);
+    expect(take.notes[0]!.durationMs).toBe(Math.round(60000 / 31.5));
+  });
+
+  it('stores a tempo it cannot hold at the speed it does hold', () => {
+    // Slower than a take may carry, so the tempo is clamped — and the timing has
+    // to be clamped with it. A quarter at the stored 20bpm is 3000ms; leaving it
+    // at the marked 10bpm would put 6000ms in a take that claims 20, and every
+    // note would then be engraved twice as long as it was written.
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + '<sound tempo="10"/>' + note('C', 4, 1))),
+    );
+    expect(take.tempo.bpm).toBe(20);
+    expect(take.notes[0]!.durationMs).toBe(3000);
+  });
+
   it('falls back to metronome marks when no sound tempo exists', () => {
     const metronome =
       '<direction><direction-type><metronome>' +

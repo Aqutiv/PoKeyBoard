@@ -418,7 +418,7 @@ export const es: Messages = {
       `Se aplicó una marca de tiempo ${field} predeterminada por ser inválida.`,
     samplePackVersion: 'Se aplicó la versión del paquete de muestras predeterminada.',
     tempoDefaulted: 'Se aplicaron ajustes de tempo predeterminados por faltar.',
-    bpmClamped: 'Se ajustaron las BPM al rango de 40 a 240.',
+    bpmClamped: 'Se ajustaron las BPM al rango de 20 a 240.',
     countInClamped: 'Se ajustó la duración de la cuenta atrás.',
     tempoChangesRepaired: 'Se depuraron los cambios de tempo.',
     instrumentDefaulted: 'Se aplicaron ajustes de instrumento predeterminados por faltar.',

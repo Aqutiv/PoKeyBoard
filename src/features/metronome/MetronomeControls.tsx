@@ -5,13 +5,13 @@ import { useMessages } from '@/i18n/i18nContext';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
-import type { CountInBars } from '@/domain/takeTypes';
+import { MAX_TEMPO_BPM, MIN_TEMPO_BPM, type CountInBars } from '@/domain/takeTypes';
 import { barLineNearMs, createTakeTempoMap, withTempoAt } from '@/domain/tempoMap';
 import './metronome.css';
 
 const TIME_SIGNATURES: readonly string[] = ['2/2', '2/4', '3/4', '3/8', '4/4', '6/8'];
-const MIN_BPM = 40;
-const MAX_BPM = 240;
+const MIN_BPM = MIN_TEMPO_BPM;
+const MAX_BPM = MAX_TEMPO_BPM;
 
 /** Poll the current beat while clicks are audible; -1 when silent. */
 function useActiveBeat(running: boolean): number {
