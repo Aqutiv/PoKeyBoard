@@ -274,6 +274,11 @@ export const fr: Messages = {
     updates: 'Mises à jour',
     diagnostics: 'Diagnostics',
     reset: 'Réinitialiser',
+    piano: 'Piano',
+    pianoSalamander: 'Salamander — piano de concert Yamaha C5, brillant et proche',
+    pianoHeadroom: 'Headroom — piano à queue Yamaha C3, chaleureux et intime',
+    pianoSwitching: 'Chargement du nouveau piano…',
+    offlinePianoHint: 'Chaque piano se télécharge séparément.',
     pianoVolume: 'Volume du piano',
     reverb: 'Réverbération',
     velocity: 'Vélocité',
@@ -315,7 +320,7 @@ export const fr: Messages = {
       'Pas de son sur iPhone ? Vérifiez le bouton silence et le volume — l’iPhone coupe l’audio web quand le bouton est en mode silencieux.',
     resetSettings: 'Réinitialiser les réglages',
     deleteSamplesConfirm:
-      'Supprimer les échantillons de piano téléchargés ? Vos prises ne sont pas affectées.',
+      'Supprimer les échantillons téléchargés de ce piano ? Vos prises ne sont pas affectées.',
     resetConfirm: 'Réinitialiser tous les réglages par défaut ? Les prises ne sont pas affectées.',
     capabilities: {
       standaloneDisplayMode: 'Exécution en tant qu’application installée',
@@ -374,7 +379,7 @@ export const fr: Messages = {
     credits: 'Crédits',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
-      'Piano : Salamander Grand Piano v3 par Alexander Holm (CC-BY 3.0), adapté pour le web. Encodage MP3 par l’encodeur LAME compilé en WebAssembly. Les mentions complètes accompagnent le code source dans THIRD_PARTY_NOTICES.md.',
+      'Pianos : Salamander Grand Piano v3 par Alexander Holm (CC-BY 3.0) et Headroom Piano par Bengt Nilsson (CC-BY 4.0), tous deux adaptés pour le web. Encodage MP3 par l’encodeur LAME compilé en WebAssembly. Les mentions complètes accompagnent le code source dans THIRD_PARTY_NOTICES.md.',
     version: ({ version }) => `Version ${version}.`,
   },
   errors: {

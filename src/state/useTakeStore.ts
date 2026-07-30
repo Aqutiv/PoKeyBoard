@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { audioEngine } from '@/audio/AudioEngine';
 import {
   computeTakeDurationMs,
   createEmptyTake,
@@ -33,6 +34,8 @@ export interface TakeStoreState {
   contentRevision: number;
 
   setTake(take: Take, options?: { dirty?: boolean }): void;
+  /** Re-record the take's sample pack from the piano now selected. */
+  stampActiveInstrument(): void;
   updateTake(mutate: (take: Take) => Take): void;
   beginRecordingPass(): void;
   appendRecordedNotes(notes: NoteEvent[], pedals: PedalEvent[], passNoteIds: string[]): void;
@@ -48,6 +51,18 @@ export interface TakeStoreState {
 
 function touched(take: Take): Take {
   return { ...take, updatedAt: new Date().toISOString() };
+}
+
+/**
+ * Record which sample pack the take is heard through. Live playback always uses
+ * the selected piano, so the stamp has to follow it — the export renderer and
+ * the export cache key both read it, and a stale value would render a take on a
+ * piano the user never heard.
+ */
+function stamped(take: Take): Take {
+  const { packVersion } = audioEngine.activeInstrument;
+  if (take.samplePackVersion === packVersion) return take;
+  return { ...take, samplePackVersion: packVersion };
 }
 
 /**
@@ -68,12 +83,24 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
       const mutationGeneration = state.mutationGeneration + 1;
       const dirty = options?.dirty ?? false;
       return {
-        take,
+        take: stamped(take),
         lastPassNoteIds: [],
         lastPassPedalEvents: [],
         dirty,
         mutationGeneration,
         savedGeneration: dirty ? state.savedGeneration : mutationGeneration,
+        contentRevision: state.contentRevision + 1,
+      };
+    }),
+
+  stampActiveInstrument: () =>
+    set((state) => {
+      const take = stamped(state.take);
+      if (take === state.take) return {};
+      return {
+        take,
+        dirty: true,
+        mutationGeneration: state.mutationGeneration + 1,
         contentRevision: state.contentRevision + 1,
       };
     }),

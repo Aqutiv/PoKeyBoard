@@ -2,9 +2,13 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { test as base } from '@playwright/test';
 import type { SamplePackFileEntry, SamplePackManifest } from '../../src/audio/audioTypes';
+import { PIANO_INSTRUMENTS } from '../../src/audio/instruments';
 
-/** Mirrors SAMPLE_PACK_PATH in src/audio/AudioEngine.ts. */
-const PACK_DIR = 'piano/salamander-grand-v2';
+/**
+ * Every pack the app can load. Settings lists them all and the instrument spec
+ * makes the second one active, so stubbing one manifest is not enough.
+ */
+const PACK_DIRS = PIANO_INSTRUMENTS.map((instrument) => instrument.path.replace(/\/$/, ''));
 
 /** MAX_ROOT_DISTANCE_SEMITONES in src/audio/SampleBank.ts. */
 const MAX_ROOT_DISTANCE = 9;
@@ -16,22 +20,21 @@ const STUB_LAYER = 1;
 const LOWEST_KEY = 21;
 const HIGHEST_KEY = 108;
 
-const realManifest = JSON.parse(
-  readFileSync(path.resolve('public', PACK_DIR, 'manifest.json'), 'utf8'),
-) as SamplePackManifest;
-
 /**
  * A manifest holding one velocity layer, thinned to the fewest roots that
  * still cover all 88 keys, every entry marked `core`.
  *
  * The app runs its real loadManifest → loadCorePack → decodeAudioData path
- * over real Salamander samples; there are just six of them instead of the
- * forty-two of the real core pack, so `data-piano-ready` (which waits on every
- * core file) lands in a fraction of the time. Every key still sounds, because
- * getSample resolves a note to the nearest loaded root within
- * MAX_ROOT_DISTANCE and pitch-shifts it.
+ * over real samples; there are just six of them instead of the forty-two of the
+ * real core pack, so `data-piano-ready` (which waits on every core file) lands
+ * in a fraction of the time. Every key still sounds, because getSample resolves
+ * a note to the nearest loaded root within MAX_ROOT_DISTANCE and pitch-shifts it.
  */
-function buildStubManifest(): SamplePackManifest {
+function buildStubManifest(packDir: string): SamplePackManifest {
+  const realManifest = JSON.parse(
+    readFileSync(path.resolve('public', packDir, 'manifest.json'), 'utf8'),
+  ) as SamplePackManifest;
+
   const roots = realManifest.files
     .filter((entry) => entry.layer === STUB_LAYER)
     .sort((a, b) => a.midi - b.midi);
@@ -55,8 +58,8 @@ function buildStubManifest(): SamplePackManifest {
     const covered = files.some((entry) => Math.abs(entry.midi - midi) <= MAX_ROOT_DISTANCE);
     if (!covered) {
       throw new Error(
-        `Stub sample manifest leaves midi ${midi} unplayable. The real pack's ` +
-          `layer-${STUB_LAYER} roots no longer span the keyboard at this stride.`,
+        `Stub sample manifest for ${packDir} leaves midi ${midi} unplayable. That ` +
+          `pack's layer-${STUB_LAYER} roots no longer span the keyboard at this stride.`,
       );
     }
   }
@@ -65,7 +68,7 @@ function buildStubManifest(): SamplePackManifest {
   return { ...realManifest, files, coreBytes: bytes, totalBytes: bytes };
 }
 
-const STUB_MANIFEST = buildStubManifest();
+const STUB_MANIFESTS = PACK_DIRS.map((dir) => [dir, buildStubManifest(dir)] as const);
 
 /**
  * Set POKEYBOARD_E2E_REAL_PACK=1 to run the whole suite against the real
@@ -87,9 +90,9 @@ export const test = base.extend<{ samplePack: 'stub' | 'real' }>({
   // `runTest` is the same thing without the false positive.
   page: async ({ page, samplePack }, runTest) => {
     if (samplePack === 'stub') {
-      await page.route(`**/${PACK_DIR}/manifest.json`, (route) =>
-        route.fulfill({ json: STUB_MANIFEST }),
-      );
+      for (const [dir, stub] of STUB_MANIFESTS) {
+        await page.route(`**/${dir}/manifest.json`, (route) => route.fulfill({ json: stub }));
+      }
     }
     await runTest(page);
   },

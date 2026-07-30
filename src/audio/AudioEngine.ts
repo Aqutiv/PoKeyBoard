@@ -7,14 +7,22 @@ import type {
   ScheduledNoteEvent,
 } from './audioTypes';
 import { ensurePlaybackSession } from './iosAudioSession';
+import {
+  DEFAULT_PIANO_INSTRUMENT_ID,
+  pianoInstrument,
+  type PianoInstrument,
+  type PianoInstrumentId,
+} from './instruments';
 import { createPianoGraph, type PianoGraph } from './PianoGraphFactory';
 import { SampleBank } from './SampleBank';
 import { VoiceManager } from './VoiceManager';
 
-// v2 delivers the same Salamander audio under a .sample extension so download
-// managers (IDM etc.) stop intercepting sample fetches. v1 (*.mp3) is retained
-// on disk untouched so already-published URLs never 404 for un-updated clients.
-export const SAMPLE_PACK_PATH = 'piano/salamander-grand-v2/';
+/**
+ * How long loadCoreSamples waits for the stored instrument before giving up and
+ * decoding the default. Persistence releases the gate in single-digit ms; the
+ * timeout only exists so a broken restore can never leave the piano silent.
+ */
+const INSTRUMENT_RESTORE_TIMEOUT_MS = 1_500;
 
 /** Live input events with audio-clock timestamps (the recorder subscribes). */
 export type InputNoteEvent =
@@ -28,8 +36,6 @@ export type InputNoteEvent =
  * clock lives here, never in React state.
  */
 export class AudioEngine {
-  readonly bank: SampleBank;
-
   private context: AudioContext | null = null;
   private graph: PianoGraph | null = null;
   private voices: VoiceManager | null = null;
@@ -44,8 +50,104 @@ export class AudioEngine {
   private currentActiveNotes: ReadonlySet<number> = new Set();
   private coreLoadStarted = false;
 
+  /**
+   * One bank per instrument. The objects are cached (their manifests are worth
+   * keeping) but only the active one holds decoded buffers — two full packs of
+   * float32 PCM would be ~300MB.
+   */
+  private readonly banks = new Map<PianoInstrumentId, SampleBank>();
+  private instrumentId: PianoInstrumentId = DEFAULT_PIANO_INSTRUMENT_ID;
+  private switchGeneration = 0;
+  private pendingSwitch: { id: PianoInstrumentId; promise: Promise<void> } | null = null;
+
+  /** Last range the keyboard asked for, replayed after an instrument switch. */
+  private lastRange: { low: number; high: number } | null = null;
+
+  /**
+   * Progress fan-out lives on the engine, not the bank: useSyncExternalStore
+   * captures its subscribe callback once, so a per-bank subscription would go
+   * deaf the first time the instrument changes.
+   */
+  private readonly progressListeners = new Set<(progress: SampleLoadProgress) => void>();
+  private unsubscribeBankProgress: (() => void) | null = null;
+
+  private restoreGateResolve: (() => void) | null = null;
+  private readonly restoreGate: Promise<void>;
+
   constructor() {
-    this.bank = new SampleBank(`${import.meta.env.BASE_URL}${SAMPLE_PACK_PATH}`);
+    this.restoreGate = new Promise<void>((resolve) => {
+      this.restoreGateResolve = resolve;
+    });
+    setTimeout(() => this.markInstrumentRestored(), INSTRUMENT_RESTORE_TIMEOUT_MS);
+    this.watchBankProgress();
+  }
+
+  /** The bank of the selected piano. */
+  get bank(): SampleBank {
+    return this.bankFor(this.instrumentId);
+  }
+
+  get activeInstrument(): PianoInstrument {
+    return pianoInstrument(this.instrumentId);
+  }
+
+  bankFor(id: PianoInstrumentId): SampleBank {
+    const existing = this.banks.get(id);
+    if (existing) return existing;
+    const bank = new SampleBank(`${import.meta.env.BASE_URL}${pianoInstrument(id).path}`);
+    this.banks.set(id, bank);
+    return bank;
+  }
+
+  /**
+   * Swap the piano. Sounding notes are released rather than cross-faded — the
+   * old buffers stay alive through their source nodes, so nothing clicks — and
+   * the outgoing bank is only freed once the new core is playable, which keeps a
+   * rapid A→B→A toggle from re-decoding anything.
+   */
+  setInstrument(id: PianoInstrumentId): Promise<void> {
+    if (this.pendingSwitch?.id === id) return this.pendingSwitch.promise;
+    if (id === this.instrumentId && !this.pendingSwitch) return Promise.resolve();
+
+    const previous = this.bankFor(this.instrumentId);
+    const generation = ++this.switchGeneration;
+    this.allNotesOff();
+    this.instrumentId = id;
+    // Re-points progress at the new bank, whose phase is 'idle' — which is what
+    // drops data-piano-ready back to false while the new pack decodes.
+    this.watchBankProgress();
+    this.coreLoadStarted = false;
+
+    const promise = (async () => {
+      this.markInstrumentRestored();
+      await this.loadCoreSamples();
+      if (generation !== this.switchGeneration) return;
+      if (this.lastRange) {
+        await this.ensurePlayableRange(this.lastRange.low, this.lastRange.high);
+      }
+      if (generation !== this.switchGeneration) return;
+      if (previous !== this.bank) previous.releaseBuffers();
+    })().finally(() => {
+      if (this.pendingSwitch?.id === id) this.pendingSwitch = null;
+    });
+    this.pendingSwitch = { id, promise };
+    return promise;
+  }
+
+  /**
+   * Let the core load proceed. Called by the persistence layer once the stored
+   * instrument has been applied, so a cold start never decodes the wrong piano.
+   */
+  markInstrumentRestored(): void {
+    this.restoreGateResolve?.();
+    this.restoreGateResolve = null;
+  }
+
+  private watchBankProgress(): void {
+    this.unsubscribeBankProgress?.();
+    this.unsubscribeBankProgress = this.bank.subscribe((progress) => {
+      for (const listener of this.progressListeners) listener(progress);
+    });
   }
 
   /**
@@ -113,8 +215,11 @@ export class AudioEngine {
     this.initialize();
     if (!this.context || this.coreLoadStarted) return;
     this.coreLoadStarted = true;
+    // Wait for the stored instrument before committing to a 5.7MB decode.
+    await this.restoreGate;
+    const bank = this.bank;
     try {
-      await this.bank.loadCorePack(this.context);
+      await bank.loadCorePack(this.context);
     } catch (error) {
       console.error('Core sample load failed:', error);
       this.coreLoadStarted = false; // allow retry from the UI
@@ -123,6 +228,7 @@ export class AudioEngine {
 
   /** Decode extra roots when the keyboard range shifts beyond the core. */
   async ensurePlayableRange(lowMidi: number, highMidi: number): Promise<void> {
+    this.lastRange = { low: lowMidi, high: highMidi };
     if (!this.context) return;
     await this.bank.ensureRangeLoaded(this.context, lowMidi, highMidi);
   }
@@ -132,13 +238,15 @@ export class AudioEngine {
    * Shares PIANO_SAMPLE_CACHE with the service worker's runtime caching.
    */
   async downloadFullSamplePack(
+    instrumentId: PianoInstrumentId = this.instrumentId,
     onProgress?: (loadedBytes: number, totalBytes: number) => void,
   ): Promise<void> {
-    const manifest = await this.bank.loadManifest();
+    const bank = this.bankFor(instrumentId);
+    const manifest = await bank.loadManifest();
     const cache = await caches.open(PIANO_SAMPLE_CACHE);
     let loadedBytes = 0;
     for (const entry of manifest.files) {
-      const url = this.bank.urlFor(entry.file);
+      const url = bank.urlFor(entry.file);
       const cached = await cache.match(url);
       if (!cached) {
         const response = await fetch(url);
@@ -152,19 +260,34 @@ export class AudioEngine {
     }
   }
 
-  async isFullPackOffline(): Promise<boolean> {
+  async isFullPackOffline(instrumentId: PianoInstrumentId = this.instrumentId): Promise<boolean> {
     if (!('caches' in globalThis)) return false;
-    const manifest = await this.bank.loadManifest();
+    const bank = this.bankFor(instrumentId);
+    const manifest = await bank.loadManifest();
     const cache = await caches.open(PIANO_SAMPLE_CACHE);
     for (const entry of manifest.files) {
-      if (!(await cache.match(this.bank.urlFor(entry.file)))) return false;
+      if (!(await cache.match(bank.urlFor(entry.file)))) return false;
     }
     return true;
   }
 
-  /** Remove downloaded sample audio without touching any take data. */
-  async deleteDownloadedSamples(): Promise<void> {
-    if ('caches' in globalThis) await caches.delete(PIANO_SAMPLE_CACHE);
+  /**
+   * Remove downloaded sample audio without touching any take data. Scoped to one
+   * piano when given an id, which is enumerated from the cache rather than the
+   * manifest so the pack's manifest.json goes too and the offline state cannot
+   * disagree with what is actually stored.
+   */
+  async deleteDownloadedSamples(instrumentId?: PianoInstrumentId): Promise<void> {
+    if (!('caches' in globalThis)) return;
+    if (!instrumentId) {
+      await caches.delete(PIANO_SAMPLE_CACHE);
+      return;
+    }
+    const cache = await caches.open(PIANO_SAMPLE_CACHE);
+    const marker = `/${pianoInstrument(instrumentId).packVersion}/`;
+    for (const request of await cache.keys()) {
+      if (new URL(request.url).pathname.includes(marker)) await cache.delete(request);
+    }
   }
 
   noteOn(midi: number, velocity: number, sourceId: NoteSourceId): boolean {
@@ -298,8 +421,15 @@ export class AudioEngine {
     return () => this.activeNoteListeners.delete(listener);
   }
 
+  /** Progress for the selected piano; survives instrument switches. */
+  getLoadProgress(): SampleLoadProgress {
+    return this.bank.getProgress();
+  }
+
   subscribeLoadProgress(listener: (progress: SampleLoadProgress) => void): () => void {
-    return this.bank.subscribe(listener);
+    this.progressListeners.add(listener);
+    listener(this.getLoadProgress());
+    return () => this.progressListeners.delete(listener);
   }
 
   private setStatus(status: EngineStatus): void {

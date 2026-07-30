@@ -276,6 +276,11 @@ export const mg: Messages = {
     updates: 'Fanavaozana',
     diagnostics: 'Fitiliana',
     reset: 'Avereno',
+    piano: 'Piano',
+    pianoSalamander: 'Salamander — piano fanao an-tsehatra Yamaha C5, mazava sy akaiky',
+    pianoHeadroom: 'Headroom — piano Yamaha C3, malefaka sy mafana',
+    pianoSwitching: 'Mampiditra ny piano vaovao…',
+    offlinePianoHint: 'Samy alaina manokana ny piano tsirairay.',
     pianoVolume: 'Feon’ny piano',
     reverb: 'Reverb',
     velocity: 'Hafainganam-pandeha',
@@ -316,7 +321,8 @@ export const mg: Messages = {
     iphoneHint:
       'Tsy misy feo amin’ny iPhone? Jereo ny bokotra mangina sy ny feo — mamono ny feon’ny web ny iPhone rehefa mangina ilay bokotra.',
     resetSettings: 'Avereno ny fandrindrana',
-    deleteSamplesConfirm: 'Fafana ny santionam-piano voatariny? Tsy voakasika ny rakitrao.',
+    deleteSamplesConfirm:
+      'Fafana ny santionan’ity piano ity izay voatariny? Tsy voakasika ny rakitrao.',
     resetConfirm: 'Averina amin’ny mahazatra ny fandrindrana rehetra? Tsy voakasika ny rakitra.',
     capabilities: {
       standaloneDisplayMode: 'Mandeha ho toy ny rindrambaiko voapetraka',
@@ -376,7 +382,7 @@ export const mg: Messages = {
     credits: 'Fisaorana',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
-      'Piano: Salamander Grand Piano v3 nataon’i Alexander Holm (CC-BY 3.0), nampifanaraka ho an’ny web. Fanovana MP3 amin’ny encoder LAME natao WebAssembly. Ny fanamarihana feno dia miaraka amin’ny loharano ao amin’ny THIRD_PARTY_NOTICES.md.',
+      'Piano: Salamander Grand Piano v3 nataon’i Alexander Holm (CC-BY 3.0) sy Headroom Piano nataon’i Bengt Nilsson (CC-BY 4.0), samy nampifanaraka ho an’ny web. Fanovana MP3 amin’ny encoder LAME natao WebAssembly. Ny fanamarihana feno dia miaraka amin’ny loharano ao amin’ny THIRD_PARTY_NOTICES.md.',
     version: ({ version }) => `Kinova ${version}.`,
   },
   errors: {

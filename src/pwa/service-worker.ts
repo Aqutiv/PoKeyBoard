@@ -24,11 +24,16 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
 // Versioned, immutable piano samples: Cache First, shared with the explicit
 // "Download piano for offline use" flow. Purging on quota pressure protects
 // user takes in IndexedDB from eviction pressure caused by sample audio.
+//
+// The entry cap is a safety valve, not a size budget (purgeOnQuotaError is the
+// real protection): both pianos fully downloaded is 182 entries, and LRU
+// eviction is silent, so it has to sit well clear of that or "available offline"
+// would quietly stop being true.
 registerRoute(
   ({ url }) => url.pathname.includes('/piano/'),
   new CacheFirst({
     cacheName: PIANO_SAMPLE_CACHE,
-    plugins: [new ExpirationPlugin({ maxEntries: 256, purgeOnQuotaError: true })],
+    plugins: [new ExpirationPlugin({ maxEntries: 512, purgeOnQuotaError: true })],
   }),
 );
 

@@ -15,11 +15,16 @@ beforeEach(async () => {
 
 describe('settingsRepository', () => {
   it('round-trips settings', async () => {
-    useSettingsStore.setState({ metronomeVolume: 0.25, showNoteLabels: false });
+    useSettingsStore.setState({
+      metronomeVolume: 0.25,
+      showNoteLabels: false,
+      pianoInstrument: 'headroom-grand',
+    });
     await saveSettings(useSettingsStore.getState());
     const loaded = await loadSettings();
     expect(loaded.metronomeVolume).toBe(0.25);
     expect(loaded.showNoteLabels).toBe(false);
+    expect(loaded.pianoInstrument).toBe('headroom-grand');
   });
 
   it('ignores unknown keys and wrong types on load', async () => {
@@ -29,6 +34,8 @@ describe('settingsRepository', () => {
       { key: 'fixedVelocity', value: 0.5 },
       { key: 'masterVolume', value: 2 },
       { key: 'language', value: 'not-a-language' },
+      // A piano that no longer ships must not leave the app fetching a dead pack.
+      { key: 'pianoInstrument', value: 'bosendorfer-280' },
     ]);
     const loaded = await loadSettings();
     expect('notARealSetting' in loaded).toBe(false);
@@ -36,6 +43,7 @@ describe('settingsRepository', () => {
     expect(loaded.fixedVelocity).toBe(0.5);
     expect(loaded.masterVolume).toBeUndefined();
     expect(loaded.language).toBeUndefined();
+    expect(loaded.pianoInstrument).toBeUndefined();
   });
 
   it('restores only known keys from a backup blob', async () => {

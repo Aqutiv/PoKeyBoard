@@ -5,6 +5,12 @@ export interface SamplePackVelocityLayer {
   index: number;
   sourceLayer: number;
   label: string;
+  /**
+   * Gain multiplier that brings this layer up to the loudness of the same layer
+   * in the reference pack, measured at build time. Absent on the reference pack
+   * itself, where SampleBank's own layer trims already describe the level.
+   */
+  levelMatch?: number;
 }
 
 export interface SamplePackFileEntry {

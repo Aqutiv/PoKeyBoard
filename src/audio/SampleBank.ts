@@ -64,6 +64,8 @@ export class SampleBank {
   private loadedBytes = 0;
   private lastError: string | undefined;
   private progressSnapshot: SampleLoadProgress | null = null;
+  /** Bumped by releaseBuffers so in-flight decodes cannot repopulate. */
+  private generation = 0;
 
   private readonly baseUrl: string;
 
@@ -159,6 +161,22 @@ export class SampleBank {
     }
   }
 
+  /**
+   * Drop every decoded buffer, keeping the manifest and the root→entry index
+   * (kilobytes of JSON, and refetching it would show a spurious manifest phase).
+   * Voices already sounding hold their buffer through their source node and
+   * finish normally.
+   */
+  releaseBuffers(): void {
+    this.generation += 1;
+    this.buffers.clear();
+    for (const layer of this.layers.values()) layer.loadedRoots.length = 0;
+    this.loadedFiles = 0;
+    this.loadedBytes = 0;
+    this.lastError = undefined;
+    this.setPhase('idle');
+  }
+
   isCoreReady(): boolean {
     if (!this.manifest) return false;
     return this.manifest.files
@@ -199,10 +217,25 @@ export class SampleBank {
       return {
         buffer,
         playbackRate: Math.pow(2, (midi - root) / 12),
-        gain: velocityGain(velocity, preferredLayer),
+        // The pack's level match multiplies the clamped velocity gain rather
+        // than feeding into it, so a quietly mastered pack is not clipped back
+        // down by velocityGain's own ceiling. It is keyed on the layer actually
+        // resolved, not the requested one, because it describes how loudly that
+        // file was recorded — during a partial load those differ.
+        gain: velocityGain(velocity, preferredLayer) * this.levelMatchFor(layerIndex),
       };
     }
     return null;
+  }
+
+  /**
+   * How much this pack's layer must be lifted to sit at the reference pack's
+   * loudness. 1 for the reference pack itself, and for any manifest predating
+   * the measurement.
+   */
+  private levelMatchFor(layer: number): number {
+    const layers = this.manifest?.velocityLayers;
+    return layers?.find((entry) => entry.index === layer)?.levelMatch ?? 1;
   }
 
   /** Stable snapshot: same reference until progress changes (React-safe). */
@@ -273,12 +306,15 @@ export class SampleBank {
     entry: SamplePackFileEntry,
   ): Promise<void> {
     let lastError: unknown;
+    const generation = this.generation;
     for (let attempt = 0; attempt <= FETCH_RETRIES; attempt += 1) {
       try {
         const response = await fetch(`${this.baseUrl}${entry.file}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const bytes = await response.arrayBuffer();
         const buffer = await context.decodeAudioData(bytes);
+        // Released mid-flight: discard rather than resurrect a freed buffer.
+        if (generation !== this.generation) return;
         this.buffers.set(entry.file, buffer);
         const layer = this.layers.get(entry.layer);
         if (layer && !layer.loadedRoots.includes(entry.midi)) {

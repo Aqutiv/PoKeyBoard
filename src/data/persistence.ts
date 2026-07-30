@@ -67,12 +67,16 @@ class PersistenceService {
       const settings = useSettingsStore.getState();
       audioEngine.setMasterVolume(settings.masterVolume);
       audioEngine.setReverbMix(settings.reverbMix);
+      void audioEngine.setInstrument(settings.pianoInstrument);
       // Default to the OS language unless the user has pinned one. Runs before
       // the autosave subscription below so an unpinned language isn't written
       // back — it stays re-derived from the OS on each launch.
       await applySystemLanguageIfUnpinned();
     } catch (error) {
       console.error('Settings restore failed:', error);
+    } finally {
+      // Even a failed restore must let the piano start loading.
+      audioEngine.markInstrumentRestored();
     }
 
     try {

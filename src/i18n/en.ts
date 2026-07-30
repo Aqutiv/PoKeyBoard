@@ -273,6 +273,11 @@ export const en: Messages = {
     updates: 'Updates',
     diagnostics: 'Diagnostics',
     reset: 'Reset',
+    piano: 'Piano',
+    pianoSalamander: 'Salamander — Yamaha C5 concert grand, bright and close',
+    pianoHeadroom: 'Headroom — Yamaha C3 grand, warm and intimate',
+    pianoSwitching: 'Loading the new piano…',
+    offlinePianoHint: 'Each piano downloads separately.',
     pianoVolume: 'Piano volume',
     reverb: 'Reverb',
     velocity: 'Velocity',
@@ -311,7 +316,7 @@ export const en: Messages = {
     iphoneHint:
       'No sound on iPhone? Check the ring/silent switch and volume — iPhones mute web audio while the switch is on silent.',
     resetSettings: 'Reset settings',
-    deleteSamplesConfirm: 'Delete downloaded piano samples? Your takes are not affected.',
+    deleteSamplesConfirm: 'Delete this piano’s downloaded samples? Your takes are not affected.',
     resetConfirm: 'Reset all settings to defaults? Takes are not affected.',
     capabilities: {
       standaloneDisplayMode: 'Running as installed app',
@@ -370,7 +375,7 @@ export const en: Messages = {
     credits: 'Credits',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
-      'Piano: Salamander Grand Piano v3 by Alexander Holm (CC-BY 3.0), adapted for the web. MP3 encoding by the LAME encoder compiled to WebAssembly. Full notices ship with the source in THIRD_PARTY_NOTICES.md.',
+      'Pianos: Salamander Grand Piano v3 by Alexander Holm (CC-BY 3.0) and Headroom Piano by Bengt Nilsson (CC-BY 4.0), both adapted for the web. MP3 encoding by the LAME encoder compiled to WebAssembly. Full notices ship with the source in THIRD_PARTY_NOTICES.md.',
     version: ({ version }) => `Version ${version}.`,
   },
   errors: {

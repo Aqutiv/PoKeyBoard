@@ -28,9 +28,12 @@ POKEYBOARD_E2E_PORT=4273 npx playwright test
 **Two speed defaults you should know about**, both in `tests/e2e/fixtures.ts` and
 `playwright.config.ts`. Every test starts from a fresh browser context with an
 empty cache, so a plain visit costs 5.4 MB and 42 `decodeAudioData` calls before
-`data-piano-ready` flips — paid once per test. So by default the pack manifest is
-routed to six real samples (one velocity layer, roots spaced so every one of the
-88 keys still sounds, pitch-shifted), and the service worker is blocked. The
+`data-piano-ready` flips — paid once per test. So by default **every** pack's
+manifest (one per selectable piano, from `PIANO_INSTRUMENTS`) is routed to six
+real samples of that pack (one velocity layer, roots spaced so every one of the
+88 keys still sounds, pitch-shifted), and the service worker is blocked. Stubbing
+just the default pack is not enough: Settings reads both manifests for their
+offline sizes, and `pianoInstrument.spec.ts` makes the second pack active. The
 suite also runs `fullyParallel` across workers, with `serviceWorker.spec.ts`
 isolated in a serial project that runs last — one of its tests byte-mutates
 `dist/service-worker.js`, and both wait on a real install that cannot be timed
@@ -71,7 +74,7 @@ project while anything depends on it.
 
 **Unit coverage** (tests/unit): MIDI name conversion and round-trips, staff mapping (splits, accidentals, ledgers, stems), visual quantization grids and duration symbols, notation layout (chords, measures, rests, 2000-note budget), take schema validation/repair/normalization, migrations (chain, future-version rejection), deterministic sorting, take duration, export-hash stability and invalidation triggers, filename sanitization, timing math, transport state machine (all legal/illegal transitions, busy states), transport clock (count-in anchoring), sustain application, scrub crossings (directions, chords, boundary-jitter dedupe, 20k-note jump performance), keyboard geometry/hit testing/velocity curve, pointer tracker (chords, glissando, cancel paths), velocity layer mapping, capability detection, take repository CRUD/revisions/cascades, settings persistence round-trips, import-link parsing (scheme rejection, scheme-less upgrade, file name derivation, dropped `text/uri-list` vs plain text) and remote import (kind sniffing, redirects, size guards against a lying Content-Length, blocked/offline/timeout/cancel classification).
 
-**E2E coverage** (tests/e2e, against the production build with the real wasm encoder; real service worker and real sample pack where the test is about them — see above): shell load, mouse key press with aria-pressed, computer-keyboard input, sustain latch, offline shell reload via SW, recording (with and without count-in) → playback → auto-pause → reload persistence, undo pass, metronome beat indicator, takes list/rename/duplicate/delete, JSON export download and validated import (plus invalid-file rejection), import from a pasted link (happy path, blocked download falling back to the file picker, invalid scheme), import from a dropped link (plus dropped non-link text being ignored), full backup download, MP3 export with downloaded-file header/size validation, cached-export reuse, download fallback (headless has no share targets), and a service-worker update prompt driven by byte-modifying the served worker.
+**E2E coverage** (tests/e2e, against the production build with the real wasm encoder; real service worker and real sample pack where the test is about them — see above): shell load, mouse key press with aria-pressed, computer-keyboard input, sustain latch, offline shell reload via SW, recording (with and without count-in) → playback → auto-pause → reload persistence, undo pass, metronome beat indicator, takes list/rename/duplicate/delete, JSON export download and validated import (plus invalid-file rejection), import from a pasted link (happy path, blocked download falling back to the file picker, invalid scheme), import from a dropped link (plus dropped non-link text being ignored), full backup download, MP3 export with downloaded-file header/size validation, cached-export reuse, download fallback (headless has no share targets), switching piano in Settings (the new pack decodes for real and the choice survives a reload, plus a per-piano offline download row each), and a service-worker update prompt driven by byte-modifying the served worker.
 
 ## Manual physical-device checklist
 
@@ -91,7 +94,8 @@ Run per release on: iPhone Safari · installed iPhone Home-Screen app · Android
 12. **Background/foreground:** backgrounding pauses sound; returning never auto-blasts audio.
 13. **iPhone silent switch:** with the switch on silent, the piano still sounds after the first gesture (workaround active); Settings hint present.
 14. **MP3 export & share sheet:** render a take; share sheet opens from the button; WhatsApp appears only when installed; the received file plays; on Firefox desktop the MP3 downloads instead.
-15. **Offline launch:** enable airplane mode after "Download piano for offline use" → installed app launches, full keyboard plays, takes list intact.
-16. **Storage restoration:** force-quit and relaunch → last take and playhead restored; installed-app storage is separate from the browser tab (verify and note).
-17. **Install flows:** Android/desktop prompt installs with correct icon; iOS Add-to-Home-Screen icon and standalone launch look right.
-18. **Update flow:** deploy a new build → "update available" appears in Settings and applies only on request, never during recording.
+15. **Offline launch:** enable airplane mode after "Download piano for offline use" → installed app launches, full keyboard plays, takes list intact. Download only one piano and confirm deleting it leaves the other still marked available offline.
+16. **Piano choice:** switch piano in Settings → the preview note and the keys sound different at the same volume; hold a key down _while_ switching → the note releases cleanly and no key sticks; the choice survives a relaunch.
+17. **Storage restoration:** force-quit and relaunch → last take and playhead restored; installed-app storage is separate from the browser tab (verify and note).
+18. **Install flows:** Android/desktop prompt installs with correct icon; iOS Add-to-Home-Screen icon and standalone launch look right.
+19. **Update flow:** deploy a new build → "update available" appears in Settings and applies only on request, never during recording.

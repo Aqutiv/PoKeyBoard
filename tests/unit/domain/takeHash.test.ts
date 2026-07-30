@@ -40,6 +40,15 @@ describe('sha256Hex', () => {
 });
 
 describe('computeExportHash', () => {
+  it('changes when the piano does, so a switch cannot serve a stale export', async () => {
+    const salamander = await computeExportHash({ ...baseInput, take: takeWithNotes() });
+    const headroom = await computeExportHash({
+      ...baseInput,
+      take: { ...takeWithNotes(), samplePackVersion: 'headroom-grand-v1' },
+    });
+    expect(headroom).not.toBe(salamander);
+  });
+
   it('is stable for identical audible content', async () => {
     const a = await computeExportHash({ ...baseInput, take: takeWithNotes() });
     const b = await computeExportHash({ ...baseInput, take: takeWithNotes() });

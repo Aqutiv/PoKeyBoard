@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
 import { detectCapabilities, type AppCapabilities } from '@/audio/audioCapabilities';
+import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
 import { LANGUAGE_OPTIONS } from '@/i18n';
 import { useMessages } from '@/i18n/i18nContext';
 import { pinLanguage, unpinLanguage } from '@/i18n/languagePreference';
@@ -33,6 +34,12 @@ function formatMB(bytes: number): string {
   return `${(bytes / 1_000_000).toFixed(1)} MB`;
 }
 
+/** Each piano's display name lives in the message catalogs, not the registry. */
+const PIANO_LABEL_KEYS: Record<PianoInstrumentId, 'pianoSalamander' | 'pianoHeadroom'> = {
+  'salamander-grand': 'pianoSalamander',
+  'headroom-grand': 'pianoHeadroom',
+};
+
 type PackState =
   | { kind: 'checking' }
   | { kind: 'not-downloaded'; totalBytes: number }
@@ -58,10 +65,12 @@ export function SettingsPage() {
   const settings = useSettingsStore();
   const instrument = useTakeStore((state) => state.take.instrument);
   const setInstrumentSettings = useTakeStore((state) => state.setInstrumentSettings);
+  const stampActiveInstrument = useTakeStore((state) => state.stampActiveInstrument);
   const transportState = useTransportState();
   const updateAvailable = useUpdateAvailable();
 
-  const [pack, setPack] = useState<PackState>({ kind: 'checking' });
+  const [packs, setPacks] = useState<Partial<Record<PianoInstrumentId, PackState>>>({});
+  const [switching, setSwitching] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{
     usage: number | null;
     quota: number | null;
@@ -70,23 +79,31 @@ export function SettingsPage() {
   const [caps] = useState<AppCapabilities>(() => detectCapabilities());
   const [installTick, setInstallTick] = useState(0);
 
-  const refreshPackState = useCallback(async () => {
-    try {
-      const manifest = await audioEngine.bank.loadManifest();
-      const offline = await audioEngine.isFullPackOffline();
-      setPack(
-        offline
-          ? { kind: 'offline-ready', totalBytes: manifest.totalBytes }
-          : { kind: 'not-downloaded', totalBytes: manifest.totalBytes },
-      );
-    } catch {
-      setPack({ kind: 'error', message: m.settings.couldNotCheck, totalBytes: 0 });
-    }
-  }, [m]);
+  const setPack = useCallback((id: PianoInstrumentId, state: PackState) => {
+    setPacks((current) => ({ ...current, [id]: state }));
+  }, []);
+
+  const refreshPackState = useCallback(
+    async (id: PianoInstrumentId) => {
+      try {
+        const manifest = await audioEngine.bankFor(id).loadManifest();
+        const offline = await audioEngine.isFullPackOffline(id);
+        setPack(id, {
+          kind: offline ? 'offline-ready' : 'not-downloaded',
+          totalBytes: manifest.totalBytes,
+        });
+      } catch {
+        setPack(id, { kind: 'error', message: m.settings.couldNotCheck, totalBytes: 0 });
+      }
+    },
+    [m, setPack],
+  );
 
   useEffect(() => {
-    const id = setTimeout(() => void refreshPackState(), 0);
-    return () => clearTimeout(id);
+    const timer = setTimeout(() => {
+      for (const piano of PIANO_INSTRUMENTS) void refreshPackState(piano.id);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [refreshPackState]);
 
   useEffect(() => {
@@ -118,30 +135,39 @@ export function SettingsPage() {
   useEffect(() => installService.subscribe(() => setInstallTick((n) => n + 1)), []);
   void installTick;
 
-  const downloadPack = useCallback(() => {
-    setPack((current) =>
-      current.kind === 'not-downloaded' || current.kind === 'error'
-        ? { kind: 'downloading', loadedBytes: 0, totalBytes: current.totalBytes }
-        : current,
-    );
-    audioEngine
-      .downloadFullSamplePack((loadedBytes, totalBytes) => {
-        setPack({ kind: 'downloading', loadedBytes, totalBytes });
-      })
-      .then(() => void refreshPackState())
-      .catch((error: unknown) => {
-        setPack({
-          kind: 'error',
-          message: error instanceof Error ? error.message : m.settings.downloadFailed,
-          totalBytes: 0,
-        });
+  const downloadPack = useCallback(
+    (id: PianoInstrumentId) => {
+      setPacks((current) => {
+        const state = current[id];
+        if (state?.kind !== 'not-downloaded' && state?.kind !== 'error') return current;
+        return {
+          ...current,
+          [id]: { kind: 'downloading', loadedBytes: 0, totalBytes: state.totalBytes },
+        };
       });
-  }, [refreshPackState, m]);
+      audioEngine
+        .downloadFullSamplePack(id, (loadedBytes, totalBytes) => {
+          setPack(id, { kind: 'downloading', loadedBytes, totalBytes });
+        })
+        .then(() => void refreshPackState(id))
+        .catch((error: unknown) => {
+          setPack(id, {
+            kind: 'error',
+            message: error instanceof Error ? error.message : m.settings.downloadFailed,
+            totalBytes: 0,
+          });
+        });
+    },
+    [refreshPackState, setPack, m],
+  );
 
-  const deletePack = useCallback(() => {
-    if (!window.confirm(m.settings.deleteSamplesConfirm)) return;
-    void audioEngine.deleteDownloadedSamples().then(() => void refreshPackState());
-  }, [refreshPackState, m]);
+  const deletePack = useCallback(
+    (id: PianoInstrumentId) => {
+      if (!window.confirm(m.settings.deleteSamplesConfirm)) return;
+      void audioEngine.deleteDownloadedSamples(id).then(() => void refreshPackState(id));
+    },
+    [refreshPackState, m],
+  );
 
   // Play a standard mid-note so the volume/reverb sliders preview their effect
   // (routes through the master + reverb graph, so it reflects the live value).
@@ -153,6 +179,24 @@ export function SettingsPage() {
       'settings-preview',
     );
   }, []);
+
+  // The preview has to wait for the new core pack: until it decodes, getSample
+  // returns nothing and the note would be silent.
+  const selectPiano = useCallback(
+    (id: PianoInstrumentId) => {
+      if (id === settings.pianoInstrument) return;
+      setSwitching(true);
+      settings.setPianoInstrument(id);
+      void audioEngine
+        .setInstrument(id)
+        .then(() => {
+          stampActiveInstrument();
+          previewNote();
+        })
+        .finally(() => setSwitching(false));
+    },
+    [settings, stampActiveInstrument, previewNote],
+  );
 
   return (
     <section className="page settings" aria-label={m.settings.title}>
@@ -217,6 +261,26 @@ export function SettingsPage() {
         </div>
 
         <h2 className="settings__section">{m.settings.sound}</h2>
+        <div
+          className="setting-row setting-row--stack"
+          role="radiogroup"
+          aria-label={m.settings.piano}
+        >
+          <span>{m.settings.piano}</span>
+          {PIANO_INSTRUMENTS.map((piano) => (
+            <label key={piano.id}>
+              <input
+                type="radio"
+                name="piano-instrument"
+                checked={settings.pianoInstrument === piano.id}
+                disabled={switching}
+                onChange={() => selectPiano(piano.id)}
+              />
+              {m.settings[PIANO_LABEL_KEYS[piano.id]]}
+            </label>
+          ))}
+          {switching ? <span aria-live="polite">{m.settings.pianoSwitching}</span> : null}
+        </div>
         <label className="setting-row">
           <span>{m.settings.pianoVolume}</span>
           <input
@@ -309,46 +373,55 @@ export function SettingsPage() {
         </label>
 
         <h2 className="settings__section">{m.settings.offlinePiano}</h2>
-        {pack.kind === 'checking' ? <p className="settings__hint">{m.settings.checking}</p> : null}
-        {pack.kind === 'not-downloaded' ? (
-          <div className="setting-row setting-row--stack">
-            <span>{m.settings.downloadPrompt({ size: formatMB(pack.totalBytes) })}</span>
-            <button type="button" className="btn" onClick={downloadPack}>
-              {m.settings.downloadButton}
-            </button>
-          </div>
-        ) : null}
-        {pack.kind === 'downloading' ? (
-          <div className="setting-row setting-row--stack" aria-live="polite">
-            <span>
-              {m.settings.downloading({
-                loaded: formatMB(pack.loadedBytes),
-                total: formatMB(pack.totalBytes),
-              })}
-            </span>
-            <progress value={pack.loadedBytes} max={pack.totalBytes} />
-          </div>
-        ) : null}
-        {pack.kind === 'offline-ready' ? (
-          <div className="setting-row setting-row--stack">
-            <span className="settings__ok">
-              {m.settings.fullOffline({ size: formatMB(pack.totalBytes) })}
-            </span>
-            <button type="button" className="btn" onClick={deletePack}>
-              {m.settings.deleteSamples}
-            </button>
-          </div>
-        ) : null}
-        {pack.kind === 'error' ? (
-          <div className="setting-row setting-row--stack">
-            <span role="alert" className="settings__error">
-              {pack.message}
-            </span>
-            <button type="button" className="btn" onClick={downloadPack}>
-              {m.settings.tryAgain}
-            </button>
-          </div>
-        ) : null}
+        <p className="settings__hint">{m.settings.offlinePianoHint}</p>
+        {PIANO_INSTRUMENTS.map((piano) => {
+          const pack = packs[piano.id] ?? { kind: 'checking' as const };
+          return (
+            <div key={piano.id} className="setting-row setting-row--stack">
+              <span>{m.settings[PIANO_LABEL_KEYS[piano.id]]}</span>
+              {pack.kind === 'checking' ? (
+                <span className="settings__hint">{m.settings.checking}</span>
+              ) : null}
+              {pack.kind === 'not-downloaded' ? (
+                <>
+                  <span>{m.settings.downloadPrompt({ size: formatMB(pack.totalBytes) })}</span>
+                  <button type="button" className="btn" onClick={() => downloadPack(piano.id)}>
+                    {m.settings.downloadButton}
+                  </button>
+                </>
+              ) : null}
+              {pack.kind === 'downloading' ? (
+                <span aria-live="polite">
+                  {m.settings.downloading({
+                    loaded: formatMB(pack.loadedBytes),
+                    total: formatMB(pack.totalBytes),
+                  })}
+                  <progress value={pack.loadedBytes} max={pack.totalBytes} />
+                </span>
+              ) : null}
+              {pack.kind === 'offline-ready' ? (
+                <>
+                  <span className="settings__ok">
+                    {m.settings.fullOffline({ size: formatMB(pack.totalBytes) })}
+                  </span>
+                  <button type="button" className="btn" onClick={() => deletePack(piano.id)}>
+                    {m.settings.deleteSamples}
+                  </button>
+                </>
+              ) : null}
+              {pack.kind === 'error' ? (
+                <>
+                  <span role="alert" className="settings__error">
+                    {pack.message}
+                  </span>
+                  <button type="button" className="btn" onClick={() => downloadPack(piano.id)}>
+                    {m.settings.tryAgain}
+                  </button>
+                </>
+              ) : null}
+            </div>
+          );
+        })}
 
         <h2 className="settings__section">{m.settings.storage}</h2>
         <p className="settings__hint">

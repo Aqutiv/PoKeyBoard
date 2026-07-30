@@ -274,6 +274,11 @@ export const es: Messages = {
     updates: 'Actualizaciones',
     diagnostics: 'Diagnóstico',
     reset: 'Restablecer',
+    piano: 'Piano',
+    pianoSalamander: 'Salamander — piano de concierto Yamaha C5, brillante y cercano',
+    pianoHeadroom: 'Headroom — piano de cola Yamaha C3, cálido e íntimo',
+    pianoSwitching: 'Cargando el piano nuevo…',
+    offlinePianoHint: 'Cada piano se descarga por separado.',
     pianoVolume: 'Volumen del piano',
     reverb: 'Reverberación',
     velocity: 'Velocidad',
@@ -315,7 +320,7 @@ export const es: Messages = {
       '¿Sin sonido en el iPhone? Comprueba el interruptor de silencio y el volumen — el iPhone silencia el audio web cuando el interruptor está en silencio.',
     resetSettings: 'Restablecer ajustes',
     deleteSamplesConfirm:
-      '¿Eliminar las muestras de piano descargadas? Tus tomas no se ven afectadas.',
+      '¿Eliminar las muestras descargadas de este piano? Tus tomas no se ven afectadas.',
     resetConfirm:
       '¿Restablecer todos los ajustes a los valores predeterminados? Las tomas no se ven afectadas.',
     capabilities: {
@@ -375,7 +380,7 @@ export const es: Messages = {
     credits: 'Créditos',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
-      'Piano: Salamander Grand Piano v3 de Alexander Holm (CC-BY 3.0), adaptado para la web. Codificación MP3 con el codificador LAME compilado a WebAssembly. Los avisos completos se incluyen con el código fuente en THIRD_PARTY_NOTICES.md.',
+      'Pianos: Salamander Grand Piano v3 de Alexander Holm (CC-BY 3.0) y Headroom Piano de Bengt Nilsson (CC-BY 4.0), ambos adaptados para la web. Codificación MP3 con el codificador LAME compilado a WebAssembly. Los avisos completos se incluyen con el código fuente en THIRD_PARTY_NOTICES.md.',
     version: ({ version }) => `Versión ${version}.`,
   },
   errors: {
