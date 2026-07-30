@@ -1,0 +1,661 @@
+{
+  "version": "headroom-grand-v2",
+  "source": "Headroom Piano (Yamaha C3) by Bengt Nilsson, sfz mapping by kinwie",
+  "license": "CC-BY 4.0",
+  "sourceUrl": "https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano",
+  "format": "flac-16bit-44.1khz-stereo",
+  "velocityLayers": [
+    {
+      "index": 0,
+      "sourceLayer": 1,
+      "label": "soft",
+      "levelMatch": 5.6916
+    },
+    {
+      "index": 1,
+      "sourceLayer": 3,
+      "label": "medium",
+      "levelMatch": 2.6463
+    },
+    {
+      "index": 2,
+      "sourceLayer": 5,
+      "label": "loud",
+      "levelMatch": 1.9837
+    }
+  ],
+  "coreBytes": 11218651,
+  "totalBytes": 24325682,
+  "files": [
+    {
+      "file": "A0v1.sample",
+      "midi": 21,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 312562
+    },
+    {
+      "file": "A0v3.sample",
+      "midi": 21,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 348177
+    },
+    {
+      "file": "A0v5.sample",
+      "midi": 21,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 370025
+    },
+    {
+      "file": "C1v1.sample",
+      "midi": 24,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 321646
+    },
+    {
+      "file": "C1v3.sample",
+      "midi": 24,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 358680
+    },
+    {
+      "file": "C1v5.sample",
+      "midi": 24,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 376812
+    },
+    {
+      "file": "Ds1v1.sample",
+      "midi": 27,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 333991
+    },
+    {
+      "file": "Ds1v3.sample",
+      "midi": 27,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 378234
+    },
+    {
+      "file": "Ds1v5.sample",
+      "midi": 27,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 406177
+    },
+    {
+      "file": "Fs1v1.sample",
+      "midi": 30,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 331007
+    },
+    {
+      "file": "Fs1v3.sample",
+      "midi": 30,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 365912
+    },
+    {
+      "file": "Fs1v5.sample",
+      "midi": 30,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 387450
+    },
+    {
+      "file": "A1v1.sample",
+      "midi": 33,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 325083
+    },
+    {
+      "file": "A1v3.sample",
+      "midi": 33,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 385597
+    },
+    {
+      "file": "A1v5.sample",
+      "midi": 33,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 430717
+    },
+    {
+      "file": "C2v1.sample",
+      "midi": 36,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 327534
+    },
+    {
+      "file": "C2v3.sample",
+      "midi": 36,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 395506
+    },
+    {
+      "file": "C2v5.sample",
+      "midi": 36,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 440030
+    },
+    {
+      "file": "Ds2v1.sample",
+      "midi": 39,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 325813
+    },
+    {
+      "file": "Ds2v3.sample",
+      "midi": 39,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 381124
+    },
+    {
+      "file": "Ds2v5.sample",
+      "midi": 39,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 442124
+    },
+    {
+      "file": "Fs2v1.sample",
+      "midi": 42,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 325327
+    },
+    {
+      "file": "Fs2v3.sample",
+      "midi": 42,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 401208
+    },
+    {
+      "file": "Fs2v5.sample",
+      "midi": 42,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 444827
+    },
+    {
+      "file": "A2v1.sample",
+      "midi": 45,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 329925
+    },
+    {
+      "file": "A2v3.sample",
+      "midi": 45,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 388542
+    },
+    {
+      "file": "A2v5.sample",
+      "midi": 45,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 446042
+    },
+    {
+      "file": "C3v1.sample",
+      "midi": 48,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 267146
+    },
+    {
+      "file": "C3v3.sample",
+      "midi": 48,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 305825
+    },
+    {
+      "file": "C3v5.sample",
+      "midi": 48,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 340073
+    },
+    {
+      "file": "Ds3v1.sample",
+      "midi": 51,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 248801
+    },
+    {
+      "file": "Ds3v3.sample",
+      "midi": 51,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 286773
+    },
+    {
+      "file": "Ds3v5.sample",
+      "midi": 51,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 330019
+    },
+    {
+      "file": "Fs3v1.sample",
+      "midi": 54,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 240679
+    },
+    {
+      "file": "Fs3v3.sample",
+      "midi": 54,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 292094
+    },
+    {
+      "file": "Fs3v5.sample",
+      "midi": 54,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 325018
+    },
+    {
+      "file": "A3v1.sample",
+      "midi": 57,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 245073
+    },
+    {
+      "file": "A3v3.sample",
+      "midi": 57,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 281438
+    },
+    {
+      "file": "A3v5.sample",
+      "midi": 57,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 319606
+    },
+    {
+      "file": "C4v1.sample",
+      "midi": 60,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 251600
+    },
+    {
+      "file": "C4v3.sample",
+      "midi": 60,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 280966
+    },
+    {
+      "file": "C4v5.sample",
+      "midi": 60,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 316893
+    },
+    {
+      "file": "Ds4v1.sample",
+      "midi": 63,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 244096
+    },
+    {
+      "file": "Ds4v3.sample",
+      "midi": 63,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 272326
+    },
+    {
+      "file": "Ds4v5.sample",
+      "midi": 63,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 303289
+    },
+    {
+      "file": "Fs4v1.sample",
+      "midi": 66,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 252871
+    },
+    {
+      "file": "Fs4v3.sample",
+      "midi": 66,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 279128
+    },
+    {
+      "file": "Fs4v5.sample",
+      "midi": 66,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 311256
+    },
+    {
+      "file": "A4v1.sample",
+      "midi": 69,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 253774
+    },
+    {
+      "file": "A4v3.sample",
+      "midi": 69,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 281528
+    },
+    {
+      "file": "A4v5.sample",
+      "midi": 69,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 300591
+    },
+    {
+      "file": "C5v1.sample",
+      "midi": 72,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 202954
+    },
+    {
+      "file": "C5v3.sample",
+      "midi": 72,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 228256
+    },
+    {
+      "file": "C5v5.sample",
+      "midi": 72,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 247508
+    },
+    {
+      "file": "Ds5v1.sample",
+      "midi": 75,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 183958
+    },
+    {
+      "file": "Ds5v3.sample",
+      "midi": 75,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 215096
+    },
+    {
+      "file": "Ds5v5.sample",
+      "midi": 75,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 235887
+    },
+    {
+      "file": "Fs5v1.sample",
+      "midi": 78,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 197292
+    },
+    {
+      "file": "Fs5v3.sample",
+      "midi": 78,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 216091
+    },
+    {
+      "file": "Fs5v5.sample",
+      "midi": 78,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 237684
+    },
+    {
+      "file": "A5v1.sample",
+      "midi": 81,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 196213
+    },
+    {
+      "file": "A5v3.sample",
+      "midi": 81,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 205894
+    },
+    {
+      "file": "A5v5.sample",
+      "midi": 81,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 225153
+    },
+    {
+      "file": "C6v1.sample",
+      "midi": 84,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 203577
+    },
+    {
+      "file": "C6v3.sample",
+      "midi": 84,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 204173
+    },
+    {
+      "file": "C6v5.sample",
+      "midi": 84,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 223543
+    },
+    {
+      "file": "Ds6v1.sample",
+      "midi": 87,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 192934
+    },
+    {
+      "file": "Ds6v3.sample",
+      "midi": 87,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 198843
+    },
+    {
+      "file": "Ds6v5.sample",
+      "midi": 87,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 220813
+    },
+    {
+      "file": "Fs6v1.sample",
+      "midi": 90,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 177873
+    },
+    {
+      "file": "Fs6v3.sample",
+      "midi": 90,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 206865
+    },
+    {
+      "file": "Fs6v5.sample",
+      "midi": 90,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 212694
+    },
+    {
+      "file": "A6v1.sample",
+      "midi": 93,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 186786
+    },
+    {
+      "file": "A6v3.sample",
+      "midi": 93,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 194515
+    },
+    {
+      "file": "A6v5.sample",
+      "midi": 93,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 213520
+    },
+    {
+      "file": "C7v1.sample",
+      "midi": 96,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 147457
+    },
+    {
+      "file": "C7v3.sample",
+      "midi": 96,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 192562
+    },
+    {
+      "file": "C7v5.sample",
+      "midi": 96,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 208801
+    },
+    {
+      "file": "Ds7v1.sample",
+      "midi": 99,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 108502
+    },
+    {
+      "file": "Ds7v3.sample",
+      "midi": 99,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 174560
+    },
+    {
+      "file": "Ds7v5.sample",
+      "midi": 99,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 202001
+    },
+    {
+      "file": "Fs7v1.sample",
+      "midi": 102,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 117924
+    },
+    {
+      "file": "Fs7v3.sample",
+      "midi": 102,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 150780
+    },
+    {
+      "file": "Fs7v5.sample",
+      "midi": 102,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 177789
+    },
+    {
+      "file": "A7v1.sample",
+      "midi": 105,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 128062
+    },
+    {
+      "file": "A7v3.sample",
+      "midi": 105,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 136825
+    },
+    {
+      "file": "A7v5.sample",
+      "midi": 105,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 193942
+    },
+    {
+      "file": "C8v1.sample",
+      "midi": 108,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 116848
+    },
+    {
+      "file": "C8v3.sample",
+      "midi": 108,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 140971
+    },
+    {
+      "file": "C8v5.sample",
+      "midi": 108,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 189601
+    }
+  ]
+}

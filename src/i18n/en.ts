@@ -409,7 +409,7 @@ export const en: Messages = {
     timestamp: ({ field }) => `Defaulted an invalid ${field} timestamp.`,
     samplePackVersion: 'Defaulted the sample-pack version.',
     tempoDefaulted: 'Defaulted missing tempo settings.',
-    bpmClamped: 'Clamped BPM into the 40–240 range.',
+    bpmClamped: 'Clamped BPM into the 20–240 range.',
     countInClamped: 'Clamped count-in length.',
     tempoChangesRepaired: 'Cleaned up the tempo changes.',
     instrumentDefaulted: 'Defaulted missing instrument settings.',

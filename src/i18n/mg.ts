@@ -419,7 +419,7 @@ export const mg: Messages = {
     timestamp: ({ field }) => `Nampiasaina daty ${field} mahazatra noho ny tsy fetezany.`,
     samplePackVersion: 'Nampiasaina ny kinova mahazatry ny fonosana santionany.',
     tempoDefaulted: 'Nampiasaina fandrindrana tempo mahazatra noho ny tsy fisiany.',
-    bpmClamped: 'Naverina tao anatin’ny elanelana 40–240 ny BPM.',
+    bpmClamped: 'Naverina tao anatin’ny elanelana 20–240 ny BPM.',
     countInClamped: 'Nohitsina ny halavan’ny fanisana mialoha.',
     tempoChangesRepaired: 'Nodiovina ny fiovan’ny tempo.',
     instrumentDefaulted: 'Nampiasaina fandrindrana zavamaneno mahazatra noho ny tsy fisiany.',

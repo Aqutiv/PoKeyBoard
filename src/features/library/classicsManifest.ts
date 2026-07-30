@@ -378,7 +378,7 @@ export const CLASSIC_SCORES: readonly ClassicScoreEntry[] = [
   {
     trackId: "score-sonate-no-8-pathetique-2nd-movement",
     file: "Sonate_No._8_Pathetique_2nd_Movement.mxl",
-    bpm: 40,
+    bpm: 31.5,
     durationMs: 278095,
     noteCount: 1637,
   },

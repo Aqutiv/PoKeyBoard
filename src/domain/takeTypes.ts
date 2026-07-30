@@ -1,7 +1,7 @@
 export const CURRENT_SCHEMA_VERSION = 1;
 
 /** Sample-pack identifier stored in every take so exports stay reproducible. */
-export const DEFAULT_SAMPLE_PACK_VERSION = 'salamander-grand-v2';
+export const DEFAULT_SAMPLE_PACK_VERSION = 'salamander-grand-v3';
 
 export const DEFAULT_INSTRUMENT_ID = 'grand-piano';
 export const DEFAULT_MASTER_VOLUME = 0.85;
@@ -14,8 +14,23 @@ export const MAX_NOTE_DURATION_MS = 2 * 60 * 1000;
 export const MAX_NOTE_COUNT = 50_000;
 /** Upper bound on a take's tempo map; scores rarely mark more than a few. */
 export const MAX_TEMPO_CHANGES = 1_024;
+/**
+ * The tempos a take may carry.
+ *
+ * The floor is not a musical opinion, it is the slowest a metronome is worth
+ * following. It reaches below the slow end of the repertoire on purpose:
+ * Beethoven's Adagio cantabile is marked ♩=31.5, and a take that cannot hold
+ * that has to store the music at some other speed — which is how the notation
+ * and the sound come to disagree.
+ */
+export const MIN_TEMPO_BPM = 20;
+export const MAX_TEMPO_BPM = 240;
 /** Highest voice number a note may claim; engravings never need more. */
 export const MAX_NOTE_VOICE = 15;
+/** Most notes a tuplet may squeeze in; the widest in the vendored corpus is 39. */
+export const MAX_TUPLET_NOTES = 64;
+/** Finest note a tuplet may be counted in, as a whole-note divisor (a 128th). */
+export const MAX_TUPLET_UNIT = 128;
 /** Furthest a key signature goes round the circle of fifths (C sharp/flat major). */
 export const MAX_FIFTHS = 7;
 
@@ -72,6 +87,44 @@ export type NoteStaff = 'treble' | 'bass';
  */
 export type NoteClef = 'treble' | 'bass';
 
+/**
+ * The tuplet a source score declared a note to be part of — its
+ * `<time-modification>`, kept as written rather than as a conclusion drawn from
+ * it.
+ *
+ * Engraving-only and never audible, like `staff` and `voice`: the note already
+ * sounds for as long as it sounds. What this adds is *why* — that the beat it
+ * falls in is divided into thirds or sixths rather than halves — which the
+ * notation would otherwise have to guess back out of where the onsets landed,
+ * and which it guesses wrong often enough to matter.
+ *
+ * The declaration and not the division it implies: a division is slots per
+ * beat, and a take's time signature can be edited after import, which would
+ * quietly invalidate it. This says only what note values were written, so the
+ * division is re-derived correctly under whatever meter is in force.
+ */
+export interface NoteTuplet {
+  /** `<actual-notes>`: how many notes are squeezed in. */
+  actual: number;
+  /** `<normal-notes>`: in the time of how many. */
+  normal: number;
+  /**
+   * What those normal notes are, as the number a whole note divides into — 4
+   * for a quarter, 8 for an eighth, 16 for a sixteenth. From `<normal-type>`
+   * where the score gives one and from the note's own `<type>` where it does
+   * not, which is what an omitted `<normal-type>` means.
+   */
+  unit: number;
+  /**
+   * Which written `<tuplet>` bracket this note belongs to, numbered in reading
+   * order. Beams break where one group ends and the next begins, so a beat of
+   * six written as two groups of three is beamed and numbered that way instead
+   * of as one six. Absent where the score declared the ratio but bracketed
+   * nothing, and the beat's own grouping stands in.
+   */
+  group?: number;
+}
+
 export interface NoteEvent {
   id: string;
   midi: number;
@@ -96,6 +149,12 @@ export interface NoteEvent {
    * what every recorded take and most imports use.
    */
   clef?: NoteClef;
+  /**
+   * The tuplet the source wrote this note inside; see `NoteTuplet`. Absent for
+   * recorded takes and for scores that declare none, where the notation reads
+   * tuplets from the playing instead.
+   */
+  tuplet?: NoteTuplet;
 }
 
 export interface PedalEvent {

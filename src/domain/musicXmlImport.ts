@@ -1,6 +1,10 @@
 import { ScoreImportError } from '@/utils/errors';
 import { newId } from '@/utils/ids';
 import { isValidMidi } from '@/utils/midi';
+// Which grid a take arrives on is a notation decision, so the one question only
+// the notation can answer — whether it can state a given tuplet — is asked of it
+// directly rather than guessed at again here.
+import { declaredDivisionOf } from '@/features/notation/tuplets';
 import { createEmptyTake, UNTITLED_TAKE_TITLE } from './noteEvents';
 import { normalizeTake } from './takeSchema';
 import { createQuarterTempoMap, tempoChangesFrom } from './tempoMap';
@@ -10,10 +14,14 @@ import {
   MAX_FIFTHS,
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
+  MAX_TEMPO_BPM,
   MAX_TEMPO_CHANGES,
+  MIN_TEMPO_BPM,
+  MAX_TUPLET_NOTES,
   type NoteClef,
   type NoteEvent,
   type NoteStaff,
+  type NoteTuplet,
   type PedalEvent,
   type QuantizationSetting,
   type Take,
@@ -41,6 +49,23 @@ const METRONOME_UNIT_QUARTERS: Record<string, number> = {
   '32nd': 0.125,
 };
 
+/**
+ * `<type>` values as the number a whole note divides into, which is how a
+ * `NoteTuplet` counts its normal note. `breve` and `long` are left out on
+ * purpose: they are longer than a whole note, so their divisor is not a whole
+ * number, and nothing is written as a tuplet of them.
+ */
+const TUPLET_TYPE_UNITS: Record<string, number> = {
+  whole: 1,
+  half: 2,
+  quarter: 4,
+  eighth: 8,
+  '16th': 16,
+  '32nd': 32,
+  '64th': 64,
+  '128th': 128,
+};
+
 /** All positions/durations in quarter-note units until tempo integration. */
 interface QNote {
   midi: number;
@@ -51,6 +76,7 @@ interface QNote {
   staff: NoteStaff | undefined;
   voice: number | undefined;
   clef: NoteClef | undefined;
+  tuplet: NoteTuplet | undefined;
 }
 
 interface QPedal {
@@ -72,6 +98,7 @@ interface PendingTie {
   staff: NoteStaff | undefined;
   voice: number | undefined;
   clef: NoteClef | undefined;
+  tuplet: NoteTuplet | undefined;
 }
 
 interface CollectedScore {
@@ -80,6 +107,16 @@ interface CollectedScore {
   tempi: TempoEntry[];
   /** The shortest written value anywhere in the score, in quarters. */
   shortestQ: number | null;
+  /** The same, counting only values that declared no tuplet at all. */
+  shortestPlainQ: number | null;
+  /**
+   * Per distinct ratio, the shortest value written under it. Whether one of
+   * these belongs in the grid's reckoning depends on the meter, so the question
+   * waits until the meter is known; see `gridForShortestQ`'s caller.
+   */
+  shortestDeclared: Map<string, { tuplet: NoteTuplet; durQ: number }>;
+  /** Ids for written tuplet brackets, handed out across the whole score. */
+  nextTupletGroup: number;
   timeSignature: TimeSignature | null;
   /** Fifths from the score's own <key>, or null when it never declared one. */
   keySignature: number | null;
@@ -126,6 +163,7 @@ function pendingToNote(pending: PendingTie): QNote {
     staff: pending.staff,
     voice: pending.voice,
     clef: pending.clef,
+    tuplet: pending.tuplet,
   };
 }
 
@@ -182,6 +220,8 @@ function collectPart(
   let cursorQ = 0;
   let measureStartQ = 0;
   let chordAnchorQ: number | null = null;
+  /** The written tuplet group the chord being read belongs to, if any. */
+  let chordGroup: number | undefined = undefined;
   let dynamicsPercent: number | null = null;
   let currentTs: TimeSignature | null = null;
   let staffCount = 1;
@@ -245,6 +285,99 @@ function collectPart(
     if (declared === undefined) return undefined;
     const normal: NoteClef = staff === 'bass' ? 'bass' : 'treble';
     return declared === normal ? undefined : declared;
+  };
+
+  /**
+   * The tuplet a note declares, as written.
+   *
+   * `<normal-type>` says what the normal notes are; per the spec, leaving it out
+   * means they are the note's own `<type>`, which is how every score in the
+   * vendored corpus writes it. A `<normal-dot>` would make the normal note one
+   * and a half of itself — nothing in the corpus does, and storing it would take
+   * a fourth field, so such a note declares nothing and the beat is read from
+   * the rest of its figure.
+   *
+   * Read through `childByTag`, not by pattern: `<type size="cue">32nd</type>`
+   * occurs, and a `<time-modification>` sits beside its note's other children
+   * rather than at a fixed place among them.
+   */
+  const tupletOf = (note: Element): NoteTuplet | undefined => {
+    const mod = childByTag(note, 'time-modification');
+    if (mod === null) return undefined;
+    if (childByTag(mod, 'normal-dot') !== null) return undefined;
+    const actual = numberByTag(mod, 'actual-notes');
+    const normal = numberByTag(mod, 'normal-notes');
+    if (actual === null || normal === null) return undefined;
+    if (!Number.isInteger(actual) || !Number.isInteger(normal)) return undefined;
+    if (actual < 1 || normal < 1 || actual > MAX_TUPLET_NOTES || normal > MAX_TUPLET_NOTES) {
+      return undefined;
+    }
+    const typeName = textByTag(mod, 'normal-type') ?? textByTag(note, 'type');
+    const unit = typeName === null ? undefined : TUPLET_TYPE_UNITS[typeName];
+    if (unit === undefined) return undefined;
+    return { actual, normal, unit };
+  };
+
+  /**
+   * Which written bracket a note belongs to, tracked as the part is read.
+   *
+   * `<notations><tuplet type="start">` opens a group and `"stop"` closes it, and
+   * a score may nest them — which is what the `number` attribute is for, and two
+   * of the vendored scores use it. So each voice keeps a stack of the brackets
+   * open on it: a start pushes, a stop takes its own number back off, and the
+   * notes in between belong to whichever is innermost. Looking an interior note
+   * up by number 1 would leave every note inside a `number="2"` bracket with no
+   * group at all, and the beam would break at both its ends.
+   *
+   * Ids come from the whole score rather than this part, because a beam is built
+   * per staff across the take and two parts numbering their own groups from zero
+   * could have two figures read as one.
+   *
+   * A note that declares a ratio while no bracket is open keeps no group at all,
+   * and its beat's own grouping stands in — which is most of the Pathétique,
+   * whose brackets cover only part of what it declares.
+   */
+  const openGroups = new Map<string, { number: number; id: number }[]>();
+  const voiceKey = (note: Element): string => textByTag(note, 'voice') ?? '1';
+  const bracketNumber = (tuplet: Element): number => {
+    const number = attrNumber(tuplet, 'number');
+    return number === null ? 1 : Math.round(number);
+  };
+  const groupOf = (note: Element): number | undefined => {
+    let started: Element | null = null;
+    let stopped: Element | null = null;
+    for (const child of note.children) {
+      if (child.tagName !== 'notations') continue;
+      for (const notation of child.children) {
+        if (notation.tagName !== 'tuplet') continue;
+        const type = notation.getAttribute('type');
+        if (type === 'start') started = notation;
+        else if (type === 'stop') stopped = notation;
+      }
+    }
+    const key = voiceKey(note);
+    const open = openGroups.get(key) ?? [];
+    if (started !== null) {
+      // Past the cap two distant groups could share an id and be read as one
+      // figure; better to say nothing and let the beat group them.
+      if (out.nextTupletGroup >= MAX_NOTE_COUNT) return undefined;
+      const id = out.nextTupletGroup;
+      out.nextTupletGroup += 1;
+      open.push({ number: bracketNumber(started), id });
+      openGroups.set(key, open);
+      return id;
+    }
+    if (stopped !== null) {
+      const number = bracketNumber(stopped);
+      // Innermost first: a stop closes the most recent bracket of its number.
+      for (let i = open.length - 1; i >= 0; i -= 1) {
+        if ((open[i] as { number: number; id: number }).number !== number) continue;
+        const [closed] = open.splice(i, 1);
+        return closed?.id;
+      }
+      return undefined; // a stop with no start; nothing to belong to
+    }
+    return open[open.length - 1]?.id;
   };
 
   const applySound = (sound: Element, atQ: number): void => {
@@ -358,12 +491,43 @@ function collectPart(
           const durQ = quartersOf(el);
           // Rests count as much as notes: the grid has to be fine enough to
           // write the silences too, and a cue note is not engraved at all.
-          if (durQ > 0 && !isCue && (out.shortestQ === null || durQ < out.shortestQ)) {
-            out.shortestQ = durQ;
+          // Read before the rest early-out: a rest can carry a tuplet and a
+          // bracket, and its length counts towards the grid like any other.
+          const declared = tupletOf(el);
+          if (durQ > 0 && !isCue) {
+            if (out.shortestQ === null || durQ < out.shortestQ) out.shortestQ = durQ;
+            // The display grid is a binary one, and a tuplet slot is by
+            // definition not on it — a note the score declared is snapped to its
+            // own division and written from its own slot, so it never asks the
+            // grid for anything. Letting one choose the grid drags the whole
+            // piece finer for a resolution only it needs.
+            //
+            // Only a declaration the notation can *state* is set aside, though,
+            // and that cannot be settled here: it depends on the meter, which
+            // the score may not have declared yet. So the shortest length of
+            // each distinct ratio is kept and asked about once the meter is
+            // known — a quintuplet, or a ratio that cancels out, is rounded onto
+            // the grid like anything else and has to be able to choose it.
+            if (declared === undefined) {
+              if (out.shortestPlainQ === null || durQ < out.shortestPlainQ) {
+                out.shortestPlainQ = durQ;
+              }
+            } else {
+              const key = `${declared.actual}:${declared.normal}/${declared.unit}`;
+              const seen = out.shortestDeclared.get(key);
+              if (seen === undefined || durQ < seen.durQ) {
+                out.shortestDeclared.set(key, { tuplet: declared, durQ });
+              }
+            }
           }
+          // Brackets are read even on a rest, which can carry one and close a
+          // group; the notes stacked on a chord take the group its anchor
+          // resolved, since the anchor may have closed it on its way past.
+          const group: number | undefined = isChord ? chordGroup : groupOf(el);
           const onsetQ = isChord ? (chordAnchorQ ?? cursorQ) : cursorQ;
           if (!isChord) {
             chordAnchorQ = isRest ? null : cursorQ;
+            chordGroup = group;
             cursorQ += durQ;
             maxQ = Math.max(maxQ, cursorQ);
           }
@@ -387,6 +551,12 @@ function collectPart(
           const staff = staffOf(el);
           const voice = voiceOf(el, staff);
           const clef = clefOf(staff, staffNumber);
+          const tuplet =
+            declared === undefined
+              ? undefined
+              : group === undefined
+                ? declared
+                : { ...declared, group };
           const tieTypes = collectTieTypes(el);
           const hasStart = tieTypes.has('start');
           const hasStop = tieTypes.has('stop');
@@ -403,16 +573,17 @@ function collectPart(
                 pendingTies.set(key, pending); // middle of a chain
               else out.notes.push(pendingToNote(pending));
             } else if (hasStart) {
-              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef });
+              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef, tuplet });
             } else {
-              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef }); // orphan stop
+              // orphan stop
+              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet });
             }
           } else if (hasStart) {
             const stale = pendingTies.get(key);
             if (stale) out.notes.push(pendingToNote(stale));
-            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef });
+            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef, tuplet });
           } else {
-            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef });
+            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet });
           }
           break;
         }
@@ -478,6 +649,9 @@ function collectScore(root: Element): CollectedScore {
     pedals: [],
     tempi: [],
     shortestQ: null,
+    shortestPlainQ: null,
+    shortestDeclared: new Map(),
+    nextTupletGroup: 0,
     timeSignature: null,
     keySignature: null,
     title: null,
@@ -490,6 +664,32 @@ function collectScore(root: Element): CollectedScore {
     if (part.tagName === 'part') divisions = collectPart(part, divisions, out);
   }
   return out;
+}
+
+/**
+ * The shortest value the display grid actually has to be able to state.
+ *
+ * A note the notation will read in its own tuplet division is snapped to that
+ * and written from its own slot, so it never asks the grid for anything and has
+ * no business choosing it — a handful of tuplet 64ths would otherwise drag a
+ * whole piece down to a 1/64 reading only they need.
+ *
+ * But that only holds for the declarations the notation can *state*. A
+ * quintuplet, a ratio that cancels out, a tuplet counted in a value longer than
+ * the beat: the layout falls back to the binary grid for every one of those, so
+ * they are rounded onto it and must be allowed to choose it like any plain
+ * value. Which ones those are depends on the meter, which is why this is asked
+ * here rather than while reading.
+ */
+function shortestOnTheGridQ(collected: CollectedScore, denominator: number): number | null {
+  let shortest = collected.shortestPlainQ;
+  for (const { tuplet, durQ } of collected.shortestDeclared.values()) {
+    if (declaredDivisionOf(tuplet, denominator) !== null) continue; // read in its own division
+    if (shortest === null || durQ < shortest) shortest = durQ;
+  }
+  // A score of nothing but tuplets, every one of them statable, has nothing to
+  // say about the grid; fall back to what it has.
+  return shortest ?? collected.shortestQ;
 }
 
 /** The offered grids as a length in quarter notes, coarsest first. */
@@ -584,7 +784,22 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
 
   // Quarter-note positions become milliseconds through the score's tempo map;
   // its changes ride along on the take so the notation can draw them.
-  const tempoMap = createQuarterTempoMap(collected.tempi);
+  //
+  // Clamped *here*, before a single millisecond is computed, and not on the way
+  // out. A take can only carry a tempo inside its own range, so a score marked
+  // outside it has to be stored at some tempo it can hold — and if the notes
+  // were timed at the marked one anyway, the take says one thing and its
+  // milliseconds say another. Everything downstream then reads every note as
+  // longer (or shorter) than written: Beethoven's ♩=31.5 stored as 40 made
+  // every duration 27% long, which is what wrote a third of that movement as
+  // dotted 32nds. Clamping first costs the piece its marked speed, which is a
+  // thing the reader can see and change; the alternative corrupts the notation.
+  const tempoMap = createQuarterTempoMap(
+    collected.tempi.map((entry) => ({
+      ...entry,
+      bpm: clamp(entry.bpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM),
+    })),
+  );
   const msAt = (q: number): number => tempoMap.msAtBeat(q);
   const firstBpm = tempoMap.baseBpm;
   // Rounding endpoints (not durations) keeps adjacent notes seamless.
@@ -602,6 +817,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       ...(note.staff !== undefined ? { staff: note.staff } : {}),
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
       ...(note.clef !== undefined ? { clef: note.clef } : {}),
+      ...(note.tuplet !== undefined ? { tuplet: note.tuplet } : {}),
     };
   });
   let maxEndMs = 0;
@@ -630,13 +846,13 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
   const tempoChanges = tempoChangesFrom(tempoMap)
     .filter((change) => change.atMs <= MAX_TAKE_MS)
     .slice(0, MAX_TEMPO_CHANGES)
-    .map((change) => ({ ...change, bpm: clamp(change.bpm, 40, 240) }));
+    .map((change) => ({ ...change, bpm: clamp(change.bpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM) }));
 
   return normalizeTake(
     createEmptyTake({
       title,
       tempo: {
-        bpm: clamp(firstBpm, 40, 240),
+        bpm: clamp(firstBpm, MIN_TEMPO_BPM, MAX_TEMPO_BPM),
         timeSignature,
         countInBars: 1,
         ...(tempoChanges.length > 0 ? { changes: tempoChanges } : {}),
@@ -644,7 +860,11 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       },
       notes,
       pedalEvents,
-      display: { quantization: gridForShortestQ(collected.shortestQ), zoom: 1, playheadMs: 0 },
+      display: {
+        quantization: gridForShortestQ(shortestOnTheGridQ(collected, timeSignature.denominator)),
+        zoom: 1,
+        playheadMs: 0,
+      },
     }),
   );
 }

@@ -59,6 +59,30 @@ describe('parseTakeJson', () => {
     expect(take.notes[1]).not.toHaveProperty('voice');
   });
 
+  it('round-trips a declared tuplet, and rejects one that was never written', () => {
+    const raw = specExampleTake();
+    const notes = raw.notes as Record<string, unknown>[];
+    notes[0]!.tuplet = { actual: 3, normal: 2, unit: 8, group: 4 };
+    const { take, repairs } = parseTakeJson(raw);
+    expect(repairs).toEqual([]);
+    expect(take.notes[0]!.tuplet).toEqual({ actual: 3, normal: 2, unit: 8, group: 4 });
+    expect(take.notes[1]).not.toHaveProperty('tuplet');
+
+    // A unit is a note value, so it divides a whole note a power-of-two number
+    // of times; three of anything is a ratio, not a note.
+    for (const bad of [
+      { actual: 0, normal: 2, unit: 8 },
+      { actual: 3, normal: 2, unit: 3 },
+      { actual: 3, normal: 2, unit: 256 },
+      { actual: 3, normal: 2 },
+      { actual: 3, normal: 2, unit: 8.5 },
+    ]) {
+      const broken = specExampleTake();
+      (broken.notes as Record<string, unknown>[])[0]!.tuplet = bad;
+      expect(() => parseTakeJson(broken)).toThrow(ImportValidationError);
+    }
+  });
+
   it('rejects an unknown staff name', () => {
     const raw = specExampleTake();
     (raw.notes as Record<string, unknown>[])[0]!.staff = 'middle';

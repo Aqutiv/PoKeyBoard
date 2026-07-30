@@ -9,15 +9,204 @@ import { GOOD_NIGHT } from '@/features/library/tracks/goodNight';
 import { MOONLIGHT_SONATA } from '@/features/library/tracks/moonlightSonata';
 import { layoutScore } from '@/features/notation/notationLayout';
 import { beatsForSymbol, TRIPLET, type DurationSymbol } from '@/features/notation/quantization';
-import { UNITS_PER_WHOLE } from '@/features/notation/rests';
+import { exactValueForUnits, unitsPerBeat, UNITS_PER_WHOLE } from '@/features/notation/rests';
 import { layoutSheet } from '@/features/notation/sheetLayout';
 import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
-import { fitsDivision, isTernaryBeat } from '@/features/notation/tuplets';
+import { declaredDivisionOf, fitsDivision, isTernaryBeat } from '@/features/notation/tuplets';
 
 /** A little human sloppiness, as a fraction of the beat. */
 function jitter(offsets: number[], by: number): number[] {
   return offsets.map((offset, i) => offset + (i % 2 === 0 ? by : -by));
 }
+
+describe('declaredDivisionOf', () => {
+  /** `{actual, normal, unit}`, spelled the way the score writes it. */
+  const t = (actual: number, normal: number, unit: number) => ({ actual, normal, unit });
+
+  it('turns the ratios the corpus actually uses into divisions of the beat', () => {
+    // In 4/4 the beat is a quarter: three eighths in the time of two divide it in
+    // three, six sixteenths in the time of four divide it in six.
+    expect(declaredDivisionOf(t(3, 2, 8), 4)).toBe(3);
+    expect(declaredDivisionOf(t(3, 2, 16), 4)).toBe(6);
+    expect(declaredDivisionOf(t(6, 4, 16), 4)).toBe(6);
+    expect(declaredDivisionOf(t(3, 2, 32), 4)).toBe(12);
+    expect(declaredDivisionOf(t(3, 2, 64), 4)).toBe(24);
+    // 2/4 counts the same beat; 2/2 a beat twice as long, so twice the slots.
+    expect(declaredDivisionOf(t(3, 2, 16), 2)).toBe(12);
+    // In 6/8 and x/16 the beat is shorter and holds fewer.
+    expect(declaredDivisionOf(t(3, 2, 16), 8)).toBe(3);
+    expect(declaredDivisionOf(t(3, 2, 32), 16)).toBe(3);
+  });
+
+  it('refuses a ratio no written value can state', () => {
+    // 384ths of a whole note is 2⁷·3: thirds and sixths land exactly, fifths and
+    // sevenths and ninths cannot. A quintuplet sixteenth is 19.2 units.
+    expect(declaredDivisionOf(t(5, 4, 16), 4)).toBeNull();
+    expect(declaredDivisionOf(t(9, 8, 32), 4)).toBeNull();
+    expect(declaredDivisionOf(t(7, 4, 16), 4)).toBeNull();
+    expect(declaredDivisionOf(t(35, 8, 16), 4)).toBeNull();
+  });
+
+  it('refuses a tuplet that does not fit inside one beat', () => {
+    // A quarter-note triplet spans two beats of 4/4, and a duplet in 6/8 spans
+    // the dotted beat. Slots are anchored at the beat, so neither has a home.
+    expect(declaredDivisionOf(t(3, 2, 4), 4)).toBeNull();
+    expect(declaredDivisionOf(t(2, 3, 8), 8)).toBeNull();
+    expect(declaredDivisionOf(t(6, 9, 8), 8)).toBeNull();
+  });
+
+  it('refuses a ratio that cancels out, which is what keeps rests legible', () => {
+    // 2:1 of eighths is a quarter and 4:2 of sixteenths is an eighth — plain
+    // values, so nothing here is a tuplet. Letting one through would hand the
+    // rest filler a binary division, which draws a dotted-32nd "triplet" rest:
+    // the right length under an absurd glyph.
+    expect(declaredDivisionOf(t(2, 1, 8), 4)).toBeNull();
+    expect(declaredDivisionOf(t(4, 2, 16), 4)).toBeNull();
+    expect(declaredDivisionOf(t(1, 1, 8), 4)).toBeNull();
+  });
+
+  it('refuses nonsense without reaching the arithmetic', () => {
+    expect(declaredDivisionOf(t(0, 2, 8), 4)).toBeNull();
+    expect(declaredDivisionOf(t(3, 0, 8), 4)).toBeNull();
+    expect(declaredDivisionOf(t(3, 2, 0), 4)).toBeNull();
+    expect(declaredDivisionOf(t(3, 2, 3), 4)).toBeNull();
+    expect(declaredDivisionOf(t(2.5, 2, 8), 4)).toBeNull();
+  });
+
+  // This is the test that licenses the plain 3:2 ratio still being hardcoded in
+  // the layout, the rest filler and the numeral rule. Every division that
+  // survives the gate is three times a power of two, so the slot it implies is
+  // always a triplet value — never a quintuplet, never a binary no-op.
+  it('only ever admits a division of three times a power of two', () => {
+    const units = [1, 2, 4, 8, 16, 32, 64, 128];
+    let admitted = 0;
+    for (const denominator of [2, 4, 8, 16]) {
+      for (let actual = 1; actual <= 40; actual += 1) {
+        for (let normal = 1; normal <= 40; normal += 1) {
+          for (const unit of units) {
+            const division = declaredDivisionOf({ actual, normal, unit }, denominator);
+            if (division === null) continue;
+            admitted += 1;
+            expect(division % 3).toBe(0);
+            expect(Number.isInteger(Math.log2(division / 3))).toBe(true);
+            // And the slot it implies is a triplet value, plain 3:2.
+            const slot = unitsPerBeat(denominator) / division;
+            expect(exactValueForUnits(slot)?.tuplet).toEqual(TRIPLET);
+          }
+        }
+      }
+    }
+    expect(admitted).toBeGreaterThan(0);
+  });
+});
+
+describe('a declared tuplet in the layout', () => {
+  const OPTS = {
+    bpm: 60, // a beat is a second, so a sextuplet sixteenth is a clean 166⅔ms
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/64' as const,
+    minMeasures: 1,
+  };
+  /** Six in the time of four sixteenths: division 6. */
+  const SEXTUPLET = { actual: 3, normal: 2, unit: 16 };
+
+  function note(partial: Partial<NoteEvent>): NoteEvent {
+    return { id: 'n', midi: 72, startMs: 0, durationMs: 166, velocity: 0.5, ...partial };
+  }
+
+  /** One beat of six, each note declaring the ratio; `group` brackets them. */
+  function sextuplet(groups?: [number, number]): NoteEvent[] {
+    return [0, 1, 2, 3, 4, 5].map((i) =>
+      note({
+        id: `s${i}`,
+        startMs: Math.round((i * 1000) / 6),
+        durationMs: 166,
+        tuplet: groups ? { ...SEXTUPLET, group: i < 3 ? groups[0] : groups[1] } : SEXTUPLET,
+      }),
+    );
+  }
+
+  it('writes what the score declared instead of guessing it back', () => {
+    // The figure that started this: on a 1/64 grid a sextuplet sixteenth is 2.67
+    // grid steps and rounds to three, which is a dotted 32nd — unbeamable, so
+    // the run falls apart into flagged notes. Declared, it is a triplet
+    // sixteenth and beams.
+    const layout = layoutScore(sextuplet(), OPTS);
+    expect(layout.chords.map((chord) => chord.symbol.base)).toEqual(Array(6).fill('sixteenth'));
+    expect(layout.chords.every((chord) => chord.symbol.tuplet !== undefined)).toBe(true);
+    expect(layout.chords.some((chord) => chord.symbol.dotted)).toBe(false);
+  });
+
+  it('beams a bracketed six as two threes, each numbered 3', () => {
+    // Which is how the same passage is printed: the score drew two groups, so
+    // the page shows two, rather than one beam carrying a 6 nobody wrote.
+    const layout = layoutScore(sextuplet([0, 1]), OPTS);
+    expect(layout.beams).toHaveLength(2);
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([3, 3]);
+    expect(layout.beams.map((beam) => beam.tupletCount)).toEqual([3, 3]);
+  });
+
+  it('leaves the beat to group a six the score did not bracket', () => {
+    // Same notes, same ratio, no brackets: nothing says where the groups are, so
+    // the beat groups them as it always has.
+    const layout = layoutScore(sextuplet(), OPTS);
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.members).toHaveLength(6);
+    expect(layout.beams[0]!.tupletCount).toBe(6);
+  });
+
+  it('reads a declaration the inference would have refused to make', () => {
+    // Two onsets is below MIN_ONSETS_TO_DECIDE, so nothing could be inferred
+    // here. The score says, so there is nothing to infer.
+    const layout = layoutScore(
+      [
+        note({ id: 'a', startMs: 0, durationMs: 333, tuplet: { actual: 3, normal: 2, unit: 8 } }),
+        note({ id: 'b', startMs: 667, durationMs: 333, tuplet: { actual: 3, normal: 2, unit: 8 } }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.symbol.tuplet?.actual)).toEqual([3, 3]);
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 667]);
+  });
+
+  it('does not drag a plain note in the same beat onto the tuplet', () => {
+    // A sixteenth written beside a sextuplet group is not part of it. Pulled
+    // onto sixths it would move an eighth of a beat and be written a third
+    // longer than it is, and the bar would stop adding up.
+    const layout = layoutScore(
+      [
+        ...sextuplet(),
+        note({ id: 'plain', midi: 60, staff: 'treble', startMs: 1250, durationMs: 250 }),
+      ],
+      OPTS,
+    );
+    const plain = layout.chords.find((chord) => chord.notes[0]!.id === 'plain');
+    expect(plain?.symbol).toEqual({ base: 'sixteenth', dotted: false });
+    expect(plain?.displayStartMs).toBe(1250);
+  });
+
+  it('leaves a declaration it cannot state to the inference', () => {
+    // A quintuplet: 384ths of a whole note cannot say it, so these notes are
+    // laid out exactly as they would be with no declaration at all.
+    const five = (tuplet?: NoteEvent['tuplet']): NoteEvent[] =>
+      [0, 1, 2, 3, 4].map((i) =>
+        note({
+          id: `q${i}`,
+          startMs: Math.round((i * 1000) / 5),
+          durationMs: 200,
+          ...(tuplet ? { tuplet } : {}),
+        }),
+      );
+    const declared = layoutScore(five({ actual: 5, normal: 4, unit: 16 }), OPTS);
+    const bare = layoutScore(five(), OPTS);
+    expect(declared.chords.map((chord) => chord.symbol)).toEqual(
+      bare.chords.map((chord) => chord.symbol),
+    );
+    expect(declared.chords.map((chord) => chord.displayStartMs)).toEqual(
+      bare.chords.map((chord) => chord.displayStartMs),
+    );
+  });
+});
 
 describe('isTernaryBeat', () => {
   it('reads an even triplet as ternary', () => {
