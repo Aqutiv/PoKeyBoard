@@ -70,8 +70,10 @@ export const SETTINGS_DEFAULTS = {
 
 /**
  * App settings. Persistence to Dexie is layered on by the data slice; the
- * store itself stays synchronous for render use. Volume/reverb setters also
- * push straight into the audio engine.
+ * store itself stays synchronous for render use. Nothing here talks to the
+ * audio engine for the levels — src/data/persistence.ts subscribes and pushes
+ * them, so a restored backup (which writes the store with setState) is carried
+ * over too.
  */
 export const useSettingsStore = create<SettingsState>()((set) => ({
   ...SETTINGS_DEFAULTS,
@@ -82,14 +84,8 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
     set({ pianoInstrument });
     void audioEngine.setInstrument(pianoInstrument);
   },
-  setMasterVolume: (value) => {
-    audioEngine.setMasterVolume(value);
-    set({ masterVolume: value });
-  },
-  setReverbMix: (value) => {
-    audioEngine.setReverbMix(value);
-    set({ reverbMix: value });
-  },
+  setMasterVolume: (masterVolume) => set({ masterVolume }),
+  setReverbMix: (reverbMix) => set({ reverbMix }),
   setVelocityMode: (velocityMode) => set({ velocityMode }),
   setFixedVelocity: (fixedVelocity) => set({ fixedVelocity }),
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
@@ -100,8 +96,6 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),
   setLibraryFolder: (libraryFolder) => set({ libraryFolder }),
   resetSettings: () => {
-    audioEngine.setMasterVolume(SETTINGS_DEFAULTS.masterVolume);
-    audioEngine.setReverbMix(SETTINGS_DEFAULTS.reverbMix);
     void audioEngine.setInstrument(SETTINGS_DEFAULTS.pianoInstrument);
     set({ ...SETTINGS_DEFAULTS });
   },

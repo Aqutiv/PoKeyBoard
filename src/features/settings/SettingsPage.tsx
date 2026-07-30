@@ -11,7 +11,6 @@ import { installService } from '@/pwa/install';
 import { updateManager } from '@/pwa/updateManager';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useSettingsStore } from '@/state/useSettingsStore';
-import { SETTINGS_DEFAULTS } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import './settings.css';
 
@@ -64,7 +63,6 @@ export function SettingsPage() {
   const m = useMessages();
   const settings = useSettingsStore();
   const instrument = useTakeStore((state) => state.take.instrument);
-  const setInstrumentSettings = useTakeStore((state) => state.setInstrumentSettings);
   const transportState = useTransportState();
   const updateAvailable = useUpdateAvailable();
 
@@ -288,11 +286,7 @@ export function SettingsPage() {
             max={1}
             step={0.05}
             value={instrument.masterVolume}
-            onChange={(e) => {
-              const masterVolume = Number(e.target.value);
-              settings.setMasterVolume(masterVolume);
-              setInstrumentSettings({ ...instrument, masterVolume });
-            }}
+            onChange={(e) => settings.setMasterVolume(Number(e.target.value))}
             onPointerDown={previewNote}
             onPointerUp={previewNote}
           />
@@ -305,11 +299,7 @@ export function SettingsPage() {
             max={1}
             step={0.05}
             value={instrument.reverbMix}
-            onChange={(e) => {
-              const reverbMix = Number(e.target.value);
-              settings.setReverbMix(reverbMix);
-              setInstrumentSettings({ ...instrument, reverbMix });
-            }}
+            onChange={(e) => settings.setReverbMix(Number(e.target.value))}
             onPointerDown={previewNote}
             onPointerUp={previewNote}
           />
@@ -498,11 +488,6 @@ export function SettingsPage() {
           onClick={() => {
             if (window.confirm(m.settings.resetConfirm)) {
               settings.resetSettings();
-              setInstrumentSettings({
-                ...instrument,
-                masterVolume: SETTINGS_DEFAULTS.masterVolume,
-                reverbMix: SETTINGS_DEFAULTS.reverbMix,
-              });
               // Reset returns to default behavior: follow the OS language again.
               void unpinLanguage();
             }

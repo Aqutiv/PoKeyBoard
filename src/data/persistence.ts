@@ -92,6 +92,14 @@ class PersistenceService {
         if (take) {
           useTakeStore.getState().setTake(take);
           transportController.restorePlayhead(take.display.playheadMs);
+          // The take's own levels win over the stored settings row, so mirror
+          // them into the store — it is the value every later slider move is
+          // compared against. The subscription is not registered yet, so the
+          // engine still has to be told by hand.
+          useSettingsStore.setState({
+            masterVolume: take.instrument.masterVolume,
+            reverbMix: take.instrument.reverbMix,
+          });
           audioEngine.setMasterVolume(take.instrument.masterVolume);
           audioEngine.setReverbMix(take.instrument.reverbMix);
           this.lastSavedContentRevisionByTake.set(take.id, useTakeStore.getState().contentRevision);
@@ -129,6 +137,29 @@ class PersistenceService {
         // stamped now; waiting for the samples to decode would leave a window
         // where the take names a piano that is not the one playing.
         useTakeStore.getState().stampActiveInstrument();
+      }
+      // The levels are owned here for the same reason: a restored backup moves
+      // the sliders with setState, so the setters never run and the piano would
+      // keep playing at the old levels until the next launch.
+      if (state.masterVolume !== previous.masterVolume || state.reverbMix !== previous.reverbMix) {
+        audioEngine.setMasterVolume(state.masterVolume);
+        audioEngine.setReverbMix(state.reverbMix);
+        // The take carries its own copy — the export renderer reads the levels
+        // off it and the export cache key hashes them — so it has to follow
+        // what is actually being heard. Opening a take gets here with the two
+        // already in agreement; writing anyway would dirty a freshly opened
+        // take and queue a pointless save.
+        const { take, setInstrumentSettings } = useTakeStore.getState();
+        if (
+          take.instrument.masterVolume !== state.masterVolume ||
+          take.instrument.reverbMix !== state.reverbMix
+        ) {
+          setInstrumentSettings({
+            ...take.instrument,
+            masterVolume: state.masterVolume,
+            reverbMix: state.reverbMix,
+          });
+        }
       }
       this.scheduleSettingsSave();
     });
