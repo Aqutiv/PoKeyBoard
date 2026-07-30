@@ -96,4 +96,47 @@ test.describe('restoring a backup', () => {
     await expect(reverbSlider(page)).toHaveValue('0.1');
     await expect.poll(() => activeTakeLevels(page)).toEqual([0.2, 0.1]);
   });
+
+  test('opening a take leaves both its levels adjustable', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+
+    // Give the first take levels of its own, then leave it for a new take set
+    // somewhere else, so reopening the first one has to move them back.
+    await volumeSlider(page).fill('0.3');
+    await reverbSlider(page).fill('0.9');
+    await expect.poll(() => activeTakeLevels(page)).toEqual([0.3, 0.9]);
+
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    const item = page.locator('.take-item').first();
+    await item.getByRole('button', { name: /More actions/ }).click();
+    await item.getByRole('button', { name: 'Rename' }).click();
+    await item.getByLabel('New title').fill('Quiet take');
+    await item.getByLabel('New title').press('Enter');
+
+    await page.getByRole('button', { name: 'New take' }).click();
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await volumeSlider(page).fill('0.85');
+    await reverbSlider(page).fill('0.2');
+    await expect.poll(() => activeTakeLevels(page)).toEqual([0.85, 0.2]);
+
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    await page.getByRole('button', { name: 'Open Quiet take' }).click();
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await expect(volumeSlider(page)).toHaveValue('0.3');
+    await expect(reverbSlider(page)).toHaveValue('0.9');
+
+    // Moving one slider must not drag the other along with it — the settings
+    // row is written together, so it has to agree with the reopened take.
+    await volumeSlider(page).fill('0.5');
+    await expect(reverbSlider(page)).toHaveValue('0.9');
+    await expect.poll(() => activeTakeLevels(page)).toEqual([0.5, 0.9]);
+
+    // And a level must be able to return to a value the settings row held
+    // earlier, which is not a change unless the row tracked the take.
+    await volumeSlider(page).fill('0.85');
+    await volumeSlider(page).fill('0.3');
+    await expect(reverbSlider(page)).toHaveValue('0.9');
+    await expect.poll(() => activeTakeLevels(page)).toEqual([0.3, 0.9]);
+  });
 });

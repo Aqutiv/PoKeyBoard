@@ -135,4 +135,57 @@ describe('settings-driven audio levels', () => {
     expect(setMasterVolume).not.toHaveBeenCalled();
     expect(setReverbMix).not.toHaveBeenCalled();
   });
+
+  /**
+   * Opening a take points the engine at the levels that take was heard at, and
+   * mirrors them into the settings store (see activatePrepared). These cover
+   * what goes wrong when that mirror is not maintained: the subscription writes
+   * both levels together, so a settings row that disagreed with the take would
+   * drag the untouched one along with it — and a slider could not move to a
+   * value the stale row already held, because that is not a change at all.
+   */
+  describe('with a take open at its own levels', () => {
+    beforeEach(() => {
+      const { useSettingsStore, useTakeStore } = stores;
+      const { take, setInstrumentSettings } = useTakeStore.getState();
+      setInstrumentSettings({ ...take.instrument, masterVolume: 0.3, reverbMix: 0.9 });
+      useSettingsStore.setState({ masterVolume: 0.3, reverbMix: 0.9 });
+      setMasterVolume.mockClear();
+      setReverbMix.mockClear();
+    });
+
+    it('keeps the reverb the user did not touch when the volume moves', () => {
+      const { useSettingsStore, useTakeStore } = stores;
+
+      useSettingsStore.getState().setMasterVolume(0.35);
+
+      expect(setMasterVolume).toHaveBeenLastCalledWith(0.35);
+      expect(useTakeStore.getState().take.instrument).toMatchObject({
+        masterVolume: 0.35,
+        reverbMix: 0.9,
+      });
+    });
+
+    it('keeps the volume the user did not touch when the reverb moves', () => {
+      const { useSettingsStore, useTakeStore } = stores;
+
+      useSettingsStore.getState().setReverbMix(0.4);
+
+      expect(setReverbMix).toHaveBeenLastCalledWith(0.4);
+      expect(useTakeStore.getState().take.instrument).toMatchObject({
+        masterVolume: 0.3,
+        reverbMix: 0.4,
+      });
+    });
+
+    it('lets a level leave the take value and come back to it', () => {
+      const { useSettingsStore, useTakeStore } = stores;
+
+      useSettingsStore.getState().setMasterVolume(0.85);
+      useSettingsStore.getState().setMasterVolume(0.3);
+
+      expect(setMasterVolume).toHaveBeenLastCalledWith(0.3);
+      expect(useTakeStore.getState().take.instrument.masterVolume).toBe(0.3);
+    });
+  });
 });
