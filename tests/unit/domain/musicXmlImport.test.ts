@@ -696,6 +696,47 @@ describe('the display grid an import arrives with', () => {
     expect(take.display.quantization).toBe('1/64');
   });
 
+  it('lets a tuplet the notation cannot state still choose the grid', () => {
+    // A declaration is set aside only when the notation will read the note in
+    // its own division. These two are not: 8:8 cancels out, and a quintuplet
+    // cannot be stated in 384ths at all. Both are rounded onto the binary grid
+    // like any plain value, so both have to be able to ask for one fine enough —
+    // otherwise the 32nd they are written as gets rounded up to a sixteenth.
+    // divisions=8 per quarter: a 32nd is 1 unit, a quarter 8.
+    const noOp =
+      '<time-modification><actual-notes>8</actual-notes>' +
+      '<normal-notes>8</normal-notes></time-modification>';
+    const cancelling = musicXmlToTake(
+      scoreWith(measure(1, DIV8 + note('C', 4, 8) + note('D', 4, 1, '<type>32nd</type>' + noOp))),
+    );
+    expect(cancelling.display.quantization).toBe('1/32');
+
+    const quintuplet =
+      '<time-modification><actual-notes>5</actual-notes>' +
+      '<normal-notes>4</normal-notes></time-modification>';
+    const five = musicXmlToTake(
+      scoreWith(
+        measure(1, DIV8 + note('C', 4, 8) + note('D', 4, 1, '<type>32nd</type>' + quintuplet)),
+      ),
+    );
+    expect(five.display.quantization).toBe('1/32');
+  });
+
+  it('keeps a statable tuplet out of the grid’s reckoning', () => {
+    // The other side of the same rule: a triplet 32nd is read in its own
+    // division and never rounded onto the grid, so it does not drag the whole
+    // piece to 1/32 for a resolution only it needs.
+    const triplet =
+      '<time-modification><actual-notes>3</actual-notes>' +
+      '<normal-notes>2</normal-notes></time-modification>';
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(1, DIV8 + note('C', 4, 8) + note('D', 4, 1, '<type>32nd</type>' + triplet)),
+      ),
+    );
+    expect(take.display.quantization).toBe('1/16');
+  });
+
   it('reads a tuplet score as the nearest grid, since none states a third', () => {
     // divisions=6 per quarter: a triplet eighth is 2 units, a triplet sixteenth
     // 1. No binary grid divides either, so the nearest one wins — which is what
@@ -811,6 +852,48 @@ describe('the tuplets a score declares', () => {
     expect(groups.slice(3, 6)).toEqual([1, 1, 1]);
     // The chord sits on the last note of the second group and shares its id.
     expect(groups[6]).toBe(1);
+  });
+
+  it('keeps a numbered bracket whole between its ends', () => {
+    // A nested figure numbers its brackets, and two of the vendored scores do.
+    // Reading an interior note as though every bracket were number 1 left it
+    // with no group at all, and the beam broke at both ends of the figure.
+    const inner = (step: string, extra = ''): string =>
+      note(step, 4, 2, '<type>eighth</type>' + mod(3, 2) + extra);
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV6 +
+            inner('C', bracket('start', 2)) +
+            inner('D') +
+            inner('E', bracket('stop', 2)) +
+            note('F', 4, 6),
+        ),
+      ),
+    );
+    const groups = take.notes.map((n) => n.tuplet?.group);
+    expect(groups).toEqual([0, 0, 0, undefined]);
+  });
+
+  it('does not let one bracket close another’s notes', () => {
+    // Two brackets open at once on the same voice: the inner one closes first,
+    // and the notes after it belong to the outer one again.
+    const inner = (step: string, extra = ''): string =>
+      note(step, 4, 1, '<type>16th</type>' + mod(3, 2) + extra);
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV6 +
+            inner('C', bracket('start', 1)) +
+            inner('D', bracket('start', 2)) +
+            inner('E', bracket('stop', 2)) +
+            inner('F', bracket('stop', 1)),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => n.tuplet?.group)).toEqual([0, 1, 1, 0]);
   });
 
   it('carries the declaration through a tie chain', () => {

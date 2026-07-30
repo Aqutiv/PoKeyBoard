@@ -1,6 +1,10 @@
 import { ScoreImportError } from '@/utils/errors';
 import { newId } from '@/utils/ids';
 import { isValidMidi } from '@/utils/midi';
+// Which grid a take arrives on is a notation decision, so the one question only
+// the notation can answer — whether it can state a given tuplet — is asked of it
+// directly rather than guessed at again here.
+import { declaredDivisionOf } from '@/features/notation/tuplets';
 import { createEmptyTake, UNTITLED_TAKE_TITLE } from './noteEvents';
 import { normalizeTake } from './takeSchema';
 import { createQuarterTempoMap, tempoChangesFrom } from './tempoMap';
@@ -103,8 +107,14 @@ interface CollectedScore {
   tempi: TempoEntry[];
   /** The shortest written value anywhere in the score, in quarters. */
   shortestQ: number | null;
-  /** The same, counting only values that are not part of a declared tuplet. */
+  /** The same, counting only values that declared no tuplet at all. */
   shortestPlainQ: number | null;
+  /**
+   * Per distinct ratio, the shortest value written under it. Whether one of
+   * these belongs in the grid's reckoning depends on the meter, so the question
+   * waits until the meter is known; see `gridForShortestQ`'s caller.
+   */
+  shortestDeclared: Map<string, { tuplet: NoteTuplet; durQ: number }>;
   /** Ids for written tuplet brackets, handed out across the whole score. */
   nextTupletGroup: number;
   timeSignature: TimeSignature | null;
@@ -312,7 +322,13 @@ function collectPart(
    * Which written bracket a note belongs to, tracked as the part is read.
    *
    * `<notations><tuplet type="start">` opens a group and `"stop"` closes it, and
-   * a score may nest them, so open brackets are held per voice and `number`.
+   * a score may nest them — which is what the `number` attribute is for, and two
+   * of the vendored scores use it. So each voice keeps a stack of the brackets
+   * open on it: a start pushes, a stop takes its own number back off, and the
+   * notes in between belong to whichever is innermost. Looking an interior note
+   * up by number 1 would leave every note inside a `number="2"` bracket with no
+   * group at all, and the beam would break at both its ends.
+   *
    * Ids come from the whole score rather than this part, because a beam is built
    * per staff across the take and two parts numbering their own groups from zero
    * could have two figures read as one.
@@ -321,10 +337,11 @@ function collectPart(
    * and its beat's own grouping stands in — which is most of the Pathétique,
    * whose brackets cover only part of what it declares.
    */
-  const openGroups = new Map<string, number>();
-  const groupKey = (note: Element, tuplet: Element | null): string => {
-    const number = tuplet === null ? null : attrNumber(tuplet, 'number');
-    return `${textByTag(note, 'voice') ?? '1'}|${number === null ? 1 : Math.round(number)}`;
+  const openGroups = new Map<string, { number: number; id: number }[]>();
+  const voiceKey = (note: Element): string => textByTag(note, 'voice') ?? '1';
+  const bracketNumber = (tuplet: Element): number => {
+    const number = attrNumber(tuplet, 'number');
+    return number === null ? 1 : Math.round(number);
   };
   const groupOf = (note: Element): number | undefined => {
     let started: Element | null = null;
@@ -338,22 +355,29 @@ function collectPart(
         else if (type === 'stop') stopped = notation;
       }
     }
+    const key = voiceKey(note);
+    const open = openGroups.get(key) ?? [];
     if (started !== null) {
       // Past the cap two distant groups could share an id and be read as one
       // figure; better to say nothing and let the beat group them.
       if (out.nextTupletGroup >= MAX_NOTE_COUNT) return undefined;
       const id = out.nextTupletGroup;
       out.nextTupletGroup += 1;
-      openGroups.set(groupKey(note, started), id);
+      open.push({ number: bracketNumber(started), id });
+      openGroups.set(key, open);
       return id;
     }
     if (stopped !== null) {
-      const key = groupKey(note, stopped);
-      const id = openGroups.get(key);
-      openGroups.delete(key);
-      return id;
+      const number = bracketNumber(stopped);
+      // Innermost first: a stop closes the most recent bracket of its number.
+      for (let i = open.length - 1; i >= 0; i -= 1) {
+        if ((open[i] as { number: number; id: number }).number !== number) continue;
+        const [closed] = open.splice(i, 1);
+        return closed?.id;
+      }
+      return undefined; // a stop with no start; nothing to belong to
     }
-    return openGroups.get(groupKey(note, null));
+    return open[open.length - 1]?.id;
   };
 
   const applySound = (sound: Element, atQ: number): void => {
@@ -467,6 +491,9 @@ function collectPart(
           const durQ = quartersOf(el);
           // Rests count as much as notes: the grid has to be fine enough to
           // write the silences too, and a cue note is not engraved at all.
+          // Read before the rest early-out: a rest can carry a tuplet and a
+          // bracket, and its length counts towards the grid like any other.
+          const declared = tupletOf(el);
           if (durQ > 0 && !isCue) {
             if (out.shortestQ === null || durQ < out.shortestQ) out.shortestQ = durQ;
             // The display grid is a binary one, and a tuplet slot is by
@@ -474,9 +501,23 @@ function collectPart(
             // own division and written from its own slot, so it never asks the
             // grid for anything. Letting one choose the grid drags the whole
             // piece finer for a resolution only it needs.
-            const declaresTuplet = childByTag(el, 'time-modification') !== null;
-            if (!declaresTuplet && (out.shortestPlainQ === null || durQ < out.shortestPlainQ)) {
-              out.shortestPlainQ = durQ;
+            //
+            // Only a declaration the notation can *state* is set aside, though,
+            // and that cannot be settled here: it depends on the meter, which
+            // the score may not have declared yet. So the shortest length of
+            // each distinct ratio is kept and asked about once the meter is
+            // known — a quintuplet, or a ratio that cancels out, is rounded onto
+            // the grid like anything else and has to be able to choose it.
+            if (declared === undefined) {
+              if (out.shortestPlainQ === null || durQ < out.shortestPlainQ) {
+                out.shortestPlainQ = durQ;
+              }
+            } else {
+              const key = `${declared.actual}:${declared.normal}/${declared.unit}`;
+              const seen = out.shortestDeclared.get(key);
+              if (seen === undefined || durQ < seen.durQ) {
+                out.shortestDeclared.set(key, { tuplet: declared, durQ });
+              }
             }
           }
           // Brackets are read even on a rest, which can carry one and close a
@@ -510,7 +551,6 @@ function collectPart(
           const staff = staffOf(el);
           const voice = voiceOf(el, staff);
           const clef = clefOf(staff, staffNumber);
-          const declared = tupletOf(el);
           const tuplet =
             declared === undefined
               ? undefined
@@ -610,6 +650,7 @@ function collectScore(root: Element): CollectedScore {
     tempi: [],
     shortestQ: null,
     shortestPlainQ: null,
+    shortestDeclared: new Map(),
     nextTupletGroup: 0,
     timeSignature: null,
     keySignature: null,
@@ -623,6 +664,32 @@ function collectScore(root: Element): CollectedScore {
     if (part.tagName === 'part') divisions = collectPart(part, divisions, out);
   }
   return out;
+}
+
+/**
+ * The shortest value the display grid actually has to be able to state.
+ *
+ * A note the notation will read in its own tuplet division is snapped to that
+ * and written from its own slot, so it never asks the grid for anything and has
+ * no business choosing it — a handful of tuplet 64ths would otherwise drag a
+ * whole piece down to a 1/64 reading only they need.
+ *
+ * But that only holds for the declarations the notation can *state*. A
+ * quintuplet, a ratio that cancels out, a tuplet counted in a value longer than
+ * the beat: the layout falls back to the binary grid for every one of those, so
+ * they are rounded onto it and must be allowed to choose it like any plain
+ * value. Which ones those are depends on the meter, which is why this is asked
+ * here rather than while reading.
+ */
+function shortestOnTheGridQ(collected: CollectedScore, denominator: number): number | null {
+  let shortest = collected.shortestPlainQ;
+  for (const { tuplet, durQ } of collected.shortestDeclared.values()) {
+    if (declaredDivisionOf(tuplet, denominator) !== null) continue; // read in its own division
+    if (shortest === null || durQ < shortest) shortest = durQ;
+  }
+  // A score of nothing but tuplets, every one of them statable, has nothing to
+  // say about the grid; fall back to what it has.
+  return shortest ?? collected.shortestQ;
 }
 
 /** The offered grids as a length in quarter notes, coarsest first. */
@@ -794,10 +861,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       notes,
       pedalEvents,
       display: {
-        // A tuplet slot never asks the binary grid for anything, so it does not
-        // get to choose it; a score of nothing but tuplets falls back to what it
-        // has.
-        quantization: gridForShortestQ(collected.shortestPlainQ ?? collected.shortestQ),
+        quantization: gridForShortestQ(shortestOnTheGridQ(collected, timeSignature.denominator)),
         zoom: 1,
         playheadMs: 0,
       },
