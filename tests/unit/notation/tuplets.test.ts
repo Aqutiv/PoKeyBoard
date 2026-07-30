@@ -12,12 +12,94 @@ import { beatsForSymbol, TRIPLET, type DurationSymbol } from '@/features/notatio
 import { UNITS_PER_WHOLE } from '@/features/notation/rests';
 import { layoutSheet } from '@/features/notation/sheetLayout';
 import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
-import { fitsDivision, isTernaryBeat } from '@/features/notation/tuplets';
+import { exactValueForUnits, unitsPerBeat } from '@/features/notation/rests';
+import { declaredDivisionOf, fitsDivision, isTernaryBeat } from '@/features/notation/tuplets';
 
 /** A little human sloppiness, as a fraction of the beat. */
 function jitter(offsets: number[], by: number): number[] {
   return offsets.map((offset, i) => offset + (i % 2 === 0 ? by : -by));
 }
+
+describe('declaredDivisionOf', () => {
+  /** `{actual, normal, unit}`, spelled the way the score writes it. */
+  const t = (actual: number, normal: number, unit: number) => ({ actual, normal, unit });
+
+  it('turns the ratios the corpus actually uses into divisions of the beat', () => {
+    // In 4/4 the beat is a quarter: three eighths in the time of two divide it in
+    // three, six sixteenths in the time of four divide it in six.
+    expect(declaredDivisionOf(t(3, 2, 8), 4)).toBe(3);
+    expect(declaredDivisionOf(t(3, 2, 16), 4)).toBe(6);
+    expect(declaredDivisionOf(t(6, 4, 16), 4)).toBe(6);
+    expect(declaredDivisionOf(t(3, 2, 32), 4)).toBe(12);
+    expect(declaredDivisionOf(t(3, 2, 64), 4)).toBe(24);
+    // 2/4 counts the same beat; 2/2 a beat twice as long, so twice the slots.
+    expect(declaredDivisionOf(t(3, 2, 16), 2)).toBe(12);
+    // In 6/8 and x/16 the beat is shorter and holds fewer.
+    expect(declaredDivisionOf(t(3, 2, 16), 8)).toBe(3);
+    expect(declaredDivisionOf(t(3, 2, 32), 16)).toBe(3);
+  });
+
+  it('refuses a ratio no written value can state', () => {
+    // 384ths of a whole note is 2⁷·3: thirds and sixths land exactly, fifths and
+    // sevenths and ninths cannot. A quintuplet sixteenth is 19.2 units.
+    expect(declaredDivisionOf(t(5, 4, 16), 4)).toBeNull();
+    expect(declaredDivisionOf(t(9, 8, 32), 4)).toBeNull();
+    expect(declaredDivisionOf(t(7, 4, 16), 4)).toBeNull();
+    expect(declaredDivisionOf(t(35, 8, 16), 4)).toBeNull();
+  });
+
+  it('refuses a tuplet that does not fit inside one beat', () => {
+    // A quarter-note triplet spans two beats of 4/4, and a duplet in 6/8 spans
+    // the dotted beat. Slots are anchored at the beat, so neither has a home.
+    expect(declaredDivisionOf(t(3, 2, 4), 4)).toBeNull();
+    expect(declaredDivisionOf(t(2, 3, 8), 8)).toBeNull();
+    expect(declaredDivisionOf(t(6, 9, 8), 8)).toBeNull();
+  });
+
+  it('refuses a ratio that cancels out, which is what keeps rests legible', () => {
+    // 2:1 of eighths is a quarter and 4:2 of sixteenths is an eighth — plain
+    // values, so nothing here is a tuplet. Letting one through would hand the
+    // rest filler a binary division, which draws a dotted-32nd "triplet" rest:
+    // the right length under an absurd glyph.
+    expect(declaredDivisionOf(t(2, 1, 8), 4)).toBeNull();
+    expect(declaredDivisionOf(t(4, 2, 16), 4)).toBeNull();
+    expect(declaredDivisionOf(t(1, 1, 8), 4)).toBeNull();
+  });
+
+  it('refuses nonsense without reaching the arithmetic', () => {
+    expect(declaredDivisionOf(t(0, 2, 8), 4)).toBeNull();
+    expect(declaredDivisionOf(t(3, 0, 8), 4)).toBeNull();
+    expect(declaredDivisionOf(t(3, 2, 0), 4)).toBeNull();
+    expect(declaredDivisionOf(t(3, 2, 3), 4)).toBeNull();
+    expect(declaredDivisionOf(t(2.5, 2, 8), 4)).toBeNull();
+  });
+
+  // This is the test that licenses the plain 3:2 ratio still being hardcoded in
+  // the layout, the rest filler and the numeral rule. Every division that
+  // survives the gate is three times a power of two, so the slot it implies is
+  // always a triplet value — never a quintuplet, never a binary no-op.
+  it('only ever admits a division of three times a power of two', () => {
+    const units = [1, 2, 4, 8, 16, 32, 64, 128];
+    let admitted = 0;
+    for (const denominator of [2, 4, 8, 16]) {
+      for (let actual = 1; actual <= 40; actual += 1) {
+        for (let normal = 1; normal <= 40; normal += 1) {
+          for (const unit of units) {
+            const division = declaredDivisionOf({ actual, normal, unit }, denominator);
+            if (division === null) continue;
+            admitted += 1;
+            expect(division % 3).toBe(0);
+            expect(Number.isInteger(Math.log2(division / 3))).toBe(true);
+            // And the slot it implies is a triplet value, plain 3:2.
+            const slot = unitsPerBeat(denominator) / division;
+            expect(exactValueForUnits(slot)?.tuplet).toEqual(TRIPLET);
+          }
+        }
+      }
+    }
+    expect(admitted).toBeGreaterThan(0);
+  });
+});
 
 describe('isTernaryBeat', () => {
   it('reads an even triplet as ternary', () => {

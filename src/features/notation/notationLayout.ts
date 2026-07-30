@@ -21,6 +21,7 @@ import { readDynamics, type DynamicEvent, type HairpinEvent } from './dynamics';
 import { accidentalFor, normalizeFifths, type AccidentalKind } from './keySignature';
 import {
   barUnits,
+  exactValueForUnits,
   restStep,
   restsForGap,
   SMALLEST_UNITS,
@@ -146,21 +147,6 @@ export interface MeasureInfo {
 
 /** Beats within this of a whole one are on it; see the note in `layoutScore`. */
 const BEAT_EPSILON = 1e-3;
-
-/**
- * The value that states a length exactly, plain or tupleted, or null when none
- * does. A plain value wins wherever there is one: three triplet eighths are
- * exactly a quarter, and a note that merely begins on a triplet beat is a half
- * note rather than a "triplet half".
- */
-function exactValueForUnits(units: number): DurationSymbol | null {
-  const plain = symbolForUnits(units);
-  if (plain) return plain;
-  const asPlain = (units * TRIPLET.actual) / TRIPLET.normal;
-  if (!Number.isInteger(asPlain)) return null;
-  const base = symbolForUnits(asPlain);
-  return base ? { ...base, tuplet: TRIPLET } : null;
-}
 
 /**
  * A stretch drawn an octave in, under an `8va` or `8vb` line.

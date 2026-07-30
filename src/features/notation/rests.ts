@@ -1,5 +1,5 @@
 import type { TimeSignature } from '@/domain/takeTypes';
-import { beatsForSymbol, DURATION_SYMBOLS, type DurationSymbol } from './quantization';
+import { beatsForSymbol, DURATION_SYMBOLS, TRIPLET, type DurationSymbol } from './quantization';
 
 /**
  * Choosing the rests that fill a silence, in the one place both renderers can
@@ -141,6 +141,21 @@ export function symbolForUnits(units: number): DurationSymbol | null {
     if (value.units === units) return value.symbol;
   }
   return null;
+}
+
+/**
+ * The value that states a length exactly, plain or tupleted, or null when none
+ * does. A plain value wins wherever there is one: three triplet eighths are
+ * exactly a quarter, and a note that merely begins on a triplet beat is a half
+ * note rather than a "triplet half".
+ */
+export function exactValueForUnits(units: number): DurationSymbol | null {
+  const plain = symbolForUnits(units);
+  if (plain) return plain;
+  const asPlain = (units * TRIPLET.actual) / TRIPLET.normal;
+  if (!Number.isInteger(asPlain)) return null;
+  const base = symbolForUnits(asPlain);
+  return base ? { ...base, tuplet: TRIPLET } : null;
 }
 
 /**

@@ -15,6 +15,7 @@ import { extractMusicXmlText } from '@/domain/mxlContainer';
 import { layoutScore } from '@/features/notation/notationLayout';
 import { barUnits, UNITS_PER_WHOLE } from '@/features/notation/rests';
 import { beatsForSymbol, type DurationSymbol } from '@/features/notation/quantization';
+import { declaredDivisionOf } from '@/features/notation/tuplets';
 import type { QuantizationSetting, Take } from '@/domain/takeTypes';
 
 const SCORES_DIR = path.resolve(process.cwd(), 'public/scores/classics-v1');
@@ -51,10 +52,14 @@ function notesDigest(take: Take): string {
  * rather than silently rendering as it always did.
  */
 function declaredFor(take: Take) {
+  const denominator = take.tempo.timeSignature.denominator;
   const ratios: Record<string, number> = {};
+  const unstatable: Record<string, number> = {};
+  const divisions: Record<string, number> = {};
   let withGroup = 0;
   const groups = new Set<number>();
   let declaredNotes = 0;
+  let honoured = 0;
   for (const note of take.notes) {
     if (!note.tuplet) continue;
     declaredNotes += 1;
@@ -65,8 +70,25 @@ function declaredFor(take: Take) {
       withGroup += 1;
       groups.add(group);
     }
+    // Asked through the real gate rather than a copy of its rule, so the digest
+    // cannot drift from what the layout actually does.
+    const division = declaredDivisionOf(note.tuplet, denominator);
+    if (division === null) {
+      unstatable[key] = (unstatable[key] ?? 0) + 1;
+    } else {
+      honoured += 1;
+      divisions[String(division)] = (divisions[String(division)] ?? 0) + 1;
+    }
   }
-  return { notes: declaredNotes, withGroup, groups: groups.size, ratios };
+  return {
+    notes: declaredNotes,
+    honoured,
+    withGroup,
+    groups: groups.size,
+    divisions,
+    ratios,
+    unstatable,
+  };
 }
 
 function digestFor(take: Take, quantization: QuantizationSetting) {
