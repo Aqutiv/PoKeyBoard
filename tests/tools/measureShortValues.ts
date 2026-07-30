@@ -5,6 +5,7 @@
  *
  *   npx vitest run --config vitest.tools.config.ts -t 'measure short values'
  */
+import { createHash } from 'node:crypto';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import process from 'node:process';
@@ -26,6 +27,46 @@ function histogram(symbols: { base: string; dotted: boolean }[]): Record<string,
     out[key] = (out[key] ?? 0) + 1;
   }
   return out;
+}
+
+/**
+ * A fingerprint of what the import produced, so that "the scores that declare
+ * nothing are untouched" is a proof rather than an argument: any change to a
+ * note's timing, velocity or engraving hints moves the hash.
+ *
+ * Ids are dropped and the lines are then sorted, because the take's own order is
+ * not reproducible: `compareNoteEvents` breaks a tie between two notes of the
+ * same pitch at the same instant on their ids, and those come from `newId()`.
+ * Hashing the notes as read gave 23 of the 60 scores a different digest on two
+ * runs of identical code. The set of notes is what this is asking about.
+ */
+function notesDigest(take: Take): string {
+  const lines = take.notes.map(({ id: _id, ...rest }) => JSON.stringify(rest)).sort();
+  return createHash('sha256').update(lines.join('\n')).digest('hex').slice(0, 16);
+}
+
+/**
+ * What the score declared about its own tuplets, as imported. The point of the
+ * breakdown is that a declaration this cannot use should be *visible* here
+ * rather than silently rendering as it always did.
+ */
+function declaredFor(take: Take) {
+  const ratios: Record<string, number> = {};
+  let withGroup = 0;
+  const groups = new Set<number>();
+  let declaredNotes = 0;
+  for (const note of take.notes) {
+    if (!note.tuplet) continue;
+    declaredNotes += 1;
+    const { actual, normal, unit, group } = note.tuplet;
+    const key = `${actual}:${normal}/${unit}`;
+    ratios[key] = (ratios[key] ?? 0) + 1;
+    if (group !== undefined) {
+      withGroup += 1;
+      groups.add(group);
+    }
+  }
+  return { notes: declaredNotes, withGroup, groups: groups.size, ratios };
 }
 
 function digestFor(take: Take, quantization: QuantizationSetting) {
@@ -107,6 +148,8 @@ it('measure short values across the classics pack', async () => {
     }
     out[file] = {
       defaultGrid: take.display.quantization,
+      notesDigest: notesDigest(take),
+      declared: declaredFor(take),
       atSixteenth: digestFor(take, '1/16'),
       atOwnGrid: digestFor(take, take.display.quantization),
     };
