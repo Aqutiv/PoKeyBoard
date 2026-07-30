@@ -86,8 +86,15 @@ async function settleForDestructiveEdit(): Promise<void> {
 
 async function activatePrepared(take: Take): Promise<void> {
   useTakeStore.getState().setTake(take);
-  audioEngine.setMasterVolume(take.instrument.masterVolume);
-  audioEngine.setReverbMix(take.instrument.reverbMix);
+  // A take carries the levels it was heard at, and opening it restores them.
+  // That goes through the settings store rather than straight to the engine so
+  // the store stays a faithful mirror of what is playing — the persistence
+  // subscription drives the engine off it, and a store that disagreed would
+  // make the next slider move act on a stale value.
+  useSettingsStore.setState({
+    masterVolume: take.instrument.masterVolume,
+    reverbMix: take.instrument.reverbMix,
+  });
   transportController.restorePlayhead(take.display.playheadMs);
   await setMetadata(META_LAST_OPEN_TAKE, take.id);
 }
