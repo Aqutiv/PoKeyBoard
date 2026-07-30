@@ -30,8 +30,21 @@ export function takeJsonFileName(title: string): string {
   return `PoKeyBoard - ${sanitizeFileNamePart(title)}.pokeyboard.json`;
 }
 
-export function takeAudioFileName(title: string): string {
-  return `PoKeyBoard - ${sanitizeFileNamePart(title)}.mp3`;
+export interface TakeAudioNameParts {
+  /** Credited composer, for a library track; absent on a user recording. */
+  composer?: string;
+  /** The piano the take sounds on, e.g. 'Salamander'. */
+  piano?: string;
+}
+
+/**
+ * `PoKeyBoard - Title (Salamander).mp3` for a recording; a library track adds
+ * its credit: `PoKeyBoard - Erik Satie - Gymnopedie No. 1 (Salamander).mp3`.
+ */
+export function takeAudioFileName(title: string, parts: TakeAudioNameParts = {}): string {
+  const credit = parts.composer ? `${sanitizeFileNamePart(parts.composer)} - ` : '';
+  const piano = parts.piano ? ` (${sanitizeFileNamePart(parts.piano)})` : '';
+  return `PoKeyBoard - ${credit}${sanitizeFileNamePart(title)}${piano}.mp3`;
 }
 
 export function takeSheetFileName(title: string): string {

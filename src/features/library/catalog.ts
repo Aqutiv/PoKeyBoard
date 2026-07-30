@@ -93,6 +93,21 @@ const CLASSIC_SCORE_SUMMARIES: readonly LibraryTrackSummary[] = CLASSIC_SCORES.f
   ];
 });
 
+const SUMMARY_BY_TAKE_ID = new Map(
+  [...LIBRARY_TRACK_SUMMARIES, ...CLASSIC_SCORE_SUMMARIES].map((summary) => [
+    summary.takeId,
+    summary,
+  ]),
+);
+
+/**
+ * The catalog entry a take id names — authored or vendored — or undefined for
+ * a user take. Metadata only: nothing is built or fetched.
+ */
+export function libraryTrackSummary(takeId: string): LibraryTrackSummary | undefined {
+  return SUMMARY_BY_TAKE_ID.get(takeId);
+}
+
 function summariesIn(folder: LibraryFolderId): readonly LibraryTrackSummary[] {
   return LIBRARY_TRACK_SUMMARIES.filter((summary) => summary.folder === folder);
 }

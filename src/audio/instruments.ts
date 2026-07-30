@@ -12,6 +12,8 @@ export interface PianoInstrument {
   id: PianoInstrumentId;
   /** Pack directory name, also the take's `samplePackVersion`. */
   packVersion: string;
+  /** Short name of the piano, used in export file names. Not translated. */
+  name: string;
   /** Sample path relative to BASE_URL. */
   path: string;
 }
@@ -28,11 +30,13 @@ export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
   {
     id: 'salamander-grand',
     packVersion: 'salamander-grand-v3',
+    name: 'Salamander',
     path: 'piano/salamander-grand-v3/',
   },
   {
     id: 'headroom-grand',
     packVersion: 'headroom-grand-v2',
+    name: 'Headroom',
     path: 'piano/headroom-grand-v2/',
   },
 ];
