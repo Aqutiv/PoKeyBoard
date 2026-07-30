@@ -39,7 +39,12 @@ import {
   type ClefKind,
   type StaffKind,
 } from './staffMapping';
-import { fitsDivision, MIN_ONSETS_TO_DECIDE, ternaryDivisionOf } from './tuplets';
+import {
+  declaredDivisionOf,
+  fitsDivision,
+  MIN_ONSETS_TO_DECIDE,
+  ternaryDivisionOf,
+} from './tuplets';
 
 /**
  * Whether a notehead is drawn on its chord's column (0) or one head-width to
@@ -938,14 +943,31 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   const { denominator } = options.timeSignature;
 
   /**
-   * Which beats were played in three, by staff.
+   * How each beat divides, by staff — into how many equal slots.
    *
    * Read before anything is placed, because it decides both where a note is
    * drawn and what value it is drawn as. Per staff rather than per bar: a piano
    * piece routinely runs triplets in one hand over straight notes in the other,
    * which is the whole texture of the Moonlight Sonata.
+   *
+   * Filled from what the score says where it says it, and from the playing where
+   * it does not. A declaration is not evidence to be weighed against the onsets
+   * — it is the answer, so the inference does not run on a beat that has one.
    */
-  const ternaryBeats = new Map<string, number>();
+  const beatDivisions = new Map<string, number>();
+  /**
+   * The beats whose division came from the score rather than from the playing.
+   *
+   * They are treated differently, and the difference matters: an inferred
+   * division is a reading of the whole beat, so everything in it is read that
+   * way, but a declaration is made note by note. A plain sixteenth written
+   * *beside* a sextuplet group is not part of it, and dragging it onto the
+   * sixths would move its onset an eighth of a beat and write it a third longer
+   * than it is — which is how the bars stopped adding up when this was first
+   * tried. So inside a declared beat only the notes that declared something
+   * follow the division; the rest keep the ordinary grid.
+   */
+  const declaredBeats = new Set<string>();
   {
     /**
      * How close to a bar or beat line counts as being on it.
@@ -978,9 +1000,25 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
         offsetsPerBeatBothHands.set(whole, [offset]);
       }
     }
+    // What the score declared, first and without argument. Where two notes in
+    // one beat declare different tuplets — an eighth-triplet under a group of
+    // sixteenth-triplets — the finer one holds both, since one is a doubling of
+    // the other and the coarser note still states its own value exactly.
+    for (const note of notes) {
+      if (note.tuplet === undefined) continue;
+      const division = declaredDivisionOf(note.tuplet, denominator);
+      if (division === null) continue; // nothing here can state it; infer instead
+      const staff = note.staff ?? (note.midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
+      const whole = Math.floor(tempoMap.beatAtMs(note.startMs) + BEAT_EPSILON);
+      const key = `${staff}|${whole}`;
+      declaredBeats.add(key);
+      const known = beatDivisions.get(key);
+      if (known === undefined || division > known) beatDivisions.set(key, division);
+    }
     for (const [key, offsets] of offsetsPerBeat) {
+      if (beatDivisions.has(key)) continue; // the score said; do not second-guess it
       const division = ternaryDivisionOf(offsets);
-      if (division !== null) ternaryBeats.set(key, division);
+      if (division !== null) beatDivisions.set(key, division);
     }
     // A hand with too little in a beat to say anything takes the other hand's
     // answer. This is not a guess: an arpeggio that crosses the middle of the
@@ -990,14 +1028,14 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     // hands keeping their own decided reading is what preserves a genuine
     // three-against-two, where each has enough notes to speak for itself.
     for (const [key, offsets] of offsetsPerBeat) {
-      if (ternaryBeats.has(key)) continue;
+      if (beatDivisions.has(key)) continue;
       if (offsets.length >= MIN_ONSETS_TO_DECIDE) continue; // it spoke, and said no
       const [staff, beat] = key.split('|');
       const other = staff === 'treble' ? 'bass' : 'treble';
       // The other hand's answer where it has one; otherwise the two hands
       // pooled, which is the only way to read a figure so evenly divided
       // between them that neither holds enough of it to tell.
-      const neighbour = ternaryBeats.get(`${other}|${beat}`);
+      const neighbour = beatDivisions.get(`${other}|${beat}`);
       const division =
         neighbour ?? ternaryDivisionOf(offsetsPerBeatBothHands.get(Number(beat)) ?? []);
       if (division === null || division === undefined) continue;
@@ -1006,15 +1044,29 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       // against two is a texture, not a mistake: a hand playing two straight
       // eighths under the other's triplets must be left playing them.
       if (!fitsDivision(offsets, division)) continue;
-      ternaryBeats.set(key, division);
+      beatDivisions.set(key, division);
     }
   }
 
-  /** The ternary division in force where a note falls, if any. */
+  /**
+   * How the beat this note is read in divides, if it divides other than in two.
+   *
+   * A note that declares its own tuplet is read in that, wherever it sits. In a
+   * beat the *score* divided, a note that declared nothing is not part of the
+   * figure and keeps the ordinary grid — see `declaredBeats`. Only where the
+   * division was inferred does it cover the whole beat, because there the
+   * evidence is the beat's onsets and there is nothing finer to go on.
+   */
   const divisionFor = (note: NoteEvent): number | null => {
+    if (note.tuplet !== undefined) {
+      const declared = declaredDivisionOf(note.tuplet, denominator);
+      if (declared !== null) return declared;
+    }
     const staff = note.staff ?? (note.midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
     const whole = Math.floor(tempoMap.beatAtMs(note.startMs) + BEAT_EPSILON);
-    return ternaryBeats.get(`${staff}|${whole}`) ?? null;
+    const key = `${staff}|${whole}`;
+    if (declaredBeats.has(key)) return null;
+    return beatDivisions.get(key) ?? null;
   };
 
   const snapToGrid = (startMs: number, division: number | null): number => {
@@ -1179,7 +1231,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       const span = spans[measureIndex];
       if (!span) return null;
       const beat = Math.floor(tempoMap.beatAtMs(span.startMs) + BEAT_EPSILON) + beatInBar;
-      return ternaryBeats.get(`${staff}|${beat}`) ?? null;
+      return beatDivisions.get(`${staff}|${beat}`) ?? null;
     },
   );
 
