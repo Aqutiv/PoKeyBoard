@@ -23,8 +23,12 @@ export interface PianoGraph {
 
 /**
  * Procedural room impulse: exponentially decaying noise, lightly low-pass
- * smoothed for warmth, independent per channel for natural stereo width.
- * Generated locally — no licensed IR asset required.
+ * smoothed for warmth, independent per channel. Generated locally — no
+ * licensed IR asset required.
+ *
+ * The per-channel decorrelation used to be the *only* source of stereo width,
+ * back when the samples were mono; now that they carry a real recorded image it
+ * widens the room rather than manufacturing the instrument's own width.
  */
 export function generateReverbImpulse(
   context: BaseAudioContext,

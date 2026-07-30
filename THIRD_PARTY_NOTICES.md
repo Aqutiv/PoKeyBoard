@@ -9,14 +9,16 @@ PoKeyBoard bundles the following third-party assets and libraries.
   <https://creativecommons.org/licenses/by/3.0/>
 - **Source:** <https://github.com/sfzinstruments/SalamanderGrandPiano>
   (original distribution: <https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html>)
-- **Files:** `public/piano/salamander-grand-v2/*.sample` (MP3 audio; the
-  neutral extension keeps download managers from intercepting sample fetches).
-  The identical `public/piano/salamander-grand-v1/*.mp3` pack is retained so
+- **Files:** `public/piano/salamander-grand-v3/*.sample` (FLAC audio; the
+  neutral extension keeps download managers from intercepting sample fetches,
+  and browsers decode from the bytes rather than the extension). The superseded
+  `public/piano/salamander-grand-v2/*.sample` pack (mono MP3) is retained so
   already-published URLs never 404 for clients still on the old app shell.
 - **Modifications:** subset of the original 16 velocity layers (layers 5, 10,
-  and 15) across the 30 minor-third root pitches; converted from 48 kHz/24-bit
-  FLAC to 48 kHz mono MP3 at 128 kbps; trimmed to 7–12 seconds with a fade-out
-  (see `scripts/build-sample-pack.mjs` for the exact pipeline).
+  and 15) across the 30 minor-third root pitches; kept at the source's 48 kHz
+  and stereo, with the 24-bit source reduced to 16-bit using triangular dither;
+  encoded as FLAC; trimmed to 7–12 seconds with a fade-out (see
+  `scripts/build-sample-pack.mjs` for the exact pipeline).
 
 Attribution is also shown in the app's About view.
 
@@ -26,15 +28,18 @@ Attribution is also shown in the app's About view.
 - **License:** Creative Commons Attribution 4.0 International (CC-BY 4.0),
   <https://creativecommons.org/licenses/by/4.0/>
 - **Source:** <https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano>
-- **Files:** `public/piano/headroom-grand-v1/*.sample` (MP3 audio under the same
-  neutral extension as the Salamander pack).
+- **Files:** `public/piano/headroom-grand-v2/*.sample` (FLAC audio under the same
+  neutral extension as the Salamander pack). The superseded
+  `public/piano/headroom-grand-v1/*.sample` pack (mono MP3) is retained so
+  already-published URLs never 404 for clients still on the old app shell.
 - **Modifications:** subset of the original 5 velocity levels (LEVEL1, LEVEL3,
   and LEVEL5) across the 30 minor-third root pitches, close-mic position only
-  (the Decca Tree position is not shipped); converted from 44.1 kHz/16-bit
-  stereo FLAC to 48 kHz mono MP3 at 128 kbps; trimmed to 7–12 seconds with a
-  fade-out; a per-layer gain is applied at playback time so the pack sits at the
-  Salamander pack's loudness (see `scripts/build-sample-pack.mjs` for the exact
-  pipeline and the measured values in the pack's `manifest.json`).
+  (the Decca Tree position is not shipped); kept at the source's 44.1 kHz,
+  16-bit and stereo — no resampling and no channel downmix — and re-encoded as
+  FLAC; trimmed to 7–12 seconds with a fade-out (dithered, because the fade
+  itself requantizes); a per-layer gain is applied at playback time so the pack
+  sits at the Salamander pack's loudness (see `scripts/build-sample-pack.mjs`
+  for the exact pipeline and the measured values in the pack's `manifest.json`).
 
 Attribution is also shown in the app's About view.
 

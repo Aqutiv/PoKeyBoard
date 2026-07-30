@@ -1,6 +1,11 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { pianoInstrument } from '../../src/audio/instruments';
 import { gotoAppReady, nav } from './helpers';
+
+// Read from the registry so a pack-version bump cannot leave these stale.
+const SALAMANDER_PACK = pianoInstrument('salamander-grand').packVersion;
+const HEADROOM_PACK = pianoInstrument('headroom-grand').packVersion;
 
 const SALAMANDER = /^Salamander/;
 const HEADROOM = /^Headroom/;
@@ -84,7 +89,7 @@ test.describe('choosing a piano', () => {
     await expect(page.getByRole('button', { name: 'C4 key' })).toBeVisible();
 
     await expect.poll(() => storedPiano(page)).toBe('headroom-grand');
-    await expect.poll(() => storedTakePacks(page)).toEqual(['headroom-grand-v1']);
+    await expect.poll(() => storedTakePacks(page)).toEqual([HEADROOM_PACK]);
     await page.reload();
     await readyKeyboard(page).waitFor({ timeout: 30_000 });
     await nav(page).getByRole('button', { name: 'Settings' }).click();
@@ -97,7 +102,7 @@ test.describe('choosing a piano', () => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Settings' }).click();
     await pianoRadio(page, HEADROOM).check();
-    await expect.poll(() => storedTakePacks(page)).toEqual(['headroom-grand-v1']);
+    await expect.poll(() => storedTakePacks(page)).toEqual([HEADROOM_PACK]);
 
     page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Reset settings' }).click();
@@ -106,7 +111,7 @@ test.describe('choosing a piano', () => {
     // Reset goes through the store, not the radio handler. The take has to
     // follow the engine anyway, or an export would render on a piano the user
     // never heard — and reuse a cache entry keyed to the other one.
-    await expect.poll(() => storedTakePacks(page)).toEqual(['salamander-grand-v2']);
+    await expect.poll(() => storedTakePacks(page)).toEqual([SALAMANDER_PACK]);
     await nav(page).getByRole('button', { name: 'Play' }).click();
     await readyKeyboard(page).waitFor({ timeout: 30_000 });
   });

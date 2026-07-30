@@ -18,12 +18,12 @@ npm run dev        # http://localhost:5173
 The piano sample packs ship in `public/piano/` (committed) — one directory per selectable piano. To regenerate one from its upstream sources you need `ffmpeg` on PATH:
 
 ```bash
-node scripts/build-sample-pack.mjs salamander-grand-v2   # Yamaha C5, the default piano
-node scripts/build-sample-pack.mjs headroom-grand-v1     # Yamaha C3, the warmer alternative
+node scripts/build-sample-pack.mjs salamander-grand-v3   # Yamaha C5, the default piano
+node scripts/build-sample-pack.mjs headroom-grand-v2     # Yamaha C3, the warmer alternative
 node scripts/build-icons.mjs                             # PWA icons from assets/branding
 ```
 
-Each run downloads the FLAC subset it needs into the gitignored `samples-staging/`, converts to MP3 (`.sample` files), and measures the pack's loudness against the default piano so the two match in the app. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean.
+Each run downloads the FLAC subset it needs into the gitignored `samples-staging/`, converts to stereo 16-bit FLAC (`.sample` files), and measures the pack's loudness against the default piano so the two match in the app. Build the default piano first — it is the reference the others are matched against. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean.
 
 ## Commands
 
@@ -57,7 +57,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 ## Offline behavior
 
 - The app shell (HTML/JS/CSS/icons, ~1.2 MB) is precached on first visit — the app starts with no connection.
-- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use Settings → **Download piano for offline use** (~12.5 MB per piano, downloaded and deleted independently, without touching takes).
+- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use Settings → **Download piano for offline use** (~24-28 MB per piano, downloaded and deleted independently, without touching takes).
 - Updates download in the background and apply only when you choose (Settings → Updates) — never mid-recording.
 
 ## Your data

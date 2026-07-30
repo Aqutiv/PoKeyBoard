@@ -27,7 +27,7 @@ POKEYBOARD_E2E_PORT=4273 npx playwright test
 
 **Two speed defaults you should know about**, both in `tests/e2e/fixtures.ts` and
 `playwright.config.ts`. Every test starts from a fresh browser context with an
-empty cache, so a plain visit costs 5.4 MB and 42 `decodeAudioData` calls before
+empty cache, so a plain visit costs ~12 MB and 42 `decodeAudioData` calls before
 `data-piano-ready` flips — paid once per test. So by default **every** pack's
 manifest (one per selectable piano, from `PIANO_INSTRUMENTS`) is routed to six
 real samples of that pack (one velocity layer, roots spaced so every one of the

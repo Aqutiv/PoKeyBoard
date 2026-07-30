@@ -63,7 +63,7 @@ The engine emits input events (`on/off/sustain`, audio-clock stamped) for live s
 `audio/instruments.ts` lists the selectable pianos, each one a versioned sample
 pack directory under `public/piano/`. The engine keeps a `SampleBank` per
 instrument but lets only the active one hold decoded buffers — a full pack of
-mono float32 PCM is ~150 MB, so two resident packs is not an option on a phone.
+stereo float32 PCM is ~312 MB, so two resident packs is not an option on a phone.
 
 Switching (`AudioEngine.setInstrument`) releases sounding notes rather than
 cross-fading two different pianos, re-points the load-progress fan-out at the new

@@ -23,12 +23,12 @@ A new deploy makes the browser install a **waiting** worker; `updateManager` (wo
 
 Per selected piano — each one downloads and is deleted on its own.
 
-| Asset                | First visit | After visit            | After "Download piano" |
-| -------------------- | ----------- | ---------------------- | ---------------------- |
-| App shell            | network     | ✓ offline              | ✓ offline              |
-| Core piano (~5.7MB)  | on demand   | keys played are cached | ✓ offline              |
-| Full piano (~12.5MB) | on demand   | partial                | ✓ offline              |
-| Takes (IndexedDB)    | local       | local                  | local                  |
+| Asset                 | First visit | After visit            | After "Download piano" |
+| --------------------- | ----------- | ---------------------- | ---------------------- |
+| App shell             | network     | ✓ offline              | ✓ offline              |
+| Core piano (~12MB)    | on demand   | keys played are cached | ✓ offline              |
+| Full piano (~24-28MB) | on demand   | partial                | ✓ offline              |
+| Takes (IndexedDB)     | local       | local                  | local                  |
 
 ## Caching headers (host configuration)
 

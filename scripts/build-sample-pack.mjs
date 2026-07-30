@@ -2,18 +2,22 @@
  * Builds a PoKeyBoard piano sample pack from a freely licensed upstream source.
  *
  * Usage: node scripts/build-sample-pack.mjs <pack-version>
- *   salamander-grand-v2  Salamander Grand Piano v3 (Yamaha C5, Alexander Holm)
- *   headroom-grand-v1    Headroom Piano (Yamaha C3, Bengt Nilsson)
+ *   salamander-grand-v3  Salamander Grand Piano v3 (Yamaha C5, Alexander Holm)
+ *   headroom-grand-v2    Headroom Piano (Yamaha C3, Bengt Nilsson)
+ *
+ * Build the reference pack first — every other pack is level-matched against
+ * its converted files on disk.
  *
  * Downloads a 3-velocity-layer, minor-third-root subset of the upstream FLACs
  * into samples-staging/<pack-version>/, converts each to a trimmed, faded
- * 128kbps MP3 in public/piano/<pack-version>/ (the .sample extension keeps
- * download managers from intercepting fetches; the payload is still MP3), and
- * writes a manifest.json describing every file (midi root, layer, pack
- * membership, size) plus the per-layer level match against the reference pack.
+ * stereo 16-bit FLAC in public/piano/<pack-version>/ (the .sample extension
+ * keeps download managers from intercepting fetches; browsers decode from the
+ * bytes, never the extension or Content-Type), and writes a manifest.json
+ * describing every file (midi root, layer, pack membership, size) plus the
+ * per-layer level match against the reference pack.
  *
- * Idempotent: existing staged FLACs and converted MP3s are reused.
- * Requires: Node 20.19+ or 22.12+ and ffmpeg with libmp3lame on PATH.
+ * Idempotent: existing staged FLACs and converted samples are reused.
+ * Requires: Node 20.19+ or 22.12+ and ffmpeg on PATH.
  */
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
@@ -41,10 +45,20 @@ function safeName(sourceName) {
  * Every pack we can build. `layers` maps the upstream velocity layers we sample
  * onto our fixed soft/medium/loud triple, and `sourceName` names the upstream
  * file (extension excluded) for a given root and layer.
+ *
+ * Only the *current* packs live here. Published packs are immutable (see
+ * src/audio/instruments.ts), so a superseded version is never rebuilt — check
+ * out the script at its tag if you ever need to reproduce one.
+ *
+ * `sampleRate` is always the source's own rate: resampling here would alter the
+ * samples and cost us the losslessness that is the whole point of FLAC. The
+ * browser resamples to the output rate at decode anyway, and playbackRate
+ * pitch-shifting already puts its resampler in the path of most notes.
  */
 const INSTRUMENTS = {
-  'salamander-grand-v2': {
+  'salamander-grand-v3': {
     rawBase: 'https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples',
+    sampleRate: 48000,
     layers: [
       { index: 0, sourceLayer: 5, label: 'soft' },
       { index: 1, sourceLayer: 10, label: 'medium' },
@@ -55,9 +69,10 @@ const INSTRUMENTS = {
     license: 'CC-BY 3.0',
     sourceUrl: 'https://github.com/sfzinstruments/SalamanderGrandPiano',
   },
-  'headroom-grand-v1': {
+  'headroom-grand-v2': {
     rawBase:
       'https://raw.githubusercontent.com/sfzinstruments/BengtNilsson.HeadroomPiano/master/Samples',
+    sampleRate: 44100,
     // Upstream splits MIDI velocity 5 ways (1-59, 60-89, 90-105, 106-119,
     // 120-127); levels 1/3/5 spread our three layers across that range.
     layers: [
@@ -77,9 +92,16 @@ const INSTRUMENTS = {
 /**
  * The pack every other pack is level-matched against, so switching pianos
  * changes their character and not their loudness. Its own manifest carries no
- * level match (SampleBank's LAYER_TRIM already describes it).
+ * level match (SampleBank's LAYER_TRIM already describes it). It must be built
+ * first, since every other pack is measured against its files on disk.
  */
-const REFERENCE_PACK = 'salamander-grand-v2';
+const REFERENCE_PACK = 'salamander-grand-v3';
+
+/**
+ * Published packs that are no longer built. Named rather than merely absent so
+ * asking for one gives a reason instead of "unknown pack".
+ */
+const RETIRED_PACKS = new Set(['salamander-grand-v1', 'salamander-grand-v2', 'headroom-grand-v1']);
 
 /** Core pack roots cover the default visible C3-B5 range (with margins). */
 const CORE_ROOT_MIN = 45; // A2
@@ -100,7 +122,7 @@ function rootMidis() {
 
 /**
  * Trim lengths balance natural decay against decoded-PCM memory on phones
- * (mono float32 at 48kHz costs ~192KB per second per sample).
+ * (stereo float32 at 48kHz costs ~384KB per second per sample).
  */
 function trimSecondsFor(midi) {
   // Low strings ring far longer; keep more of their natural decay.
@@ -161,10 +183,16 @@ async function convert(job) {
   if ((await fileSize(job.output)) > 0) return { skipped: true };
   const trim = trimSecondsFor(job.midi);
   const fadeStart = trim - 1.5;
-  // ffmpeg picks the muxer from the extension, so encode to .mp3 and rename.
-  const temporary = job.output.replace(/\.sample$/i, '.partial.mp3');
-  // Mono keeps decoded AudioBuffer memory phone-friendly; the app's stereo
-  // reverb restores a sense of space.
+  // ffmpeg picks the muxer from the extension, so encode to .flac and rename.
+  // The temp file lives in staging, never in the published pack directory: an
+  // aborted build must not leave a .partial.flac where `vite build` would copy
+  // it into dist/. Same volume as the output, so the rename stays atomic.
+  const temporary = path.join(job.stagingDir, `${path.basename(job.file, '.sample')}.partial.flac`);
+  // Stereo, because the mono downmix was throwing away most of what makes a
+  // piano sound real on headphones — the recorded image, which the app was
+  // then approximating with decorrelated reverb noise. FLAC because it is the
+  // only candidate with no encoder priming delay: lossy codecs push the attack
+  // later (AAC by ~48ms), which an instrument cannot afford.
   await runFfmpeg([
     '-y',
     '-i',
@@ -174,13 +202,27 @@ async function convert(job) {
     '-af',
     `afade=t=out:st=${fadeStart}:d=1.5`,
     '-ar',
-    '48000',
+    String(job.sampleRate),
     '-ac',
-    '1',
+    '2',
+    '-sample_fmt',
+    's16',
+    // swresample dithers nothing by default. Needed on every pack, not just the
+    // 24-bit source: the fade runs in float, so the last 1.5s of every file is a
+    // requantization, and undithered that is truncation distortion in the tail.
+    // High-passed TPDF keeps the noise out of the way; noise-shaped modes would
+    // stack audible hiss across three layers sounding at once.
+    '-dither_method',
+    'triangular_hp',
     '-c:a',
-    'libmp3lame',
-    '-b:a',
-    '128k',
+    'flac',
+    '-compression_level',
+    '8',
+    // Reproducible bytes across ffmpeg versions: no version-stamped vendor
+    // string, no inherited upstream tags. Protects the no-op rebuild guarantee.
+    '-map_metadata',
+    '-1',
+    '-bitexact',
     temporary,
   ]);
   if ((await fileSize(temporary)) === 0) {
@@ -280,6 +322,8 @@ async function main(packVersion) {
         name: sourceName,
         sourceName,
         rawBase: instrument.rawBase,
+        sampleRate: instrument.sampleRate,
+        stagingDir,
         midi,
         layer,
         file,
@@ -351,10 +395,15 @@ async function main(packVersion) {
       // below Salamander), so the range is wide; the clamp only guards against a
       // measurement gone wrong. The match is applied after decoding, in float,
       // so a large boost cannot clip — it lands ahead of the graph's limiter.
-      const levelMatch = Math.min(
-        MAX_LEVEL_MATCH,
-        Math.max(1 / MAX_LEVEL_MATCH, referenceRms / ownRms),
-      );
+      const raw = referenceRms / ownRms;
+      const levelMatch = Math.min(MAX_LEVEL_MATCH, Math.max(1 / MAX_LEVEL_MATCH, raw));
+      if (raw !== levelMatch) {
+        // Clamping silently would ship a pack that quietly fails to match.
+        console.warn(
+          `  WARNING: layer ${layer.index} wanted ${raw.toFixed(2)}x but was clamped to ` +
+            `${levelMatch}x — this pack will not actually match the reference.`,
+        );
+      }
       layer.levelMatch = Number(levelMatch.toFixed(4));
       console.log(
         `  layer ${layer.index} (${layer.label}): ${toDb(ownRms).toFixed(1)} dB vs ` +
@@ -368,7 +417,7 @@ async function main(packVersion) {
     source: instrument.source,
     license: instrument.license,
     sourceUrl: instrument.sourceUrl,
-    format: 'mp3-128k-48khz-mono',
+    format: `flac-16bit-${instrument.sampleRate / 1000}khz-stereo`,
     velocityLayers,
     coreBytes,
     totalBytes,
@@ -401,6 +450,14 @@ if (pkg.name !== 'pokeyboard') {
 }
 
 const requested = process.argv[2];
+if (RETIRED_PACKS.has(requested)) {
+  console.error(
+    `${requested} is published and immutable — rebuilding it would rewrite audio ` +
+      `clients are already caching. See DEPLOYMENT.md; the recipe that made it is ` +
+      `in git history.`,
+  );
+  process.exit(1);
+}
 if (!requested || !(requested in INSTRUMENTS)) {
   console.error(
     `Usage: node scripts/build-sample-pack.mjs <pack-version>\n` +
