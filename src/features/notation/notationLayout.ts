@@ -66,6 +66,8 @@ export interface LaidOutNote {
   clef: ClefKind;
   /** The voice the source numbered, if any; see `ChordGroup.voice`. */
   voice?: number;
+  /** The written tuplet bracket this note sits in; see `ChordGroup.tupletGroup`. */
+  tupletGroup?: number;
   step: number;
   /** The accidental printed here, after the key and the rest of the bar. */
   accidental: AccidentalKind | null;
@@ -102,6 +104,15 @@ export interface ChordGroup {
   voice: number;
   stemDown: boolean;
   symbol: DurationSymbol;
+  /**
+   * The written tuplet bracket this chord belongs to, where the source drew one.
+   *
+   * A beam stops at the end of a group, which is how a beat of six triplet
+   * sixteenths is engraved as two beamed threes carrying a 3 each rather than
+   * one six — the way the same passage is printed. Absent where the score
+   * bracketed nothing, and then the beat does the grouping as it always has.
+   */
+  tupletGroup?: number;
   /** Index into `ScoreLayout.beams`, or null for a chord that flags instead. */
   beamId: number | null;
 }
@@ -254,7 +265,14 @@ function chordsInStack(stack: LaidOutNote[]): ChordGroup[] {
     for (const note of groupNotes) {
       if (note.durationMs > longest.durationMs) longest = note;
     }
-    return { notes: groupNotes, averageStep, symbol: longest.symbol };
+    // The group comes from the same note the symbol does, so a chord is read as
+    // part of whatever figure its written value belongs to.
+    return {
+      notes: groupNotes,
+      averageStep,
+      symbol: longest.symbol,
+      tupletGroup: longest.tupletGroup,
+    };
   });
   voices.sort((a, b) => b.averageStep - a.averageStep);
 
@@ -268,6 +286,7 @@ function chordsInStack(stack: LaidOutNote[]): ChordGroup[] {
       voice: first.voice ?? index,
       stemDown: stemDownFor(index, voices.length, voice.averageStep),
       symbol: voice.symbol,
+      ...(voice.tupletGroup !== undefined ? { tupletGroup: voice.tupletGroup } : {}),
       beamId: null,
     };
   });
@@ -500,6 +519,25 @@ function beamable(chord: ChordGroup): boolean {
 }
 
 /**
+ * Whether a beam may run from one chord straight into the next.
+ *
+ * The written tuplet groups are what a beam must respect where the source drew
+ * them: a beat of six triplet sixteenths bracketed as two threes is engraved as
+ * two beamed threes, each numbered 3, and running one beam across the pair
+ * would print a six that the score never wrote. Where nothing was bracketed —
+ * a recorded take, or a score that declares ratios without drawing groups —
+ * both sides are undefined and this says nothing, leaving the beat to group as
+ * it always did.
+ *
+ * Asked here and nowhere else: the page does not group beams of its own, it
+ * receives `beamId` from this layout and only gives the run its geometry, so
+ * both views follow from this one answer.
+ */
+function beamsJoin(previous: ChordGroup, next: ChordGroup): boolean {
+  return previous.tupletGroup === next.tupletGroup;
+}
+
+/**
  * Beam runs of equal undotted eighths and shorter values sharing a beat group on
  * one voice of one staff. Compound meters (6/8, 9/8, …) group per dotted
  * beat-unit trio. A beam never crosses a rest, a change of note value, a beat
@@ -600,7 +638,15 @@ function buildBeamGroups(
           // is rarely a whole number of milliseconds, so a note written on one
           // lands just before it and would otherwise beam with the group before.
           const group = Math.floor((timeMs - measure.startMs) / groupMs + BEAT_EPSILON);
-          if (run.length > 0 && (chord.symbol.base !== runBase || group !== runGroup)) flush();
+          const previous = run[run.length - 1];
+          if (
+            run.length > 0 &&
+            (chord.symbol.base !== runBase ||
+              group !== runGroup ||
+              (previous !== undefined && !beamsJoin(previous, chord)))
+          ) {
+            flush();
+          }
           run.push(chord);
           runBase = chord.symbol.base;
           runGroup = group;
@@ -1137,6 +1183,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       staff: position.staff,
       clef: position.clef,
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
+      ...(note.tuplet?.group !== undefined ? { tupletGroup: note.tuplet.group } : {}),
       step: position.step,
       accidental: position.accidental,
       alter: position.alter,
