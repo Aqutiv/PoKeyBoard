@@ -60,4 +60,23 @@ describe('file name builders', () => {
       'PoKeyBoard Backup - 2026-07-17.json',
     );
   });
+
+  it('keeps the whole name inside the 255-byte limit, decorations included', () => {
+    const bytes = (name: string) => new TextEncoder().encode(name).length;
+    // Three bytes a character: under the 120-character clamp, far over 255 bytes.
+    const cjk = '音'.repeat(120);
+    for (const name of [
+      takeJsonFileName(cjk),
+      takeSheetFileName(cjk),
+      takeAudioFileName(cjk),
+      takeAudioFileName(cjk, { composer: 'Erik Satie', piano: 'Salamander' }),
+    ]) {
+      expect(bytes(name)).toBeLessThanOrEqual(255);
+    }
+
+    // The decorations survive the trim; only the title is shortened.
+    const audio = takeAudioFileName(cjk, { composer: 'Erik Satie', piano: 'Salamander' });
+    expect(audio.startsWith('PoKeyBoard - Erik Satie - 音')).toBe(true);
+    expect(audio.endsWith(' (Salamander).mp3')).toBe(true);
+  });
 });
