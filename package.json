@@ -17,6 +17,11 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc -b"
   },
+  "overrides": {
+    "@trickfilm400/rollup-plugin-off-main-thread": "4.0.0-pre2",
+    "brace-expansion": "^5.0.9",
+    "fast-uri": "^3.1.4"
+  },
   "dependencies": {
     "@fontsource/fraunces": "^5.3.0",
     "dexie": "^4.4.4",

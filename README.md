@@ -56,7 +56,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 
 ## Offline behavior
 
-- The app shell (HTML/JS/CSS/icons, ~1.2 MB) is precached on first visit — the app starts with no connection.
+- The app shell (HTML/JS/CSS/icons/fonts, ~2.0 MB) is precached on first visit — the app starts with no connection.
 - Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use Settings → **Download piano for offline use** (~24-28 MB per piano, downloaded and deleted independently, without touching takes).
 - Updates download in the background and apply only when you choose (Settings → Updates) — never mid-recording.
 

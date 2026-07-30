@@ -116,4 +116,4 @@ The export service copies the rendered buffer's channels, **transfers** them to 
 
 ## PWA
 
-Workbox `injectManifest`: shell precache (~1.2 MB), SPA navigation fallback, Cache First runtime caching for every versioned sample pack in one named cache shared with the explicit "Download piano for offline use" flow (which downloads and deletes per piano, enumerating the cache by pack path). Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.
+Workbox `injectManifest`: shell precache (~2.0 MB), SPA navigation fallback, Cache First runtime caching for every versioned sample pack in one named cache shared with the explicit "Download piano for offline use" flow (which downloads and deletes per piano, enumerating the cache by pack path). Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.
