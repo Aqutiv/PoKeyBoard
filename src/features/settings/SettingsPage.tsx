@@ -65,7 +65,6 @@ export function SettingsPage() {
   const settings = useSettingsStore();
   const instrument = useTakeStore((state) => state.take.instrument);
   const setInstrumentSettings = useTakeStore((state) => state.setInstrumentSettings);
-  const stampActiveInstrument = useTakeStore((state) => state.stampActiveInstrument);
   const transportState = useTransportState();
   const updateAvailable = useUpdateAvailable();
 
@@ -186,16 +185,16 @@ export function SettingsPage() {
     (id: PianoInstrumentId) => {
       if (id === settings.pianoInstrument) return;
       setSwitching(true);
+      // Switching the engine and re-stamping the take are the persistence
+      // layer's job, on any route to a new piano; this only awaits the switch
+      // so the preview note lands on samples that have finished decoding.
       settings.setPianoInstrument(id);
       void audioEngine
         .setInstrument(id)
-        .then(() => {
-          stampActiveInstrument();
-          previewNote();
-        })
+        .then(previewNote)
         .finally(() => setSwitching(false));
     },
-    [settings, stampActiveInstrument, previewNote],
+    [settings, previewNote],
   );
 
   return (

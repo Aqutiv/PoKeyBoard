@@ -38,6 +38,35 @@ async function storedPiano(page: Page): Promise<string | undefined> {
   );
 }
 
+/**
+ * The pack every stored take names. Playback always uses the *selected* piano,
+ * so a take naming a different one would render an export nobody heard — and
+ * the export cache keys off exactly this field.
+ */
+async function storedTakePacks(page: Page): Promise<string[]> {
+  return page.evaluate(
+    () =>
+      new Promise<string[]>((resolve, reject) => {
+        const open = indexedDB.open('pokeyboard');
+        open.onerror = () => reject(new Error('could not open the database'));
+        open.onsuccess = () => {
+          const db = open.result;
+          const request = db.transaction('takes').objectStore('takes').getAll();
+          request.onsuccess = () => {
+            resolve(
+              (request.result as Array<{ takeJson: string }>).map(
+                (row) =>
+                  (JSON.parse(row.takeJson) as { samplePackVersion: string }).samplePackVersion,
+              ),
+            );
+            db.close();
+          };
+          request.onerror = () => reject(new Error('could not read the takes'));
+        };
+      }),
+  );
+}
+
 test.describe('choosing a piano', () => {
   test('switches the live piano and remembers the choice', async ({ page }) => {
     await gotoAppReady(page);
@@ -55,10 +84,31 @@ test.describe('choosing a piano', () => {
     await expect(page.getByRole('button', { name: 'C4 key' })).toBeVisible();
 
     await expect.poll(() => storedPiano(page)).toBe('headroom-grand');
+    await expect.poll(() => storedTakePacks(page)).toEqual(['headroom-grand-v1']);
     await page.reload();
     await readyKeyboard(page).waitFor({ timeout: 30_000 });
     await nav(page).getByRole('button', { name: 'Settings' }).click();
     await expect(pianoRadio(page, HEADROOM)).toBeChecked();
+  });
+
+  test('resetting settings returns to the default piano and re-stamps the take', async ({
+    page,
+  }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await pianoRadio(page, HEADROOM).check();
+    await expect.poll(() => storedTakePacks(page)).toEqual(['headroom-grand-v1']);
+
+    page.once('dialog', (dialog) => void dialog.accept());
+    await page.getByRole('button', { name: 'Reset settings' }).click();
+
+    await expect(pianoRadio(page, SALAMANDER)).toBeChecked();
+    // Reset goes through the store, not the radio handler. The take has to
+    // follow the engine anyway, or an export would render on a piano the user
+    // never heard — and reuse a cache entry keyed to the other one.
+    await expect.poll(() => storedTakePacks(page)).toEqual(['salamander-grand-v2']);
+    await nav(page).getByRole('button', { name: 'Play' }).click();
+    await readyKeyboard(page).waitFor({ timeout: 30_000 });
   });
 
   test('offers each piano its own offline download', async ({ page }) => {
