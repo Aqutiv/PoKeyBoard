@@ -8,7 +8,7 @@ import { PREVIEW_URL } from './tests/e2e/previewServer.js';
  *
  * Two deliberate departures from a plain visit, both for speed: the service
  * worker is blocked, and tests/e2e/fixtures.ts trims the sample manifest to six
- * real samples so `data-piano-ready` no longer waits on 5.4 MB of audio. Specs
+ * real samples so `data-piano-ready` no longer waits on ~12 MB of audio. Specs
  * that are *about* the worker or about sample loading opt back out; see the
  * `samplePack` fixture. POKEYBOARD_E2E_REAL_PACK=1 runs the whole suite the
  * unmodified way.

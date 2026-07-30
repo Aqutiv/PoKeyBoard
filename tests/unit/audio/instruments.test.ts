@@ -39,10 +39,13 @@ describe('the piano registry', () => {
   });
 
   it('resolves a stored pack version, falling back rather than throwing', () => {
+    expect(instrumentForPackVersion('salamander-grand-v3').id).toBe('salamander-grand');
+    expect(instrumentForPackVersion('headroom-grand-v2').id).toBe('headroom-grand');
+    // Retired packs, still stamped on takes recorded before the stereo FLAC
+    // generation (and, for v1, before the .sample rename).
+    expect(instrumentForPackVersion('salamander-grand-v1').id).toBe('salamander-grand');
     expect(instrumentForPackVersion('salamander-grand-v2').id).toBe('salamander-grand');
     expect(instrumentForPackVersion('headroom-grand-v1').id).toBe('headroom-grand');
-    // Retired pack, still stamped on takes recorded before the .sample rename.
-    expect(instrumentForPackVersion('salamander-grand-v1').id).toBe('salamander-grand');
     expect(instrumentForPackVersion('grand-piano-v1').id).toBe(DEFAULT_PIANO_INSTRUMENT_ID);
     expect(instrumentForPackVersion('').id).toBe(DEFAULT_PIANO_INSTRUMENT_ID);
     expect(instrumentForPackVersion('bosendorfer-280').id).toBe(DEFAULT_PIANO_INSTRUMENT_ID);
@@ -60,6 +63,21 @@ describe.each(PIANO_INSTRUMENTS)('the $packVersion pack on disk', (instrument) =
     expect(manifest.license).toMatch(/^CC-BY/);
     expect(manifest.sourceUrl).toMatch(/^https:\/\//);
     expect(manifest.velocityLayers.map((layer) => layer.index)).toEqual([0, 1, 2]);
+  });
+
+  it('is stereo and lossless', () => {
+    // The mono downmix was the single biggest fidelity loss, and a lossy codec
+    // costs attack timing — neither should come back by accident on a rebuild.
+    expect(manifest.format).toMatch(/^flac-16bit-\d+(\.\d+)?khz-stereo$/);
+  });
+
+  it('starts every sample with the attack, not codec priming silence', () => {
+    // FLAC has no encoder delay. A lossy re-encode would push the transient
+    // later, which on a piano reads as added latency.
+    for (const entry of manifest.files) {
+      const bytes = readFileSync(path.join(packDir, entry.file));
+      expect(bytes.subarray(0, 4).toString('latin1')).toBe('fLaC');
+    }
   });
 
   it('covers every root in all three layers', () => {

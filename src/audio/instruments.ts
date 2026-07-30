@@ -18,20 +18,22 @@ export interface PianoInstrument {
 
 export const DEFAULT_PIANO_INSTRUMENT_ID: PianoInstrumentId = 'salamander-grand';
 
+// The immediately-previous generation stays on disk untouched so already-
+// published URLs never 404 for clients still running an older app shell —
+// currently salamander-grand-v2 and headroom-grand-v1, the mono 128kbps MP3
+// packs this stereo FLAC generation replaces. Older generations than that are
+// retired: salamander-grand-v1 (*.mp3, from before the neutral extension) was
+// dropped when v3 shipped.
 export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
-  // v2 delivers the same Salamander audio as v1 under a .sample extension so
-  // download managers (IDM etc.) stop intercepting sample fetches. The v1
-  // (*.mp3) pack is retained on disk untouched so already-published URLs never
-  // 404 for un-updated clients.
   {
     id: 'salamander-grand',
-    packVersion: 'salamander-grand-v2',
-    path: 'piano/salamander-grand-v2/',
+    packVersion: 'salamander-grand-v3',
+    path: 'piano/salamander-grand-v3/',
   },
   {
     id: 'headroom-grand',
-    packVersion: 'headroom-grand-v1',
-    path: 'piano/headroom-grand-v1/',
+    packVersion: 'headroom-grand-v2',
+    path: 'piano/headroom-grand-v2/',
   },
 ];
 
@@ -45,13 +47,15 @@ export function pianoInstrument(id: PianoInstrumentId): PianoInstrument {
 }
 
 /**
- * The instrument a stored take's `samplePackVersion` refers to. Retired pack
- * versions (salamander-grand-v1) and anything unrecognised resolve to the
- * default piano, which is what such a take will actually be played with.
+ * The instrument a stored take's `samplePackVersion` refers to. A retired pack
+ * version still resolves to its piano — every pack directory is `<id>-vN`, so
+ * dropping the version suffix leaves the instrument id. Anything unrecognised
+ * resolves to the default piano, which is what such a take will be played with.
  */
 export function instrumentForPackVersion(version: string): PianoInstrument {
   const exact = PIANO_INSTRUMENTS.find((instrument) => instrument.packVersion === version);
   if (exact) return exact;
-  if (version.startsWith('salamander-grand')) return pianoInstrument('salamander-grand');
-  return pianoInstrument(DEFAULT_PIANO_INSTRUMENT_ID);
+  const base = version.replace(/-v\d+$/, '');
+  const retired = PIANO_INSTRUMENTS.find((instrument) => instrument.id === base);
+  return retired ?? pianoInstrument(DEFAULT_PIANO_INSTRUMENT_ID);
 }

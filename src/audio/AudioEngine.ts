@@ -53,7 +53,7 @@ export class AudioEngine {
   /**
    * One bank per instrument. The objects are cached (their manifests are worth
    * keeping) but only the active one holds decoded buffers — two full packs of
-   * float32 PCM would be ~300MB.
+   * stereo float32 PCM would be ~620MB.
    */
   private readonly banks = new Map<PianoInstrumentId, SampleBank>();
   private instrumentId: PianoInstrumentId = DEFAULT_PIANO_INSTRUMENT_ID;
@@ -215,7 +215,7 @@ export class AudioEngine {
     this.initialize();
     if (!this.context || this.coreLoadStarted) return;
     this.coreLoadStarted = true;
-    // Wait for the stored instrument before committing to a 5.7MB decode.
+    // Wait for the stored instrument before committing to a ~12MB decode.
     await this.restoreGate;
     const bank = this.bank;
     try {
