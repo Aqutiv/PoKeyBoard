@@ -1,13 +1,21 @@
 /**
- * Deciding whether a beat was played in three rather than in two.
+ * How a beat divides — into three rather than into two, and how finely.
  *
- * Nothing in a take says so. A recording knows only when keys went down, and an
- * imported score has already been flattened to milliseconds, so a triplet and a
- * pair of straight quavers arrive looking the same — a list of times. The
- * difference is only in where inside the beat those times fall.
+ * There are two ways to know. A score can *say*, in the `<time-modification>`
+ * an import keeps on the note (`declaredDivisionOf`), and that is the end of the
+ * question. A recording cannot: it knows only when keys went down, so a triplet
+ * and a pair of straight quavers arrive looking the same — a list of times — and
+ * the difference is only in where inside the beat those times fall
+ * (`ternaryDivisionOf`, and the misfit arithmetic under it).
  *
- * Pure arithmetic: positions in, a verdict out. No timing, no geometry.
+ * This module owns both, so that "how is this beat divided" has one home.
+ *
+ * Pure arithmetic: positions or a ratio in, a verdict out. No timing, no
+ * geometry.
  */
+
+import type { NoteTuplet } from '@/domain/takeTypes';
+import { exactValueForUnits, symbolForUnits, UNITS_PER_WHOLE, unitsPerBeat } from './rests';
 
 /** Where a note starts, as a fraction of the beat it falls in (0 ≤ at < 1). */
 export type BeatOffset = number;
@@ -144,4 +152,51 @@ export function ternaryDivisionOf(offsets: readonly BeatOffset[]): number | null
 /** Whether the beat divides in three at all; see `ternaryDivisionOf`. */
 export function isTernaryBeat(offsets: readonly BeatOffset[]): boolean {
   return ternaryDivisionOf(offsets) !== null;
+}
+
+/**
+ * How finely a declared tuplet divides the beat it sits in, or null where this
+ * notation cannot state it.
+ *
+ * A ratio is not yet a division: `actual` notes in the time of `normal` ones of
+ * some value gives a slot length, and the division is how many of those slots
+ * fill a beat. So the test is whether the notation can *state* that slot, not
+ * whether the ratio looks familiar — and it is asked in integer units, which is
+ * the only arithmetic the written values are exact in.
+ *
+ * What it refuses, and why each one is a refusal rather than an approximation:
+ *
+ * - A slot that is not a whole number of units. `UNITS_PER_WHOLE` is 384 = 2⁷·3,
+ *   so thirds and sixths land exactly and fifths, sevenths and ninths cannot: a
+ *   quintuplet sixteenth is 19.2 units. Those keep the reading they already had.
+ * - A slot that does not divide the beat. The whole model anchors slots at the
+ *   beat, so a tuplet counted in a value longer than the beat — a quarter-note
+ *   triplet in 4/4, a duplet against 6/8 — has nowhere to sit.
+ * - A slot that is already a plain value, which means the ratio cancels out
+ *   (2:1 of eighths is just a quarter). Refusing it keeps the division ternary,
+ *   and *that* is what stops a binary division reaching the rest filler, which
+ *   would draw a dotted-32nd "triplet" rest: right length, absurd glyph.
+ * - A slot no symbol states at all, which cannot be written either way.
+ *
+ * The survivors are the slots that are two thirds of a standard value, so every
+ * division this returns is three times a power of two. `notationLayout` leans on
+ * that: it means `exactValueForUnits` always stamps the plain 3:2 ratio, and
+ * that two divisions meeting on one beat merge by keeping the finer.
+ */
+export function declaredDivisionOf(tuplet: NoteTuplet, denominator: number): number | null {
+  const { actual, normal, unit } = tuplet;
+  if (!Number.isInteger(unit) || unit < 1) return null;
+  if (!Number.isInteger(actual) || !Number.isInteger(normal)) return null;
+  if (actual < 1 || normal < 1) return null;
+
+  const normalUnits = UNITS_PER_WHOLE / unit;
+  const slot = (normal * normalUnits) / actual;
+  if (!Number.isInteger(slot) || slot < 1) return null;
+
+  const perBeat = unitsPerBeat(denominator);
+  if (perBeat % slot !== 0) return null;
+  if (symbolForUnits(slot) !== null) return null;
+  if (exactValueForUnits(slot) === null) return null;
+
+  return perBeat / slot;
 }

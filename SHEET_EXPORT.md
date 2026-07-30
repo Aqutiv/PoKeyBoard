@@ -117,15 +117,36 @@ takes seconds and never touches the audio engine.
 
 ## Known limitations
 
-- Triplets are read from the playing rather than declared: per staff, per beat,
-  the onsets are scored against a binary division and a ternary one, and the
-  ternary reading has to be substantially better before it is believed —
+- **Tuplets come from the score where it declares them, and from the playing
+  where it does not.** An imported `<time-modification>` is kept on the note and
+  is authoritative: it says how the beat divides, and no inference runs on a beat
+  that has one. Where the score bracketed its groups, beams stop at the bracket,
+  so a beat of six triplet sixteenths written as two threes prints two beams
+  numbered 3 rather than one numbered 6.
+  A declaration is honoured only where this notation can state it, which is
+  every ratio whose slot is a whole number of 384ths of a whole note and divides
+  the beat — thirds and sixths and their halvings. **Quintuplets, septuplets and
+  ninths cannot be stated** (384 = 2⁷·3 has no 5 or 7), nor can a duplet against
+  a compound meter or any tuplet counted in a value longer than the beat. Those
+  keep the reading below, exactly as before, and are the ~18% of declared notes
+  in the vendored pack that fall through.
+  A recording declares nothing, so it is read from the playing: per staff, per
+  beat, the onsets are scored against a binary division and a ternary one, and
+  the ternary reading has to be substantially better before it is believed —
   writing straight quavers as triplets puts a wrong rhythm on the page, while
   missing a triplet leaves the page as it was. A hand holding too little of a
   beat to tell takes the other hand's answer, and where neither can speak the
   two are pooled; a hand with enough notes keeps its own reading, which is what
   preserves a real three-against-two. Only whole tuplets are numbered: "2" over
   two thirds of a triplet would name a duplet, a different rhythm.
+  Two differences follow from where the answer came from. An inferred division
+  reads the whole beat, since the beat's onsets are all the evidence there is; a
+  declared one is made note by note, so a plain sixteenth written beside a
+  sextuplet group keeps the ordinary grid instead of being dragged onto sixths.
+  And a tuplet slot never chooses the display grid, because it is not on it.
+- A tuplet with no beam — a quarter-note triplet — carries no numeral, because
+  the numeral is drawn on the beam and there is nowhere else to hang it.
+  `<tuplet show-number="none">` is not honoured either.
 - Octave lines are derived from pitch alone. A run of chords sitting three
   ledger lines or more beyond a staff is drawn an octave in under an `8va` or
   `8vb`; a single stray note is left where it is, since a line and a label cost

@@ -415,7 +415,7 @@ export const fr: Messages = {
       `Un horodatage ${field} par défaut a été appliqué car il était invalide.`,
     samplePackVersion: 'La version du pack d’échantillons par défaut a été appliquée.',
     tempoDefaulted: 'Des réglages de tempo par défaut ont été appliqués car ils manquaient.',
-    bpmClamped: 'Les BPM ont été ramenés dans la plage 40–240.',
+    bpmClamped: 'Les BPM ont été ramenés dans la plage 20–240.',
     countInClamped: 'La durée du décompte a été ajustée.',
     tempoChangesRepaired: 'Les changements de tempo ont été nettoyés.',
     instrumentDefaulted:

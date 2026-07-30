@@ -33,8 +33,8 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 ## Validation rules (src/domain/takeSchema.ts)
 
 - `midi` 0–127 integer; `velocity` 0–1; `startMs ≥ 0`; `durationMs ≥ 1` (≤ 2 min per note); take timeline capped at 6 h; ≤ 50 000 notes. `NaN`/`Infinity` anywhere is rejected.
-- `bpm` 40–240; `countInBars` 0|1|2; denominator 2|4|8|16.
-- `tempo.changes` is **optional** (absent means one tempo throughout): sorted, `atMs ≥ 1`, `bpm` 40–240, ≤ 1024 entries. Note timing is always absolute ms, so a tempo map never moves a note — it tells the notation where bar lines fall and which note values to draw. Added without a schema bump: older takes parse untouched, and an older build drops the field.
+- `bpm` 20–240; `countInBars` 0|1|2; denominator 2|4|8|16. An import clamps the score’s marked tempo into this range **before** converting anything to milliseconds, so the tempo a take carries and the timing it stores always agree.
+- `tempo.changes` is **optional** (absent means one tempo throughout): sorted, `atMs ≥ 1`, `bpm` 20–240, ≤ 1024 entries. Note timing is always absolute ms, so a tempo map never moves a note — it tells the notation where bar lines fall and which note values to draw. Added without a schema bump: older takes parse untouched, and an older build drops the field.
 - `quantization` `off | 1/8 | 1/16 | 1/32 | 1/64` — **display only**; raw performance timing is never quantized. An imported score arrives on the grid that can state its own shortest value — one level finer again where that value is dotted, since a length rounds to a whole number of grid steps (1/16 floor, 1/64 ceiling).
 - A note's `staff` (`treble | bass`), `voice` (integer 0–15) and `clef` (`treble | bass`) are
   **optional engraving hints from an imported score**, never audible: `staff` is the hand the
@@ -44,6 +44,14 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   Recorded takes omit all three and the notation falls back to pitch, written note value, and the
   staff's own clef. Added the same way `tempo.changes` was — no schema bump, older takes parse
   untouched, an older build drops them.
+- A note's `tuplet` is a fourth such hint: the `<time-modification>` the source declared, as
+  `{ actual, normal, unit, group? }` — `actual` notes in the time of `normal`, counted in the note
+  `unit` divides a whole note into (8 = eighth; a power of two, like a time signature's
+  denominator), with `group` numbering the written `<tuplet>` bracket it belongs to so beams break
+  where the score breaks them. It says how the beat this note falls in is _divided_, which the
+  notation would otherwise have to infer from where the onsets landed — and inferring it wrong
+  writes a sextuplet sixteenth as a dotted 32nd. Never audible: exports hash the same with it and
+  without it. Recorded takes omit it and inference takes over.
 - `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v2`, `headroom-grand-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 

@@ -20,12 +20,35 @@ import {
   MAX_NOTE_DURATION_MS,
   MAX_NOTE_VOICE,
   MAX_TAKE_MS,
+  MAX_TEMPO_BPM,
   MAX_TEMPO_CHANGES,
+  MIN_TEMPO_BPM,
+  MAX_TUPLET_NOTES,
+  MAX_TUPLET_UNIT,
   QUANTIZATION_SETTINGS,
   type Take,
 } from './takeTypes';
 
 const timelineMs = z.number().int().min(0).max(MAX_TAKE_MS);
+
+/**
+ * A note's declared tuplet. `unit` is a note value as a whole-note divisor, so
+ * it is a power of two the way `timeSignature.denominator` is — a ratio counted
+ * in some other unit is not a note value and cannot have been written.
+ */
+export const noteTupletSchema = z.object({
+  actual: z.number().int().min(1).max(MAX_TUPLET_NOTES),
+  normal: z.number().int().min(1).max(MAX_TUPLET_NOTES),
+  unit: z
+    .number()
+    .int()
+    .min(1)
+    .max(MAX_TUPLET_UNIT)
+    .refine((value) => (value & (value - 1)) === 0, {
+      message: 'unit must be a power of two',
+    }),
+  group: z.number().int().min(0).max(MAX_NOTE_COUNT).optional(),
+});
 
 export const noteEventSchema = z.object({
   id: z.string().min(1).max(128),
@@ -40,6 +63,7 @@ export const noteEventSchema = z.object({
   staff: z.enum(['treble', 'bass']).optional(),
   voice: z.number().int().min(0).max(MAX_NOTE_VOICE).optional(),
   clef: z.enum(['treble', 'bass']).optional(),
+  tuplet: noteTupletSchema.optional(),
 });
 
 export const pedalEventSchema = z.object({
@@ -49,11 +73,11 @@ export const pedalEventSchema = z.object({
 
 export const tempoChangeSchema = z.object({
   atMs: z.number().int().min(1).max(MAX_TAKE_MS),
-  bpm: z.number().min(40).max(240),
+  bpm: z.number().min(MIN_TEMPO_BPM).max(MAX_TEMPO_BPM),
 });
 
 export const tempoSchema = z.object({
-  bpm: z.number().min(40).max(240),
+  bpm: z.number().min(MIN_TEMPO_BPM).max(MAX_TEMPO_BPM),
   timeSignature: z.object({
     numerator: z.number().int().min(1).max(16),
     denominator: z.union([z.literal(2), z.literal(4), z.literal(8), z.literal(16)]),
@@ -149,7 +173,7 @@ function repairTempoChanges(input: readonly unknown[]): {
       dropped = true;
       continue;
     }
-    const clamped = Math.min(240, Math.max(40, bpm));
+    const clamped = Math.min(MAX_TEMPO_BPM, Math.max(MIN_TEMPO_BPM, bpm));
     if (clamped !== bpm || at !== atMs) dropped = true;
     // A later mark at the same millisecond wins, as it does during playback.
     kept.set(at, clamped);
@@ -196,8 +220,8 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
     repairs.push({ code: 'tempoDefaulted' });
   } else if (typeof data.tempo === 'object' && data.tempo !== null) {
     const tempo = { ...(data.tempo as RawTakeData) };
-    if (isFiniteNumber(tempo.bpm) && (tempo.bpm < 40 || tempo.bpm > 240)) {
-      tempo.bpm = Math.min(240, Math.max(40, tempo.bpm));
+    if (isFiniteNumber(tempo.bpm) && (tempo.bpm < MIN_TEMPO_BPM || tempo.bpm > MAX_TEMPO_BPM)) {
+      tempo.bpm = Math.min(MAX_TEMPO_BPM, Math.max(MIN_TEMPO_BPM, tempo.bpm));
       repairs.push({ code: 'bpmClamped' });
     }
     if (
