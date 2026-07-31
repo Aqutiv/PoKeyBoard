@@ -408,6 +408,14 @@ export class AudioEngine {
     return this.context;
   }
 
+  /**
+   * Where non-piano sources (the metronome) should connect: past master volume
+   * and reverb, but still inside the graph's clip protection.
+   */
+  getOutputDestination(): AudioNode | null {
+    return this.graph?.outputDestination ?? null;
+  }
+
   subscribeStatus(listener: (status: EngineStatus) => void): () => void {
     this.statusListeners.add(listener);
     listener(this.status);

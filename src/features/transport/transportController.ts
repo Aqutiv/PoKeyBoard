@@ -231,7 +231,7 @@ export class TransportController {
 
   private configureMetronome(): void {
     const context = audioEngine.getAudioContext();
-    if (context) this.metronome.attach(context);
+    if (context) this.metronome.attach(context, audioEngine.getOutputDestination() ?? undefined);
     this.metronome.configure({ volume: useSettingsStore.getState().metronomeVolume });
   }
 

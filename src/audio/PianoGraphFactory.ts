@@ -2,8 +2,14 @@
  * Builds the piano output graph shared by live playback and offline
  * rendering:
  *
- *   voices → voiceBus ─┬────────────────────────→ master → limiter → out
- *                      └→ send(gain=mix) → convolver → master
+ *   voices → voiceBus ─┬→ dry ──────────────────────→ master ┐
+ *                      └→ send(gain=mix) → convolver ────────┤
+ *                                                            ↓
+ *                                    out ← softClip ← limiter ← outputStage
+ *
+ * Non-piano sources (the metronome) join at `outputStage`, so they stay
+ * independent of master volume and reverb but are still covered by the
+ * clip protection.
  */
 export interface PianoGraphOptions {
   masterVolume: number;
@@ -14,6 +20,8 @@ export interface PianoGraph {
   context: BaseAudioContext;
   /** Voices connect their output here. */
   voiceDestination: GainNode;
+  /** Where non-piano sources join, after master volume but before the limiter. */
+  outputDestination: AudioNode;
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
   getMasterVolume(): number;
@@ -69,24 +77,78 @@ export function generateReverbImpulse(
 
 const RAMP_TC = 0.03;
 
+/**
+ * Fixed trim on the summing bus. Per-voice gain deliberately exceeds 1 — the
+ * pack's `levelMatch` is applied outside `velocityGain`'s clamp — and nothing
+ * attenuates by polyphony, so a pedalled fortissimo chord arrives well past
+ * full scale. The bus is the one place a constant trim buys transient
+ * headroom without touching the musical dynamics between notes.
+ */
+export const VOICE_BUS_HEADROOM = 0.7;
+
+/** Below this input magnitude the soft clipper is exactly unity gain. */
+export const SOFT_CLIP_KNEE = 0.7;
+
+/**
+ * Final saturation stage. The compressor ahead of it has no lookahead, so the
+ * first millisecond of a dense onset passes ungoverned; this bends those peaks
+ * back instead of letting them hard-clip at the device.
+ *
+ * Identity below the knee — normal-level material is bit-for-bit untouched —
+ * then a tanh bend that approaches, but never reaches, ±1. Slope is continuous
+ * across the knee, so there is no corner to hear. (A curve normalized to hit
+ * ±1 at ±1 would carry makeup gain below the knee and quietly undo
+ * VOICE_BUS_HEADROOM, so this one deliberately does not.)
+ *
+ * WaveShaperNode clamps out-of-range input to the curve's endpoints, so inputs
+ * beyond ±1 are bounded too.
+ */
+export function createSoftClipCurve(
+  samples = 2048,
+  knee = SOFT_CLIP_KNEE,
+): Float32Array<ArrayBuffer> {
+  const curve = new Float32Array(new ArrayBuffer(samples * Float32Array.BYTES_PER_ELEMENT));
+  const range = 1 - knee;
+  for (let i = 0; i < samples; i += 1) {
+    const x = (i / (samples - 1)) * 2 - 1;
+    const magnitude = Math.abs(x);
+    curve[i] =
+      magnitude <= knee
+        ? x
+        : Math.sign(x) * (knee + range * Math.tanh((magnitude - knee) / range));
+  }
+  return curve;
+}
+
 export function createPianoGraph(
   context: BaseAudioContext,
   options: PianoGraphOptions,
 ): PianoGraph {
   const voiceBus = context.createGain();
-  voiceBus.gain.value = 1;
+  voiceBus.gain.value = VOICE_BUS_HEADROOM;
 
   const master = context.createGain();
   master.gain.value = clamp01(options.masterVolume);
 
+  const outputStage = context.createGain();
+  outputStage.gain.value = 1;
+
   // Safety limiter: inaudible headroom guard, not a loudness effect.
   const limiter = context.createDynamicsCompressor();
-  limiter.threshold.value = -4;
-  limiter.knee.value = 6;
-  limiter.ratio.value = 12;
-  limiter.attack.value = 0.002;
-  limiter.release.value = 0.12;
+  limiter.threshold.value = -6;
+  limiter.knee.value = 3;
+  limiter.ratio.value = 20;
+  limiter.attack.value = 0.001;
+  limiter.release.value = 0.18;
 
+  const softClip = context.createWaveShaper();
+  softClip.curve = createSoftClipCurve();
+  softClip.oversample = '4x';
+
+  // Dry is pulled back as the send comes up, so more reverb no longer means
+  // strictly more level into master.
+  const dryGain = context.createGain();
+  dryGain.gain.value = dryGainFor(clamp01(options.reverbMix));
   const reverbSend = context.createGain();
   reverbSend.gain.value = clamp01(options.reverbMix);
   const convolver = context.createConvolver();
@@ -94,13 +156,16 @@ export function createPianoGraph(
   const reverbReturn = context.createGain();
   reverbReturn.gain.value = 1;
 
-  voiceBus.connect(master);
+  voiceBus.connect(dryGain);
+  dryGain.connect(master);
   voiceBus.connect(reverbSend);
   reverbSend.connect(convolver);
   convolver.connect(reverbReturn);
   reverbReturn.connect(master);
-  master.connect(limiter);
-  limiter.connect(context.destination);
+  master.connect(outputStage);
+  outputStage.connect(limiter);
+  limiter.connect(softClip);
+  softClip.connect(context.destination);
 
   let masterVolume = clamp01(options.masterVolume);
   let reverbMix = clamp01(options.reverbMix);
@@ -108,6 +173,7 @@ export function createPianoGraph(
   return {
     context,
     voiceDestination: voiceBus,
+    outputDestination: outputStage,
     setMasterVolume(value: number): void {
       masterVolume = clamp01(value);
       master.gain.setTargetAtTime(masterVolume, context.currentTime, RAMP_TC);
@@ -115,15 +181,30 @@ export function createPianoGraph(
     setReverbMix(value: number): void {
       reverbMix = clamp01(value);
       reverbSend.gain.setTargetAtTime(reverbMix, context.currentTime, RAMP_TC);
+      dryGain.gain.setTargetAtTime(dryGainFor(reverbMix), context.currentTime, RAMP_TC);
     },
     getMasterVolume: () => masterVolume,
     getReverbMix: () => reverbMix,
     dispose(): void {
-      for (const node of [voiceBus, master, limiter, reverbSend, convolver, reverbReturn]) {
+      for (const node of [
+        voiceBus,
+        dryGain,
+        master,
+        outputStage,
+        limiter,
+        softClip,
+        reverbSend,
+        convolver,
+        reverbReturn,
+      ]) {
         node.disconnect();
       }
     },
   };
+}
+
+function dryGainFor(reverbMix: number): number {
+  return 1 - 0.5 * clamp01(reverbMix);
 }
 
 function clamp01(value: number): number {

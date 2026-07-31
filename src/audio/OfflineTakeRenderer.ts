@@ -112,7 +112,7 @@ export async function renderTakeToBuffer(
   if (options.includeMetronome) {
     scheduleClicksForRange(
       context,
-      context.destination,
+      graph.outputDestination,
       take.tempo,
       options.metronomeVolume,
       0,
