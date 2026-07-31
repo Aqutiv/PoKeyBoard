@@ -1,15 +1,17 @@
 /**
- * Generates every PWA icon size from the master brand asset
- * (assets/branding/pokeyboard-icon-master.png) into public/icons/.
+ * Generates every PWA icon size from the brand assets into public/icons/.
  *
- * Maskable icons scale the artwork to ~66% on the theme background so the
- * content stays inside the launcher safe zone. Requires ffmpeg on PATH.
+ * Standard desktop/web icons use the transparent emblem. Apple touch and
+ * maskable icons retain the opaque tile for platform compatibility. Maskable
+ * icons scale the artwork to ~66% on the theme background so the content stays
+ * inside the launcher safe zone. Requires ffmpeg on PATH.
  */
 import { spawn } from 'node:child_process';
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
 
-const MASTER = path.join('assets', 'branding', 'pokeyboard-icon-master.png');
+const OPAQUE_MASTER = path.join('assets', 'branding', 'pokeyboard-icon-master.png');
+const TRANSPARENT_MASTER = path.join('assets', 'branding', 'pokeyboard-emblem-transparent.png');
 const OUT_DIR = path.join('public', 'icons');
 const THEME_BG = '0x171412';
 
@@ -28,12 +30,12 @@ function runFfmpeg(args) {
   });
 }
 
-function plain(size, name) {
+function resize(source, size, name, preserveAlpha = false) {
   return runFfmpeg([
     '-i',
-    MASTER,
+    source,
     '-vf',
-    `scale=${size}:${size}:flags=lanczos`,
+    `scale=${size}:${size}:flags=lanczos${preserveAlpha ? ',format=rgba' : ''}`,
     path.join(OUT_DIR, name),
   ]);
 }
@@ -42,7 +44,7 @@ function maskable(size, name) {
   const inner = Math.round(size * 0.66);
   return runFfmpeg([
     '-i',
-    MASTER,
+    OPAQUE_MASTER,
     '-vf',
     `scale=${inner}:${inner}:flags=lanczos,pad=${size}:${size}:(ow-iw)/2:(oh-ih)/2:color=${THEME_BG}`,
     path.join(OUT_DIR, name),
@@ -50,11 +52,11 @@ function maskable(size, name) {
 }
 
 await mkdir(OUT_DIR, { recursive: true });
-await plain(512, 'icon-512.png');
-await plain(192, 'icon-192.png');
-await plain(180, 'apple-touch-icon.png');
-await plain(64, 'favicon-64.png');
-await plain(32, 'favicon-32.png');
+await resize(TRANSPARENT_MASTER, 512, 'icon-transparent-512.png', true);
+await resize(TRANSPARENT_MASTER, 192, 'icon-transparent-192.png', true);
+await resize(OPAQUE_MASTER, 180, 'apple-touch-icon.png');
+await resize(TRANSPARENT_MASTER, 64, 'favicon-transparent-64.png', true);
+await resize(TRANSPARENT_MASTER, 32, 'favicon-transparent-32.png', true);
 await maskable(512, 'maskable-512.png');
 await maskable(192, 'maskable-192.png');
 console.log('Icons written to public/icons/');
