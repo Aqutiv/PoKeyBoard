@@ -113,9 +113,7 @@ export function createSoftClipCurve(
     const x = (i / (samples - 1)) * 2 - 1;
     const magnitude = Math.abs(x);
     curve[i] =
-      magnitude <= knee
-        ? x
-        : Math.sign(x) * (knee + range * Math.tanh((magnitude - knee) / range));
+      magnitude <= knee ? x : Math.sign(x) * (knee + range * Math.tanh((magnitude - knee) / range));
   }
   return curve;
 }

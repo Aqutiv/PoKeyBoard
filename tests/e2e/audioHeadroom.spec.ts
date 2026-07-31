@@ -78,8 +78,9 @@ async function renderPeak(
 ): Promise<number> {
   await page.addScriptTag({ content: bundle });
   return page.evaluate(async (options: RenderInput) => {
-    const factory = (window as unknown as { PianoGraph: typeof import('../../src/audio/PianoGraphFactory') })
-      .PianoGraph;
+    const factory = (
+      window as unknown as { PianoGraph: typeof import('../../src/audio/PianoGraphFactory') }
+    ).PianoGraph;
     const sampleRate = 48000;
     const seconds = 2;
     const context = new OfflineAudioContext({
