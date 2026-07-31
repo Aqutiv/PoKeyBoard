@@ -90,13 +90,15 @@ export class MetronomeEngine {
   private nextBeatIndex = 0;
   private running = false;
 
-  attach(context: AudioContext): void {
+  attach(context: AudioContext, destination: AudioNode = context.destination): void {
     if (this.context === context) return;
     this.context = context;
     this.gain = context.createGain();
     this.gain.gain.value = this.config.volume;
-    // Own output path: independent of piano master volume and reverb.
-    this.gain.connect(context.destination);
+    // Own output path: independent of piano master volume and reverb, but it
+    // joins ahead of the graph's limiter so the click can't push the sum past
+    // full scale during loud playback.
+    this.gain.connect(destination);
   }
 
   configure(config: Partial<MetronomeConfig>): void {
