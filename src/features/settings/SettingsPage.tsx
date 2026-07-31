@@ -360,6 +360,15 @@ export function SettingsPage() {
             onChange={(e) => settings.setScrubAudition(e.target.checked)}
           />
         </label>
+        <label className="setting-row">
+          <span>{m.settings.backgroundPlayback}</span>
+          <input
+            type="checkbox"
+            checked={settings.backgroundPlayback}
+            onChange={(e) => settings.setBackgroundPlayback(e.target.checked)}
+          />
+        </label>
+        <p className="settings__hint">{m.settings.backgroundPlaybackHint}</p>
 
         <h2 className="settings__section">{m.settings.offlinePiano}</h2>
         <p className="settings__hint">{m.settings.offlinePianoHint}</p>

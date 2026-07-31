@@ -152,6 +152,11 @@ export class MetronomeEngine {
     return Math.floor(index) % grid.numerator;
   }
 
+  /** Top up from an external audio-render clock while page timers are throttled. */
+  topUpSchedule(): void {
+    this.scheduleWindow();
+  }
+
   /** Resume scheduling at the first beat at or after the current audio time. */
   private seekToNow(): void {
     const context = this.context;

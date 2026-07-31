@@ -291,6 +291,9 @@ export const fr: Messages = {
     fixedVelocity: 'Vélocité fixe',
     noteLabels: 'Étiquettes des notes sur les touches',
     scrubAudition: 'Son lors du défilement de la partition',
+    backgroundPlayback: 'Continuer la lecture en arrière-plan',
+    backgroundPlaybackHint:
+      'Maintient la lecture des prises enregistrées lorsque PoKeyBoard est réduit ou sans focus. Certains appareils peuvent arrêter le son quand l’écran est verrouillé.',
     checking: 'Vérification…',
     downloadPrompt: ({ size }) =>
       `Téléchargez le piano complet (${size}) pour garder chaque touche jouable hors ligne.`,

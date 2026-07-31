@@ -47,6 +47,8 @@ export class AudioEngine {
   private readonly statusListeners = new Set<(status: EngineStatus) => void>();
   private readonly activeNoteListeners = new Set<(midis: ReadonlySet<number>) => void>();
   private readonly inputListeners = new Set<(event: InputNoteEvent) => void>();
+  private readonly schedulerTickListeners = new Set<() => void>();
+  private schedulerTicker: AudioWorkletNode | null = null;
   private currentActiveNotes: ReadonlySet<number> = new Set();
   private coreLoadStarted = false;
 
@@ -180,10 +182,10 @@ export class AudioEngine {
       this.setStatus(this.context.state === 'running' ? 'running' : 'suspended');
     });
 
-    // Last line of stuck-note defense; the lifecycle module adds the rest.
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) this.allNotesOff();
-    });
+    // An AudioWorklet remains tied to audio rendering when browsers throttle
+    // page timers. It only posts timing pulses; the existing audio-clock
+    // scheduler remains the source of truth.
+    void this.initializeSchedulerTicker(this.context);
 
     void this.loadCoreSamples();
   }
@@ -325,6 +327,33 @@ export class AudioEngine {
     return () => this.inputListeners.delete(listener);
   }
 
+  /** Timing pulses which continue while ordinary page timers are throttled. */
+  subscribeSchedulerTick(listener: () => void): () => void {
+    this.schedulerTickListeners.add(listener);
+    return () => this.schedulerTickListeners.delete(listener);
+  }
+
+  private async initializeSchedulerTicker(context: AudioContext): Promise<void> {
+    if (!context.audioWorklet || typeof AudioWorkletNode === 'undefined') return;
+    try {
+      await context.audioWorklet.addModule(
+        `${import.meta.env.BASE_URL}audio/transport-scheduler-worklet.js`,
+      );
+      if (this.context !== context) return;
+      const ticker = new AudioWorkletNode(context, 'pokeyboard-transport-scheduler');
+      ticker.port.onmessage = () => {
+        for (const listener of this.schedulerTickListeners) listener();
+      };
+      // The processor emits silence, but connecting it keeps it participating
+      // in the render graph (and therefore ticking) in the background.
+      ticker.connect(context.destination);
+      this.schedulerTicker = ticker;
+    } catch (error) {
+      // The normal setInterval scheduler remains available as a fallback.
+      console.warn('Background playback scheduler unavailable:', error);
+    }
+  }
+
   private emitInput(event: InputNoteEvent): void {
     for (const listener of this.inputListeners) listener(event);
   }
@@ -374,6 +403,8 @@ export class AudioEngine {
   }
 
   dispose(): void {
+    this.schedulerTicker?.disconnect();
+    this.schedulerTicker = null;
     this.voices?.dispose();
     this.graph?.dispose();
     void this.context?.close();

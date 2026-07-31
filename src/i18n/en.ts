@@ -290,6 +290,9 @@ export const en: Messages = {
     fixedVelocity: 'Fixed velocity',
     noteLabels: 'Note labels on keys',
     scrubAudition: 'Sound while scrubbing the score',
+    backgroundPlayback: 'Continue playback in the background',
+    backgroundPlaybackHint:
+      'Keeps recorded takes playing when PoKeyBoard is minimized or not in focus. Some devices may still stop audio when the screen locks.',
     checking: 'Checking…',
     downloadPrompt: ({ size }) =>
       `Download the full piano (${size}) to keep every key playable offline.`,

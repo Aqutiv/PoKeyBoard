@@ -335,6 +335,8 @@ export interface Messages {
     fixedVelocity: string;
     noteLabels: string;
     scrubAudition: string;
+    backgroundPlayback: string;
+    backgroundPlaybackHint: string;
     checking: string;
     downloadPrompt: (p: { size: string }) => string;
     downloadButton: string;

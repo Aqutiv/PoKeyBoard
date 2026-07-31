@@ -2,6 +2,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { scrubController } from '@/features/notation/scrubController';
 import { transportController } from '@/features/transport/transportController';
 import { isBusyState } from '@/features/transport/transportMachine';
+import { useSettingsStore } from '@/state/useSettingsStore';
 
 /** Stable id for the interruption banner, translated at the render site. */
 export type InterruptionMessageKey = 'recordingInterrupted';
@@ -28,6 +29,8 @@ class LifecycleService {
     const onHidden = () => {
       const state = transportController.getState();
       const wasRecording = state === 'recording' || state === 'countIn';
+      const keepPlaying = state === 'playing' && useSettingsStore.getState().backgroundPlayback;
+      if (keepPlaying) return;
       if (scrubController.isActive) scrubController.end();
       transportController.handleInterruption();
       audioEngine.allNotesOff();

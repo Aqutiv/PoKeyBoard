@@ -71,6 +71,7 @@ export class TransportController {
 
   // Playback
   private schedulerTimer: ReturnType<typeof setInterval> | null = null;
+  private schedulerTickUnsub: (() => void) | null = null;
   private playNotes: NoteEvent[] = [];
   private playCursor = 0;
   private playDurationMs = 0;
@@ -479,6 +480,10 @@ export class TransportController {
     this.playCursor = notes.findIndex((note) => note.startMs >= fromMs);
     if (this.playCursor === -1) this.playCursor = notes.length;
     this.scheduleTick();
+    this.schedulerTickUnsub = audioEngine.subscribeSchedulerTick(() => {
+      this.scheduleTick();
+      this.metronome.topUpSchedule();
+    });
     this.schedulerTimer = setInterval(() => this.scheduleTick(), SCHEDULER_INTERVAL_MS);
   }
 
@@ -624,6 +629,8 @@ export class TransportController {
   }
 
   private clearScheduler(): void {
+    this.schedulerTickUnsub?.();
+    this.schedulerTickUnsub = null;
     if (this.schedulerTimer !== null) {
       clearInterval(this.schedulerTimer);
       this.schedulerTimer = null;
