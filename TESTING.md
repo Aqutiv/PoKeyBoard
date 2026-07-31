@@ -91,7 +91,7 @@ Run per release on: iPhone Safari · installed iPhone Home-Screen app · Android
 9. **Playback sync:** score playhead, highlighted notes, key animation, and audio stay together.
 10. **Scrubbing:** paused drag auditions notes both directions; speed follows the finger; flick coasts with sound; nothing stuck afterwards.
 11. **Interruption:** receive a call / lock the screen while recording → on return, the recording is finalized, saved, and explained; nothing keeps sounding.
-12. **Background/foreground:** backgrounding pauses sound; returning never auto-blasts audio.
+12. **Background/foreground:** backgrounding pauses sound by default; with background playback enabled, a recorded take continues while hidden. Recordings still stop safely and returning never auto-blasts interrupted audio.
 13. **iPhone silent switch:** with the switch on silent, the piano still sounds after the first gesture (workaround active); Settings hint present.
 14. **MP3 export & share sheet:** render a take; share sheet opens from the button; WhatsApp appears only when installed; the received file plays; on Firefox desktop the MP3 downloads instead.
 15. **Offline launch:** enable airplane mode after "Download piano for offline use" → installed app launches, full keyboard plays, takes list intact. Download only one piano and confirm deleting it leaves the other still marked available offline.

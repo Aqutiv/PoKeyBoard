@@ -291,6 +291,9 @@ export const es: Messages = {
     fixedVelocity: 'Velocidad fija',
     noteLabels: 'Etiquetas de notas en las teclas',
     scrubAudition: 'Sonido al desplazar la partitura',
+    backgroundPlayback: 'Continuar la reproducción en segundo plano',
+    backgroundPlaybackHint:
+      'Mantiene las tomas grabadas en reproducción cuando PoKeyBoard está minimizado o sin foco. Algunos dispositivos pueden detener el audio al bloquear la pantalla.',
     checking: 'Comprobando…',
     downloadPrompt: ({ size }) =>
       `Descarga el piano completo (${size}) para que todas las teclas se puedan tocar sin conexión.`,

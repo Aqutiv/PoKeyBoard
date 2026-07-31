@@ -19,12 +19,14 @@ describe('settingsRepository', () => {
       metronomeVolume: 0.25,
       showNoteLabels: false,
       pianoInstrument: 'headroom-grand',
+      backgroundPlayback: true,
     });
     await saveSettings(useSettingsStore.getState());
     const loaded = await loadSettings();
     expect(loaded.metronomeVolume).toBe(0.25);
     expect(loaded.showNoteLabels).toBe(false);
     expect(loaded.pianoInstrument).toBe('headroom-grand');
+    expect(loaded.backgroundPlayback).toBe(true);
   });
 
   it('ignores unknown keys and wrong types on load', async () => {

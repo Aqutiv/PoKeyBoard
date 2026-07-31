@@ -17,6 +17,7 @@ const SETTING_SCHEMAS = {
   fixedVelocity: z.number().min(0.2).max(1),
   showNoteLabels: z.boolean(),
   scrubAudition: z.boolean(),
+  backgroundPlayback: z.boolean(),
   metronomeVolume: z.number().min(0).max(1),
   displayQuantization: z.enum(QUANTIZATION_SETTINGS),
   keyboardAnchorMidi: z.number().int().min(21).max(108),

@@ -293,6 +293,9 @@ export const mg: Messages = {
     fixedVelocity: 'Hafainganam-pandeha raikitra',
     noteLabels: 'Anaran’ny naoty eo amin’ny kitendry',
     scrubAudition: 'Feo rehefa mandalo ny sori-kira',
+    backgroundPlayback: 'Tohizo any ambadika ny fandefasana',
+    backgroundPlaybackHint:
+      'Manohy mandefa ny rakitra voarakitra rehefa ahena na tsy ifantohana ny PoKeyBoard. Mety mbola hampiato ny feo ny fitaovana sasany rehefa mihidy ny efijery.',
     checking: 'Mijery…',
     downloadPrompt: ({ size }) =>
       `Alaivo ny piano feno (${size}) mba hahafahana mitendry ny kitendry rehetra tsy an-tserasera.`,
