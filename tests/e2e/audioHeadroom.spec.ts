@@ -173,6 +173,35 @@ test.describe('output headroom', () => {
     expect(peak).toBeLessThanOrEqual(1);
   });
 
+  test('keeps responding above full scale instead of flat-topping', async ({ page }) => {
+    await page.goto('/');
+    const dense = {
+      voiceCount: VOICE_COUNT,
+      metronomePeak: METRONOME_PEAK,
+      masterVolume: 1,
+      reverbMix: 0.18,
+    };
+    // Deliberately absurd levels — far past anything the app produces. The
+    // shaper's curve is addressed over [-1, 1] and a WaveShaperNode clamps
+    // beyond that, so without the 1/SOFT_CLIP_INPUT_RANGE pre-gain every
+    // overshoot collapses onto one endpoint value and flat-tops the waveform:
+    // hard clipping moved inside the graph rather than removed. Up here that
+    // plateau is reached, so a materially higher peak from a higher input is
+    // what proves the transfer function is still curving.
+    //
+    // Measured: gain-staged, doubling the input moves the peak by ~0.0086
+    // (0.9474 → 0.9559). With the pre-gain removed both pin to the curve's
+    // endpoint and the gap collapses to ~0.00003, so the margin below is what
+    // makes this a real guard rather than a float comparison.
+    const loud = await renderPeak(page, bundle, { ...dense, voiceGain: worstCaseVoiceGain() * 8 });
+    const louder = await renderPeak(page, bundle, {
+      ...dense,
+      voiceGain: worstCaseVoiceGain() * 16,
+    });
+    expect(louder - loud).toBeGreaterThan(0.002);
+    expect(louder).toBeLessThanOrEqual(1);
+  });
+
   test('stays linear for quiet material — no squashing below the threshold', async ({ page }) => {
     await page.goto('/');
     const quiet = { voiceCount: 1, metronomePeak: 0, masterVolume: 0.85, reverbMix: 0 };

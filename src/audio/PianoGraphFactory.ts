@@ -5,7 +5,7 @@
  *   voices → voiceBus ─┬→ dry ──────────────────────→ master ┐
  *                      └→ send(gain=mix) → convolver ────────┤
  *                                                            ↓
- *                                    out ← softClip ← limiter ← outputStage
+ *              out ← softClip ← softClipInput ← limiter ← outputStage
  *
  * Non-piano sources (the metronome) join at `outputStage`, so they stay
  * independent of master volume and reverb but are still covered by the
@@ -89,31 +89,52 @@ export const VOICE_BUS_HEADROOM = 0.7;
 /** Below this input magnitude the soft clipper is exactly unity gain. */
 export const SOFT_CLIP_KNEE = 0.7;
 
+/** What the saturation approaches, leaving a little true-peak headroom. */
+export const SOFT_CLIP_CEILING = 0.98;
+
+/**
+ * Input magnitude the curve's endpoint corresponds to — +12 dBFS.
+ *
+ * A WaveShaperNode's curve is always addressed over [-1, 1] and it *clamps*
+ * anything beyond that to the endpoint value. So a curve defined directly over
+ * [-1, 1] would map every overshoot to one constant, flat-topping the waveform
+ * — hard clipping moved inside the graph rather than removed. Feeding the
+ * shaper through 1/SOFT_CLIP_INPUT_RANGE instead stretches the curve's domain
+ * over the whole range a transient can reach, and by its endpoint the transfer
+ * function has genuinely saturated, so the clamp is a no-op rather than a
+ * corner.
+ */
+export const SOFT_CLIP_INPUT_RANGE = 4;
+
 /**
  * Final saturation stage. The compressor ahead of it has no lookahead, so the
  * first millisecond of a dense onset passes ungoverned; this bends those peaks
  * back instead of letting them hard-clip at the device.
  *
  * Identity below the knee — normal-level material is bit-for-bit untouched —
- * then a tanh bend that approaches, but never reaches, ±1. Slope is continuous
- * across the knee, so there is no corner to hear. (A curve normalized to hit
- * ±1 at ±1 would carry makeup gain below the knee and quietly undo
+ * then a tanh bend approaching SOFT_CLIP_CEILING. Slope is continuous across
+ * the knee, so there is no corner to hear. (A curve normalized to hit ±1 at its
+ * endpoints would carry makeup gain below the knee and quietly undo
  * VOICE_BUS_HEADROOM, so this one deliberately does not.)
  *
- * WaveShaperNode clamps out-of-range input to the curve's endpoints, so inputs
- * beyond ±1 are bounded too.
+ * Indices map to input magnitudes up to `inputRange`; the caller is responsible
+ * for the matching 1/inputRange pre-gain.
  */
 export function createSoftClipCurve(
-  samples = 2048,
+  samples = 4096,
   knee = SOFT_CLIP_KNEE,
+  ceiling = SOFT_CLIP_CEILING,
+  inputRange = SOFT_CLIP_INPUT_RANGE,
 ): Float32Array<ArrayBuffer> {
   const curve = new Float32Array(new ArrayBuffer(samples * Float32Array.BYTES_PER_ELEMENT));
-  const range = 1 - knee;
+  const bend = ceiling - knee;
   for (let i = 0; i < samples; i += 1) {
-    const x = (i / (samples - 1)) * 2 - 1;
-    const magnitude = Math.abs(x);
+    const input = ((i / (samples - 1)) * 2 - 1) * inputRange;
+    const magnitude = Math.abs(input);
     curve[i] =
-      magnitude <= knee ? x : Math.sign(x) * (knee + range * Math.tanh((magnitude - knee) / range));
+      magnitude <= knee
+        ? input
+        : Math.sign(input) * (knee + bend * Math.tanh((magnitude - knee) / bend));
   }
   return curve;
 }
@@ -139,6 +160,11 @@ export function createPianoGraph(
   limiter.attack.value = 0.001;
   limiter.release.value = 0.18;
 
+  // Scales the shaper's [-1, 1] curve domain up to cover the whole range a
+  // transient can reach; the curve bakes the inverse back in, so the pair is
+  // unity gain end to end.
+  const softClipInput = context.createGain();
+  softClipInput.gain.value = 1 / SOFT_CLIP_INPUT_RANGE;
   const softClip = context.createWaveShaper();
   softClip.curve = createSoftClipCurve();
   softClip.oversample = '4x';
@@ -162,7 +188,8 @@ export function createPianoGraph(
   reverbReturn.connect(master);
   master.connect(outputStage);
   outputStage.connect(limiter);
-  limiter.connect(softClip);
+  limiter.connect(softClipInput);
+  softClipInput.connect(softClip);
   softClip.connect(context.destination);
 
   let masterVolume = clamp01(options.masterVolume);
@@ -190,6 +217,7 @@ export function createPianoGraph(
         master,
         outputStage,
         limiter,
+        softClipInput,
         softClip,
         reverbSend,
         convolver,

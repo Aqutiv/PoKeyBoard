@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createPianoGraph,
   createSoftClipCurve,
+  SOFT_CLIP_CEILING,
+  SOFT_CLIP_INPUT_RANGE,
   SOFT_CLIP_KNEE,
   VOICE_BUS_HEADROOM,
 } from '@/audio/PianoGraphFactory';
@@ -95,12 +97,26 @@ function findNode(created: StubNode[], kind: string): StubNode {
 describe('createSoftClipCurve', () => {
   const curve = createSoftClipCurve();
 
-  it('is monotonically increasing and bounded within ±1', () => {
+  /** The input magnitude curve index `i` represents, after the pre-gain. */
+  const inputAt = (i: number) => ((i / (curve.length - 1)) * 2 - 1) * SOFT_CLIP_INPUT_RANGE;
+
+  // Non-decreasing rather than strictly increasing: out at the extremes the
+  // curve has saturated flat, which is the whole point of it.
+  it('is monotonically non-decreasing and bounded within ±1', () => {
     let previous = -Infinity;
     for (const value of curve) {
-      expect(value).toBeGreaterThan(previous);
+      expect(value).toBeGreaterThanOrEqual(previous);
       expect(Math.abs(value)).toBeLessThanOrEqual(1 + 1e-9);
       previous = value;
+    }
+  });
+
+  it('is strictly increasing across the audible range', () => {
+    let previous = -Infinity;
+    for (let i = 0; i < curve.length; i += 1) {
+      if (Math.abs(inputAt(i)) > 1) continue;
+      expect(curve[i] as number).toBeGreaterThan(previous);
+      previous = curve[i] as number;
     }
   });
 
@@ -113,16 +129,37 @@ describe('createSoftClipCurve', () => {
 
   it('is exactly unity gain below the knee', () => {
     for (let i = 0; i < curve.length; i += 1) {
-      const x = (i / (curve.length - 1)) * 2 - 1;
-      if (Math.abs(x) > SOFT_CLIP_KNEE) continue;
+      const input = inputAt(i);
+      if (Math.abs(input) > SOFT_CLIP_KNEE) continue;
       // Float32 storage, so compare at single precision.
-      expect(curve[i] as number).toBeCloseTo(x, 6);
+      expect(curve[i] as number).toBeCloseTo(input, 6);
     }
   });
 
   it('never reaches full scale, even at the endpoints', () => {
     expect(curve[curve.length - 1] as number).toBeLessThan(1);
     expect(curve[0] as number).toBeGreaterThan(-1);
+  });
+
+  /**
+   * The reason the curve is gain-staged rather than defined straight over
+   * [-1, 1]: a WaveShaperNode clamps out-of-range input to the endpoint, so if
+   * the transfer function were still climbing there, every overshoot would
+   * collapse onto one value and flat-top the waveform — hard clipping moved
+   * inside the graph rather than removed.
+   */
+  it('has already saturated by its endpoint, so the clamp is not a corner', () => {
+    const last = curve[curve.length - 1] as number;
+    const nearEnd = curve[curve.length - 2] as number;
+    expect(last - nearEnd).toBeLessThan(1e-6);
+    expect(last).toBeCloseTo(SOFT_CLIP_CEILING, 4);
+  });
+
+  it('covers the whole range a transient can reach', () => {
+    // Anything the limiter can pass lands inside the curve's domain, well
+    // beyond full scale.
+    expect(inputAt(curve.length - 1)).toBeGreaterThanOrEqual(4);
+    expect(inputAt(curve.length - 1)).toBe(SOFT_CLIP_INPUT_RANGE);
   });
 });
 
@@ -154,7 +191,10 @@ describe('createPianoGraph', () => {
       curve: Float32Array | null;
       oversample: string;
     };
-    expect(limiter.outputs).toContain(softClip);
+    // The pre-gain that maps the curve's domain onto the real signal range.
+    const preGain = limiter.outputs[0] as unknown as StubNode & { gain: StubParam };
+    expect(preGain.gain.value).toBeCloseTo(1 / SOFT_CLIP_INPUT_RANGE, 10);
+    expect(preGain.outputs).toContain(softClip);
     expect(softClip.outputs).toContain(destination);
     expect(softClip.oversample).toBe('4x');
     expect(softClip.curve?.length).toBeGreaterThan(0);
