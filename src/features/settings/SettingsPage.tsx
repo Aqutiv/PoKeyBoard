@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
+import { APP_VERSION } from '@/app/version';
 import { audioEngine } from '@/audio/AudioEngine';
 import { detectCapabilities, type AppCapabilities } from '@/audio/audioCapabilities';
 import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
@@ -472,7 +473,7 @@ export function SettingsPage() {
             </button>
           </div>
         ) : (
-          <p className="settings__hint">{m.settings.upToDate({ version: __APP_VERSION__ })}</p>
+          <p className="settings__hint">{m.settings.upToDate({ version: APP_VERSION })}</p>
         )}
 
         <h2 className="settings__section">{m.settings.diagnostics}</h2>
