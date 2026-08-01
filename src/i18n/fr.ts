@@ -214,6 +214,8 @@ export const fr: Messages = {
     quizWrong: ({ answer }) => `Celle-ci est ${answer}.`,
     quizAnswerLabel: ({ note }) => `Répondre ${note}`,
     playNote: ({ note }) => `Jouez ${note}.`,
+    readNotePrompt: 'Quelle est cette note ?',
+    playWhatYouSee: 'Jouez la note affichée.',
     chapterTitles: {
       meetTheKeyboard: 'Découvrir le clavier',
       musicalAlphabet: 'L’alphabet musical',

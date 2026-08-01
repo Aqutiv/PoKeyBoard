@@ -8,6 +8,10 @@ import {
 } from '@/features/learn/chapters';
 import { HALF_STEPS_WHOLE_STEPS } from '@/features/learn/chapters/halfStepsWholeSteps';
 import { MUSICAL_ALPHABET } from '@/features/learn/chapters/musicalAlphabet';
+import { TREBLE_STAFF } from '@/features/learn/chapters/trebleStaff';
+import { drillRoundAt } from '@/features/learn/drill';
+import { phraseToNotes } from '@/features/learn/phrase';
+import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
 import { stepWhites } from '@/features/keyboard/keyboardGeometry';
 import { loadChapterProse } from '@/features/learn/content';
 import { goalTotal } from '@/features/learn/exerciseSpec';
@@ -47,10 +51,13 @@ describe('learn catalog', () => {
 
   it('marks only the authored chapters as playable', () => {
     const playable = LEARN_CHAPTERS.filter((chapter) => chapter.load !== null);
+    // A deliberate ledger of what has shipped: updating it should be a
+    // conscious line in the commit that ships a chapter.
     expect(playable.map((chapter) => chapter.id)).toEqual([
       'meetTheKeyboard',
       'musicalAlphabet',
       'halfStepsWholeSteps',
+      'trebleStaff',
     ]);
   });
 
@@ -244,10 +251,12 @@ describe('chapter three', () => {
   it('drills the same five black keys the quiz names, in the other spelling', () => {
     const quiz = HALF_STEPS_WHOLE_STEPS.steps.find((s) => s.kind === 'quiz');
     const drill = HALF_STEPS_WHOLE_STEPS.steps.find((s) => s.kind === 'drill');
+    expect(quiz?.question.kind).toBe('nameTheKey');
     expect(quiz?.question.pitchClasses).toEqual([1, 3, 6, 8, 10]);
-    expect(quiz?.question.spelling).toBe('sharp');
+    expect(drill?.drill.kind).toBe('namedKey');
     expect(drill?.drill.pitchClasses).toEqual([1, 3, 6, 8, 10]);
-    expect(drill?.drill.spelling).toBe('flat');
+    if (quiz?.question.kind === 'nameTheKey') expect(quiz.question.spelling).toBe('sharp');
+    if (drill?.drill.kind === 'namedKey') expect(drill.drill.spelling).toBe('flat');
     expect(drill?.rounds).toBeGreaterThan(0);
   });
 
@@ -258,13 +267,84 @@ describe('chapter three', () => {
     expect(drill?.listen).toBeUndefined();
   });
 
-  it('writes English prose, with a prompt for every exercise', async () => {
+  it('writes English prose, with a prompt for every exercise (ch3)', async () => {
     const prose = await loadChapterProse('halfStepsWholeSteps', 'en');
     for (const step of HALF_STEPS_WHOLE_STEPS.steps) {
       const text = prose[step.id];
       expect(text?.heading, step.id).toBeTruthy();
       expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);
       // A drill's prompt is generated from its round, not written per chapter.
+      if (step.kind === 'exercise') expect(text?.prompt, step.id).toBeTruthy();
+    }
+  });
+});
+
+describe('chapter four', () => {
+  it('reads with a quiz and a drill either side of the exercises', () => {
+    const kinds = TREBLE_STAFF.steps.map((step) => step.kind);
+    expect(kinds).toHaveLength(11);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(3);
+    expect(kinds.filter((kind) => kind === 'quiz')).toHaveLength(1);
+    expect(kinds.filter((kind) => kind === 'drill')).toHaveLength(1);
+  });
+
+  it('gives every step a unique id', () => {
+    const ids = TREBLE_STAFF.steps.map((step) => step.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('keeps every note it draws on the treble staff', () => {
+    // Below middle C, `midiToStaffPosition` silently moves a note to the bass
+    // staff — a staff this chapter has not introduced. One slip would put a
+    // note somewhere the lesson never explains.
+    for (const step of TREBLE_STAFF.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        expect(note.midi, `${step.id}: ${note.midi}`).toBeGreaterThanOrEqual(TREBLE_SPLIT_MIDI);
+      }
+    }
+  });
+
+  it('fills every bar, so no rest is engraved beside the note', () => {
+    for (const step of TREBLE_STAFF.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        expect(note.durationMs, step.id).toBe(4000);
+      }
+    }
+  });
+
+  it('asks the quiz and the drill about the same five notes', () => {
+    const quiz = TREBLE_STAFF.steps.find((s) => s.kind === 'quiz');
+    const drill = TREBLE_STAFF.steps.find((s) => s.kind === 'drill');
+    expect(quiz?.question.kind).toBe('readNote');
+    expect(drill?.drill.kind).toBe('readNote');
+    expect(quiz?.question.pitchClasses).toEqual([0, 2, 4, 5, 7]);
+    expect(drill?.drill.pitchClasses).toEqual([0, 2, 4, 5, 7]);
+  });
+
+  it('gives a reading round no spoken label, since the staff is the question', () => {
+    const drill = TREBLE_STAFF.steps.find((s) => s.kind === 'drill');
+    if (drill?.drill.kind !== 'readNote') throw new Error('expected a reading drill');
+    for (let round = 0; round < 5; round += 1) {
+      const asked = drillRoundAt(drill.drill, round);
+      expect(asked?.label).toBe('');
+      expect(asked?.phrase).toBeDefined();
+    }
+  });
+
+  it('numbers the fingers rather than naming the keys', () => {
+    const step = TREBLE_STAFF.steps.find((s) => s.id === 'fingerNumbers');
+    if (step?.visual?.kind !== 'keyboard') throw new Error('expected a keyboard diagram');
+    expect(step.visual.labelText).toEqual({ 60: '1', 62: '2', 64: '3', 65: '4', 67: '5' });
+  });
+
+  it('writes English prose, with a prompt for every exercise', async () => {
+    const prose = await loadChapterProse('trebleStaff', 'en');
+    for (const step of TREBLE_STAFF.steps) {
+      const text = prose[step.id];
+      expect(text?.heading, step.id).toBeTruthy();
+      expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);
       if (step.kind === 'exercise') expect(text?.prompt, step.id).toBeTruthy();
     }
   });

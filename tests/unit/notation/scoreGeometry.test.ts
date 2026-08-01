@@ -165,3 +165,71 @@ describe('computeScoreGeometry', () => {
     expect(stemTip).toBeGreaterThanOrEqual(0);
   });
 });
+
+/** One staff loses the second staff and the gap between them. */
+const SINGLE_MIN_HEIGHT = TREBLE_TOP + STAFF_H + (SCORE_MIN_HEIGHT - BASS_TOP - STAFF_H);
+
+/** As Learn builds it: no dynamics, no rests. */
+function bare(layout: ScoreLayout): ScoreLayout {
+  return { ...layout, dynamics: [], hairpins: [], rests: [] };
+}
+
+describe('computeScoreGeometry with a single staff', () => {
+  it('collapses to one staff of the default height', () => {
+    expect(computeScoreGeometry(layoutScore([], LAYOUT_OPTS), { staves: 'treble' })).toEqual({
+      trebleTop: TREBLE_TOP,
+      // Deliberately collapsed onto the drawn staff rather than left dangling:
+      // anything that slips past a guard lands visibly, not off the canvas.
+      bassTop: TREBLE_TOP,
+      minHeight: SINGLE_MIN_HEIGHT,
+      pedalRow: TREBLE_TOP + STAFF_H + (SCORE_MIN_HEIGHT - BASS_TOP - STAFF_H) - 9,
+      dynamicsRow: TREBLE_TOP + STAFF_H + GAP * 1.8,
+    });
+  });
+
+  it('saves exactly one staff and one gap', () => {
+    const layout = bare(layoutScore([note(64, 0)], LAYOUT_OPTS));
+    const saved =
+      computeScoreGeometry(layout).minHeight -
+      computeScoreGeometry(layout, { staves: 'treble' }).minHeight;
+    expect(saved).toBe(STAFF_H + STAFF_SPACING);
+  });
+
+  it('lets a low treble note press on the bottom margin', () => {
+    // The behaviour the up/down-staff rewrite exists for. On the grand staff
+    // the gap absorbs this; with one staff, that staff answers for both edges.
+    const low: NoteEvent = { ...note(48, 0), staff: 'treble' };
+    const layout = bare(layoutScore([low], LAYOUT_OPTS));
+    expect(computeScoreGeometry(layout, { staves: 'treble' }).minHeight).toBeGreaterThan(
+      SINGLE_MIN_HEIGHT,
+    );
+  });
+
+  it('changes nothing about the grand staff', () => {
+    // The same note, laid out the normal way, keeps the height it always had.
+    const low: NoteEvent = { ...note(48, 0), staff: 'treble' };
+    const layout = bare(layoutScore([low], LAYOUT_OPTS));
+    expect(computeScoreGeometry(layout).minHeight).toBe(SCORE_MIN_HEIGHT);
+  });
+
+  it('treats an absent option, an empty one and grand as the same thing', () => {
+    const layout = bare(layoutScore([note(60, 0), note(48, 500)], LAYOUT_OPTS));
+    expect(computeScoreGeometry(layout, {})).toEqual(computeScoreGeometry(layout));
+    expect(computeScoreGeometry(layout, { staves: 'grand' })).toEqual(computeScoreGeometry(layout));
+  });
+
+  it('still finds headroom for a high note', () => {
+    const layout = bare(layoutScore([note(108, 0)], LAYOUT_OPTS));
+    const single = computeScoreGeometry(layout, { staves: 'treble' });
+    expect(single.trebleTop).toBeGreaterThan(TREBLE_TOP);
+    expect(single.minHeight).toBeGreaterThan(SINGLE_MIN_HEIGHT);
+  });
+
+  it('mirrors for a bass-only staff', () => {
+    const layout = bare(layoutScore([note(48, 0)], LAYOUT_OPTS));
+    const single = computeScoreGeometry(layout, { staves: 'bass' });
+    expect(single.trebleTop).toBe(TREBLE_TOP);
+    expect(single.bassTop).toBe(TREBLE_TOP);
+    expect(single.minHeight).toBe(SINGLE_MIN_HEIGHT);
+  });
+});

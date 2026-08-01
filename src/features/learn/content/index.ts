@@ -29,6 +29,9 @@ const PROSE: Partial<
   halfStepsWholeSteps: {
     en: () => import('./en/halfStepsWholeSteps').then((m) => m.halfStepsWholeStepsEn),
   },
+  trebleStaff: {
+    en: () => import('./en/trebleStaff').then((m) => m.trebleStaffEn),
+  },
 };
 
 /**

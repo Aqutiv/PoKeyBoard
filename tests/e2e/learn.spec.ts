@@ -144,13 +144,14 @@ test.describe('learn outline', () => {
       'Meet the Keyboard',
       'The Musical Alphabet',
       'Half Steps, Whole Steps & the Black Keys',
+      'Reading the Treble Staff',
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
     await expect(
-      page.getByRole('button', { name: 'Reading the Treble Staff — coming soon' }),
+      page.getByRole('button', { name: 'The Bass Staff & the Grand Staff — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(7);
+    await expect(page.getByText('Coming soon')).toHaveCount(6);
   });
 });
 
@@ -530,5 +531,109 @@ test.describe('chapter three', () => {
     for (const code of ['KeyY', 'KeyE', 'KeyU', 'KeyT']) await playKey(page, code);
     await expect(progressLine(page)).toHaveText('Nicely done.');
     await expect(nextButton(page)).toBeEnabled();
+  });
+});
+
+test.describe('chapter four', () => {
+  /** Open chapter 4 and step to a heading by clicking Next `clicks` times. */
+  async function gotoStep(page: Page, heading: string, clicks: number): Promise<void> {
+    await openChapter(page, 'Reading the Treble Staff');
+    for (let i = 0; i < clicks; i += 1) await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  }
+
+  test('draws a treble staff with no bass staff and no bar furniture', async ({ page }) => {
+    await openChapter(page, 'Reading the Treble Staff');
+    await expect(page.getByRole('heading', { name: 'Five lines and four spaces' })).toBeVisible();
+
+    // The snippet collapses to one staff, so it is far shorter than the grand
+    // staff's 192px — that height is the visible proof the bass staff is gone.
+    const height = await page
+      .locator('.learn-staff__canvas')
+      .evaluate((el) => (el as HTMLCanvasElement).clientHeight);
+    expect(height).toBeLessThan(192);
+    expect(height).toBeGreaterThan(0);
+  });
+
+  test('reads middle C off the stave', async ({ page }) => {
+    await gotoStep(page, 'Play what you see', 3);
+    await expect(progressLine(page)).toHaveText('0 of 1');
+    await expect(nextButton(page)).toBeDisabled();
+    await playKey(page, 'KeyS'); // D4 — not what is written
+    await expect(progressLine(page)).toHaveText('0 of 1');
+    await playKey(page, 'KeyA'); // C4
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('the reading quiz gates Next until five notes are named', async ({ page }) => {
+    await gotoStep(page, 'Play what you see', 3);
+    await playKey(page, 'KeyA');
+    await nextButton(page).click(); // C D E F G
+    await nextButton(page).click(); // finger numbers
+    await nextButton(page).click(); // the quiz
+
+    await expect(page.getByRole('heading', { name: 'Which note is this?' })).toBeVisible();
+    // The question is a picture, so the panel shows a stave rather than keys.
+    await expect(page.locator('.learn-quiz .learn-staff__canvas')).toHaveCount(1);
+    await expect(page.locator('.learn-quiz .learn-diagram')).toHaveCount(0);
+    await expect(nextButton(page)).toBeDisabled();
+
+    // Deterministic round order over the five-finger pool, stride 3.
+    for (const [index, letter] of ['C', 'F', 'D', 'G', 'E'].entries()) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+      const done = index + 1;
+      await expect(page.locator('.learn-quiz__status')).toHaveText(
+        done === 5 ? 'Nicely done.' : `${done} of 5`,
+      );
+    }
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('the reading drill advances only on the note shown', async ({ page }) => {
+    await gotoStep(page, 'Play what you see', 3);
+    await playKey(page, 'KeyA');
+    for (let i = 0; i < 3; i += 1) await nextButton(page).click();
+    for (const letter of ['C', 'F', 'D', 'G', 'E']) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+    }
+    await nextButton(page).click();
+
+    await expect(page.getByRole('heading', { name: 'Play the note shown' })).toBeVisible();
+    // A stave, and no note name anywhere — the picture is the whole question.
+    await expect(page.locator('.learn-exercise .learn-staff__canvas')).toHaveCount(1);
+    await expect(page.locator('.learn-exercise__prompt')).toHaveText('Play the note shown.');
+    await expect(progressLine(page)).toHaveText('0 of 5');
+
+    await playKey(page, 'KeyS'); // D4 — first round asks for C
+    await expect(progressLine(page)).toHaveText('0 of 5');
+
+    // Same stride-3 order: C F D G E.
+    for (const [index, code] of ['KeyA', 'KeyF', 'KeyS', 'KeyG', 'KeyD'].entries()) {
+      await playKey(page, code);
+      const done = index + 1;
+      await expect(progressLine(page)).toHaveText(done === 5 ? 'Nicely done.' : `${done} of 5`);
+    }
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('plays the five-note run up and back down', async ({ page }) => {
+    await gotoStep(page, 'Play what you see', 3);
+    await playKey(page, 'KeyA');
+    for (let i = 0; i < 3; i += 1) await nextButton(page).click();
+    for (const letter of ['C', 'F', 'D', 'G', 'E']) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+    }
+    await nextButton(page).click();
+    for (const code of ['KeyA', 'KeyF', 'KeyS', 'KeyG', 'KeyD']) await playKey(page, code);
+    await nextButton(page).click();
+
+    await expect(page.getByRole('heading', { name: 'Play the whole run' })).toBeVisible();
+    for (const code of ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG']) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'And back down' })).toBeVisible();
+    for (const code of ['KeyG', 'KeyF', 'KeyD', 'KeyS', 'KeyA']) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
   });
 });

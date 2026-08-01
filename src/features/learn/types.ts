@@ -92,20 +92,40 @@ export interface DrillStep extends StepBase {
   drill: DrillPool;
 }
 
-export type DrillPool = {
-  kind: 'namedKey';
-  pitchClasses: readonly PitchClass[];
-  /** Which name each round asks under. Defaults to sharps. */
-  spelling?: NoteSpelling;
-};
+export type DrillPool =
+  | {
+      kind: 'namedKey';
+      pitchClasses: readonly PitchClass[];
+      /** Which name each round asks under. Defaults to sharps. */
+      spelling?: NoteSpelling;
+    }
+  | {
+      /** The round shows a note on a staff and the user plays it. */
+      kind: 'readNote';
+      pitchClasses: readonly PitchClass[];
+      /** Octave the notes are drawn in, as a midi offset. C4 by default. */
+      baseMidi?: number;
+    };
 
-export type QuizQuestion = {
-  kind: 'nameTheKey';
-  /** Drawn from in a fixed order; also the order the answer buttons appear in. */
-  pitchClasses: readonly PitchClass[];
-  /** Which name the answer buttons offer. Defaults to sharps. */
-  spelling?: NoteSpelling;
-};
+export type QuizQuestion =
+  | {
+      kind: 'nameTheKey';
+      /** Drawn from in a fixed order; also the order the answer buttons appear in. */
+      pitchClasses: readonly PitchClass[];
+      /** Which name the answer buttons offer. Defaults to sharps. */
+      spelling?: NoteSpelling;
+    }
+  | {
+      /** The question is a note on a staff; the answers are still letters. */
+      kind: 'readNote';
+      pitchClasses: readonly PitchClass[];
+      spelling?: NoteSpelling;
+      /**
+       * Octave the notes are drawn in, as a midi offset. C4 by default, which
+       * is where every note of the first reading chapter lives.
+       */
+      baseMidi?: number;
+    };
 
 export type LearnVisual =
   | {
@@ -120,6 +140,8 @@ export type LearnVisual =
       labels?: readonly number[];
       /** Which name a labelled black key gets. White keys read the same either way. */
       spelling?: NoteSpelling;
+      /** Arbitrary text per key — finger numbers, degrees — over `labels`. */
+      labelText?: Readonly<Record<number, string>>;
     }
   | { kind: 'staff'; phrase: LearnPhrase };
 

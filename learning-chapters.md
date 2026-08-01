@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 3     | 7         |
+| Beginner     | 4     | 6         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -32,11 +32,11 @@ _Never touched a piano → a simple piece, hands together._
 
 ### Part 2 — Reading music
 
-| #   | Chapter                          | Teaches                                                                                                            | Exercises validate                                                             |
-| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------ |
-| 4   | Reading the Treble Staff         | Staff, lines and spaces, treble clef; middle C on its ledger line; right-hand five-finger position; finger numbers | play the note shown; play a 5-note run from notation                           |
-| 5   | The Bass Staff & the Grand Staff | Bass clef and its own lines and spaces; left hand below middle C; how the staves join                              | read and play bass-clef notes; a grand-staff pair, one note per hand           |
-| 6   | Rhythm & the Beat                | Pulse; 4/4 and the time signature; whole/half/quarter/eighth and rests; bar lines; the metronome                   | tap a steady pulse with the click; play a written rhythm on one pitch, in time |
+| #   | Chapter                          | Teaches                                                                                                            | Exercises validate                                                                                                 |
+| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| 4   | **Reading the Treble Staff** ✅  | Staff, lines and spaces, treble clef; middle C on its ledger line; right-hand five-finger position; finger numbers | play middle C off the stave · name a written note ×5 · play a written note ×5 · the five-note run up and back down |
+| 5   | The Bass Staff & the Grand Staff | Bass clef and its own lines and spaces; left hand below middle C; how the staves join                              | read and play bass-clef notes; a grand-staff pair, one note per hand                                               |
+| 6   | Rhythm & the Beat                | Pulse; 4/4 and the time signature; whole/half/quarter/eighth and rests; bar lines; the metronome                   | tap a steady pulse with the click; play a written rhythm on one pitch, in time                                     |
 
 ### Part 3 — Playing
 
@@ -169,7 +169,18 @@ Four step kinds (`src/features/learn/types.ts`):
   (`rounds.ts`). Currently one pool kind, `namedKey`.
 
 Both `quiz` and `drill` render inline in the chapter card, never as a dialog —
-see the `aria-modal` constraint below.
+see the `aria-modal` constraint below. Either can ask its question with a
+**staff** rather than a keyboard: `readNote` on a quiz, `readNote` on a drill
+pool. A reading round carries no written note name, because that would be the
+answer — which also means it cannot be completed by screen reader. See the
+limitations below.
+
+Notation for a lesson is drawn treble-only and low-chrome: `ScoreView` takes
+`staves: 'treble' | 'bass' | 'grand'` and `chrome: 'bare' | 'full'`, and
+`computeScoreGeometry(layout, { staves })` collapses the height to match. Both
+default to the grand staff with full chrome, so the Play page is untouched.
+`StaffSnippet` also blanks `rests`, because `deriveRests` answers "what silence
+did this performance leave over" and a worked example is not a performance.
 
 Note labels come from `noteLabel(midiOrPitchClass, spelling)`
 (`src/features/learn/noteLabel.ts`), which wraps the notation engine's own
@@ -238,6 +249,14 @@ Learned the hard way; violating any of these produces a silent failure.
   should reuse that pattern and does not yet.
 - **Lesson prose is English-only.** Chapter titles and blurbs are translated;
   the inside of a chapter falls back per string.
+- **Reading rounds cannot be done by screen reader.** The staff canvas is
+  `role="img"` with a generic label; naming the note would announce the answer.
+  A drill that asks you to read a picture is inherently visual, so the skip
+  affordance is the honest escape hatch rather than a fake label.
+- **A note below middle C needs an explicit `staff` hint.**
+  `midiToStaffPosition` splits on `TREBLE_SPLIT_MIDI = 60`, so without one a low
+  note silently moves to the bass staff. `phraseToNotes` passes the hint through
+  (the fifth element of a `TrackEvent`); chapter 4 needs none, chapter 5 will.
 
 ---
 

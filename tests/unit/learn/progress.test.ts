@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/data/db';
 import { loadLearnProgress, saveLearnProgress } from '@/data/learnProgressRepository';
 import { META_LEARN_PROGRESS, setMetadata } from '@/data/metadataRepository';
-import { findLearnChapter } from '@/features/learn/chapters';
+import { findLearnChapter, LEARN_CHAPTERS } from '@/features/learn/chapters';
 import {
   chapterStatus,
   chapterStep,
@@ -12,8 +12,9 @@ import {
 } from '@/features/learn/progress';
 
 const chapterOne = findLearnChapter('meetTheKeyboard');
-/** Authored chapters keep moving; this one is deliberately still a stub. */
-const unwritten = findLearnChapter('trebleStaff');
+/** Whichever chapter is still a stub — found rather than named, so shipping
+ *  one does not send this test stale. */
+const unwritten = LEARN_CHAPTERS.find((chapter) => chapter.load === null);
 
 describe('chapterStatus', () => {
   it('calls an unauthored chapter coming soon, not locked', () => {

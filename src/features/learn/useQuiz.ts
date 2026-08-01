@@ -1,8 +1,10 @@
 import { useCallback, useState } from 'react';
 import type { PitchClass } from './exerciseSpec';
+import { DEFAULT_STAFF_BASE_MIDI } from './drill';
 import type { NoteSpelling } from './noteLabel';
 import { roundEntryAt } from './rounds';
-import type { QuizStep } from './types';
+import { singleNotePhrase } from './staffPhrase';
+import type { LearnPhrase, QuizQuestion, QuizStep } from './types';
 
 /** The octave the quiz draws its keys from — C4 up to B4. */
 export const QUIZ_BASE_MIDI = 60;
@@ -23,6 +25,10 @@ export interface QuizSession {
   wrong: PitchClass | null;
   /** Which name the buttons and the diagram show a black key under. */
   spelling: NoteSpelling;
+  /** How the question is asked: a lit key, or a note on a staff. */
+  kind: QuizQuestion['kind'];
+  /** For a reading round, the staff to draw. */
+  phrase: LearnPhrase | null;
   answer: (choice: PitchClass) => void;
 }
 
@@ -74,14 +80,21 @@ export function useQuiz(step: QuizStep | null): QuizSession {
     [satisfied, pitchClass],
   );
 
+  const question = step?.question;
+  const reading = question?.kind === 'readNote';
+  const midi =
+    (reading ? (question.baseMidi ?? DEFAULT_STAFF_BASE_MIDI) : QUIZ_BASE_MIDI) + pitchClass;
+
   return {
-    midi: QUIZ_BASE_MIDI + pitchClass,
+    midi,
     choices: pool,
     done: Math.min(round, total),
     total,
     satisfied,
     wrong,
-    spelling: step?.question.spelling ?? 'sharp',
+    spelling: question?.spelling ?? 'sharp',
+    kind: question?.kind ?? 'nameTheKey',
+    phrase: reading ? singleNotePhrase(midi) : null,
     answer,
   };
 }

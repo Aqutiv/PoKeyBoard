@@ -213,6 +213,8 @@ export const es: Messages = {
     quizWrong: ({ answer }) => `Esa es ${answer}.`,
     quizAnswerLabel: ({ note }) => `Responder ${note}`,
     playNote: ({ note }) => `Toca ${note}.`,
+    readNotePrompt: '¿Qué nota es esta?',
+    playWhatYouSee: 'Toca la nota que ves.',
     chapterTitles: {
       meetTheKeyboard: 'Conoce el teclado',
       musicalAlphabet: 'El alfabeto musical',

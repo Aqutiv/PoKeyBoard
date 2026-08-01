@@ -248,6 +248,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
             highlightSecondary={step.visual.highlightSecondary}
             labels={step.visual.labels}
             spelling={step.visual.spelling}
+            labelText={step.visual.labelText}
             ariaLabel={m.learn.diagramLabel}
           />
         ) : null}
@@ -270,13 +271,20 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
         {step?.kind === 'exercise' || isDrill ? (
           <div className="learn-exercise">
+            {/* A reading round asks with a picture, so the staff stands where
+                a spoken prompt otherwise would. */}
+            {drill.round?.phrase ? (
+              <StaffSnippet phrase={drill.round.phrase} ariaLabel={m.learn.staffLabel} />
+            ) : null}
             {/* A drill's prompt changes every round, so it is announced; an
                 exercise's is fixed prose and would only repeat itself. */}
             <p className="learn-exercise__prompt" role={isDrill ? 'status' : undefined}>
               {isDrill
-                ? drill.round
-                  ? m.learn.playNote({ note: drill.round.label })
-                  : ''
+                ? drill.round?.phrase
+                  ? m.learn.playWhatYouSee
+                  : drill.round
+                    ? m.learn.playNote({ note: drill.round.label })
+                    : ''
                 : text?.prompt}
             </p>
             <p className="learn-exercise__progress" role="status">

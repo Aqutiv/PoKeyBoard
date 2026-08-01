@@ -14,6 +14,12 @@ interface KeyboardDiagramProps {
   labels?: readonly number[];
   /** Which name a labelled black key gets. Defaults to sharps. */
   spelling?: NoteSpelling;
+  /**
+   * Arbitrary text per key — finger numbers, scale degrees — taking precedence
+   * over `labels`. Kept as a separate prop so `labels` keeps its exact meaning
+   * and no existing chapter's authoring changes.
+   */
+  labelText?: Readonly<Record<number, string>>;
   ariaLabel: string;
 }
 
@@ -29,6 +35,7 @@ export function KeyboardDiagram({
   highlightSecondary,
   labels,
   spelling,
+  labelText,
   ariaLabel,
 }: KeyboardDiagramProps) {
   const layout = useMemo(() => layoutKeyboard(lowMidi, highMidi), [lowMidi, highMidi]);
@@ -53,7 +60,9 @@ export function KeyboardDiagram({
             width: `${key.width * whiteWidthPercent}%`,
           }}
         >
-          {labels?.includes(key.midi) ? (
+          {labelText?.[key.midi] !== undefined ? (
+            <span className="learn-diagram__label">{labelText[key.midi]}</span>
+          ) : labels?.includes(key.midi) ? (
             // The name alone: octave numbers are a chapter 1 step 9 idea.
             <span className="learn-diagram__label">{noteLabel(key.midi, spelling)}</span>
           ) : null}

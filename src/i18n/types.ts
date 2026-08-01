@@ -325,6 +325,9 @@ export interface Messages {
     quizAnswerLabel: (p: { note: string }) => string;
     /** Drill steps: the app names a note and the user finds it. */
     playNote: (p: { note: string }) => string;
+    /** Reading rounds, where the question is a staff rather than a name. */
+    readNotePrompt: string;
+    playWhatYouSee: string;
     chapterTitles: LearnChapterMessages;
     chapterBlurbs: LearnChapterMessages;
     partTitles: LearnPartMessages;

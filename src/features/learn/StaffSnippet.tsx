@@ -13,6 +13,13 @@ import type { LearnPhrase } from './types';
 
 /** Far enough behind the start that `drawPlayhead` bails on its own guard. */
 const NO_PLAYHEAD_MS = -1e9;
+
+/**
+ * Stated once and used twice, deliberately. `computeScoreGeometry` sizes the
+ * canvas and `ScoreView` decides what is drawn into it; if the two disagree,
+ * a one-staff picture lands in a two-staff canvas — gutter fill and all.
+ */
+const STAVES = 'treble' as const;
 const RIGHT_PAD_PX = 16;
 
 const subscribeTheme = (onChange: () => void): (() => void) => themeController.subscribe(onChange);
@@ -44,9 +51,14 @@ export function StaffSnippet({ phrase, ariaLabel }: StaffSnippetProps) {
     // right for a performance and wrong for a worked example — a lesson about
     // where middle C sits should not also be shouting `f`. Blanking them also
     // drops the dynamics row from the computed height.
-    return { ...score, dynamics: [], hairpins: [] };
+    //
+    // Rests go the same way, and the renderer's own staff filter is not enough
+    // on its own: that only drops the *bass* rests, while a phrase shorter than
+    // its bar also leaves treble ones. `deriveRests` answers "what silence did
+    // this performance leave over", and a worked example is not a performance.
+    return { ...score, dynamics: [], hairpins: [], rests: [] };
   }, [phrase]);
-  const geometry = useMemo(() => computeScoreGeometry(layout), [layout]);
+  const geometry = useMemo(() => computeScoreGeometry(layout, { staves: STAVES }), [layout]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -83,6 +95,8 @@ export function StaffSnippet({ phrase, ariaLabel }: StaffSnippetProps) {
           pedalRow: geometry.pedalRow,
           dynamicsRow: geometry.dynamicsRow,
           gutterPx,
+          staves: STAVES,
+          chrome: 'bare',
         },
         {
           layout,

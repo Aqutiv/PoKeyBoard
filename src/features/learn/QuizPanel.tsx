@@ -1,5 +1,6 @@
 import { useMessages } from '@/i18n/i18nContext';
 import { KeyboardDiagram } from './KeyboardDiagram';
+import { StaffSnippet } from './StaffSnippet';
 import { noteLabel } from './noteLabel';
 import { QUIZ_HIGH_MIDI, QUIZ_LOW_MIDI, type QuizSession } from './useQuiz';
 
@@ -20,14 +21,22 @@ export function QuizPanel({ session }: QuizPanelProps) {
 
   return (
     <div className="learn-quiz">
-      <KeyboardDiagram
-        lowMidi={QUIZ_LOW_MIDI}
-        highMidi={QUIZ_HIGH_MIDI}
-        highlight={[session.midi]}
-        spelling={session.spelling}
-        ariaLabel={m.learn.diagramLabel}
-      />
-      <p className="learn-quiz__prompt">{m.learn.quizPrompt}</p>
+      {session.phrase ? (
+        // A reading round: the staff is the question. The label stays generic
+        // on purpose — naming the note here would announce the answer.
+        <StaffSnippet phrase={session.phrase} ariaLabel={m.learn.staffLabel} />
+      ) : (
+        <KeyboardDiagram
+          lowMidi={QUIZ_LOW_MIDI}
+          highMidi={QUIZ_HIGH_MIDI}
+          highlight={[session.midi]}
+          spelling={session.spelling}
+          ariaLabel={m.learn.diagramLabel}
+        />
+      )}
+      <p className="learn-quiz__prompt">
+        {session.kind === 'readNote' ? m.learn.readNotePrompt : m.learn.quizPrompt}
+      </p>
       <div className="learn-quiz__choices">
         {session.choices.map((choice) => (
           <button

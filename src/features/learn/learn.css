@@ -307,9 +307,11 @@
 }
 
 /* The answer row and the score have to be reachable without scrolling the
-   card, so the quiz gets a shorter diagram than a theory step's. */
-.learn-quiz .learn-diagram {
-  margin: 0 0 10px;
+   card, so the quiz gets a tighter question than a theory step's. */
+.learn-quiz .learn-diagram,
+.learn-quiz .learn-staff,
+.learn-exercise .learn-staff {
+  margin: 0 0 8px;
 }
 
 .learn-quiz .learn-diagram__keys {

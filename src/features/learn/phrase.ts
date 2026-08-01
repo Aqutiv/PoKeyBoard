@@ -18,7 +18,7 @@ export function phraseToNotes(phrase: LearnPhrase): NoteEvent[] {
   const notes: NoteEvent[] = [];
 
   phrase.events.forEach((event, index) => {
-    const [beat, noteOrChord, durationBeats, velocity] = event;
+    const [beat, noteOrChord, durationBeats, velocity, staff] = event;
     const names = Array.isArray(noteOrChord) ? noteOrChord : [noteOrChord];
     // Endpoints go through the map, not durations, so a note reads as written.
     const startMs = Math.round(map.msAtBeat(beat));
@@ -34,6 +34,11 @@ export function phraseToNotes(phrase: LearnPhrase): NoteEvent[] {
         startMs,
         durationMs,
         velocity: velocity ?? DEFAULT_VELOCITY,
+        // Without this, `midiToStaffPosition` splits purely on middle C, so a
+        // lesson could never show a low note on the treble staff. Omitted
+        // entirely when unsaid, so phrases that never mention a staff lay out
+        // exactly as they did before.
+        ...(staff !== undefined ? { staff } : {}),
       });
     });
   });
