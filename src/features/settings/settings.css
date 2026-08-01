@@ -108,6 +108,9 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   background: var(--surface-1);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .piano-card--active {
@@ -115,11 +118,35 @@
   background: var(--surface-2);
 }
 
+/* Mouse only: on touch, :hover would stick to the last-tapped card.
+   Sibling of the .take-item / .library-item blocks — keep the three in step.
+   The selected card already sits at --surface-2, so it steps up one further
+   rather than sharing a shade with a merely hovered one. */
+@media (hover: hover) and (pointer: fine) {
+  .piano-card:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+  }
+
+  .piano-card--active:hover {
+    background: var(--surface-3);
+    border-color: var(--accent-strong);
+  }
+}
+
 .piano-card__choice {
   display: flex;
   align-items: flex-start;
   gap: 10px;
   min-height: var(--touch-target);
+  /* The takes and library cards are buttons and get this for free; the piano
+     card's target is a label, so it has to say so. The offline row beside it
+     is not a selection target, which is why this sits on the label only. */
+  cursor: pointer;
+}
+
+.piano-card__choice:has(input:disabled) {
+  cursor: default;
 }
 
 .piano-card__choice input[type='radio'] {

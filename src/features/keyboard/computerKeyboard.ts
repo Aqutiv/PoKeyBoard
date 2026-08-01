@@ -1,3 +1,5 @@
+import { BaseOctave } from './baseOctave';
+
 /**
  * Desktop computer-keyboard input: two rows map to a piano octave and a
  * half starting at the movable base note (default C4). Space is sustain,
@@ -31,15 +33,17 @@ const KEY_TO_SEMITONE: Record<string, number> = {
   Quote: 17,
 };
 
-const MIN_BASE = 24; // C1
-const MAX_BASE = 96; // C7
-
 export class ComputerKeyboardInput {
-  private baseMidi = 60;
   private readonly downCodes = new Map<string, number>();
   private sustainKeyDown = false;
   private callbacks: ComputerKeyboardCallbacks | null = null;
   private velocity = 0.75;
+  private readonly base: BaseOctave;
+
+  /** Defaults to a private octave so standalone construction still works. */
+  constructor(base: BaseOctave = new BaseOctave()) {
+    this.base = base;
+  }
 
   private readonly onKeyDown = (event: KeyboardEvent) => {
     if (!this.callbacks || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
@@ -57,13 +61,12 @@ export class ComputerKeyboardInput {
       return;
     }
     if (event.code === 'KeyZ' || event.code === 'KeyX') {
-      const next = this.baseMidi + (event.code === 'KeyZ' ? -12 : 12);
-      this.baseMidi = Math.min(MAX_BASE, Math.max(MIN_BASE, next));
+      this.base.shift(event.code === 'KeyZ' ? -1 : 1);
       return;
     }
     const semitone = KEY_TO_SEMITONE[event.code];
     if (semitone === undefined || this.downCodes.has(event.code)) return;
-    const midi = this.baseMidi + semitone;
+    const midi = this.base.get() + semitone;
     if (midi < 0 || midi > 127) return;
     this.downCodes.set(event.code, midi);
     this.callbacks.noteOn(midi, this.velocity);

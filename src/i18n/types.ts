@@ -335,6 +335,8 @@ export interface Messages {
     scrubAudition: string;
     backgroundPlayback: string;
     backgroundPlaybackHint: string;
+    gamepad: string;
+    gamepadHint: string;
     checking: string;
     downloadPiano: (p: { piano: string; size: string }) => string;
     deletePiano: (p: { piano: string }) => string;
@@ -375,6 +377,7 @@ export interface Messages {
       webCodecsAudioEncoder: string;
       pointerEvents: string;
       touch: string;
+      gamepad: string;
     };
   };
   about: {

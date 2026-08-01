@@ -292,6 +292,9 @@ export const en: Messages = {
     backgroundPlayback: 'Continue playback in the background',
     backgroundPlaybackHint:
       'Keeps recorded takes playing when PoKeyBoard is minimized or not in focus. Some devices may still stop audio when the screen locks.',
+    gamepad: 'Play with a game controller',
+    gamepadHint:
+      'The D-pad and face buttons play one octave, C to C: Left, Up, Right, Down, then X, Y, B, A. The bumpers shift the octave, the left trigger sustains, and the right trigger raises the note a semitone. Tap the screen once first — a controller alone cannot start the audio.',
     checking: 'Checking…',
     downloadPiano: ({ piano, size }) => `Download ${piano} (${size})`,
     deletePiano: ({ piano }) => `Delete ${piano} download`,
@@ -335,6 +338,7 @@ export const en: Messages = {
       webCodecsAudioEncoder: 'WebCodecs audio encoder',
       pointerEvents: 'Pointer events',
       touch: 'Touch input',
+      gamepad: 'Game controller API',
     },
   },
   about: {

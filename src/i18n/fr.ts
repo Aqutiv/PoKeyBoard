@@ -293,6 +293,9 @@ export const fr: Messages = {
     backgroundPlayback: 'Continuer la lecture en arrière-plan',
     backgroundPlaybackHint:
       'Maintient la lecture des prises enregistrées lorsque PoKeyBoard est réduit ou sans focus. Certains appareils peuvent arrêter le son quand l’écran est verrouillé.',
+    gamepad: 'Jouer avec une manette',
+    gamepadHint:
+      'La croix directionnelle et les boutons d’action jouent une octave, de do à do : gauche, haut, droite, bas, puis X, Y, B, A. Les gâchettes supérieures changent d’octave, la gâchette gauche tient la pédale et la droite monte la note d’un demi-ton. Touchez d’abord l’écran une fois : une manette seule ne peut pas démarrer l’audio.',
     checking: 'Vérification…',
     downloadPiano: ({ piano, size }) => `Télécharger ${piano} (${size})`,
     deletePiano: ({ piano }) => `Supprimer le téléchargement de ${piano}`,
@@ -339,6 +342,7 @@ export const fr: Messages = {
       webCodecsAudioEncoder: 'Encodeur audio WebCodecs',
       pointerEvents: 'Événements de pointeur',
       touch: 'Saisie tactile',
+      gamepad: 'API de manette de jeu',
     },
   },
   about: {

@@ -29,6 +29,8 @@ export interface SettingsState {
   scrubAudition: boolean;
   /** Keep recorded-take playback running while the page is hidden. */
   backgroundPlayback: boolean;
+  /** Let a connected game controller play the piano. */
+  gamepadInput: boolean;
   metronomeVolume: number;
   displayQuantization: QuantizationSetting;
   keyboardAnchorMidi: number;
@@ -46,6 +48,7 @@ export interface SettingsState {
   setShowNoteLabels(show: boolean): void;
   setScrubAudition(enabled: boolean): void;
   setBackgroundPlayback(enabled: boolean): void;
+  setGamepadInput(enabled: boolean): void;
   setMetronomeVolume(value: number): void;
   setDisplayQuantization(value: QuantizationSetting): void;
   setKeyboardAnchorMidi(midi: number): void;
@@ -65,6 +68,7 @@ export const SETTINGS_DEFAULTS = {
   showNoteLabels: true,
   scrubAudition: true,
   backgroundPlayback: false,
+  gamepadInput: true,
   metronomeVolume: 0.6,
   displayQuantization: '1/16' as QuantizationSetting,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
@@ -95,6 +99,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),
+  setGamepadInput: (gamepadInput) => set({ gamepadInput }),
   setMetronomeVolume: (metronomeVolume) => set({ metronomeVolume }),
   setDisplayQuantization: (displayQuantization) => set({ displayQuantization }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),

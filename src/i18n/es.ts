@@ -293,6 +293,9 @@ export const es: Messages = {
     backgroundPlayback: 'Continuar la reproducción en segundo plano',
     backgroundPlaybackHint:
       'Mantiene las tomas grabadas en reproducción cuando PoKeyBoard está minimizado o sin foco. Algunos dispositivos pueden detener el audio al bloquear la pantalla.',
+    gamepad: 'Tocar con un mando de juego',
+    gamepadHint:
+      'La cruceta y los botones frontales tocan una octava, de do a do: izquierda, arriba, derecha, abajo y luego X, Y, B, A. Los botones superiores cambian de octava, el gatillo izquierdo sostiene y el derecho sube la nota un semitono. Toca la pantalla una vez primero: un mando por sí solo no puede iniciar el audio.',
     checking: 'Comprobando…',
     downloadPiano: ({ piano, size }) => `Descargar ${piano} (${size})`,
     deletePiano: ({ piano }) => `Eliminar la descarga de ${piano}`,
@@ -340,6 +343,7 @@ export const es: Messages = {
       webCodecsAudioEncoder: 'Codificador de audio WebCodecs',
       pointerEvents: 'Eventos de puntero',
       touch: 'Entrada táctil',
+      gamepad: 'API de mando de juego',
     },
   },
   about: {

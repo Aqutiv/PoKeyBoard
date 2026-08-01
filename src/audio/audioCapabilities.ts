@@ -12,6 +12,7 @@ export interface AppCapabilities {
   webCodecsAudioEncoder: boolean;
   pointerEvents: boolean;
   touch: boolean;
+  gamepad: boolean;
 }
 
 interface NavigatorMaybeStandalone extends Navigator {
@@ -55,5 +56,6 @@ export function detectCapabilities(): AppCapabilities {
     webCodecsAudioEncoder: 'AudioEncoder' in globalThis,
     pointerEvents: 'PointerEvent' in globalThis,
     touch: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
+    gamepad: typeof navigator.getGamepads === 'function',
   };
 }

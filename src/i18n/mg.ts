@@ -295,6 +295,9 @@ export const mg: Messages = {
     backgroundPlayback: 'Tohizo any ambadika ny fandefasana',
     backgroundPlaybackHint:
       'Manohy mandefa ny rakitra voarakitra rehefa ahena na tsy ifantohana ny PoKeyBoard. Mety mbola hampiato ny feo ny fitaovana sasany rehefa mihidy ny efijery.',
+    gamepad: 'Mitendry amin’ny kapila lalao',
+    gamepadHint:
+      'Ny lakroa sy ny bokotra eo anoloana dia mitendry oktavy iray, do ka hatramin’ny do: ankavia, ambony, ankavanana, ambany, avy eo X, Y, B, A. Ny bokotra ambony manova oktavy, ny kitro havia mihazona ny feo, ary ny havanana manondrotra ny naoty amin’ny antsasa-kentona. Kasiho aloha indray mandeha ny efijery: tsy afaka mampandeha ny feo irery ny kapila.',
     checking: 'Mijery…',
     downloadPiano: ({ piano, size }) => `Alaivo ${piano} (${size})`,
     deletePiano: ({ piano }) => `Fafao ny ${piano} voatariny`,
@@ -341,6 +344,7 @@ export const mg: Messages = {
       webCodecsAudioEncoder: 'Encoder feo WebCodecs',
       pointerEvents: 'Hetsiky ny mpanondro',
       touch: 'Fidirana kasika',
+      gamepad: 'API kapila lalao',
     },
   },
   about: {
