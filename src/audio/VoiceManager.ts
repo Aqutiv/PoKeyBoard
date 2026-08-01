@@ -31,6 +31,7 @@ export class VoiceManager {
   private readonly voices = new Set<Voice>();
   private readonly sustainSources = new Set<NoteSourceId>();
   private readonly activeListeners = new Set<(midis: ReadonlySet<number>) => void>();
+  private readonly sustainListeners = new Set<(down: boolean) => void>();
   private nextVoiceId = 1;
 
   private readonly context: BaseAudioContext;
@@ -131,12 +132,26 @@ export class VoiceManager {
         if (voice.heldByPedal && !voice.releasing) this.releaseVoice(voice, now);
       }
     }
+    if (wasDown !== this.sustainDown) this.emitSustain();
+  }
+
+  /** Change subscription only; the current state is read via sustainDown. */
+  subscribeSustain(listener: (down: boolean) => void): () => void {
+    this.sustainListeners.add(listener);
+    return () => this.sustainListeners.delete(listener);
+  }
+
+  private emitSustain(): void {
+    for (const listener of this.sustainListeners) listener(this.sustainDown);
   }
 
   /** Fast-fade everything; the guarantee behind "never a stuck note". */
   allNotesOff(): void {
     const now = this.context.currentTime;
+    // A panic reset drops the pedal too, so anything showing it has to hear.
+    const sustainWasDown = this.sustainDown;
     this.sustainSources.clear();
+    if (sustainWasDown) this.emitSustain();
     let changed = false;
     for (const voice of this.voices) {
       if (voice.uiActive) {
@@ -175,6 +190,7 @@ export class VoiceManager {
   dispose(): void {
     this.allNotesOff();
     this.activeListeners.clear();
+    this.sustainListeners.clear();
   }
 
   private releaseVoice(voice: Voice, when: number, markReleasingNow = true): void {

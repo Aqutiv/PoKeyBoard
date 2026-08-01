@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useLiveActiveNotes } from '@/app/hooks/useAudioEngine';
+import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -46,8 +46,9 @@ export function PianoKeyboard({
   const showNoteLabels = useSettingsStore((s) => s.showNoteLabels);
   const anchorMidi = useSettingsStore((s) => s.keyboardAnchorMidi);
   const setAnchorMidi = useSettingsStore((s) => s.setKeyboardAnchorMidi);
-  const [sustainOn, setSustainOn] = useState(false);
-  const [pedalKeyDown, setPedalKeyDown] = useState(false);
+  // Both pedal sources — the button's own latch and a held Space — live in the
+  // engine, so the button shows the damper's real state.
+  const pedalDown = useSustainDown();
 
   useEffect(
     () => () => {
@@ -115,10 +116,7 @@ export function PianoKeyboard({
     return input.attach({
       noteOn: (midi, velocity) => audioEngine.noteOn(midi, velocity, 'kbd'),
       noteOff: (midi) => audioEngine.noteOff(midi, 'kbd'),
-      setSustain: (down) => {
-        audioEngine.setSustain(down, 'kbd-pedal');
-        setPedalKeyDown(down);
-      },
+      setSustain: (down) => audioEngine.setSustain(down, 'kbd-pedal'),
     });
   }, [fixedVelocity]);
 
@@ -203,22 +201,16 @@ export function PianoKeyboard({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [shiftRange]);
 
+  // Toggling against the engine rather than a local latch means a panic reset
+  // that dropped the pedal is recovered by the very next click.
   const toggleSustain = useCallback(() => {
-    setSustainOn((current) => {
-      const next = !current;
-      audioEngine.setSustain(next, 'ui-pedal');
-      return next;
-    });
+    audioEngine.setSustain(!audioEngine.isSustainDown(), 'ui-pedal');
   }, []);
 
   const isActive = useCallback(
     (midi: number) => liveActive.has(midi) || (extraActiveMidis?.has(midi) ?? false),
     [liveActive, extraActiveMidis],
   );
-
-  // The latch and the held Space key are independent pedal sources; either one
-  // holds the damper up.
-  const pedalDown = sustainOn || pedalKeyDown;
 
   const whiteWidthPercent = 100 / layout.whiteCount;
 
