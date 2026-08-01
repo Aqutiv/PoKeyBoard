@@ -4,7 +4,9 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
+import { BaseOctave } from './baseOctave';
 import { ComputerKeyboardInput, isModalOpen, isTextInput } from './computerKeyboard';
+import { GamepadInput } from './gamepadInput';
 import {
   BLACK_KEY_HEIGHT,
   computeVisibleWhites,
@@ -44,6 +46,7 @@ export function PianoKeyboard({
   const velocityMode = useSettingsStore((s) => s.velocityMode);
   const fixedVelocity = useSettingsStore((s) => s.fixedVelocity);
   const showNoteLabels = useSettingsStore((s) => s.showNoteLabels);
+  const gamepadEnabled = useSettingsStore((s) => s.gamepadInput);
   const anchorMidi = useSettingsStore((s) => s.keyboardAnchorMidi);
   const setAnchorMidi = useSettingsStore((s) => s.setKeyboardAnchorMidi);
   // Both pedal sources — the button's own latch and a held Space — live in the
@@ -109,16 +112,34 @@ export function PianoKeyboard({
   // Never leave sounding keys behind when the layout shifts or we unmount.
   useEffect(() => () => tracker.releaseAll(), [tracker, layout.lowMidi, layout.highMidi]);
 
+  // Shared by both input sources so Z/X and the bumpers can never disagree
+  // about the octave. Held outside the effects below, which re-run whenever the
+  // velocity or the toggle changes and would otherwise reset it to C4.
+  const [baseOctave] = useState(() => new BaseOctave());
+
   // Desktop computer-keyboard input.
   useEffect(() => {
-    const input = new ComputerKeyboardInput();
+    const input = new ComputerKeyboardInput(baseOctave);
     input.setVelocity(fixedVelocity);
     return input.attach({
       noteOn: (midi, velocity) => audioEngine.noteOn(midi, velocity, 'kbd'),
       noteOff: (midi) => audioEngine.noteOff(midi, 'kbd'),
       setSustain: (down) => audioEngine.setSustain(down, 'kbd-pedal'),
     });
-  }, [fixedVelocity]);
+  }, [fixedVelocity, baseOctave]);
+
+  // Game-controller input. Its own source ids keep held notes and the pedal
+  // independent of the computer keyboard's.
+  useEffect(() => {
+    if (!gamepadEnabled) return;
+    const input = new GamepadInput(baseOctave);
+    input.setVelocity(fixedVelocity);
+    return input.attach({
+      noteOn: (midi, velocity) => audioEngine.noteOn(midi, velocity, 'gamepad'),
+      noteOff: (midi) => audioEngine.noteOff(midi, 'gamepad'),
+      setSustain: (down) => audioEngine.setSustain(down, 'gamepad-pedal'),
+    });
+  }, [fixedVelocity, gamepadEnabled, baseOctave]);
 
   const locate = useCallback(
     (event: React.PointerEvent): { midi: number | null; velocity: number } => {

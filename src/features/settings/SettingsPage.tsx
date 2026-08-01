@@ -28,6 +28,7 @@ const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
   'webCodecsAudioEncoder',
   'pointerEvents',
   'touch',
+  'gamepad',
 ];
 
 function useUpdateAvailable(): boolean {
@@ -156,6 +157,15 @@ export function SettingsPage() {
           />
         </label>
         <p className="settings__hint">{m.settings.backgroundPlaybackHint}</p>
+        <label className="setting-row">
+          <span>{m.settings.gamepad}</span>
+          <input
+            type="checkbox"
+            checked={settings.gamepadInput}
+            onChange={(e) => settings.setGamepadInput(e.target.checked)}
+          />
+        </label>
+        <p className="settings__hint">{m.settings.gamepadHint}</p>
 
         <h2 className="settings__section">{m.settings.appearance}</h2>
         <label className="setting-row">

@@ -1,4 +1,4 @@
-/** Identifies who triggered a note: 'pointer:<id>', 'kbd', 'playback', 'scrub'. */
+/** Identifies who triggered a note: 'pointer:<id>', 'kbd', 'gamepad', 'playback', 'scrub'. */
 export type NoteSourceId = string;
 
 export interface SamplePackVelocityLayer {
