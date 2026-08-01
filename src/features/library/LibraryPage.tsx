@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -7,6 +7,7 @@ import { formatDurationMs } from '@/utils/timing';
 import { filterLibrarySections, LIBRARY_FOLDER_SECTIONS } from './catalog';
 import { LIBRARY_FOLDER_IDS, type LibraryFolderId } from './folders';
 import { openLibraryTrack } from './libraryService';
+import { readLibraryScroll, rememberLibraryScroll } from './scrollMemory';
 import './library.css';
 
 /** Curated built-in tracks: open one on Play to listen, learn, or record over. */
@@ -32,7 +33,35 @@ export function LibraryPage() {
     [folder, query, showFilter],
   );
 
+  // Opening a track routes to Play and unmounts this page, so the list has to be
+  // put back where it was left — 63 classics are a long way to scroll twice.
+  // Each folder keeps its own place; the memory lasts as long as the tab does.
+  const groups = useRef<HTMLDivElement>(null);
+  const openFolder = useRef(folder);
+  const rememberCurrentScroll = (): void => {
+    if (groups.current) rememberLibraryScroll(folder, groups.current.scrollTop);
+  };
+
+  // Restored before paint, so the list never flashes at the top. Keyed on the
+  // folder alone: filtering the classics must not jump the list around.
+  useLayoutEffect(() => {
+    openFolder.current = folder;
+    if (groups.current) groups.current.scrollTop = readLibraryScroll(folder);
+  }, [folder]);
+
+  // Leaving is the other half. A layout effect cleanup is the last moment the
+  // offset can be read — a detached node reports 0 — and the node is held onto
+  // rather than read off the ref, which React need not still be pointing at.
+  useLayoutEffect(() => {
+    const el = groups.current;
+    if (!el) return;
+    return () => rememberLibraryScroll(openFolder.current, el.scrollTop);
+  }, []);
+
   const chooseFolder = (id: LibraryFolderId): void => {
+    // Recorded before the switch, not on the way out of the effect above: by
+    // then the shorter list has rendered and clamped the offset it would read.
+    rememberCurrentScroll();
     // A filter left behind in a hidden folder would silently shorten the list
     // the next time it is opened.
     setQuery('');
@@ -139,7 +168,7 @@ export function LibraryPage() {
           {m.library.filterEmpty({ query })}
         </p>
       ) : null}
-      <div className="library-groups">
+      <div className="library-groups" ref={groups}>
         {sections.map((section) => {
           const list = (
             <ul className="library-list">
