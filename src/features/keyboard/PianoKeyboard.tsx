@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useLiveActiveNotes } from '@/app/hooks/useAudioEngine';
+import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
-import { ComputerKeyboardInput, isTextInput } from './computerKeyboard';
+import { ComputerKeyboardInput, isModalOpen, isTextInput } from './computerKeyboard';
 import {
   BLACK_KEY_HEIGHT,
   computeVisibleWhites,
@@ -46,7 +46,9 @@ export function PianoKeyboard({
   const showNoteLabels = useSettingsStore((s) => s.showNoteLabels);
   const anchorMidi = useSettingsStore((s) => s.keyboardAnchorMidi);
   const setAnchorMidi = useSettingsStore((s) => s.setKeyboardAnchorMidi);
-  const [sustainOn, setSustainOn] = useState(false);
+  // Both pedal sources — the button's own latch and a held Space — live in the
+  // engine, so the button shows the damper's real state.
+  const pedalDown = useSustainDown();
 
   useEffect(
     () => () => {
@@ -187,9 +189,8 @@ export function PianoKeyboard({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTextInput(event.target)) return;
-      // Export dialogs leave the piano mounted behind them, and their own
-      // scrollable body wants the page keys.
-      if (document.querySelector('[aria-modal="true"]')) return;
+      // The dialog's own scrollable body wants the page keys.
+      if (isModalOpen()) return;
       const shift = RANGE_KEYS[event.key];
       if (!shift) return;
       // Otherwise the browser scrolls the page out from under the keyboard.
@@ -200,12 +201,10 @@ export function PianoKeyboard({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [shiftRange]);
 
+  // Toggling against the engine rather than a local latch means a panic reset
+  // that dropped the pedal is recovered by the very next click.
   const toggleSustain = useCallback(() => {
-    setSustainOn((current) => {
-      const next = !current;
-      audioEngine.setSustain(next, 'ui-pedal');
-      return next;
-    });
+    audioEngine.setSustain(!audioEngine.isSustainDown(), 'ui-pedal');
   }, []);
 
   const isActive = useCallback(
@@ -260,10 +259,11 @@ export function PianoKeyboard({
         {controlsExtra}
         <button
           type="button"
-          className={`piano__sustain${playbackPedalDown ? ' is-playback' : ''}${sustainOn ? ' is-on' : ''}`}
-          // The control's own state: playback lights the button as a cue but
-          // never presses it, so this stays the user's sustain toggle.
-          aria-pressed={sustainOn}
+          className={`piano__sustain${playbackPedalDown ? ' is-playback' : ''}${pedalDown ? ' is-on' : ''}`}
+          // Playback lights the button as a cue but never presses it, so it is
+          // kept out of this. Holding Space is the user working the pedal for
+          // real, so it reports as pressed and reverts on release.
+          aria-pressed={pedalDown}
           onClick={toggleSustain}
         >
           {m.piano.sustain}

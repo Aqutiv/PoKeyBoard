@@ -48,7 +48,7 @@ test.describe('Sheet music export', () => {
     await expect(dialog).toHaveCount(0);
   });
 
-  test('leaves the piano range alone while the dialog is open', async ({ page }) => {
+  test('leaves the piano keyboard alone while the dialog is open', async ({ page }) => {
     await gotoAppReady(page);
     await recordShortTake(page);
     const range = page.locator('.piano__range');
@@ -69,6 +69,25 @@ test.describe('Sheet music export', () => {
     // The shortcuts come back once the dialog is gone.
     await page.keyboard.press('ArrowRight');
     await expect(range).not.toHaveText(before!);
+  });
+
+  test('does not pedal the piano behind the dialog', async ({ page }) => {
+    await gotoAppReady(page);
+    await recordShortTake(page);
+
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Sheet music (PDF)' }).click();
+    await expect(page.getByRole('dialog', { name: 'Export sheet music' })).toBeVisible();
+
+    // Space belongs to the dialog's focused button, not to the hidden piano.
+    // That activation is why this assertion gets a test of its own: it leaves
+    // the dialog in whatever state the button dictates.
+    await page.keyboard.down('Space');
+    await expect(page.getByRole('button', { name: 'Sustain' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await page.keyboard.up('Space');
   });
 
   test('exports the library Moonlight Sonata across multiple pages', async ({ page }) => {

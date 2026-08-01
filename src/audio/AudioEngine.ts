@@ -46,10 +46,12 @@ export class AudioEngine {
 
   private readonly statusListeners = new Set<(status: EngineStatus) => void>();
   private readonly activeNoteListeners = new Set<(midis: ReadonlySet<number>) => void>();
+  private readonly sustainListeners = new Set<(down: boolean) => void>();
   private readonly inputListeners = new Set<(event: InputNoteEvent) => void>();
   private readonly schedulerTickListeners = new Set<() => void>();
   private schedulerTicker: AudioWorkletNode | null = null;
   private currentActiveNotes: ReadonlySet<number> = new Set();
+  private currentSustainDown = false;
   private coreLoadStarted = false;
 
   /**
@@ -174,6 +176,10 @@ export class AudioEngine {
     this.voices.subscribeActiveNotes((midis) => {
       this.currentActiveNotes = midis;
       for (const listener of this.activeNoteListeners) listener(midis);
+    });
+    this.voices.subscribeSustain((down) => {
+      this.currentSustainDown = down;
+      for (const listener of this.sustainListeners) listener(down);
     });
     this.setStatus(this.context.state === 'running' ? 'running' : 'suspended');
 
@@ -465,6 +471,17 @@ export class AudioEngine {
   subscribeActiveNotes(listener: (midis: ReadonlySet<number>) => void): () => void {
     this.activeNoteListeners.add(listener);
     return () => this.activeNoteListeners.delete(listener);
+  }
+
+  /** True while any source holds the damper up — the pedal's only truth. */
+  isSustainDown(): boolean {
+    return this.currentSustainDown;
+  }
+
+  /** Change subscription only, like subscribeActiveNotes. */
+  subscribeSustain(listener: (down: boolean) => void): () => void {
+    this.sustainListeners.add(listener);
+    return () => this.sustainListeners.delete(listener);
   }
 
   /** Progress for the selected piano; survives instrument switches. */

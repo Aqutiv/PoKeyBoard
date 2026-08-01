@@ -28,3 +28,11 @@ const getActiveNotes = () => audioEngine.getActiveNotes();
 export function useLiveActiveNotes(): ReadonlySet<number> {
   return useSyncExternalStore(subscribeActiveNotes, getActiveNotes);
 }
+
+const subscribeSustain = (onStoreChange: () => void) => audioEngine.subscribeSustain(onStoreChange);
+const getSustainDown = () => audioEngine.isSustainDown();
+
+/** The pedal as the engine has it, so a panic reset cannot leave the UI lying. */
+export function useSustainDown(): boolean {
+  return useSyncExternalStore(subscribeSustain, getSustainDown);
+}

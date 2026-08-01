@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { gotoAppReady, nav, transport } from './helpers';
+import { gotoAppReady, nav, recordShortTake, transport } from './helpers';
 
 test.describe('app shell and piano', () => {
   test('loads the shell with nav, transport, and keyboard', async ({ page }) => {
@@ -52,6 +52,33 @@ test.describe('app shell and piano', () => {
     await expect(sustain).toHaveAttribute('aria-pressed', 'true');
     await sustain.click();
     await expect(sustain).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('holding Space works the sustain pedal', async ({ page }) => {
+    await gotoAppReady(page);
+    const sustain = page.getByRole('button', { name: 'Sustain' });
+    await expect(sustain).toHaveAttribute('aria-pressed', 'false');
+    // Momentary, like a real pedal — down while held, up on release.
+    await page.keyboard.down('Space');
+    await expect(sustain).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.up('Space');
+    await expect(sustain).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  test('drops the pedal display when a recording stop clears sustain', async ({ page }) => {
+    await gotoAppReady(page);
+    const sustain = page.getByRole('button', { name: 'Sustain' });
+    await sustain.click();
+    await expect(sustain).toHaveAttribute('aria-pressed', 'true');
+
+    // Stopping a recording panics every voice off, the pedal included, so the
+    // button must not go on claiming the damper is up.
+    await recordShortTake(page);
+    await expect(sustain).toHaveAttribute('aria-pressed', 'false');
+
+    // And the very next click still turns it back on.
+    await sustain.click();
+    await expect(sustain).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('range shifts by a single white key or by a whole octave', async ({ page }) => {
