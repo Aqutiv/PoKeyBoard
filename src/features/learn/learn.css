@@ -11,14 +11,21 @@
   background: var(--surface-1);
 }
 
+/* Three segments at 320px leave ~92px each, and "Intermediate" needs ~88px at
+   14px — so the type steps down on narrow screens, and ellipsis backs it up
+   for whichever locale still overruns. */
 .learn-levels__option {
   flex: 1;
+  min-width: 0;
   min-height: 40px;
-  padding: 0 12px;
+  padding: 0 6px;
   border-radius: calc(var(--radius-m) - 2px);
   color: var(--text-dim);
-  font-size: 14px;
+  font-size: clamp(11px, 3vw, 14px);
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .learn-levels__option.is-selected {
@@ -39,6 +46,28 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+/* Sticks to the top of the scroller as its chapters pass beneath it — hence
+   the opaque page background rather than a transparent one. Same treatment as
+   the library's composer headings. */
+.learn-part__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 14px 2px 6px;
+  background: var(--surface-0);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.learn-part:first-child .learn-part__heading {
+  padding-top: 2px;
 }
 
 .learn-item {
@@ -201,6 +230,34 @@
   flex: 1;
 }
 
+/* A short phone gives the card barely 180px once the keyboard, footer and nav
+   have taken their share — enough to hide a whole answer row. Buy some back
+   from the key bed and the padding; the card still scrolls beyond that. */
+@media (max-height: 640px) {
+  .learn-runner__keyboard {
+    height: clamp(130px, 26vh, 300px);
+  }
+
+  .learn-runner__card {
+    padding: 10px;
+  }
+
+  .learn-card__body {
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .learn-card__heading {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .learn-quiz .learn-diagram__keys {
+    height: 62px;
+  }
+}
+
 /* -------------------------------- */
 /* Exercise panel                    */
 /* -------------------------------- */
@@ -237,6 +294,64 @@
 
 .learn-exercise__actions:not(:empty) {
   margin-top: 10px;
+}
+
+/* -------------------------------- */
+/* Quiz panel                        */
+/* -------------------------------- */
+
+.learn-quiz {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* The answer row and the score have to be reachable without scrolling the
+   card, so the quiz gets a shorter diagram than a theory step's. */
+.learn-quiz .learn-diagram {
+  margin: 0 0 10px;
+}
+
+.learn-quiz .learn-diagram__keys {
+  height: 74px;
+}
+
+.learn-quiz__prompt {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Wraps to two rows on a narrow phone rather than shrinking below the touch
+   target — seven letters will not fit on one line at 320px. */
+.learn-quiz__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.learn-quiz__choice {
+  flex: 1 1 auto;
+  min-width: 38px;
+  min-height: var(--touch-target);
+  padding: 0 4px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.learn-quiz__choice:disabled {
+  opacity: 0.5;
+}
+
+.learn-quiz__status {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--accent-strong);
 }
 
 /* -------------------------------- */

@@ -1,7 +1,7 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import type { TrackEvent } from '@/features/library/trackBuilder';
 import type { Messages } from '@/i18n/types';
-import type { ExerciseSpec } from './exerciseSpec';
+import type { ExerciseSpec, PitchClass } from './exerciseSpec';
 import type { LearnLevelId } from './levels';
 
 /**
@@ -11,6 +11,9 @@ import type { LearnLevelId } from './levels';
  */
 export type LearnChapterId = keyof Messages['learn']['chapterTitles'];
 
+/** The named run of chapters a chapter belongs to inside its level. */
+export type LearnPartId = keyof Messages['learn']['partTitles'];
+
 export type LearnStepId = string;
 
 /** Catalog entry: metadata only. Steps arrive through `load`. */
@@ -19,6 +22,8 @@ export interface LearnChapterMeta {
   level: LearnLevelId;
   /** 1-based position within its level; drives display order. */
   order: number;
+  /** Which part of the level this sits under. Parts are consecutive runs. */
+  part: LearnPartId;
   /**
    * `null` until this chapter's steps are authored, which is what renders it
    * as "coming soon". Kept as a thunk so 19 chapters of content never land in
@@ -32,7 +37,7 @@ export interface LearnChapter {
   steps: readonly LearnStep[];
 }
 
-export type LearnStep = TheoryStep | ExerciseStep;
+export type LearnStep = TheoryStep | ExerciseStep | QuizStep;
 
 interface StepBase {
   /**
@@ -55,6 +60,24 @@ export interface ExerciseStep extends StepBase {
   kind: 'exercise';
   spec: ExerciseSpec;
 }
+
+/**
+ * Recognition rather than production: the app shows something and the user
+ * names it. Playing a note and knowing what it is called are different skills,
+ * and an exercise can only ever test the first.
+ */
+export interface QuizStep extends StepBase {
+  kind: 'quiz';
+  /** Correct answers needed before the step is satisfied. */
+  rounds: number;
+  question: QuizQuestion;
+}
+
+export type QuizQuestion = {
+  kind: 'nameTheKey';
+  /** Drawn from in a fixed order; also the order the answer buttons appear in. */
+  pitchClasses: readonly PitchClass[];
+};
 
 export type LearnVisual =
   | {

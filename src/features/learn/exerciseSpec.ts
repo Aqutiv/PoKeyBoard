@@ -52,7 +52,21 @@ export type ExerciseSpec =
       together?: Togetherness;
     }
   /** A whole black-key group: 2 means {C♯,D♯}, 3 means {F♯,G♯,A♯}. */
-  | { kind: 'blackKeyGroup'; size: 2 | 3; together?: Togetherness };
+  | { kind: 'blackKeyGroup'; size: 2 | 3; together?: Togetherness }
+  /**
+   * These pitch classes, in this order, in any octave. The only ordered kind —
+   * everything else counts a set, which cannot express "C then D" or a scale
+   * whose first and last note are both C.
+   */
+  | {
+      kind: 'sequence';
+      pitchClasses: readonly PitchClass[];
+      /** 'up'/'down' require each note to move that way against the previous. */
+      direction?: 'up' | 'down' | 'any';
+    };
+
+/** Every kind but `sequence`, which is counted by position rather than membership. */
+export type UnorderedSpec = Exclude<ExerciseSpec, { kind: 'sequence' }>;
 
 /** Denominator of the "{done} of {total}" readout. */
 export function goalTotal(spec: ExerciseSpec): number {
@@ -69,6 +83,8 @@ export function goalTotal(spec: ExerciseSpec): number {
       return 2;
     case 'blackKeyGroup':
       return spec.size;
+    case 'sequence':
+      return spec.pitchClasses.length;
   }
 }
 

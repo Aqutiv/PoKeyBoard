@@ -12,13 +12,14 @@ import {
 } from '@/features/learn/progress';
 
 const chapterOne = findLearnChapter('meetTheKeyboard');
-const chapterTwo = findLearnChapter('musicalAlphabet');
+/** Authored chapters keep moving; this one is deliberately still a stub. */
+const unwritten = findLearnChapter('halfStepsWholeSteps');
 
 describe('chapterStatus', () => {
   it('calls an unauthored chapter coming soon, not locked', () => {
     // "Not written yet" and "not started yet" are different states: telling
     // someone to come back later for an untouched chapter would be nonsense.
-    expect(chapterStatus(chapterTwo!, EMPTY_LEARN_PROGRESS)).toBe('comingSoon');
+    expect(chapterStatus(unwritten!, EMPTY_LEARN_PROGRESS)).toBe('comingSoon');
   });
 
   it('calls an untouched authored chapter available', () => {

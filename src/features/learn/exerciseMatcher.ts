@@ -4,6 +4,7 @@ import {
   pitchClassOf,
   type ExerciseSpec,
   type Togetherness,
+  type UnorderedSpec,
 } from './exerciseSpec';
 
 /**
@@ -25,6 +26,9 @@ export interface ExerciseState {
   /** Midis counted toward the goal. Grows monotonically for cumulative specs;
    *  reflects the current gesture for specs that require simultaneity. */
   credited: ReadonlySet<number>;
+  /** `sequence` only: the midis matched so far, in the order they were played.
+   *  A set cannot carry order, nor a scale whose first and last note are both C. */
+  run: readonly number[];
   /** Last press time per midi, audio-clock ms — backs `onsetWindowMs`. */
   onsets: ReadonlyMap<number, number>;
   satisfied: boolean;
@@ -42,7 +46,7 @@ export interface MidiRange {
 }
 
 export function initExercise(): ExerciseState {
-  return { credited: new Set(), onsets: new Map(), satisfied: false };
+  return { credited: new Set(), run: [], onsets: new Map(), satisfied: false };
 }
 
 /**
@@ -62,15 +66,23 @@ export function reduceExercise(
   const onsets = new Map(state.onsets);
   if (input.kind === 'press') onsets.set(input.midi, input.atMs);
 
+  if (spec.kind === 'sequence') {
+    // Order is a story about onsets; releasing a key says nothing about where
+    // in the line you are.
+    const run = input.kind === 'press' ? advanceRun(spec, state.run, input.midi) : state.run;
+    return { ...state, run, onsets, satisfied: run.length >= goalTotal(spec) };
+  }
+
   const candidate = candidateSet(input, onsets, togethernessOf(spec));
   const credited = creditFrom(spec, candidate);
-  return { credited, onsets, satisfied: credited.size >= goalTotal(spec) };
+  return { ...state, credited, onsets, satisfied: credited.size >= goalTotal(spec) };
 }
 
 export function progressOf(spec: ExerciseSpec, state: ExerciseState): ExerciseProgress {
   const total = goalTotal(spec);
+  const done = spec.kind === 'sequence' ? state.run.length : state.credited.size;
   return {
-    done: state.satisfied ? total : Math.min(state.credited.size, total),
+    done: state.satisfied ? total : Math.min(done, total),
     total,
     satisfied: state.satisfied,
   };
@@ -132,6 +144,20 @@ export function targetMidisFor(
       }
       return out;
     }
+
+    case 'sequence': {
+      // Only the next note is a target: showing the whole line at once would
+      // tell the user the answer instead of where they are in it.
+      const expected = spec.pitchClasses[state.run.length];
+      if (expected === undefined) return out;
+      const previous = state.run[state.run.length - 1];
+      for (let midi = range.lowMidi; midi <= range.highMidi; midi += 1) {
+        if (pitchClassOf(midi) !== expected) continue;
+        if (previous !== undefined && !directionHolds(spec.direction, previous, midi)) continue;
+        out.add(midi);
+      }
+      return out;
+    }
   }
 }
 
@@ -152,7 +178,44 @@ export function needsRangeShift(
 
 // ---- internals ----------------------------------------------------------
 
-function togethernessOf(spec: ExerciseSpec): Togetherness | undefined {
+/**
+ * Walk the run on by one note.
+ *
+ * A wrong note breaks the run — but if it could begin a fresh one, it starts
+ * there rather than making the user lift their hands and re-begin. A slip then
+ * costs one attempt instead of the whole line.
+ */
+function advanceRun(
+  spec: Extract<ExerciseSpec, { kind: 'sequence' }>,
+  run: readonly number[],
+  midi: number,
+): readonly number[] {
+  if (fitsNext(spec, run, midi)) return [...run, midi];
+  return fitsNext(spec, [], midi) ? [midi] : [];
+}
+
+function fitsNext(
+  spec: Extract<ExerciseSpec, { kind: 'sequence' }>,
+  run: readonly number[],
+  midi: number,
+): boolean {
+  const expected = spec.pitchClasses[run.length];
+  if (expected === undefined || pitchClassOf(midi) !== expected) return false;
+  const previous = run[run.length - 1];
+  return previous === undefined || directionHolds(spec.direction, previous, midi);
+}
+
+function directionHolds(
+  direction: 'up' | 'down' | 'any' | undefined,
+  previous: number,
+  midi: number,
+): boolean {
+  if (direction === 'up') return midi > previous;
+  if (direction === 'down') return midi < previous;
+  return true;
+}
+
+function togethernessOf(spec: UnorderedSpec): Togetherness | undefined {
   switch (spec.kind) {
     case 'distinctKeys':
     case 'risingLeap':
@@ -189,7 +252,7 @@ function candidateSet(
   return out;
 }
 
-function creditFrom(spec: ExerciseSpec, candidate: ReadonlySet<number>): ReadonlySet<number> {
+function creditFrom(spec: UnorderedSpec, candidate: ReadonlySet<number>): ReadonlySet<number> {
   switch (spec.kind) {
     case 'distinctKeys':
       return candidate;

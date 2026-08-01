@@ -6,6 +6,7 @@ import { isBusyState } from '@/features/transport/transportMachine';
 import { transportController } from '@/features/transport/transportController';
 import { useI18n } from '@/i18n/i18nContext';
 import { KeyboardDiagram } from './KeyboardDiagram';
+import { QuizPanel } from './QuizPanel';
 import { StaffSnippet } from './StaffSnippet';
 import { findLearnChapter } from './chapters';
 import { loadChapterProse } from './content';
@@ -15,6 +16,7 @@ import { needsRangeShift, targetMidisFor, type MidiRange } from './exerciseMatch
 import { chapterStep, withChapterDone, withChapterStep, type LearnProgress } from './progress';
 import type { LearnChapter, LearnChapterId, LearnStep } from './types';
 import { useExercise } from './useExercise';
+import { useQuiz } from './useQuiz';
 
 const DEFAULT_ANCHOR_MIDI = 60;
 const EMPTY_TARGETS: ReadonlySet<number> = new Set();
@@ -42,7 +44,10 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
   const [chapter, setChapter] = useState<LearnChapter | null>(null);
   const [prose, setProse] = useState<ChapterProse | null>(null);
-  const [index, setIndex] = useState(() => chapterStep(chapterId, progress));
+  // Held apart from `index` so the async load handler can close over a value
+  // that never moves, without reading a ref during render.
+  const [openingIndex] = useState(() => chapterStep(chapterId, progress));
+  const [index, setIndex] = useState(openingIndex);
   const [anchorMidi, setAnchorMidi] = useState(DEFAULT_ANCHOR_MIDI);
   const [range, setRange] = useState<MidiRange>({ lowMidi: 60, highMidi: 72 });
   const [showingHint, setShowingHint] = useState(false);
@@ -64,18 +69,28 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
         if (cancelled) return;
         setChapter(loadedChapter);
         setProse(loadedProse);
+        // Settle the opening step here rather than letting the render-phase
+        // reset below catch it. The keyboard is live while the chapter module
+        // is still in flight, so a user who shifts the range in that window
+        // would otherwise have it snapped back the moment the chapter landed.
+        const opening = loadedChapter.steps[Math.min(openingIndex, loadedChapter.steps.length - 1)];
+        if (opening) {
+          setSettledStepId(opening.id);
+          if (opening.anchorMidi !== undefined) setAnchorMidi(opening.anchorMidi);
+        }
       },
     );
     return () => {
       cancelled = true;
     };
-  }, [chapterId, language, meta]);
+  }, [chapterId, language, meta, openingIndex]);
 
   const steps = chapter?.steps ?? [];
   const step: LearnStep | undefined = steps[Math.min(index, steps.length - 1)];
   const spec = step?.kind === 'exercise' ? step.spec : null;
 
   const exercise = useExercise(spec);
+  const quiz = useQuiz(step?.kind === 'quiz' ? step : null);
   const loadProgress = useSampleLoadProgress();
   // `noteOn` emits no input event when the pitch has no decoded sample, so an
   // exercise offered before the core pack lands would be quietly unwinnable.
@@ -111,7 +126,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
   const isLast = steps.length > 0 && index >= steps.length - 1;
   const canAdvance =
-    step?.kind !== 'exercise' || exercise.progress.satisfied || exercise.skipAvailable;
+    step?.kind === 'exercise'
+      ? exercise.progress.satisfied || exercise.skipAvailable
+      : step?.kind === 'quiz'
+        ? quiz.satisfied
+        : true;
 
   const finish = useCallback(() => {
     onProgress(withChapterDone(progress, chapterId));
@@ -226,6 +245,8 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
             {m.learn.listen}
           </button>
         ) : null}
+
+        {step?.kind === 'quiz' ? <QuizPanel session={quiz} /> : null}
 
         {step?.kind === 'exercise' ? (
           <div className="learn-exercise">

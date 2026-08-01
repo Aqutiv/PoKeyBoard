@@ -23,6 +23,9 @@ const PROSE: Partial<
     // Other locales land here as they are written; until then this chapter
     // reads in English rather than not at all.
   },
+  musicalAlphabet: {
+    en: () => import('./en/musicalAlphabet').then((m) => m.musicalAlphabetEn),
+  },
 };
 
 /**

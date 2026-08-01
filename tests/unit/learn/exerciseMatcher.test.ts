@@ -378,6 +378,104 @@ describe('exactKeys', () => {
   });
 });
 
+describe('sequence', () => {
+  // C D E F G A B C — the first and last note share a pitch class, which is
+  // exactly why a run cannot be a set.
+  const scaleUp: ExerciseSpec = {
+    kind: 'sequence',
+    pitchClasses: [0, 2, 4, 5, 7, 9, 11, 0],
+    direction: 'up',
+  };
+
+  const walk = (from: number, degrees: readonly number[]): Beat[] =>
+    degrees.map((semitones) => ['on', from + semitones] as Beat);
+
+  it('accepts the scale walked up in order', () => {
+    expect(progress(scaleUp, walk(C4, [0, 2, 4, 5, 7, 9, 11, 12]))).toBe('8/8 ok');
+  });
+
+  it('counts a repeated pitch class twice, at its own position', () => {
+    expect(progress(scaleUp, walk(C4, [0, 2, 4, 5, 7, 9, 11]))).toBe('7/8');
+  });
+
+  it('rejects the closing C played below the B', () => {
+    // Same pitch classes, wrong shape: `direction: 'up'` is what forbids it.
+    expect(progress(scaleUp, walk(C4, [0, 2, 4, 5, 7, 9, 11, 0]))).toBe('7/8');
+  });
+
+  it('clears the run on a wrong note', () => {
+    expect(
+      progress(scaleUp, [
+        ['on', C4],
+        ['on', 62],
+        ['on', 65], // F, where E was expected
+      ]),
+    ).toBe('0/8');
+  });
+
+  it('restarts at one when the wrong note could begin a fresh run', () => {
+    // A slip should cost an attempt, not the whole line.
+    expect(
+      progress(scaleUp, [
+        ['on', C4],
+        ['on', 62],
+        ['on', C5], // a C: wrong here, but a legal opening
+      ]),
+    ).toBe('1/8');
+  });
+
+  it('ignores releases entirely', () => {
+    expect(
+      progress(scaleUp, [
+        ['on', C4],
+        ['off', C4],
+        ['on', 62],
+        ['off', 62],
+      ]),
+    ).toBe('2/8');
+  });
+
+  it('walks down when the direction says so', () => {
+    const scaleDown: ExerciseSpec = {
+      kind: 'sequence',
+      pitchClasses: [0, 11, 9, 7, 5, 4, 2, 0],
+      direction: 'down',
+    };
+    expect(progress(scaleDown, walk(C4, [12, 11, 9, 7, 5, 4, 2, 0]))).toBe('8/8 ok');
+    // A B *above* the opening C is the right letter going the wrong way, and a
+    // B cannot open this line either — so the run clears rather than stalling.
+    // Ignoring wrong notes instead would let someone mash their way through.
+    expect(
+      progress(scaleDown, [
+        ['on', C4],
+        ['on', 71],
+      ]),
+    ).toBe('0/8');
+  });
+
+  it('ignores height when no direction is asked for', () => {
+    const anyOrder: ExerciseSpec = { kind: 'sequence', pitchClasses: [2, 5, 9] };
+    expect(
+      progress(anyOrder, [
+        ['on', 62],
+        ['on', 53],
+        ['on', 81],
+      ]),
+    ).toBe('3/3 ok');
+  });
+
+  it('targets only the next note, and only where it is legal', () => {
+    const started = run(scaleUp, [['on', C4]]);
+    // D above C4, not the D below it, and not the E after it.
+    expect([...targetMidisFor(scaleUp, started, { lowMidi: 48, highMidi: 84 })]).toEqual([62, 74]);
+  });
+
+  it('asks for a range shift when the next note is off screen', () => {
+    const started = run(scaleUp, [['on', 72]]);
+    expect(needsRangeShift(scaleUp, started, { lowMidi: 60, highMidi: 73 })).toBe(true);
+  });
+});
+
 describe('satisfaction is sticky', () => {
   it('does not fall back when the keys are released', () => {
     const spec: ExerciseSpec = {

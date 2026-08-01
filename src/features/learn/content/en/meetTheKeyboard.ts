@@ -71,7 +71,7 @@ export const meetTheKeyboardEn: ChapterProse = {
     heading: 'Find three different Cs',
     body: [
       'There is a C in front of every group of two, so a full piano has eight of them. They are all C.',
-      'Your screen only shows part of the keyboard at a time. Use the ‹ and › arrows just above the keys to slide along and find the next one.',
+      'Your screen only shows part of the keyboard at a time. Use the ‹ and › arrows just above the keys to slide along and find the next one — the left and right arrow keys do the same thing.',
     ],
     prompt: 'Play three different Cs.',
   },

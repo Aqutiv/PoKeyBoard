@@ -3,10 +3,10 @@ import { loadLearnProgress, saveLearnProgress } from '@/data/learnProgressReposi
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { ChapterRunner } from './ChapterRunner';
-import { LEARN_CHAPTERS_BY_LEVEL } from './chapters';
+import { LEARN_SECTIONS_BY_LEVEL } from './chapters';
 import { LEARN_LEVEL_IDS, type LearnLevelId } from './levels';
 import { chapterStatus, EMPTY_LEARN_PROGRESS, type LearnProgress } from './progress';
-import type { LearnChapterId } from './types';
+import type { LearnChapterId, LearnChapterMeta } from './types';
 import './learn.css';
 
 /** A course in playing: chapters of theory and exercises, beginner to advanced. */
@@ -49,7 +49,49 @@ export function LearnPage() {
     );
   }
 
-  const chapters = LEARN_CHAPTERS_BY_LEVEL[level];
+  const renderChapter = (chapter: LearnChapterMeta) => {
+    const title = m.learn.chapterTitles[chapter.id];
+    const status = chapterStatus(chapter, progress);
+    const locked = status === 'comingSoon';
+    const step = progress.chapters[chapter.id]?.step ?? 0;
+    return (
+      <li key={chapter.id} className={`learn-item is-${status}`}>
+        <button
+          type="button"
+          className="learn-item__main"
+          disabled={locked}
+          aria-label={locked ? m.learn.lockedLabel({ title }) : m.learn.openLabel({ title })}
+          onClick={() => setOpenId(chapter.id)}
+        >
+          <span className="learn-item__number">
+            {m.learn.chapterNumber({ order: chapter.order })}
+            {locked ? (
+              <svg
+                className="learn-item__lock"
+                viewBox="0 0 24 24"
+                aria-hidden="true"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <rect x="5" y="11" width="14" height="9" rx="2" />
+                <path d="M8 11V7.5a4 4 0 0 1 8 0V11" />
+              </svg>
+            ) : null}
+          </span>
+          <span className="learn-item__title">{title}</span>
+          <span className="learn-item__blurb">{m.learn.chapterBlurbs[chapter.id]}</span>
+          <span className="learn-item__meta">
+            {locked ? m.learn.comingSoon : null}
+            {status === 'completed' ? m.learn.completed : null}
+            {status === 'inProgress' ? m.learn.resumeAt({ step: step + 1 }) : null}
+          </span>
+        </button>
+      </li>
+    );
+  };
 
   return (
     <section className="page" aria-label={m.learn.title}>
@@ -70,54 +112,20 @@ export function LearnPage() {
           </button>
         ))}
       </div>
+      {/* One scroller over all the parts, not one per part, so the headings
+          can stick as their chapters pass beneath them. */}
       <div className="learn-scroll">
-        <ul className="learn-list">
-          {chapters.map((chapter) => {
-            const title = m.learn.chapterTitles[chapter.id];
-            const status = chapterStatus(chapter, progress);
-            const locked = status === 'comingSoon';
-            const step = progress.chapters[chapter.id]?.step ?? 0;
-            return (
-              <li key={chapter.id} className={`learn-item is-${status}`}>
-                <button
-                  type="button"
-                  className="learn-item__main"
-                  disabled={locked}
-                  aria-label={
-                    locked ? m.learn.lockedLabel({ title }) : m.learn.openLabel({ title })
-                  }
-                  onClick={() => setOpenId(chapter.id)}
-                >
-                  <span className="learn-item__number">
-                    {m.learn.chapterNumber({ order: chapter.order })}
-                    {locked ? (
-                      <svg
-                        className="learn-item__lock"
-                        viewBox="0 0 24 24"
-                        aria-hidden="true"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                      >
-                        <rect x="5" y="11" width="14" height="9" rx="2" />
-                        <path d="M8 11V7.5a4 4 0 0 1 8 0V11" />
-                      </svg>
-                    ) : null}
-                  </span>
-                  <span className="learn-item__title">{title}</span>
-                  <span className="learn-item__blurb">{m.learn.chapterBlurbs[chapter.id]}</span>
-                  <span className="learn-item__meta">
-                    {locked ? m.learn.comingSoon : null}
-                    {status === 'completed' ? m.learn.completed : null}
-                    {status === 'inProgress' ? m.learn.resumeAt({ step: step + 1 }) : null}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        {LEARN_SECTIONS_BY_LEVEL[level].map((section) => {
+          const headingId = `learn-part-${section.part}`;
+          return (
+            <section className="learn-part" key={section.part} aria-labelledby={headingId}>
+              <h2 className="learn-part__heading" id={headingId}>
+                {m.learn.partTitles[section.part]}
+              </h2>
+              <ul className="learn-list">{section.chapters.map(renderChapter)}</ul>
+            </section>
+          );
+        })}
       </div>
     </section>
   );

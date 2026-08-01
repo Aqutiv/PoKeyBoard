@@ -24,12 +24,19 @@ async function gotoLearn(page: Page): Promise<void> {
   await expect(levels(page)).toBeVisible({ timeout: 30_000 });
 }
 
-/** Open chapter 1 and wait for the core samples, or input emits nothing. */
-async function openChapterOne(page: Page): Promise<void> {
+/** Open a chapter and wait for the core samples, or input emits nothing. */
+async function openChapter(page: Page, title: string): Promise<void> {
   await gotoLearn(page);
-  await page.getByRole('button', { name: 'Open Meet the Keyboard' }).click();
+  await page.getByRole('button', { name: `Open ${title}` }).click();
   await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
 }
+
+async function openChapterOne(page: Page): Promise<void> {
+  await openChapter(page, 'Meet the Keyboard');
+}
+
+/** The white keys of one octave from middle C, in alphabet order. */
+const WALK_UP = ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK'];
 
 const progressLine = (page: Page) => page.locator('.learn-exercise__progress');
 const nextButton = (page: Page) => page.getByRole('button', { name: 'Next' });
@@ -81,22 +88,44 @@ test.describe('learn outline', () => {
     await expect(levels(page)).toBeVisible();
   });
 
-  test('lists ten beginner and nine advanced chapters', async ({ page }) => {
+  test('lists three levels of ten chapters', async ({ page }) => {
     await gotoLearn(page);
+    await expect(levels(page).getByRole('button')).toHaveText([
+      'Beginner',
+      'Intermediate',
+      'Advanced',
+    ]);
     await expect(levels(page).getByRole('button', { name: 'Beginner' })).toHaveAttribute(
       'aria-pressed',
       'true',
     );
-    await expect(chapterButtons(page)).toHaveCount(10);
+
+    for (const level of ['Beginner', 'Intermediate', 'Advanced']) {
+      await levels(page).getByRole('button', { name: level }).click();
+      await expect(chapterButtons(page), level).toHaveCount(10);
+    }
+  });
+
+  test('groups each level into three named parts', async ({ page }) => {
+    await gotoLearn(page);
+    await expect(page.locator('.learn-part__heading')).toHaveText([
+      'The instrument',
+      'Reading music',
+      'Playing',
+    ]);
 
     await levels(page).getByRole('button', { name: 'Advanced' }).click();
-    await expect(chapterButtons(page)).toHaveCount(9);
+    await expect(page.locator('.learn-part__heading')).toHaveText([
+      'Richer harmony',
+      'Independence and control',
+      'Making it your own',
+    ]);
   });
 
   test('remembers the level across a reload', async ({ page }) => {
     await gotoLearn(page);
     await levels(page).getByRole('button', { name: 'Advanced' }).click();
-    await expect(chapterButtons(page)).toHaveCount(9);
+    await expect(page.locator('.learn-part__heading').first()).toHaveText('Richer harmony');
     await expect
       .poll(() => persistedSetting(page, 'learnLevel'), { timeout: 10_000 })
       .toBe('advanced');
@@ -109,13 +138,16 @@ test.describe('learn outline', () => {
     );
   });
 
-  test('unlocks only the first chapter', async ({ page }) => {
+  test('unlocks only the authored chapters', async ({ page }) => {
     await gotoLearn(page);
     await expect(page.getByRole('button', { name: 'Open Meet the Keyboard' })).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Open The Musical Alphabet' })).toBeEnabled();
     await expect(
-      page.getByRole('button', { name: 'The Musical Alphabet — coming soon' }),
+      page.getByRole('button', {
+        name: 'Half Steps, Whole Steps & the Black Keys — coming soon',
+      }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(9);
+    await expect(page.getByText('Coming soon')).toHaveCount(8);
   });
 });
 
@@ -231,5 +263,129 @@ test.describe('chapter runner', () => {
 
     await nav(page).getByRole('button', { name: 'Play' }).click();
     await expect(page.locator('.piano__range')).toHaveText(before);
+  });
+
+  test('arrow keys move the lesson keyboard, not the Play one', async ({ page }) => {
+    // Main gained an arrow-key range shortcut after this feature was written;
+    // it routes through the same setter the runner overrides, so it should
+    // move the lesson's local anchor and leave Play's setting alone.
+    await gotoBooted(page, '/#/play');
+    await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
+    const playRange = await page.locator('.piano__range').innerText();
+
+    await openChapterOne(page);
+    const lessonRange = await page.locator('.piano__range').innerText();
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('.piano__range')).not.toHaveText(lessonRange);
+
+    await page.getByRole('button', { name: 'Close chapter' }).click();
+    await nav(page).getByRole('button', { name: 'Play' }).click();
+    await expect(page.locator('.piano__range')).toHaveText(playRange);
+  });
+});
+
+test.describe('chapter two', () => {
+  async function openChapterTwo(page: Page): Promise<void> {
+    await openChapter(page, 'The Musical Alphabet');
+  }
+
+  /** Step past the opening theory card onto the first exercise. */
+  async function gotoWalkUp(page: Page): Promise<void> {
+    await openChapterTwo(page);
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'Walk up from C' })).toBeVisible();
+  }
+
+  test('counts the scale walked up in order', async ({ page }) => {
+    await gotoWalkUp(page);
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const [index, code] of WALK_UP.entries()) {
+      await playKey(page, code);
+      const done = index + 1;
+      await expect(progressLine(page)).toHaveText(done === 8 ? 'Nicely done.' : `${done} of 8`);
+    }
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('a wrong note drops the run back', async ({ page }) => {
+    await gotoWalkUp(page);
+    await playKey(page, 'KeyA'); // C
+    await playKey(page, 'KeyS'); // D
+    await expect(progressLine(page)).toHaveText('2 of 8');
+    await playKey(page, 'KeyF'); // F, where E was due
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    await expect(nextButton(page)).toBeDisabled();
+  });
+
+  test('the quiz gates Next until five keys are named', async ({ page }) => {
+    await gotoWalkUp(page);
+    for (const code of WALK_UP) await playKey(page, code);
+    await nextButton(page).click(); // to "Where each letter hides"
+    await nextButton(page).click(); // to the quiz
+
+    await expect(page.getByRole('heading', { name: 'Which key is this?' })).toBeVisible();
+    await expect(nextButton(page)).toBeDisabled();
+    await expect(page.locator('.learn-quiz__status')).toHaveText('0 of 5');
+
+    // Questions are drawn deterministically, so the answers are knowable: the
+    // pool is walked with a stride of 3 to keep round n off button n.
+    for (const [index, letter] of ['C', 'F', 'B', 'E', 'A'].entries()) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+      const done = index + 1;
+      await expect(page.locator('.learn-quiz__status')).toHaveText(
+        done === 5 ? 'Nicely done.' : `${done} of 5`,
+      );
+    }
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('a wrong answer names the key and asks again', async ({ page }) => {
+    await gotoWalkUp(page);
+    for (const code of WALK_UP) await playKey(page, code);
+    await nextButton(page).click();
+    await nextButton(page).click();
+
+    await page.getByRole('button', { name: 'Answer D' }).click(); // first answer is C
+    await expect(page.locator('.learn-quiz__status')).toHaveText('That one is C.');
+    await page.getByRole('button', { name: 'Answer C' }).click();
+    await expect(page.locator('.learn-quiz__status')).toHaveText('1 of 5');
+  });
+
+  test('the quiz leaves the piano playable', async ({ page }) => {
+    // The regression guard for an accidental aria-modal: the computer-keyboard
+    // layer ignores every keystroke while one exists anywhere on the page.
+    await gotoWalkUp(page);
+    for (const code of WALK_UP) await playKey(page, code);
+    await nextButton(page).click();
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'Which key is this?' })).toBeVisible();
+
+    await expect(page.locator('[aria-modal="true"]')).toHaveCount(0);
+    await page.keyboard.down('KeyA');
+    await expect(page.getByRole('button', { name: 'C4 key' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.keyboard.up('KeyA');
+  });
+
+  test('the descending walk rejects a note played upwards', async ({ page }) => {
+    await gotoWalkUp(page);
+    for (const code of WALK_UP) await playKey(page, code);
+    await nextButton(page).click(); // where each letter hides
+    await nextButton(page).click(); // quiz
+    for (const letter of ['C', 'F', 'B', 'E', 'A']) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+    }
+    await nextButton(page).click(); // find D, F, A
+    for (const code of ['KeyS', 'KeyF', 'KeyH']) await playKey(page, code);
+    await nextButton(page).click(); // walking back down (theory)
+    await nextButton(page).click(); // walk down
+
+    await expect(page.getByRole('heading', { name: 'Walk down from C' })).toBeVisible();
+    await playKey(page, 'KeyK'); // the upper C
+    await expect(progressLine(page)).toHaveText('1 of 8');
+    await playKey(page, 'KeyJ'); // B below it — correct
+    await expect(progressLine(page)).toHaveText('2 of 8');
   });
 });

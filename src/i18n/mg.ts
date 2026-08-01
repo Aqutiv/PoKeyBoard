@@ -183,6 +183,7 @@ export const mg: Messages = {
     levelLabel: 'Ambaratongam-pianarana',
     levels: {
       beginner: 'Vao manomboka',
+      intermediate: 'Antonony',
       advanced: 'Efa mahay',
     },
     chapterNumber: ({ order }) => `Toko ${order}`,
@@ -209,6 +210,10 @@ export const mg: Messages = {
     staffLabel: 'Ohatra amin’ny soratra mozika',
     tryOnPlay: 'Andramo ao amin’ny Mitendry',
     backToChapters: 'Hiverina amin’ny toko',
+    quizPrompt: 'Kitendry inona no voamariky?',
+    quizCorrect: 'Marina.',
+    quizWrong: ({ answer }) => `Io dia ${answer}.`,
+    quizAnswerLabel: ({ note }) => `Valio ${note}`,
     chapterTitles: {
       meetTheKeyboard: 'Fantaro ny klavie',
       musicalAlphabet: 'Ny abidia mozikaly',
@@ -220,15 +225,37 @@ export const mg: Messages = {
       cMajorScale: 'Ny gamy do lehibe',
       triads: 'Akôro telo feo: lehibe sy kely',
       chordsPedalAndHands: 'Akôro, pedaly ary tanana roa',
+      howToPractise: 'Fomba fanaovana fanazaran-tena',
       keySignatures: 'Famantarana lakile sy ny faribolana fahadimy',
+      scalesBeyondC: 'Gamy mihoatra ny do',
       minorKeys: 'Ny lakile kely',
       intervals: 'Elanelana: amin’ny maso sy ny sofina',
       inversions: 'Fanovana filaharana sy fitarihana feo',
-      seventhChords: 'Akôro fahafito sy fiafarana',
       rhythmBeyondFourFour: 'Mihoatra ny 4/4',
-      dynamicsAndArticulation: 'Hery, fanononana ary pedaly',
-      accompanimentPatterns: 'Endrika fanotronana sy tabilaon’akôro',
+      arpeggios: 'Arpezy sy akôro tapatapaka',
+      accompanimentPatterns: 'Endrika fanotronana',
+      dynamicsAndArticulation: 'Hery, fanononana ary fizarana andian-teny',
+      seventhChords: 'Akôro fahafito sy fanitarana',
+      functionalHarmony: 'Fiafarana sy harmonia miasa',
+      modes: 'Ny modely sy ny lokony',
+      twoHandIndependence: 'Fahaleovan-tenan’ny tanana roa',
+      ornaments: 'Ny haingo',
+      sightReading: 'Famakiana am-pahitana',
+      playingByEar: 'Mitendry an-tsofina sy manova lakile',
+      songForm: 'Endrika sy rafitry ny hira',
+      leadSheets: 'Mamaky tabilaon’akôro',
       improvising: 'Manoratra an-tsehatra amin’ny filaharan’akôro',
+    },
+    partTitles: {
+      theInstrument: 'Ny zavamaneno',
+      readingMusic: 'Mamaky mozika',
+      playing: 'Mitendry',
+      gettingSerious: 'Manohy tanteraka',
+      harmonyBuildingBlocks: 'Fototry ny harmonia',
+      playingWithStyle: 'Mitendry misy endrika',
+      richerHarmony: 'Harmonia manankarena kokoa',
+      independenceAndControl: 'Fahaleovan-tena sy fifehezana',
+      makingItYourOwn: 'Ataovy anao',
     },
     chapterBlurbs: {
       meetTheKeyboard:
@@ -250,19 +277,35 @@ export const mg: Messages = {
         'Ampifanindrio terza roa dia akôro — naoty iray no manapa-kevitra raha mitsiky na misento.',
       chordsPedalAndHands:
         'Tanana havia ambanin’ny havanana, ny pedaly miova araka ny harmonia: hira feno, tanana roa.',
+      howToPractise:
+        'Miadana, tsikelikely, tanana misaraka — sy ny fitaovana roa efa ao anatin’ity app ity.',
       keySignatures: 'Antony misy ny diesy sy bemôly eo aloha, sy ny fomba hamantarana ny lakile.',
+      scalesBeyondC:
+        'Sol, fa ary re lehibe: toerana misy ny kitendry mainty, sy ny antony hiovan’ny rantsan-tanana.',
       minorKeys:
         'Mifandray, mitovy fototra, voajanahary, harmonika, melodika: ny fianakaviana kely manontolo.',
       intervals:
         'Tononinao ny elanelana eo anelanelan’ny naoty roa, dia ianaro fantarina tsy mijery.',
       inversions: 'Akôro mitovy amin’ny filaharana hafa: ny fika mampandeha tsara ny filaharana.',
-      seventhChords:
-        'Terza iray fanampiny ho an’ny loko sy fihenjanana, dia ny fialan-tsasatra: fiafarana sy ii–V–I.',
-      rhythmBeyondFourFour: 'Valsa, fizarana mitambatra, triolety, sinkopa ary swing.',
+      rhythmBeyondFourFour: 'Valsa, fizarana mitambatra, naoty misy teboka, triolety ary sinkopa.',
+      arpeggios: 'Akôro miparitaka amin’ny oktava roa, sy ny fandalovan-tanana mitondra anao any.',
+      accompanimentPatterns:
+        'Basy Alberti, akôro tapatapaka ary basim-balsa: izay ataon’ny tanana havia.',
       dynamicsAndArticulation:
         'Mafy, malefaka, mifamatotra, fohy: ny elanelana misy eo amin’ny marina sy ny mozikaly.',
-      accompanimentPatterns:
-        'Basy Alberti, akôro tapatapaka ary basim-balsa: ovay ho mozika ny tabilaon’akôro.',
+      seventhChords: 'Terza iray fanampiny ho an’ny loko: maj7, m7, dominanta ary diminué.',
+      functionalHarmony:
+        'Antony misintona mody ny akôro: tonika, sodominanta, dominanta, sy ny fiafaran’ny andian-teny.',
+      modes:
+        'Naoty fito mitovy, toe-tsaina fito samy hafa: doriana, miksolidiana, lidiana sy ny sisa.',
+      twoHandIndependence: 'Ny sakana marina: gadona roa miaraka, tsy misy mitarika ny iray hafa.',
+      ornaments: 'Trily, mordanta, gropeto ary naoty haingo: ny endriny sy ny fomba fitendry azy.',
+      sightReading: 'Mamaky mialoha, mahita endrika fa tsy naoty, ary manohy rehefa diso.',
+      playingByEar: 'Tadiavo ny hira ren’ny sofinao ihany, dia afindrao amin’ny lakile hafa.',
+      songForm:
+        'Andininy, fiverenana, AABA ary ny blues fizarana roa ambin’ny folo: endriky ny mozika.',
+      leadSheets:
+        'Hira sy famantarana akôro no hany azon’ny mpitendry matihanina. Izao no fomba hitendrena azy.',
       improvising: 'Gamy iray, filaharan’akôro iray, ary alalana hamorona eny am-pandehanana.',
     },
   },

@@ -76,16 +76,47 @@ export interface LearnChapterMessages {
   cMajorScale: string;
   triads: string;
   chordsPedalAndHands: string;
-  // Advanced
+  // Intermediate
+  howToPractise: string;
   keySignatures: string;
+  scalesBeyondC: string;
   minorKeys: string;
   intervals: string;
   inversions: string;
-  seventhChords: string;
   rhythmBeyondFourFour: string;
-  dynamicsAndArticulation: string;
+  arpeggios: string;
   accompanimentPatterns: string;
+  dynamicsAndArticulation: string;
+  // Advanced
+  seventhChords: string;
+  functionalHarmony: string;
+  modes: string;
+  twoHandIndependence: string;
+  ornaments: string;
+  sightReading: string;
+  playingByEar: string;
+  songForm: string;
+  leadSheets: string;
   improvising: string;
+}
+
+/**
+ * The three named parts each level is divided into, so ten chapters read as a
+ * journey rather than a list. Same compile-enforced-keys trick as above.
+ */
+export interface LearnPartMessages {
+  // Beginner
+  theInstrument: string;
+  readingMusic: string;
+  playing: string;
+  // Intermediate
+  gettingSerious: string;
+  harmonyBuildingBlocks: string;
+  playingWithStyle: string;
+  // Advanced
+  richerHarmony: string;
+  independenceAndControl: string;
+  makingItYourOwn: string;
 }
 
 /**
@@ -259,6 +290,7 @@ export interface Messages {
     levelLabel: string;
     levels: {
       beginner: string;
+      intermediate: string;
       advanced: string;
     };
     chapterNumber: (p: { order: number }) => string;
@@ -286,8 +318,14 @@ export interface Messages {
     staffLabel: string;
     tryOnPlay: string;
     backToChapters: string;
+    /** Recognition steps: a key lights up and the user names it. */
+    quizPrompt: string;
+    quizCorrect: string;
+    quizWrong: (p: { answer: string }) => string;
+    quizAnswerLabel: (p: { note: string }) => string;
     chapterTitles: LearnChapterMessages;
     chapterBlurbs: LearnChapterMessages;
+    partTitles: LearnPartMessages;
   };
   importDialog: {
     title: string;

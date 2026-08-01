@@ -180,6 +180,8 @@ export const es: Messages = {
     levelLabel: 'Nivel de aprendizaje',
     levels: {
       beginner: 'Principiante',
+      // Short on purpose: three segments at 320px leave no room for "Intermedio".
+      intermediate: 'Medio',
       advanced: 'Avanzado',
     },
     chapterNumber: ({ order }) => `Capítulo ${order}`,
@@ -206,6 +208,10 @@ export const es: Messages = {
     staffLabel: 'Ejemplo de notación musical',
     tryOnPlay: 'Probarlo en Tocar',
     backToChapters: 'Volver a los capítulos',
+    quizPrompt: '¿Qué tecla está resaltada?',
+    quizCorrect: 'Correcto.',
+    quizWrong: ({ answer }) => `Esa es ${answer}.`,
+    quizAnswerLabel: ({ note }) => `Responder ${note}`,
     chapterTitles: {
       meetTheKeyboard: 'Conoce el teclado',
       musicalAlphabet: 'El alfabeto musical',
@@ -217,15 +223,37 @@ export const es: Messages = {
       cMajorScale: 'La escala de do mayor',
       triads: 'Tríadas: mayores y menores',
       chordsPedalAndHands: 'Acordes, pedal y ambas manos',
+      howToPractise: 'Cómo estudiar',
       keySignatures: 'Armaduras y el círculo de quintas',
+      scalesBeyondC: 'Escalas más allá de do',
       minorKeys: 'Las tonalidades menores',
       intervals: 'Intervalos: a la vista y al oído',
       inversions: 'Inversiones y conducción de voces',
-      seventhChords: 'Acordes de séptima y cadencias',
       rhythmBeyondFourFour: 'Más allá del 4/4',
-      dynamicsAndArticulation: 'Dinámica, articulación y pedal',
-      accompanimentPatterns: 'Patrones de acompañamiento y cifrados',
+      arpeggios: 'Arpegios y acordes quebrados',
+      accompanimentPatterns: 'Patrones de acompañamiento',
+      dynamicsAndArticulation: 'Dinámica, articulación y fraseo',
+      seventhChords: 'Acordes de séptima y extensiones',
+      functionalHarmony: 'Cadencias y armonía funcional',
+      modes: 'Los modos y su color',
+      twoHandIndependence: 'Independencia de manos',
+      ornaments: 'Los adornos',
+      sightReading: 'Lectura a primera vista',
+      playingByEar: 'Tocar de oído y transportar',
+      songForm: 'Forma y estructura de una canción',
+      leadSheets: 'Leer un cifrado americano',
       improvising: 'Improvisar sobre una progresión',
+    },
+    partTitles: {
+      theInstrument: 'El instrumento',
+      readingMusic: 'Leer música',
+      playing: 'Tocar',
+      gettingSerious: 'Ir en serio',
+      harmonyBuildingBlocks: 'Los cimientos de la armonía',
+      playingWithStyle: 'Tocar con estilo',
+      richerHarmony: 'Armonía más rica',
+      independenceAndControl: 'Independencia y control',
+      makingItYourOwn: 'Hacerlo tuyo',
     },
     chapterBlurbs: {
       meetTheKeyboard:
@@ -243,18 +271,34 @@ export const es: Messages = {
       triads: 'Apila dos terceras y tienes un acorde, y una sola nota decide si sonríe o suspira.',
       chordsPedalAndHands:
         'Mano izquierda bajo la derecha y el pedal cambiando con la armonía: una pieza entera.',
+      howToPractise:
+        'Despacio, por trozos, manos separadas — y las dos herramientas que ya tienes en esta app.',
       keySignatures:
         'Por qué los sostenidos y bemoles van delante, y cómo nombrar la tonalidad de un vistazo.',
+      scalesBeyondC:
+        'Sol, fa y re mayor: dónde caen las teclas negras y por qué cambia la digitación.',
       minorKeys: 'Relativa, homónima, natural, armónica, melódica: toda la familia menor ordenada.',
       intervals: 'Nombra cualquier distancia entre dos notas y aprende a reconocerla sin mirar.',
       inversions: 'El mismo acorde en otro orden: el truco que hace fluir las progresiones.',
-      seventhChords:
-        'Una tercera más para dar color y tensión, y luego el reposo: cadencias y el ii–V–I.',
-      rhythmBeyondFourFour: 'Valses, compases compuestos, tresillos, síncopa y swing.',
+      rhythmBeyondFourFour: 'Valses, compases compuestos, puntillos, tresillos y síncopa.',
+      arpeggios: 'Acordes desplegados en dos octavas, y el paso de mano que te lleva hasta arriba.',
+      accompanimentPatterns:
+        'Bajo de Alberti, acordes quebrados y bajo de vals: qué hace la mano izquierda.',
       dynamicsAndArticulation:
         'Fuerte, suave, ligado, corto: la diferencia entre correcto y musical.',
-      accompanimentPatterns:
-        'Bajo de Alberti, acordes quebrados y bajo de vals: convierte los cifrados en música.',
+      seventhChords: 'Una tercera más para dar color y tensión: maj7, m7, dominante y disminuido.',
+      functionalHarmony:
+        'Por qué los acordes tiran hacia casa: tónica, subdominante, dominante y el final de la frase.',
+      modes:
+        'Las mismas siete notas, siete estados de ánimo: dórico, mixolidio, lidio y los demás.',
+      twoHandIndependence:
+        'La barrera de verdad: dos ritmos a la vez sin que uno arrastre al otro.',
+      ornaments: 'Trinos, mordentes, grupetos y notas de adorno: cómo se escriben y cómo se tocan.',
+      sightReading: 'Leer por delante, ver figuras en vez de notas, y seguir cuando te equivocas.',
+      playingByEar: 'Encuentra una melodía que solo has oído y llévala luego a otra tonalidad.',
+      songForm: 'Estrofa, estribillo, AABA y el blues de doce compases: las formas de la música.',
+      leadSheets:
+        'Una melodía y unos cifrados es todo lo que recibe un pianista profesional. Así se toca.',
       improvising: 'Una escala, una progresión y permiso para inventar sobre la marcha.',
     },
   },

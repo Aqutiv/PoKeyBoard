@@ -181,6 +181,7 @@ export const en: Messages = {
     levelLabel: 'Learn level',
     levels: {
       beginner: 'Beginner',
+      intermediate: 'Intermediate',
       advanced: 'Advanced',
     },
     chapterNumber: ({ order }) => `Chapter ${order}`,
@@ -207,6 +208,10 @@ export const en: Messages = {
     staffLabel: 'Music notation example',
     tryOnPlay: 'Try it on Play',
     backToChapters: 'Back to chapters',
+    quizPrompt: 'Which key is highlighted?',
+    quizCorrect: 'Correct.',
+    quizWrong: ({ answer }) => `That one is ${answer}.`,
+    quizAnswerLabel: ({ note }) => `Answer ${note}`,
     chapterTitles: {
       meetTheKeyboard: 'Meet the Keyboard',
       musicalAlphabet: 'The Musical Alphabet',
@@ -218,15 +223,37 @@ export const en: Messages = {
       cMajorScale: 'The C Major Scale',
       triads: 'Triads: Major and Minor',
       chordsPedalAndHands: 'Chords, Pedal & Hands Together',
+      howToPractise: 'How to Practise',
       keySignatures: 'Key Signatures & the Circle of Fifths',
+      scalesBeyondC: 'Scales Beyond C',
       minorKeys: 'Minor Keys',
       intervals: 'Intervals — By Eye and By Ear',
       inversions: 'Inversions & Voice Leading',
-      seventhChords: 'Seventh Chords & Cadences',
       rhythmBeyondFourFour: 'Rhythm Beyond 4/4',
-      dynamicsAndArticulation: 'Dynamics, Articulation & Pedaling',
-      accompanimentPatterns: 'Accompaniment Patterns & Lead Sheets',
+      arpeggios: 'Arpeggios & Broken Chords',
+      accompanimentPatterns: 'Accompaniment Patterns',
+      dynamicsAndArticulation: 'Dynamics, Articulation & Phrasing',
+      seventhChords: 'Seventh Chords & Extensions',
+      functionalHarmony: 'Cadences & Functional Harmony',
+      modes: 'Modes & Colour',
+      twoHandIndependence: 'Two-Hand Independence',
+      ornaments: 'Ornaments',
+      sightReading: 'Sight-Reading',
+      playingByEar: 'Playing by Ear & Transposing',
+      songForm: 'Song Form & Structure',
+      leadSheets: 'Reading a Lead Sheet',
       improvising: 'Improvise Over a Progression',
+    },
+    partTitles: {
+      theInstrument: 'The instrument',
+      readingMusic: 'Reading music',
+      playing: 'Playing',
+      gettingSerious: 'Getting serious',
+      harmonyBuildingBlocks: 'Harmony’s building blocks',
+      playingWithStyle: 'Playing with style',
+      richerHarmony: 'Richer harmony',
+      independenceAndControl: 'Independence and control',
+      makingItYourOwn: 'Making it your own',
     },
     chapterBlurbs: {
       meetTheKeyboard:
@@ -247,18 +274,37 @@ export const en: Messages = {
         'Stack two thirds and you have a chord — and one note decides whether it smiles or sighs.',
       chordsPedalAndHands:
         'Left hand under right, the pedal changing with the harmony: a whole piece, hands together.',
+      howToPractise:
+        'Slow, in pieces, hands apart — and the two tools already in this app that make it stick.',
       keySignatures: 'Why sharps and flats sit at the front, and how to name the key at a glance.',
+      scalesBeyondC:
+        'G, F and D major: where the black keys land, and why the fingering shifts to suit them.',
       minorKeys:
         'Relative, parallel, natural, harmonic, melodic — the whole minor family sorted out.',
       intervals: 'Name any distance between two notes, then learn to recognise it without looking.',
       inversions: 'Same chord, different order — the trick that makes progressions move smoothly.',
-      seventhChords:
-        'One more third for colour and tension, then the release: cadences and the ii–V–I.',
-      rhythmBeyondFourFour: 'Waltzes, compound time, triplets, syncopation and swing.',
+      rhythmBeyondFourFour: 'Waltzes, compound time, dotted rhythms, triplets and syncopation.',
+      arpeggios:
+        'Chords spread out over two octaves, and the hand crossing that carries you there.',
+      accompanimentPatterns:
+        'Alberti bass, broken chords and waltz bass — what the left hand does under a tune.',
       dynamicsAndArticulation:
         'Loud, soft, smooth, short — the difference between correct and musical.',
-      accompanimentPatterns:
-        'Alberti bass, broken chords and waltz bass: turn chord symbols into playing.',
+      seventhChords: 'One more third for colour and tension: maj7, m7, dominant and diminished.',
+      functionalHarmony:
+        'Why chords pull towards home — tonic, subdominant, dominant, and how a phrase ends.',
+      modes:
+        'The same seven notes, seven different moods: Dorian, Mixolydian, Lydian and the rest.',
+      twoHandIndependence:
+        'The real barrier — two different rhythms at once, without one dragging the other.',
+      ornaments:
+        'Trills, mordents, turns and grace notes: how they look on the page and land under the hand.',
+      sightReading:
+        'Reading ahead, seeing shapes instead of notes, and keeping going when you slip.',
+      playingByEar: 'Find a tune you can only hear, then move the whole thing into another key.',
+      songForm: 'Verse, chorus, AABA and the twelve-bar blues — the shapes music gets built in.',
+      leadSheets:
+        'A melody and some chord symbols is all a working pianist gets. Here is how to play from it.',
       improvising: 'A scale, a progression, and permission to make it up as you go.',
     },
   },

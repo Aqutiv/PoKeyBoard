@@ -180,6 +180,9 @@ export const fr: Messages = {
     levelLabel: 'Niveau d’apprentissage',
     levels: {
       beginner: 'Débutant',
+      // Court exprès : trois segments à 320px ne laissent pas la place à
+      // « Intermédiaire ».
+      intermediate: 'Moyen',
       advanced: 'Avancé',
     },
     chapterNumber: ({ order }) => `Chapitre ${order}`,
@@ -206,6 +209,10 @@ export const fr: Messages = {
     staffLabel: 'Exemple de notation musicale',
     tryOnPlay: 'Essayer dans Jouer',
     backToChapters: 'Retour aux chapitres',
+    quizPrompt: 'Quelle touche est mise en évidence ?',
+    quizCorrect: 'Correct.',
+    quizWrong: ({ answer }) => `Celle-ci est ${answer}.`,
+    quizAnswerLabel: ({ note }) => `Répondre ${note}`,
     chapterTitles: {
       meetTheKeyboard: 'Découvrir le clavier',
       musicalAlphabet: 'L’alphabet musical',
@@ -217,15 +224,37 @@ export const fr: Messages = {
       cMajorScale: 'La gamme de do majeur',
       triads: 'Les accords parfaits : majeur et mineur',
       chordsPedalAndHands: 'Accords, pédale et deux mains',
+      howToPractise: 'Comment travailler',
       keySignatures: 'Armures et cycle des quintes',
+      scalesBeyondC: 'Les gammes au-delà de do',
       minorKeys: 'Les tonalités mineures',
       intervals: 'Les intervalles : à l’œil et à l’oreille',
       inversions: 'Renversements et conduite des voix',
-      seventhChords: 'Accords de septième et cadences',
       rhythmBeyondFourFour: 'Au-delà du 4/4',
-      dynamicsAndArticulation: 'Nuances, articulation et pédale',
-      accompanimentPatterns: 'Formules d’accompagnement et grilles d’accords',
+      arpeggios: 'Arpèges et accords brisés',
+      accompanimentPatterns: 'Formules d’accompagnement',
+      dynamicsAndArticulation: 'Nuances, articulation et phrasé',
+      seventhChords: 'Accords de septième et enrichissements',
+      functionalHarmony: 'Cadences et harmonie fonctionnelle',
+      modes: 'Les modes et leurs couleurs',
+      twoHandIndependence: 'L’indépendance des mains',
+      ornaments: 'Les ornements',
+      sightReading: 'Le déchiffrage',
+      playingByEar: 'Jouer d’oreille et transposer',
+      songForm: 'Forme et structure d’un morceau',
+      leadSheets: 'Lire une grille d’accords',
       improvising: 'Improviser sur une grille',
+    },
+    partTitles: {
+      theInstrument: 'L’instrument',
+      readingMusic: 'Lire la musique',
+      playing: 'Jouer',
+      gettingSerious: 'Passer à la vitesse supérieure',
+      harmonyBuildingBlocks: 'Les fondations de l’harmonie',
+      playingWithStyle: 'Jouer avec style',
+      richerHarmony: 'Une harmonie plus riche',
+      independenceAndControl: 'Indépendance et contrôle',
+      makingItYourOwn: 'S’approprier la musique',
     },
     chapterBlurbs: {
       meetTheKeyboard:
@@ -244,18 +273,35 @@ export const fr: Messages = {
         'Empilez deux tierces et voilà un accord — une seule note décide s’il sourit ou soupire.',
       chordsPedalAndHands:
         'Main gauche sous la droite, la pédale qui suit l’harmonie : un morceau entier, à deux mains.',
+      howToPractise:
+        'Lentement, par morceaux, mains séparées — et les deux outils déjà présents dans l’app.',
       keySignatures:
         'Pourquoi les altérations sont en tête, et comment nommer la tonalité d’un coup d’œil.',
+      scalesBeyondC:
+        'Sol, fa et ré majeur : où tombent les touches noires, et pourquoi le doigté change.',
       minorKeys: 'Relative, homonyme, naturelle, harmonique, mélodique : toute la famille mineure.',
       intervals:
         'Nommez n’importe quelle distance entre deux notes, puis reconnaissez-la sans regarder.',
       inversions: 'Le même accord dans un autre ordre : l’astuce qui fluidifie les enchaînements.',
-      seventhChords:
-        'Une tierce de plus pour la couleur et la tension, puis la détente : cadences et ii–V–I.',
-      rhythmBeyondFourFour: 'Valses, mesures composées, triolets, syncopes et swing.',
-      dynamicsAndArticulation: 'Fort, doux, lié, détaché : la différence entre juste et musical.',
+      rhythmBeyondFourFour: 'Valses, mesures composées, notes pointées, triolets et syncopes.',
+      arpeggios: 'Des accords déployés sur deux octaves, et le passage du pouce qui vous y mène.',
       accompanimentPatterns:
-        'Basse d’Alberti, accords brisés et basse de valse : transformez une grille en musique.',
+        'Basse d’Alberti, accords brisés et basse de valse : ce que fait la main gauche.',
+      dynamicsAndArticulation: 'Fort, doux, lié, détaché : la différence entre juste et musical.',
+      seventhChords: 'Une tierce de plus pour la couleur : maj7, m7, dominante et diminué.',
+      functionalHarmony:
+        'Pourquoi les accords tirent vers la maison : tonique, sous-dominante, dominante, cadences.',
+      modes: 'Les mêmes sept notes, sept humeurs : dorien, mixolydien, lydien et les autres.',
+      twoHandIndependence:
+        'Le vrai obstacle : deux rythmes à la fois, sans que l’un entraîne l’autre.',
+      ornaments:
+        'Trilles, mordants, gruppettos et notes d’agrément : à l’écrit et sous les doigts.',
+      sightReading:
+        'Lire en avance, voir des formes plutôt que des notes, et continuer malgré tout.',
+      playingByEar: 'Retrouvez un air que vous n’avez qu’entendu, puis transposez-le ailleurs.',
+      songForm: 'Couplet, refrain, AABA et le blues en douze mesures : les formes de la musique.',
+      leadSheets:
+        'Une mélodie et quelques chiffrages : c’est tout ce qu’un pianiste reçoit. Voici comment jouer.',
       improvising: 'Une gamme, une grille, et le droit d’inventer au fil du jeu.',
     },
   },
