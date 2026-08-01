@@ -44,6 +44,9 @@ export class ComputerKeyboardInput {
   private readonly onKeyDown = (event: KeyboardEvent) => {
     if (!this.callbacks || event.repeat || event.metaKey || event.ctrlKey || event.altKey) return;
     if (isTextInput(event.target)) return;
+    // Not in onKeyUp: anything already sounding must still release if a dialog
+    // opens mid-hold.
+    if (isModalOpen()) return;
 
     if (event.code === 'Space') {
       event.preventDefault();
@@ -114,6 +117,14 @@ export class ComputerKeyboardInput {
       this.callbacks.setSustain(false);
     }
   }
+}
+
+/**
+ * Dialogs render as siblings of the page, so the piano stays mounted behind
+ * them — every keyboard shortcut has to stand down while one is open.
+ */
+export function isModalOpen(): boolean {
+  return document.querySelector('[aria-modal="true"]') !== null;
 }
 
 export function isTextInput(target: EventTarget | null): boolean {

@@ -54,6 +54,17 @@ test.describe('app shell and piano', () => {
     await expect(sustain).toHaveAttribute('aria-pressed', 'false');
   });
 
+  test('holding Space works the sustain pedal', async ({ page }) => {
+    await gotoAppReady(page);
+    const sustain = page.getByRole('button', { name: 'Sustain' });
+    await expect(sustain).toHaveAttribute('aria-pressed', 'false');
+    // Momentary, like a real pedal — down while held, up on release.
+    await page.keyboard.down('Space');
+    await expect(sustain).toHaveAttribute('aria-pressed', 'true');
+    await page.keyboard.up('Space');
+    await expect(sustain).toHaveAttribute('aria-pressed', 'false');
+  });
+
   test('range shifts by a single white key or by a whole octave', async ({ page }) => {
     await gotoAppReady(page);
     const range = page.locator('.piano__range');

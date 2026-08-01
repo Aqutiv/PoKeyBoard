@@ -4,7 +4,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
-import { ComputerKeyboardInput, isTextInput } from './computerKeyboard';
+import { ComputerKeyboardInput, isModalOpen, isTextInput } from './computerKeyboard';
 import {
   BLACK_KEY_HEIGHT,
   computeVisibleWhites,
@@ -47,6 +47,7 @@ export function PianoKeyboard({
   const anchorMidi = useSettingsStore((s) => s.keyboardAnchorMidi);
   const setAnchorMidi = useSettingsStore((s) => s.setKeyboardAnchorMidi);
   const [sustainOn, setSustainOn] = useState(false);
+  const [pedalKeyDown, setPedalKeyDown] = useState(false);
 
   useEffect(
     () => () => {
@@ -114,7 +115,10 @@ export function PianoKeyboard({
     return input.attach({
       noteOn: (midi, velocity) => audioEngine.noteOn(midi, velocity, 'kbd'),
       noteOff: (midi) => audioEngine.noteOff(midi, 'kbd'),
-      setSustain: (down) => audioEngine.setSustain(down, 'kbd-pedal'),
+      setSustain: (down) => {
+        audioEngine.setSustain(down, 'kbd-pedal');
+        setPedalKeyDown(down);
+      },
     });
   }, [fixedVelocity]);
 
@@ -187,9 +191,8 @@ export function PianoKeyboard({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTextInput(event.target)) return;
-      // Export dialogs leave the piano mounted behind them, and their own
-      // scrollable body wants the page keys.
-      if (document.querySelector('[aria-modal="true"]')) return;
+      // The dialog's own scrollable body wants the page keys.
+      if (isModalOpen()) return;
       const shift = RANGE_KEYS[event.key];
       if (!shift) return;
       // Otherwise the browser scrolls the page out from under the keyboard.
@@ -212,6 +215,10 @@ export function PianoKeyboard({
     (midi: number) => liveActive.has(midi) || (extraActiveMidis?.has(midi) ?? false),
     [liveActive, extraActiveMidis],
   );
+
+  // The latch and the held Space key are independent pedal sources; either one
+  // holds the damper up.
+  const pedalDown = sustainOn || pedalKeyDown;
 
   const whiteWidthPercent = 100 / layout.whiteCount;
 
@@ -260,10 +267,11 @@ export function PianoKeyboard({
         {controlsExtra}
         <button
           type="button"
-          className={`piano__sustain${playbackPedalDown ? ' is-playback' : ''}${sustainOn ? ' is-on' : ''}`}
-          // The control's own state: playback lights the button as a cue but
-          // never presses it, so this stays the user's sustain toggle.
-          aria-pressed={sustainOn}
+          className={`piano__sustain${playbackPedalDown ? ' is-playback' : ''}${pedalDown ? ' is-on' : ''}`}
+          // Playback lights the button as a cue but never presses it, so it is
+          // kept out of this. Holding Space is the user working the pedal for
+          // real, so it reports as pressed and reverts on release.
+          aria-pressed={pedalDown}
           onClick={toggleSustain}
         >
           {m.piano.sustain}
