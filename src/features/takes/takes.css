@@ -23,10 +23,32 @@
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .take-item.is-active {
   border-color: var(--accent);
+}
+
+/* Mouse only: on touch, :hover would stick to the last-tapped row.
+   Twin of the .library-item block in library.css — keep the two in step. */
+@media (hover: hover) and (pointer: fine) {
+  .take-item:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+  }
+
+  .take-item.is-active:hover {
+    border-color: var(--accent-strong);
+  }
+
+  /* One step above the hovered row, so the ⋯ reads as its own target. */
+  .take-item__more:hover {
+    background: var(--surface-3);
+    color: var(--text);
+  }
 }
 
 .take-item__row {
@@ -82,7 +104,15 @@
   font-size: 20px;
   color: var(--text-dim);
   border-left: 1px solid var(--border);
-  border-radius: 0 var(--radius-m) var(--radius-m) 0;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+/* Round the ⋯ fill to the card's inner corner, but only while it is the card's
+   bottom edge — with the actions drawer open it butts against the drawer. */
+.take-item__row:last-child .take-item__more {
+  border-radius: 0 calc(var(--radius-m) - 1px) calc(var(--radius-m) - 1px) 0;
 }
 
 .take-item__actions {
@@ -91,6 +121,9 @@
   gap: 6px;
   padding: 8px 12px 10px;
   border-top: 1px solid var(--border);
+  /* Its own surface, so the .btn row keeps contrast when the card is hovered. */
+  background: var(--surface-1);
+  border-radius: 0 0 calc(var(--radius-m) - 1px) calc(var(--radius-m) - 1px);
 }
 
 .take-item__rename input {
