@@ -6,6 +6,7 @@ import type { Messages } from './types';
 export const en: Messages = {
   nav: {
     play: 'Play',
+    learn: 'Learn',
     library: 'Library',
     takes: 'Takes',
     settings: 'Settings',
@@ -172,6 +173,93 @@ export const en: Messages = {
         'A tender moonlit lullaby in 6/8, with a singing melody and gently rocking arpeggios.',
       moonlightSonata:
         'Beethoven’s Adagio sostenuto, complete — slow moonlit triplets beneath a quiet singing melody.',
+    },
+  },
+  learn: {
+    title: 'Learn',
+    hint: 'A course in playing, from your first key press to improvising.',
+    levelLabel: 'Learn level',
+    levels: {
+      beginner: 'Beginner',
+      advanced: 'Advanced',
+    },
+    chapterNumber: ({ order }) => `Chapter ${order}`,
+    openLabel: ({ title }) => `Open ${title}`,
+    lockedLabel: ({ title }) => `${title} — coming soon`,
+    comingSoon: 'Coming soon',
+    completed: 'Completed',
+    resumeAt: ({ step }) => `Resume at step ${step}`,
+    stepOf: ({ step, steps }) => `Step ${step} of ${steps}`,
+    progress: ({ done, total }) => `${done} of ${total}`,
+    exerciseDone: 'Nicely done.',
+    listen: 'Listen',
+    showMe: 'Show me',
+    skipStep: 'Skip this step',
+    tryAgain: 'Try again',
+    next: 'Next',
+    back: 'Back',
+    finish: 'Finish',
+    close: 'Close chapter',
+    shiftHint: 'None left on screen — use ‹ › to slide the keyboard along.',
+    loadingPiano: 'Loading the piano…',
+    loadingChapter: 'Loading chapter…',
+    diagramLabel: 'Keyboard diagram',
+    staffLabel: 'Music notation example',
+    tryOnPlay: 'Try it on Play',
+    backToChapters: 'Back to chapters',
+    chapterTitles: {
+      meetTheKeyboard: 'Meet the Keyboard',
+      musicalAlphabet: 'The Musical Alphabet',
+      halfStepsWholeSteps: 'Half Steps, Whole Steps & the Black Keys',
+      trebleStaff: 'Reading the Treble Staff',
+      bassAndGrandStaff: 'The Bass Staff & the Grand Staff',
+      rhythmAndBeat: 'Rhythm & the Beat',
+      firstMelody: 'Your First Melody',
+      cMajorScale: 'The C Major Scale',
+      triads: 'Triads: Major and Minor',
+      chordsPedalAndHands: 'Chords, Pedal & Hands Together',
+      keySignatures: 'Key Signatures & the Circle of Fifths',
+      minorKeys: 'Minor Keys',
+      intervals: 'Intervals — By Eye and By Ear',
+      inversions: 'Inversions & Voice Leading',
+      seventhChords: 'Seventh Chords & Cadences',
+      rhythmBeyondFourFour: 'Rhythm Beyond 4/4',
+      dynamicsAndArticulation: 'Dynamics, Articulation & Pedaling',
+      accompanimentPatterns: 'Accompaniment Patterns & Lead Sheets',
+      improvising: 'Improvise Over a Progression',
+    },
+    chapterBlurbs: {
+      meetTheKeyboard:
+        'Where the notes live: high and low, the black-key map, and how to find C without looking.',
+      musicalAlphabet: 'Seven letters, endlessly repeating — name every white key on the piano.',
+      halfStepsWholeSteps:
+        'The smallest step there is, sharps and flats, and the two places white keys touch.',
+      trebleStaff:
+        'Lines, spaces and the treble clef — read your first written notes and play them.',
+      bassAndGrandStaff:
+        'The left hand joins in, and middle C turns out to be the bridge between two staves.',
+      rhythmAndBeat:
+        'Pulse, bars and note lengths — play in time with the metronome instead of near it.',
+      firstMelody: 'Pitch and rhythm together at last: eight bars you read from the page and play.',
+      cMajorScale:
+        'The pattern behind every major key, and the thumb tuck that gets you through it.',
+      triads:
+        'Stack two thirds and you have a chord — and one note decides whether it smiles or sighs.',
+      chordsPedalAndHands:
+        'Left hand under right, the pedal changing with the harmony: a whole piece, hands together.',
+      keySignatures: 'Why sharps and flats sit at the front, and how to name the key at a glance.',
+      minorKeys:
+        'Relative, parallel, natural, harmonic, melodic — the whole minor family sorted out.',
+      intervals: 'Name any distance between two notes, then learn to recognise it without looking.',
+      inversions: 'Same chord, different order — the trick that makes progressions move smoothly.',
+      seventhChords:
+        'One more third for colour and tension, then the release: cadences and the ii–V–I.',
+      rhythmBeyondFourFour: 'Waltzes, compound time, triplets, syncopation and swing.',
+      dynamicsAndArticulation:
+        'Loud, soft, smooth, short — the difference between correct and musical.',
+      accompanimentPatterns:
+        'Alberti bass, broken chords and waltz bass: turn chord symbols into playing.',
+      improvising: 'A scale, a progression, and permission to make it up as you go.',
     },
   },
   importDialog: {

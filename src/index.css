@@ -139,6 +139,16 @@ button {
   height: 22px;
 }
 
+/* Six tabs leave ~52px each at 320px, which is narrower than the longest
+   label in some locales (Malagasy "Fandrindrana"). Clip rather than let a
+   label push its neighbours out of the bar. */
+.app-nav__item > span:not(.visually-hidden) {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .app-nav__item[aria-current='page'] {
   color: var(--accent-strong);
 }

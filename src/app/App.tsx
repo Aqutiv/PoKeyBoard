@@ -17,6 +17,9 @@ const SheetExportDialog = lazy(() =>
     default: module.SheetExportDialog,
   })),
 );
+const LearnPage = lazy(() =>
+  import('@/features/learn/LearnPage').then((module) => ({ default: module.LearnPage })),
+);
 const LibraryPage = lazy(() =>
   import('@/features/library/LibraryPage').then((module) => ({ default: module.LibraryPage })),
 );
@@ -35,6 +38,8 @@ function CurrentView() {
   switch (route) {
     case 'play':
       return <PlayPage />;
+    case 'learn':
+      return <LearnPage />;
     case 'library':
       return <LibraryPage />;
     case 'takes':
@@ -43,6 +48,12 @@ function CurrentView() {
       return <SettingsPage />;
     case 'about':
       return <AboutPage />;
+    default: {
+      // `noImplicitReturns` is off, so a Route with no case here would render
+      // a blank page rather than fail the build. This makes it fail the build.
+      const unhandled: never = route;
+      return unhandled;
+    }
   }
 }
 

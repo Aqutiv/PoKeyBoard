@@ -5,6 +5,7 @@ import type { Messages } from './types';
 export const mg: Messages = {
   nav: {
     play: 'Mitendry',
+    learn: 'Mianatra',
     library: 'Hira',
     takes: 'Rakitra',
     settings: 'Fandrindrana',
@@ -174,6 +175,95 @@ export const mg: Messages = {
         'Hira fampatoriana malefaka eo ambanin’ny hazavan’ny volana amin’ny gadona 6/8, misy feonkira toy ny mihira sy arpège mihozongozona moramora.',
       moonlightSonata:
         'Ny Adagio sostenuto an’i Beethoven, feno — triolet miadana toy ny tara-bolana eo ambanin’ny feon-kira mitony.',
+    },
+  },
+  learn: {
+    title: 'Mianatra',
+    hint: 'Fianarana mitendry, manomboka amin’ny kitendry voalohany ka hatramin’ny fanoratana an-tsehatra.',
+    levelLabel: 'Ambaratongam-pianarana',
+    levels: {
+      beginner: 'Vao manomboka',
+      advanced: 'Efa mahay',
+    },
+    chapterNumber: ({ order }) => `Toko ${order}`,
+    openLabel: ({ title }) => `Sokafy ${title}`,
+    lockedLabel: ({ title }) => `${title} — ho avy tsy ho ela`,
+    comingSoon: 'Ho avy tsy ho ela',
+    completed: 'Vita',
+    resumeAt: ({ step }) => `Tohizo amin’ny dingana ${step}`,
+    stepOf: ({ step, steps }) => `Dingana ${step} amin’ny ${steps}`,
+    progress: ({ done, total }) => `${done} amin’ny ${total}`,
+    exerciseDone: 'Tsara be.',
+    listen: 'Henoy',
+    showMe: 'Asehoy ahy',
+    skipStep: 'Dinganina ity',
+    tryAgain: 'Andramo indray',
+    next: 'Manaraka',
+    back: 'Miverina',
+    finish: 'Vitao',
+    close: 'Akatony ny toko',
+    shiftHint: 'Tsy misy intsony eo amin’ny efijery — ampiasao ny ‹ › hanetsehana ny klavie.',
+    loadingPiano: 'Mampiditra ny piano…',
+    loadingChapter: 'Mampiditra ny toko…',
+    diagramLabel: 'Sarin’ny klavie',
+    staffLabel: 'Ohatra amin’ny soratra mozika',
+    tryOnPlay: 'Andramo ao amin’ny Mitendry',
+    backToChapters: 'Hiverina amin’ny toko',
+    chapterTitles: {
+      meetTheKeyboard: 'Fantaro ny klavie',
+      musicalAlphabet: 'Ny abidia mozikaly',
+      halfStepsWholeSteps: 'Antsasa-dalana, dalana feno ary ny kitendry mainty',
+      trebleStaff: 'Mamaky ny lakile sol',
+      bassAndGrandStaff: 'Ny lakile fa sy ny tsipika roa',
+      rhythmAndBeat: 'Ny gadona sy ny fitempo',
+      firstMelody: 'Ny hira voalohany',
+      cMajorScale: 'Ny gamy do lehibe',
+      triads: 'Akôro telo feo: lehibe sy kely',
+      chordsPedalAndHands: 'Akôro, pedaly ary tanana roa',
+      keySignatures: 'Famantarana lakile sy ny faribolana fahadimy',
+      minorKeys: 'Ny lakile kely',
+      intervals: 'Elanelana: amin’ny maso sy ny sofina',
+      inversions: 'Fanovana filaharana sy fitarihana feo',
+      seventhChords: 'Akôro fahafito sy fiafarana',
+      rhythmBeyondFourFour: 'Mihoatra ny 4/4',
+      dynamicsAndArticulation: 'Hery, fanononana ary pedaly',
+      accompanimentPatterns: 'Endrika fanotronana sy tabilaon’akôro',
+      improvising: 'Manoratra an-tsehatra amin’ny filaharan’akôro',
+    },
+    chapterBlurbs: {
+      meetTheKeyboard:
+        'Toerana misy ny naoty: avo sy iva, ny sarin’ny kitendry mainty, ary ny fomba hitadiavana ny do tsy mijery.',
+      musicalAlphabet:
+        'Litera fito miverimberina tsy misy farany: tononinao ny kitendry fotsy rehetra.',
+      halfStepsWholeSteps:
+        'Ny dingana kely indrindra, ny diesy sy bemôly, ary ny toerana roa mifanolotra ny kitendry fotsy.',
+      trebleStaff:
+        'Tsipika, elanelana ary lakile sol: vakio ary tendreo ny naoty voasoratra voalohany.',
+      bassAndGrandStaff:
+        'Miditra ny tanana havia, ary ny do afovoany no tetezana mampifandray ny tsipika roa.',
+      rhythmAndBeat:
+        'Fitempo, fizarana ary halavan-naoty: mitendre araka ny metronoma, fa tsy manakaiky azy fotsiny.',
+      firstMelody: 'Feo sy gadona miaraka amin’ny farany: fizarana valo vakinao eo amin’ny pejy.',
+      cMajorScale:
+        'Ny endrika ao ambadiky ny lakile lehibe rehetra, sy ny fandalovan’ny ankiben-tanana.',
+      triads:
+        'Ampifanindrio terza roa dia akôro — naoty iray no manapa-kevitra raha mitsiky na misento.',
+      chordsPedalAndHands:
+        'Tanana havia ambanin’ny havanana, ny pedaly miova araka ny harmonia: hira feno, tanana roa.',
+      keySignatures: 'Antony misy ny diesy sy bemôly eo aloha, sy ny fomba hamantarana ny lakile.',
+      minorKeys:
+        'Mifandray, mitovy fototra, voajanahary, harmonika, melodika: ny fianakaviana kely manontolo.',
+      intervals:
+        'Tononinao ny elanelana eo anelanelan’ny naoty roa, dia ianaro fantarina tsy mijery.',
+      inversions: 'Akôro mitovy amin’ny filaharana hafa: ny fika mampandeha tsara ny filaharana.',
+      seventhChords:
+        'Terza iray fanampiny ho an’ny loko sy fihenjanana, dia ny fialan-tsasatra: fiafarana sy ii–V–I.',
+      rhythmBeyondFourFour: 'Valsa, fizarana mitambatra, triolety, sinkopa ary swing.',
+      dynamicsAndArticulation:
+        'Mafy, malefaka, mifamatotra, fohy: ny elanelana misy eo amin’ny marina sy ny mozikaly.',
+      accompanimentPatterns:
+        'Basy Alberti, akôro tapatapaka ary basim-balsa: ovay ho mozika ny tabilaon’akôro.',
+      improvising: 'Gamy iray, filaharan’akôro iray, ary alalana hamorona eny am-pandehanana.',
     },
   },
   importDialog: {

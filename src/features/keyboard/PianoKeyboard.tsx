@@ -31,12 +31,30 @@ interface PianoKeyboardProps {
   playbackPedalDown?: boolean;
   /** Extra controls rendered between the range shifter and Sustain. */
   controlsExtra?: ReactNode;
+  /**
+   * Keys the user is being asked to press, styled apart from the ones they are
+   * holding: a target is a request, an active key is a fact.
+   */
+  targetMidis?: ReadonlySet<number>;
+  /**
+   * Park this keyboard here instead of at the persisted `keyboardAnchorMidi`.
+   * Pass `onAnchorChange` alongside it, or the range shifter has nothing to
+   * move. Learn uses this so a lesson never relocates the Play keyboard.
+   */
+  anchorMidi?: number;
+  onAnchorChange?: (midi: number) => void;
+  /** Reported whenever the visible window changes, including on first layout. */
+  onRangeChange?: (range: { lowMidi: number; highMidi: number }) => void;
 }
 
 export function PianoKeyboard({
   extraActiveMidis,
   playbackPedalDown = false,
   controlsExtra,
+  targetMidis,
+  anchorMidi: anchorMidiOverride,
+  onAnchorChange,
+  onRangeChange,
 }: PianoKeyboardProps) {
   const m = useMessages();
   const keysRef = useRef<HTMLDivElement | null>(null);
@@ -47,8 +65,11 @@ export function PianoKeyboard({
   const fixedVelocity = useSettingsStore((s) => s.fixedVelocity);
   const showNoteLabels = useSettingsStore((s) => s.showNoteLabels);
   const gamepadEnabled = useSettingsStore((s) => s.gamepadInput);
-  const anchorMidi = useSettingsStore((s) => s.keyboardAnchorMidi);
-  const setAnchorMidi = useSettingsStore((s) => s.setKeyboardAnchorMidi);
+  // Both selectors run unconditionally; the override is chosen afterwards.
+  const storeAnchorMidi = useSettingsStore((s) => s.keyboardAnchorMidi);
+  const storeSetAnchorMidi = useSettingsStore((s) => s.setKeyboardAnchorMidi);
+  const anchorMidi = anchorMidiOverride ?? storeAnchorMidi;
+  const setAnchorMidi = onAnchorChange ?? storeSetAnchorMidi;
   // Both pedal sources — the button's own latch and a held Space — live in the
   // engine, so the button shows the damper's real state.
   const pedalDown = useSustainDown();
@@ -117,6 +138,11 @@ export function PianoKeyboard({
     load();
     return baseOctave.subscribe(load);
   }, [layout.lowMidi, layout.highMidi, baseOctave]);
+
+  // Learn recomputes which keys to highlight from the window on screen.
+  useEffect(() => {
+    onRangeChange?.({ lowMidi: layout.lowMidi, highMidi: layout.highMidi });
+  }, [layout.lowMidi, layout.highMidi, onRangeChange]);
 
   const [tracker] = useState(
     () =>
@@ -246,6 +272,8 @@ export function PianoKeyboard({
     [liveActive, extraActiveMidis],
   );
 
+  const isTarget = useCallback((midi: number) => targetMidis?.has(midi) ?? false, [targetMidis]);
+
   const whiteWidthPercent = 100 / layout.whiteCount;
 
   return (
@@ -322,7 +350,10 @@ export function PianoKeyboard({
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
               aria-pressed={isActive(key.midi)}
-              className={`piano-key piano-key--white${isActive(key.midi) ? ' is-active' : ''}`}
+              className={`piano-key piano-key--white${isActive(key.midi) ? ' is-active' : ''}${
+                isTarget(key.midi) ? ' is-target' : ''
+              }`}
+              data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,
                 width: `${key.width * whiteWidthPercent}%`,
@@ -344,7 +375,10 @@ export function PianoKeyboard({
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
               aria-pressed={isActive(key.midi)}
-              className={`piano-key piano-key--black${isActive(key.midi) ? ' is-active' : ''}`}
+              className={`piano-key piano-key--black${isActive(key.midi) ? ' is-active' : ''}${
+                isTarget(key.midi) ? ' is-target' : ''
+              }`}
+              data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,
                 width: `${key.width * whiteWidthPercent}%`,

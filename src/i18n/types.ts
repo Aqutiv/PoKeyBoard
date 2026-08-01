@@ -59,6 +59,36 @@ export interface Repair {
 }
 
 /**
+ * One entry per Learn chapter, keyed by chapter id. Declaring the keys here
+ * rather than as a `Record<string, string>` is what makes a missing chapter
+ * title a compile error in all four locales — the same trick
+ * `library.descriptions` uses. Chapters are listed in curriculum order.
+ */
+export interface LearnChapterMessages {
+  // Beginner
+  meetTheKeyboard: string;
+  musicalAlphabet: string;
+  halfStepsWholeSteps: string;
+  trebleStaff: string;
+  bassAndGrandStaff: string;
+  rhythmAndBeat: string;
+  firstMelody: string;
+  cMajorScale: string;
+  triads: string;
+  chordsPedalAndHands: string;
+  // Advanced
+  keySignatures: string;
+  minorKeys: string;
+  intervals: string;
+  inversions: string;
+  seventhChords: string;
+  rhythmBeyondFourFour: string;
+  dynamicsAndArticulation: string;
+  accompanimentPatterns: string;
+  improvising: string;
+}
+
+/**
  * The full message catalog. Static entries are strings; dynamic entries are
  * typed functions so each locale owns its own interpolation and pluralization.
  * Declaring this as an interface makes every locale object compile-time-checked
@@ -67,6 +97,7 @@ export interface Repair {
 export interface Messages {
   nav: {
     play: string;
+    learn: string;
     library: string;
     takes: string;
     settings: string;
@@ -221,6 +252,42 @@ export interface Messages {
       goodNight: string;
       moonlightSonata: string;
     };
+  };
+  learn: {
+    title: string;
+    hint: string;
+    levelLabel: string;
+    levels: {
+      beginner: string;
+      advanced: string;
+    };
+    chapterNumber: (p: { order: number }) => string;
+    openLabel: (p: { title: string }) => string;
+    lockedLabel: (p: { title: string }) => string;
+    comingSoon: string;
+    completed: string;
+    resumeAt: (p: { step: number }) => string;
+    stepOf: (p: { step: number; steps: number }) => string;
+    progress: (p: { done: number; total: number }) => string;
+    exerciseDone: string;
+    listen: string;
+    showMe: string;
+    skipStep: string;
+    tryAgain: string;
+    next: string;
+    back: string;
+    finish: string;
+    close: string;
+    /** Shown when the exercise still needs notes but none are on screen. */
+    shiftHint: string;
+    loadingPiano: string;
+    loadingChapter: string;
+    diagramLabel: string;
+    staffLabel: string;
+    tryOnPlay: string;
+    backToChapters: string;
+    chapterTitles: LearnChapterMessages;
+    chapterBlurbs: LearnChapterMessages;
   };
   importDialog: {
     title: string;

@@ -33,7 +33,7 @@ async function rowCount(page: Page, selector: string): Promise<number> {
   });
 }
 
-const ROWS = ['.transport__buttons', '.metronome', '.piano__controls'];
+const ROWS = ['.transport__buttons', '.metronome', '.piano__controls', '.app-nav'];
 
 test.describe('narrow portrait phone', () => {
   test.use({ viewport: { width: 320, height: 568 } });
@@ -44,6 +44,20 @@ test.describe('narrow portrait phone', () => {
     for (const selector of ROWS) {
       expect.soft(await clippedControls(page, selector), selector).toEqual([]);
     }
+  });
+
+  test('keeps every nav label inside its own tab', async ({ page }) => {
+    // Six tabs leave ~52px each here, which is narrower than the longest label
+    // in some locales — the labels ellipsis rather than push each other out.
+    await gotoAppReady(page);
+    const overflowing = await page
+      .locator('.app-nav')
+      .evaluate((navBar) =>
+        [...navBar.children]
+          .filter((item) => item.scrollWidth > item.clientWidth + 0.5)
+          .map((item) => item.textContent ?? ''),
+      );
+    expect(overflowing).toEqual([]);
   });
 });
 

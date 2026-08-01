@@ -4,6 +4,7 @@ import type { Messages } from './types';
 export const fr: Messages = {
   nav: {
     play: 'Jouer',
+    learn: 'Apprendre',
     library: 'Bibliothèque',
     takes: 'Prises',
     settings: 'Réglages',
@@ -171,6 +172,91 @@ export const fr: Messages = {
         'Une tendre berceuse au clair de lune en 6/8, avec une mélodie chantante et des arpèges au doux balancement.',
       moonlightSonata:
         'L’Adagio sostenuto de Beethoven, complet : de lents triolets au clair de lune sous une mélodie qui chante à mi-voix.',
+    },
+  },
+  learn: {
+    title: 'Apprendre',
+    hint: 'Un cours de piano, de la première touche à l’improvisation.',
+    levelLabel: 'Niveau d’apprentissage',
+    levels: {
+      beginner: 'Débutant',
+      advanced: 'Avancé',
+    },
+    chapterNumber: ({ order }) => `Chapitre ${order}`,
+    openLabel: ({ title }) => `Ouvrir ${title}`,
+    lockedLabel: ({ title }) => `${title} — bientôt disponible`,
+    comingSoon: 'Bientôt disponible',
+    completed: 'Terminé',
+    resumeAt: ({ step }) => `Reprendre à l’étape ${step}`,
+    stepOf: ({ step, steps }) => `Étape ${step} sur ${steps}`,
+    progress: ({ done, total }) => `${done} sur ${total}`,
+    exerciseDone: 'Bien joué.',
+    listen: 'Écouter',
+    showMe: 'Montre-moi',
+    skipStep: 'Passer cette étape',
+    tryAgain: 'Réessayer',
+    next: 'Suivant',
+    back: 'Retour',
+    finish: 'Terminer',
+    close: 'Fermer le chapitre',
+    shiftHint: 'Plus aucune à l’écran — utilisez ‹ › pour faire glisser le clavier.',
+    loadingPiano: 'Chargement du piano…',
+    loadingChapter: 'Chargement du chapitre…',
+    diagramLabel: 'Schéma du clavier',
+    staffLabel: 'Exemple de notation musicale',
+    tryOnPlay: 'Essayer dans Jouer',
+    backToChapters: 'Retour aux chapitres',
+    chapterTitles: {
+      meetTheKeyboard: 'Découvrir le clavier',
+      musicalAlphabet: 'L’alphabet musical',
+      halfStepsWholeSteps: 'Demi-tons, tons et touches noires',
+      trebleStaff: 'Lire la clé de sol',
+      bassAndGrandStaff: 'La clé de fa et la portée double',
+      rhythmAndBeat: 'Le rythme et la pulsation',
+      firstMelody: 'Votre première mélodie',
+      cMajorScale: 'La gamme de do majeur',
+      triads: 'Les accords parfaits : majeur et mineur',
+      chordsPedalAndHands: 'Accords, pédale et deux mains',
+      keySignatures: 'Armures et cycle des quintes',
+      minorKeys: 'Les tonalités mineures',
+      intervals: 'Les intervalles : à l’œil et à l’oreille',
+      inversions: 'Renversements et conduite des voix',
+      seventhChords: 'Accords de septième et cadences',
+      rhythmBeyondFourFour: 'Au-delà du 4/4',
+      dynamicsAndArticulation: 'Nuances, articulation et pédale',
+      accompanimentPatterns: 'Formules d’accompagnement et grilles d’accords',
+      improvising: 'Improviser sur une grille',
+    },
+    chapterBlurbs: {
+      meetTheKeyboard:
+        'Où vivent les notes : grave et aigu, la carte des touches noires, et comment trouver le do sans regarder.',
+      musicalAlphabet: 'Sept lettres qui se répètent sans fin : nommez chaque touche blanche.',
+      halfStepsWholeSteps:
+        'Le plus petit pas qui soit, les dièses et les bémols, et les deux endroits où les touches blanches se touchent.',
+      trebleStaff: 'Lignes, interlignes et clé de sol : lisez vos premières notes et jouez-les.',
+      bassAndGrandStaff:
+        'La main gauche entre en jeu, et le do central se révèle être le pont entre les deux portées.',
+      rhythmAndBeat:
+        'Pulsation, mesures et durées : jouez en rythme avec le métronome, pas à côté.',
+      firstMelody: 'Hauteur et rythme enfin réunis : huit mesures que vous lisez et jouez.',
+      cMajorScale: 'Le motif derrière toute tonalité majeure, et le passage du pouce.',
+      triads:
+        'Empilez deux tierces et voilà un accord — une seule note décide s’il sourit ou soupire.',
+      chordsPedalAndHands:
+        'Main gauche sous la droite, la pédale qui suit l’harmonie : un morceau entier, à deux mains.',
+      keySignatures:
+        'Pourquoi les altérations sont en tête, et comment nommer la tonalité d’un coup d’œil.',
+      minorKeys: 'Relative, homonyme, naturelle, harmonique, mélodique : toute la famille mineure.',
+      intervals:
+        'Nommez n’importe quelle distance entre deux notes, puis reconnaissez-la sans regarder.',
+      inversions: 'Le même accord dans un autre ordre : l’astuce qui fluidifie les enchaînements.',
+      seventhChords:
+        'Une tierce de plus pour la couleur et la tension, puis la détente : cadences et ii–V–I.',
+      rhythmBeyondFourFour: 'Valses, mesures composées, triolets, syncopes et swing.',
+      dynamicsAndArticulation: 'Fort, doux, lié, détaché : la différence entre juste et musical.',
+      accompanimentPatterns:
+        'Basse d’Alberti, accords brisés et basse de valse : transformez une grille en musique.',
+      improvising: 'Une gamme, une grille, et le droit d’inventer au fil du jeu.',
     },
   },
   importDialog: {

@@ -4,6 +4,7 @@ import type { Messages } from './types';
 export const es: Messages = {
   nav: {
     play: 'Tocar',
+    learn: 'Aprender',
     library: 'Biblioteca',
     takes: 'Tomas',
     settings: 'Ajustes',
@@ -171,6 +172,90 @@ export const es: Messages = {
         'Una tierna nana a la luz de la luna en 6/8, con una melodía cantabile y arpegios que se mecen suavemente.',
       moonlightSonata:
         'El Adagio sostenuto de Beethoven, completo: tresillos lentos a la luz de la luna bajo una melodía que canta en voz baja.',
+    },
+  },
+  learn: {
+    title: 'Aprender',
+    hint: 'Un curso para tocar, desde la primera tecla hasta improvisar.',
+    levelLabel: 'Nivel de aprendizaje',
+    levels: {
+      beginner: 'Principiante',
+      advanced: 'Avanzado',
+    },
+    chapterNumber: ({ order }) => `Capítulo ${order}`,
+    openLabel: ({ title }) => `Abrir ${title}`,
+    lockedLabel: ({ title }) => `${title} — próximamente`,
+    comingSoon: 'Próximamente',
+    completed: 'Completado',
+    resumeAt: ({ step }) => `Continuar en el paso ${step}`,
+    stepOf: ({ step, steps }) => `Paso ${step} de ${steps}`,
+    progress: ({ done, total }) => `${done} de ${total}`,
+    exerciseDone: 'Muy bien.',
+    listen: 'Escuchar',
+    showMe: 'Muéstrame',
+    skipStep: 'Saltar este paso',
+    tryAgain: 'Intentar de nuevo',
+    next: 'Siguiente',
+    back: 'Atrás',
+    finish: 'Terminar',
+    close: 'Cerrar capítulo',
+    shiftHint: 'No queda ninguna en pantalla: usa ‹ › para desplazar el teclado.',
+    loadingPiano: 'Cargando el piano…',
+    loadingChapter: 'Cargando el capítulo…',
+    diagramLabel: 'Diagrama del teclado',
+    staffLabel: 'Ejemplo de notación musical',
+    tryOnPlay: 'Probarlo en Tocar',
+    backToChapters: 'Volver a los capítulos',
+    chapterTitles: {
+      meetTheKeyboard: 'Conoce el teclado',
+      musicalAlphabet: 'El alfabeto musical',
+      halfStepsWholeSteps: 'Semitonos, tonos y las teclas negras',
+      trebleStaff: 'Leer la clave de sol',
+      bassAndGrandStaff: 'La clave de fa y el sistema completo',
+      rhythmAndBeat: 'El ritmo y el pulso',
+      firstMelody: 'Tu primera melodía',
+      cMajorScale: 'La escala de do mayor',
+      triads: 'Tríadas: mayores y menores',
+      chordsPedalAndHands: 'Acordes, pedal y ambas manos',
+      keySignatures: 'Armaduras y el círculo de quintas',
+      minorKeys: 'Las tonalidades menores',
+      intervals: 'Intervalos: a la vista y al oído',
+      inversions: 'Inversiones y conducción de voces',
+      seventhChords: 'Acordes de séptima y cadencias',
+      rhythmBeyondFourFour: 'Más allá del 4/4',
+      dynamicsAndArticulation: 'Dinámica, articulación y pedal',
+      accompanimentPatterns: 'Patrones de acompañamiento y cifrados',
+      improvising: 'Improvisar sobre una progresión',
+    },
+    chapterBlurbs: {
+      meetTheKeyboard:
+        'Dónde viven las notas: agudo y grave, el mapa de las teclas negras y cómo encontrar el do sin mirar.',
+      musicalAlphabet: 'Siete letras que se repiten sin fin: nombra todas las teclas blancas.',
+      halfStepsWholeSteps:
+        'El paso más pequeño que existe, los sostenidos y bemoles, y los dos sitios donde las teclas blancas se tocan.',
+      trebleStaff: 'Líneas, espacios y la clave de sol: lee tus primeras notas escritas y tócalas.',
+      bassAndGrandStaff:
+        'Entra la mano izquierda, y el do central resulta ser el puente entre los dos pentagramas.',
+      rhythmAndBeat:
+        'Pulso, compases y duraciones: toca a tiempo con el metrónomo, no cerca de él.',
+      firstMelody: 'Altura y ritmo por fin juntos: ocho compases que lees en la página y tocas.',
+      cMajorScale: 'El patrón que hay detrás de toda tonalidad mayor, y el paso del pulgar.',
+      triads: 'Apila dos terceras y tienes un acorde, y una sola nota decide si sonríe o suspira.',
+      chordsPedalAndHands:
+        'Mano izquierda bajo la derecha y el pedal cambiando con la armonía: una pieza entera.',
+      keySignatures:
+        'Por qué los sostenidos y bemoles van delante, y cómo nombrar la tonalidad de un vistazo.',
+      minorKeys: 'Relativa, homónima, natural, armónica, melódica: toda la familia menor ordenada.',
+      intervals: 'Nombra cualquier distancia entre dos notas y aprende a reconocerla sin mirar.',
+      inversions: 'El mismo acorde en otro orden: el truco que hace fluir las progresiones.',
+      seventhChords:
+        'Una tercera más para dar color y tensión, y luego el reposo: cadencias y el ii–V–I.',
+      rhythmBeyondFourFour: 'Valses, compases compuestos, tresillos, síncopa y swing.',
+      dynamicsAndArticulation:
+        'Fuerte, suave, ligado, corto: la diferencia entre correcto y musical.',
+      accompanimentPatterns:
+        'Bajo de Alberti, acordes quebrados y bajo de vals: convierte los cifrados en música.',
+      improvising: 'Una escala, una progresión y permiso para inventar sobre la marcha.',
     },
   },
   importDialog: {
