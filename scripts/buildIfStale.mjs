@@ -8,7 +8,7 @@
  * wrongly, so anything ambiguous rebuilds. `npm run test:e2e:fast` skips this
  * check entirely.
  */
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -29,14 +29,41 @@ const WATCHED = [
 
 const WITNESS = path.join('dist', 'index.html');
 
+/** Git metadata, or '' outside a checkout. Mirrors the helper in vite.config.ts. */
+function git(...args) {
+  try {
+    return execFileSync('git', args, {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+  } catch {
+    return '';
+  }
+}
+
 /**
- * Build-time configuration that lives in no watched file. vite.config.ts turns
- * POKEYBOARD_BASE into asset URLs, the web manifest and the service-worker
- * scope, so changing it has to invalidate dist/ even when every source file is
- * older than the build — otherwise `POKEYBOARD_BASE=/subpath/ npm run test:e2e`
- * would quietly test the previous root build.
+ * Build-time configuration that lives in no watched file. Each entry is derived
+ * the same way vite.config.ts derives it — deliberately re-read rather than
+ * imported, since this script runs as plain Node against a TypeScript config.
+ *
+ * - `base`: vite.config.ts turns POKEYBOARD_BASE into asset URLs, the web
+ *   manifest and the service-worker scope, so changing it has to invalidate
+ *   dist/ even when every source file is older than the build — otherwise
+ *   `POKEYBOARD_BASE=/subpath/ npm run test:e2e` would quietly test the
+ *   previous root build.
+ * - `commit`/`date`: the build stamp shown in About. Git metadata is in no
+ *   watched path, so a commit that touches only tests/ or a doc would leave
+ *   dist/ current by mtime while its stamp still named the previous commit.
+ *
+ * Uncommitted edits do not move HEAD, so iterating on a spec still skips the
+ * build; only an actual checkout or commit rebuilds, which is when the artifact
+ * genuinely differs.
  */
-const BUILD_ENV = JSON.stringify({ base: process.env.POKEYBOARD_BASE ?? '/' });
+const BUILD_ENV = JSON.stringify({
+  base: process.env.POKEYBOARD_BASE ?? '/',
+  commit: process.env.GITHUB_SHA?.slice(0, 7) ?? git('rev-parse', '--short', 'HEAD'),
+  date: git('log', '-1', '--format=%cs'),
+});
 const BUILD_ENV_STAMP = path.join('dist', '.buildIfStale-env');
 
 /** The newest mtime at or under `target`, with the file that carries it. */
@@ -70,6 +97,18 @@ async function recordedBuildEnv() {
   }
 }
 
+/** Names the BUILD_ENV entries that moved, so the rebuild says which one it was. */
+function changedBuildEnvKeys(recorded) {
+  let previous;
+  try {
+    previous = JSON.parse(recorded);
+  } catch {
+    return ['an unreadable stamp']; // Truncated or hand-edited: rebuild anyway.
+  }
+  const current = JSON.parse(BUILD_ENV);
+  return Object.keys(current).filter((key) => current[key] !== previous[key]);
+}
+
 function runBuild() {
   return new Promise((resolve, reject) => {
     const child = spawn('npm', ['run', 'build'], { stdio: 'inherit', shell: true });
@@ -89,10 +128,13 @@ async function build(reason) {
 }
 
 const witness = await newest(WITNESS);
+const recorded = await recordedBuildEnv();
 if (!witness) {
   await build('no dist/index.html');
-} else if ((await recordedBuildEnv()) !== BUILD_ENV) {
-  await build('dist/ was built with a different POKEYBOARD_BASE');
+} else if (recorded === null) {
+  await build('dist/ predates the build-input stamp');
+} else if (recorded !== BUILD_ENV) {
+  await build(`dist/ was built with a different ${changedBuildEnvKeys(recorded).join(' and ')}`);
 } else {
   const candidates = await Promise.all(WATCHED.map(newest));
   const stale = candidates

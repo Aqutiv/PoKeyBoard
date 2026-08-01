@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { APP_BUILD_LABEL } from '@/app/version';
 import { useMessages } from '@/i18n/i18nContext';
 import './about.css';
 
@@ -61,7 +62,7 @@ export function AboutPage() {
         <h2 className="about__section">{m.about.credits}</h2>
         <p className="page__hint">{m.about.creditLine}</p>
         <p className="page__hint">{m.about.attribution}</p>
-        <p className="page__hint">{m.about.version({ version: __APP_VERSION__ })}</p>
+        <p className="page__hint">{m.about.version({ version: APP_BUILD_LABEL })}</p>
       </div>
     </section>
   );
