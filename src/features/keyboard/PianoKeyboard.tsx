@@ -187,6 +187,9 @@ export function PianoKeyboard({
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.metaKey || event.ctrlKey || event.altKey) return;
       if (isTextInput(event.target)) return;
+      // Export dialogs leave the piano mounted behind them, and their own
+      // scrollable body wants the page keys.
+      if (document.querySelector('[aria-modal="true"]')) return;
       const shift = RANGE_KEYS[event.key];
       if (!shift) return;
       // Otherwise the browser scrolls the page out from under the keyboard.
