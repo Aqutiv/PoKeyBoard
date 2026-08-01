@@ -83,6 +83,31 @@ test.describe('library folders', () => {
     await expect(page.getByRole('button', { name: 'Open Für Elise', exact: true })).toBeVisible();
   });
 
+  test('comes back to where the list was left, but starts at the top after a reload', async ({
+    page,
+  }) => {
+    await openClassics(page);
+    const groups = page.locator('.library-groups');
+    // Scrolled by reaching for a track well down the list, not by setting an
+    // offset: the track that gets opened has to be one the click does not scroll
+    // back to the top to reach.
+    const track = page.getByRole('button', { name: 'Open Canon in D', exact: true });
+    await track.scrollIntoViewIfNeeded();
+    const offset = await groups.evaluate((el) => el.scrollTop);
+    expect(offset).toBeGreaterThan(0);
+
+    await track.click();
+    await expect(page.locator('.play-header__title')).toHaveText('Canon in D');
+    await nav(page).getByRole('button', { name: 'Library' }).click();
+    await expect(folders(page)).toBeVisible();
+    await expect.poll(() => groups.evaluate((el) => el.scrollTop)).toBe(offset);
+
+    // Deliberately session-only: the place is held in memory, not persisted.
+    await page.reload();
+    await expect(folders(page)).toBeVisible();
+    await expect.poll(() => groups.evaluate((el) => el.scrollTop)).toBe(0);
+  });
+
   test('opens an authored classic on Play as an unmodifiable library take', async ({ page }) => {
     await openClassics(page);
     await page.getByRole('button', { name: 'Open Für Elise', exact: true }).click();
