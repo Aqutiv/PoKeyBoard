@@ -4,7 +4,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
-import { ComputerKeyboardInput } from './computerKeyboard';
+import { ComputerKeyboardInput, isTextInput } from './computerKeyboard';
 import {
   BLACK_KEY_HEIGHT,
   computeVisibleWhites,
@@ -175,6 +175,30 @@ export function PianoKeyboard({
     },
     [layout.lowMidi, setAnchorMidi, tracker, visibleWhites],
   );
+
+  // Arrow and page keys mirror the on-screen shift buttons.
+  useEffect(() => {
+    const RANGE_KEYS: Record<string, [1 | -1, 'key' | 'octave']> = {
+      ArrowLeft: [-1, 'key'],
+      ArrowRight: [1, 'key'],
+      PageDown: [-1, 'octave'],
+      PageUp: [1, 'octave'],
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+      if (isTextInput(event.target)) return;
+      // Export dialogs leave the piano mounted behind them, and their own
+      // scrollable body wants the page keys.
+      if (document.querySelector('[aria-modal="true"]')) return;
+      const shift = RANGE_KEYS[event.key];
+      if (!shift) return;
+      // Otherwise the browser scrolls the page out from under the keyboard.
+      event.preventDefault();
+      shiftRange(...shift);
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [shiftRange]);
 
   const toggleSustain = useCallback(() => {
     setSustainOn((current) => {

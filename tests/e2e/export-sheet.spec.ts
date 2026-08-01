@@ -48,6 +48,29 @@ test.describe('Sheet music export', () => {
     await expect(dialog).toHaveCount(0);
   });
 
+  test('leaves the piano range alone while the dialog is open', async ({ page }) => {
+    await gotoAppReady(page);
+    await recordShortTake(page);
+    const range = page.locator('.piano__range');
+    const before = await range.textContent();
+
+    await page.getByRole('button', { name: 'Share', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Sheet music (PDF)' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Export sheet music' });
+    await expect(dialog).toBeVisible();
+
+    // The dialog owns the page keys; the piano behind it must not move.
+    await page.keyboard.press('PageUp');
+    await page.keyboard.press('ArrowRight');
+    await expect(range).toHaveText(before!);
+
+    await dialog.getByRole('button', { name: 'Cancel' }).click();
+    await expect(dialog).toHaveCount(0);
+    // The shortcuts come back once the dialog is gone.
+    await page.keyboard.press('ArrowRight');
+    await expect(range).not.toHaveText(before!);
+  });
+
   test('exports the library Moonlight Sonata across multiple pages', async ({ page }) => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Library' }).click();
