@@ -265,6 +265,42 @@ test.describe('chapter runner', () => {
     await expect(page.locator('.piano__range')).toHaveText(before);
   });
 
+  test('stays in the chapter across a visit to another tab', async ({ page }) => {
+    await openChapterOne(page);
+    for (const code of ['KeyA', 'KeyS', 'KeyD']) await playKey(page, code);
+    await nextButton(page).click();
+    await expect(page.getByText('Step 2 of 11')).toBeVisible();
+
+    await nav(page).getByRole('button', { name: 'Library' }).click();
+    await expect(page.getByRole('group', { name: 'Library folder' })).toBeVisible();
+    await nav(page).getByRole('button', { name: 'Learn' }).click();
+
+    // Back in the lesson, at the step it was left on — not the outline, and
+    // not restarted from step one.
+    await expect(page.getByText('Step 2 of 11')).toBeVisible();
+    await expect(levels(page)).toHaveCount(0);
+  });
+
+  test('returns to the outline once the chapter is closed', async ({ page }) => {
+    await openChapterOne(page);
+    await page.getByRole('button', { name: 'Close chapter' }).click();
+    await expect(levels(page)).toBeVisible();
+
+    await nav(page).getByRole('button', { name: 'Library' }).click();
+    await expect(page.getByRole('group', { name: 'Library folder' })).toBeVisible();
+    await nav(page).getByRole('button', { name: 'Learn' }).click();
+    await expect(levels(page)).toBeVisible();
+  });
+
+  test('starts a fresh visit at the outline, not mid-lesson', async ({ page }) => {
+    // Which step you reached is progress and persists; being *inside* a chapter
+    // belongs to the sitting, so a reload should not drop you into a lesson.
+    await openChapterOne(page);
+    await expect(page.getByText('Step 1 of 11')).toBeVisible();
+    await page.reload();
+    await expect(levels(page)).toBeVisible({ timeout: 30_000 });
+  });
+
   test('arrow keys move the lesson keyboard, not the Play one', async ({ page }) => {
     // Main gained an arrow-key range shortcut after this feature was written;
     // it routes through the same setter the runner overrides, so it should

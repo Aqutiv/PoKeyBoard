@@ -297,7 +297,9 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
               type="button"
               className="btn btn--small"
               onClick={() => {
-                onProgress(withChapterDone(progress, chapterId));
+                // Closes as well as completes: the chapter is now finished, so
+                // coming back to Learn should land on the outline.
+                finish();
                 navigate('play');
               }}
             >

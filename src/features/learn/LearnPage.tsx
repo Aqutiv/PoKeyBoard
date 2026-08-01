@@ -6,6 +6,7 @@ import { ChapterRunner } from './ChapterRunner';
 import { LEARN_SECTIONS_BY_LEVEL } from './chapters';
 import { LEARN_LEVEL_IDS, type LearnLevelId } from './levels';
 import { chapterStatus, EMPTY_LEARN_PROGRESS, type LearnProgress } from './progress';
+import { getOpenChapter, setOpenChapter } from './session';
 import type { LearnChapterId, LearnChapterMeta } from './types';
 import './learn.css';
 
@@ -17,14 +18,27 @@ export function LearnPage() {
   const setLevel = useSettingsStore((s) => s.setLearnLevel);
 
   const [progress, setProgress] = useState<LearnProgress>(EMPTY_LEARN_PROGRESS);
-  const [openId, setOpenId] = useState<LearnChapterId | null>(null);
+  const [progressLoaded, setProgressLoaded] = useState(false);
+  // Seeded from module state, so stepping over to another tab mid-lesson and
+  // coming back returns to the chapter rather than the outline.
+  const [openId, setOpenIdState] = useState<LearnChapterId | null>(getOpenChapter);
+
+  const setOpenId = useCallback((id: LearnChapterId | null) => {
+    setOpenChapter(id);
+    setOpenIdState(id);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
-    void loadLearnProgress().then((loaded) => {
-      // A late arrival must not clobber progress made while it was in flight.
-      if (!cancelled) setProgress(loaded);
-    });
+    void loadLearnProgress()
+      // A blank slate beats a Learn tab that never renders.
+      .catch(() => EMPTY_LEARN_PROGRESS)
+      .then((loaded) => {
+        // A late arrival must not clobber progress made while it was in flight.
+        if (cancelled) return;
+        setProgress(loaded);
+        setProgressLoaded(true);
+      });
     return () => {
       cancelled = true;
     };
@@ -37,6 +51,11 @@ export function LearnPage() {
       console.error('Saving learn progress failed:', error);
     });
   }, []);
+
+  // Nothing renders until progress is in. The runner reads the step to open on
+  // exactly once, so mounting it against an empty record — which is what a
+  // restored chapter would do — would silently restart the chapter.
+  if (!progressLoaded) return null;
 
   if (openId !== null) {
     return (
