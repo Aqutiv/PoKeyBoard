@@ -1,18 +1,62 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DEFAULT_PIANO_INSTRUMENT_ID, pianoInstrument } from '@/audio/instruments';
 import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX } from '@/domain/takeTypes';
 
-const setMasterVolume = vi.fn();
-const setReverbMix = vi.fn();
+/**
+ * The mocks below are registered once for the whole file rather than around
+ * every boot. Re-registering them per test used to leave a window the module
+ * runner could slip through: vi.doMock/vi.doUnmock only *queue* the change and
+ * each resolves its path over its own round trip, so a boot racing that queue
+ * could be handed the real AudioEngine while the mock was still settling — the
+ * settings subscription then pushed the levels into an engine the spy never
+ * saw. vi.mock is hoisted above the imports and never torn down, and
+ * vi.resetModules() leaves the mock registry alone, so each boot below still
+ * gets fresh module state over these same stubs.
+ */
+const { setMasterVolume, setReverbMix } = vi.hoisted(() => ({
+  setMasterVolume: vi.fn(),
+  setReverbMix: vi.fn(),
+}));
+
+vi.mock('@/data/takeRepository', () => ({
+  getTake: vi.fn(async () => null),
+  saveTake: vi.fn(async () => 1),
+}));
+vi.mock('@/data/metadataRepository', () => ({
+  META_LAST_OPEN_TAKE: 'lastOpenTakeId',
+  META_PERSIST_REQUESTED: 'persistentStorageRequested',
+  getMetadata: vi.fn(async () => undefined),
+  setMetadata: vi.fn(async () => undefined),
+}));
+vi.mock('@/data/audioCacheRepository', () => ({
+  invalidateCachedAudio: vi.fn(async () => undefined),
+}));
+vi.mock('@/data/settingsRepository', () => ({
+  loadSettings: vi.fn(async () => ({})),
+  saveSettings: vi.fn(async () => undefined),
+}));
+vi.mock('@/audio/AudioEngine', async () => {
+  const { DEFAULT_PIANO_INSTRUMENT_ID, pianoInstrument } = await import('@/audio/instruments');
+  return {
+    audioEngine: {
+      setMasterVolume,
+      setReverbMix,
+      setInstrument: vi.fn(async () => undefined),
+      markInstrumentRestored: vi.fn(),
+      activeInstrument: pianoInstrument(DEFAULT_PIANO_INSTRUMENT_ID),
+    },
+  };
+});
+vi.mock('@/features/transport/transportController', () => ({
+  transportController: {
+    restorePlayhead: vi.fn(),
+    onRecordingFinalized: new Set<() => void>(),
+  },
+}));
+vi.mock('@/i18n/languagePreference', () => ({
+  applySystemLanguageIfUnpinned: vi.fn(async () => undefined),
+}));
 
 afterEach(() => {
-  vi.doUnmock('@/data/takeRepository');
-  vi.doUnmock('@/data/metadataRepository');
-  vi.doUnmock('@/data/audioCacheRepository');
-  vi.doUnmock('@/data/settingsRepository');
-  vi.doUnmock('@/audio/AudioEngine');
-  vi.doUnmock('@/features/transport/transportController');
-  vi.doUnmock('@/i18n/languagePreference');
   vi.resetModules();
 });
 
@@ -22,47 +66,9 @@ async function bootPersistence() {
   setMasterVolume.mockClear();
   setReverbMix.mockClear();
 
-  vi.doMock('@/data/takeRepository', () => ({
-    getTake: vi.fn(async () => null),
-    saveTake: vi.fn(async () => 1),
-  }));
-  vi.doMock('@/data/metadataRepository', () => ({
-    META_LAST_OPEN_TAKE: 'lastOpenTakeId',
-    META_PERSIST_REQUESTED: 'persistentStorageRequested',
-    getMetadata: vi.fn(async () => undefined),
-    setMetadata: vi.fn(async () => undefined),
-  }));
-  vi.doMock('@/data/audioCacheRepository', () => ({
-    invalidateCachedAudio: vi.fn(async () => undefined),
-  }));
-  vi.doMock('@/data/settingsRepository', () => ({
-    loadSettings: vi.fn(async () => ({})),
-    saveSettings: vi.fn(async () => undefined),
-  }));
-  vi.doMock('@/audio/AudioEngine', () => ({
-    audioEngine: {
-      setMasterVolume,
-      setReverbMix,
-      setInstrument: vi.fn(async () => undefined),
-      markInstrumentRestored: vi.fn(),
-      activeInstrument: pianoInstrument(DEFAULT_PIANO_INSTRUMENT_ID),
-    },
-  }));
-  vi.doMock('@/features/transport/transportController', () => ({
-    transportController: {
-      restorePlayhead: vi.fn(),
-      onRecordingFinalized: new Set<() => void>(),
-    },
-  }));
-  vi.doMock('@/i18n/languagePreference', () => ({
-    applySystemLanguageIfUnpinned: vi.fn(async () => undefined),
-  }));
-
   // Sequential, not Promise.all: persistence imports both stores itself, and
-  // racing that against the direct imports lets the module runner evaluate a
-  // store twice. The subscription then lands on an instance this test never
-  // touches, and the engine spy sees nothing — rare locally, reliable on a
-  // loaded CI box.
+  // racing that against the direct imports gives the module runner a second
+  // chance to evaluate something in the shared graph twice.
   const { persistenceService } = await import('@/data/persistence');
   const { useSettingsStore } = await import('@/state/useSettingsStore');
   const { useTakeStore } = await import('@/state/useTakeStore');
