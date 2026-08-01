@@ -58,11 +58,14 @@ async function bootPersistence() {
     applySystemLanguageIfUnpinned: vi.fn(async () => undefined),
   }));
 
-  const [{ persistenceService }, { useSettingsStore }, { useTakeStore }] = await Promise.all([
-    import('@/data/persistence'),
-    import('@/state/useSettingsStore'),
-    import('@/state/useTakeStore'),
-  ]);
+  // Sequential, not Promise.all: persistence imports both stores itself, and
+  // racing that against the direct imports lets the module runner evaluate a
+  // store twice. The subscription then lands on an instance this test never
+  // touches, and the engine spy sees nothing — rare locally, reliable on a
+  // loaded CI box.
+  const { persistenceService } = await import('@/data/persistence');
+  const { useSettingsStore } = await import('@/state/useSettingsStore');
+  const { useTakeStore } = await import('@/state/useTakeStore');
   await persistenceService.init();
   // Only what happens *after* boot is under test; init applies the stored
   // levels once by hand, before the subscription exists.
