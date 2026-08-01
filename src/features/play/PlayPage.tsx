@@ -106,7 +106,7 @@ export function PlayPage() {
                 className="btn btn--small"
                 onClick={() => void audioEngine.loadCoreSamples()}
               >
-                {m.settings.tryAgain}
+                {m.play.retryLoadingPiano}
               </button>
             </div>
           ) : null}

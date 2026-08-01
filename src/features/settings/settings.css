@@ -91,6 +91,77 @@
   accent-color: var(--accent);
 }
 
+/* One card per piano: the choice and its offline download live together, so the
+   piano is named once instead of once per concern. `.setting-row` stays on the
+   card for the shared radio sizing and progress width above. */
+.piano-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.piano-card {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+}
+
+.piano-card--active {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+
+.piano-card__choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: var(--touch-target);
+}
+
+.piano-card__choice input[type='radio'] {
+  /* Optically align the control with the name line, not the label box. */
+  margin-top: 3px;
+  flex: none;
+}
+
+.piano-card__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.piano-card__name {
+  font-weight: 600;
+}
+
+.piano-card__desc {
+  font-size: 13px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+.piano-card__offline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  /* Indent past the radio so the status reads as part of the choice. */
+  padding-left: 30px;
+  font-size: 13px;
+}
+
+.piano-card__progress {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .settings__hint {
   margin: 4px 0;
   font-size: 13px;

@@ -34,8 +34,9 @@ src/
                 remoteImportMessage
     export/     AudioExportDialog, SheetExportDialog, sheetPdfService
                 (pdf-lib, dynamic import — see SHEET_EXPORT.md)
-    settings/   SettingsPage (piano choice, offline packs, diagnostics,
-                install, updates)
+    settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
+                reset), PianoSection (piano choice with its own offline pack,
+                levels)
     play/       PlayPage, SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
@@ -116,4 +117,4 @@ The export service copies the rendered buffer's channels, **transfers** them to 
 
 ## PWA
 
-Workbox `injectManifest`: shell precache (~2.0 MB), SPA navigation fallback, Cache First runtime caching for every versioned sample pack in one named cache shared with the explicit "Download piano for offline use" flow (which downloads and deletes per piano, enumerating the cache by pack path). Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.
+Workbox `injectManifest`: shell precache (~2.0 MB), SPA navigation fallback, Cache First runtime caching for every versioned sample pack in one named cache shared with the explicit per-piano download flow in Settings → Piano (which downloads and deletes per piano, enumerating the cache by pack path). Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.
