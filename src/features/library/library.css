@@ -18,6 +18,9 @@
   color: var(--text-dim);
   font-size: 14px;
   font-weight: 600;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
 }
 
 .library-folders__option.is-selected {
@@ -139,10 +142,31 @@
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .library-item.is-active {
   border-color: var(--accent);
+}
+
+/* Mouse only: on touch, :hover would stick to the last-tapped row.
+   Twin of the .take-item block in takes.css — keep the two in step. */
+@media (hover: hover) and (pointer: fine) {
+  .library-item:hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+  }
+
+  .library-item.is-active:hover {
+    border-color: var(--accent-strong);
+  }
+
+  .library-folders__option:not(.is-selected):hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
 }
 
 .library-item__main {
