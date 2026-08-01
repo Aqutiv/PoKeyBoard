@@ -46,19 +46,19 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 
 1. `npm run build && npm run preview -- --host` and open `http://<your-ip>:4173` **only for quick layout checks** (no SW on plain http), or deploy to an HTTPS host for the full experience.
 2. First visit online; the app shell caches automatically.
-3. Settings → **Download piano for offline use** to pin a full sample pack (each piano downloads separately).
+3. Settings → **Piano** → **Download Salamander** (or **Download Headroom**) to pin a full sample pack — each piano card downloads on its own.
 
 ## Installing
 
 - **iPhone / iPad (Safari):** Share menu → **Add to Home Screen**. iOS has no programmatic install prompt. Open the installed icon before creating important takes — the installed app may use a separate storage area from the Safari tab.
 - **Android (Chrome):** accept the install prompt, or browser menu → _Add to Home screen_.
-- **Desktop (Chrome/Edge):** the install icon in the address bar, or Settings → Install inside the app when the browser offers it.
+- **Desktop (Chrome/Edge):** the install icon in the address bar, or Settings → App inside the app when the browser offers it.
 
 ## Offline behavior
 
 - The app shell (HTML/JS/CSS/icons/fonts, ~2.0 MB) is precached on first visit — the app starts with no connection.
-- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use Settings → **Download piano for offline use** (~24-28 MB per piano, downloaded and deleted independently, without touching takes).
-- Updates download in the background and apply only when you choose (Settings → Updates) — never mid-recording.
+- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use the **Download** button on a piano card in Settings → **Piano** (~24-28 MB per piano, downloaded and deleted independently, without touching takes).
+- Updates download in the background and apply only when you choose (Settings → App) — never mid-recording.
 
 ## Your data
 

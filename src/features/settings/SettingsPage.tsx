@@ -1,8 +1,7 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
 import { detectCapabilities, type AppCapabilities } from '@/audio/audioCapabilities';
-import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
 import { LANGUAGE_OPTIONS } from '@/i18n';
 import { useMessages } from '@/i18n/i18nContext';
 import { pinLanguage, unpinLanguage } from '@/i18n/languagePreference';
@@ -11,7 +10,8 @@ import { installService } from '@/pwa/install';
 import { updateManager } from '@/pwa/updateManager';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useSettingsStore } from '@/state/useSettingsStore';
-import { useTakeStore } from '@/state/useTakeStore';
+import { formatMB } from './formatBytes';
+import { PianoSection } from './PianoSection';
 import './settings.css';
 
 const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
@@ -29,23 +29,6 @@ const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
   'touch',
 ];
 
-function formatMB(bytes: number): string {
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
-}
-
-/** Each piano's display name lives in the message catalogs, not the registry. */
-const PIANO_LABEL_KEYS: Record<PianoInstrumentId, 'pianoSalamander' | 'pianoHeadroom'> = {
-  'salamander-grand': 'pianoSalamander',
-  'headroom-grand': 'pianoHeadroom',
-};
-
-type PackState =
-  | { kind: 'checking' }
-  | { kind: 'not-downloaded'; totalBytes: number }
-  | { kind: 'downloading'; loadedBytes: number; totalBytes: number }
-  | { kind: 'offline-ready'; totalBytes: number }
-  | { kind: 'error'; message: string; totalBytes: number };
-
 function useUpdateAvailable(): boolean {
   return useSyncExternalStore(
     (onStoreChange) => updateManager.subscribe(onStoreChange),
@@ -53,21 +36,12 @@ function useUpdateAvailable(): boolean {
   );
 }
 
-// Standard preview note for the sound sliders: middle C, mezzo-forte, long
-// enough for the reverb tail to be audible after it releases.
-const PREVIEW_MIDI = 60;
-const PREVIEW_VELOCITY = 0.7;
-const PREVIEW_DURATION_MS = 600;
-
 export function SettingsPage() {
   const m = useMessages();
   const settings = useSettingsStore();
-  const instrument = useTakeStore((state) => state.take.instrument);
   const transportState = useTransportState();
   const updateAvailable = useUpdateAvailable();
 
-  const [packs, setPacks] = useState<Partial<Record<PianoInstrumentId, PackState>>>({});
-  const [switching, setSwitching] = useState(false);
   const [storageInfo, setStorageInfo] = useState<{
     usage: number | null;
     quota: number | null;
@@ -75,33 +49,6 @@ export function SettingsPage() {
   }>({ usage: null, quota: null, persisted: null });
   const [caps] = useState<AppCapabilities>(() => detectCapabilities());
   const [installTick, setInstallTick] = useState(0);
-
-  const setPack = useCallback((id: PianoInstrumentId, state: PackState) => {
-    setPacks((current) => ({ ...current, [id]: state }));
-  }, []);
-
-  const refreshPackState = useCallback(
-    async (id: PianoInstrumentId) => {
-      try {
-        const manifest = await audioEngine.bankFor(id).loadManifest();
-        const offline = await audioEngine.isFullPackOffline(id);
-        setPack(id, {
-          kind: offline ? 'offline-ready' : 'not-downloaded',
-          totalBytes: manifest.totalBytes,
-        });
-      } catch {
-        setPack(id, { kind: 'error', message: m.settings.couldNotCheck, totalBytes: 0 });
-      }
-    },
-    [m, setPack],
-  );
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      for (const piano of PIANO_INSTRUMENTS) void refreshPackState(piano.id);
-    }, 0);
-    return () => clearTimeout(timer);
-  }, [refreshPackState]);
 
   useEffect(() => {
     let alive = true;
@@ -132,178 +79,17 @@ export function SettingsPage() {
   useEffect(() => installService.subscribe(() => setInstallTick((n) => n + 1)), []);
   void installTick;
 
-  const downloadPack = useCallback(
-    (id: PianoInstrumentId) => {
-      setPacks((current) => {
-        const state = current[id];
-        if (state?.kind !== 'not-downloaded' && state?.kind !== 'error') return current;
-        return {
-          ...current,
-          [id]: { kind: 'downloading', loadedBytes: 0, totalBytes: state.totalBytes },
-        };
-      });
-      audioEngine
-        .downloadFullSamplePack(id, (loadedBytes, totalBytes) => {
-          setPack(id, { kind: 'downloading', loadedBytes, totalBytes });
-        })
-        .then(() => void refreshPackState(id))
-        .catch((error: unknown) => {
-          setPack(id, {
-            kind: 'error',
-            message: error instanceof Error ? error.message : m.settings.downloadFailed,
-            totalBytes: 0,
-          });
-        });
-    },
-    [refreshPackState, setPack, m],
-  );
-
-  const deletePack = useCallback(
-    (id: PianoInstrumentId) => {
-      if (!window.confirm(m.settings.deleteSamplesConfirm)) return;
-      void audioEngine.deleteDownloadedSamples(id).then(() => void refreshPackState(id));
-    },
-    [refreshPackState, m],
-  );
-
-  // Play a standard mid-note so the volume/reverb sliders preview their effect
-  // (routes through the master + reverb graph, so it reflects the live value).
-  const previewNote = useCallback(() => {
-    void audioEngine.unlockFromUserGesture();
-    audioEngine.scheduleNote(
-      { midi: PREVIEW_MIDI, velocity: PREVIEW_VELOCITY, durationMs: PREVIEW_DURATION_MS },
-      audioEngine.currentTime,
-      'settings-preview',
-    );
-  }, []);
-
-  // The preview has to wait for the new core pack: until it decodes, getSample
-  // returns nothing and the note would be silent.
-  const selectPiano = useCallback(
-    (id: PianoInstrumentId) => {
-      if (id === settings.pianoInstrument) return;
-      setSwitching(true);
-      // Switching the engine and re-stamping the take are the persistence
-      // layer's job, on any route to a new piano; this only awaits the switch
-      // so the preview note lands on samples that have finished decoding.
-      settings.setPianoInstrument(id);
-      void audioEngine
-        .setInstrument(id)
-        .then(previewNote)
-        .finally(() => setSwitching(false));
-    },
-    [settings, previewNote],
-  );
-
   return (
     <section className="page settings" aria-label={m.settings.title}>
       <header className="page__header">
         <h1 className="page__title">{m.settings.title}</h1>
       </header>
 
+      {/* Sections run most-played first, then the app itself. They stay direct
+          children of the scroller: `.settings__section:first-child` trims the
+          leading margin, and the e2e suite treats the page as one flat list. */}
       <div className="settings__scroll">
-        <h2 className="settings__section">{m.settings.language}</h2>
-        <label className="setting-row">
-          <span>{m.settings.language}</span>
-          <select
-            value={settings.language}
-            onChange={(e) => {
-              settings.setLanguage(e.target.value as SupportedLanguage);
-              void pinLanguage();
-            }}
-            aria-label={m.settings.language}
-          >
-            {LANGUAGE_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <h2 className="settings__section">{m.settings.appearance}</h2>
-        <div
-          className="setting-row setting-row--stack"
-          role="radiogroup"
-          aria-label={m.settings.theme}
-        >
-          <span>{m.settings.theme}</span>
-          <label>
-            <input
-              type="radio"
-              name="theme-preference"
-              checked={settings.theme === 'dark'}
-              onChange={() => settings.setTheme('dark')}
-            />
-            {m.settings.themeDark}
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="theme-preference"
-              checked={settings.theme === 'light'}
-              onChange={() => settings.setTheme('light')}
-            />
-            {m.settings.themeLight}
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="theme-preference"
-              checked={settings.theme === 'system'}
-              onChange={() => settings.setTheme('system')}
-            />
-            {m.settings.themeSystem}
-          </label>
-        </div>
-
-        <h2 className="settings__section">{m.settings.sound}</h2>
-        <div
-          className="setting-row setting-row--stack"
-          role="radiogroup"
-          aria-label={m.settings.piano}
-        >
-          <span>{m.settings.piano}</span>
-          {PIANO_INSTRUMENTS.map((piano) => (
-            <label key={piano.id}>
-              <input
-                type="radio"
-                name="piano-instrument"
-                checked={settings.pianoInstrument === piano.id}
-                disabled={switching}
-                onChange={() => selectPiano(piano.id)}
-              />
-              {m.settings[PIANO_LABEL_KEYS[piano.id]]}
-            </label>
-          ))}
-          {switching ? <span aria-live="polite">{m.settings.pianoSwitching}</span> : null}
-        </div>
-        <label className="setting-row">
-          <span>{m.settings.pianoVolume}</span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={instrument.masterVolume}
-            onChange={(e) => settings.setMasterVolume(Number(e.target.value))}
-            onPointerDown={previewNote}
-            onPointerUp={previewNote}
-          />
-        </label>
-        <label className="setting-row">
-          <span>{m.settings.reverb}</span>
-          <input
-            type="range"
-            min={0}
-            max={1}
-            step={0.05}
-            value={instrument.reverbMix}
-            onChange={(e) => settings.setReverbMix(Number(e.target.value))}
-            onPointerDown={previewNote}
-            onPointerUp={previewNote}
-          />
-        </label>
+        <PianoSection />
 
         <h2 className="settings__section">{m.settings.playing}</h2>
         <div
@@ -370,74 +156,60 @@ export function SettingsPage() {
         </label>
         <p className="settings__hint">{m.settings.backgroundPlaybackHint}</p>
 
-        <h2 className="settings__section">{m.settings.offlinePiano}</h2>
-        <p className="settings__hint">{m.settings.offlinePianoHint}</p>
-        {PIANO_INSTRUMENTS.map((piano) => {
-          const pack = packs[piano.id] ?? { kind: 'checking' as const };
-          return (
-            <div key={piano.id} className="setting-row setting-row--stack">
-              <span>{m.settings[PIANO_LABEL_KEYS[piano.id]]}</span>
-              {pack.kind === 'checking' ? (
-                <span className="settings__hint">{m.settings.checking}</span>
-              ) : null}
-              {pack.kind === 'not-downloaded' ? (
-                <>
-                  <span>{m.settings.downloadPrompt({ size: formatMB(pack.totalBytes) })}</span>
-                  <button type="button" className="btn" onClick={() => downloadPack(piano.id)}>
-                    {m.settings.downloadButton}
-                  </button>
-                </>
-              ) : null}
-              {pack.kind === 'downloading' ? (
-                <span aria-live="polite">
-                  {m.settings.downloading({
-                    loaded: formatMB(pack.loadedBytes),
-                    total: formatMB(pack.totalBytes),
-                  })}
-                  <progress value={pack.loadedBytes} max={pack.totalBytes} />
-                </span>
-              ) : null}
-              {pack.kind === 'offline-ready' ? (
-                <>
-                  <span className="settings__ok">
-                    {m.settings.fullOffline({ size: formatMB(pack.totalBytes) })}
-                  </span>
-                  <button type="button" className="btn" onClick={() => deletePack(piano.id)}>
-                    {m.settings.deleteSamples}
-                  </button>
-                </>
-              ) : null}
-              {pack.kind === 'error' ? (
-                <>
-                  <span role="alert" className="settings__error">
-                    {pack.message}
-                  </span>
-                  <button type="button" className="btn" onClick={() => downloadPack(piano.id)}>
-                    {m.settings.tryAgain}
-                  </button>
-                </>
-              ) : null}
-            </div>
-          );
-        })}
+        <h2 className="settings__section">{m.settings.appearance}</h2>
+        <label className="setting-row">
+          <span>{m.settings.language}</span>
+          <select
+            value={settings.language}
+            onChange={(e) => {
+              settings.setLanguage(e.target.value as SupportedLanguage);
+              void pinLanguage();
+            }}
+            aria-label={m.settings.language}
+          >
+            {LANGUAGE_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <div
+          className="setting-row setting-row--stack"
+          role="radiogroup"
+          aria-label={m.settings.theme}
+        >
+          <span>{m.settings.theme}</span>
+          <label>
+            <input
+              type="radio"
+              name="theme-preference"
+              checked={settings.theme === 'dark'}
+              onChange={() => settings.setTheme('dark')}
+            />
+            {m.settings.themeDark}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="theme-preference"
+              checked={settings.theme === 'light'}
+              onChange={() => settings.setTheme('light')}
+            />
+            {m.settings.themeLight}
+          </label>
+          <label>
+            <input
+              type="radio"
+              name="theme-preference"
+              checked={settings.theme === 'system'}
+              onChange={() => settings.setTheme('system')}
+            />
+            {m.settings.themeSystem}
+          </label>
+        </div>
 
-        <h2 className="settings__section">{m.settings.storage}</h2>
-        <p className="settings__hint">
-          {storageInfo.persisted === true
-            ? m.settings.persistGranted
-            : storageInfo.persisted === false
-              ? m.settings.persistNotGranted
-              : m.settings.persistUnknown}
-          {storageInfo.usage !== null && storageInfo.quota !== null
-            ? m.settings.storageUsing({
-                usage: formatMB(storageInfo.usage),
-                quota: formatMB(storageInfo.quota),
-              })
-            : ''}
-        </p>
-        <p className="settings__hint">{m.settings.takesLocalHint}</p>
-
-        <h2 className="settings__section">{m.settings.install}</h2>
+        <h2 className="settings__section">{m.settings.app}</h2>
         {installService.isStandalone ? (
           <p className="settings__hint settings__ok">{m.settings.runningInstalled}</p>
         ) : installService.canPromptInstall ? (
@@ -457,8 +229,6 @@ export function SettingsPage() {
             {m.settings.installHintPost}
           </p>
         )}
-
-        <h2 className="settings__section">{m.settings.updates}</h2>
         {updateAvailable ? (
           <div className="setting-row setting-row--stack">
             <span>{m.settings.updateReady}</span>
@@ -474,6 +244,22 @@ export function SettingsPage() {
         ) : (
           <p className="settings__hint">{m.settings.upToDate({ version: __APP_VERSION__ })}</p>
         )}
+
+        <h2 className="settings__section">{m.settings.storage}</h2>
+        <p className="settings__hint">
+          {storageInfo.persisted === true
+            ? m.settings.persistGranted
+            : storageInfo.persisted === false
+              ? m.settings.persistNotGranted
+              : m.settings.persistUnknown}
+          {storageInfo.usage !== null && storageInfo.quota !== null
+            ? m.settings.storageUsing({
+                usage: formatMB(storageInfo.usage),
+                quota: formatMB(storageInfo.quota),
+              })
+            : ''}
+        </p>
+        <p className="settings__hint">{m.settings.takesLocalHint}</p>
 
         <h2 className="settings__section">{m.settings.diagnostics}</h2>
         <ul className="caps-list">

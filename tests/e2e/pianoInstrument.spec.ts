@@ -116,15 +116,23 @@ test.describe('choosing a piano', () => {
     await readyKeyboard(page).waitFor({ timeout: 30_000 });
   });
 
-  test('offers each piano its own offline download', async ({ page }) => {
+  test('names each piano once, with its own offline download', async ({ page }) => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Settings' }).click();
 
-    // Two independent rows, each sized from its own manifest.
-    const prompts = page.getByText(/Download the full piano \(/);
-    await expect(prompts).toHaveCount(2);
-    await expect(page.getByRole('button', { name: 'Download piano for offline use' })).toHaveCount(
-      2,
-    );
+    const group = page.getByRole('radiogroup', { name: 'Piano' });
+
+    // One card per piano: the download button names the piano and is sized from
+    // that piano's own manifest.
+    for (const name of ['Salamander', 'Headroom']) {
+      await expect(group.getByRole('radio', { name: new RegExp(`^${name}`) })).toHaveCount(1);
+      await expect(
+        group.getByRole('button', { name: new RegExp(`^Download ${name} \\(\\d`) }),
+      ).toHaveCount(1);
+    }
+
+    // The description belongs to the choice, so no second row repeats it.
+    await expect(page.getByText('Yamaha C5 concert grand, bright and close')).toHaveCount(1);
+    await expect(page.getByText('Yamaha C3 grand, warm and intimate')).toHaveCount(1);
   });
 });
