@@ -7,8 +7,15 @@
 export const MIN_BASE = 24; // C1
 export const MAX_BASE = 96; // C7
 
+/**
+ * The widest span any input source reaches above the base: the computer
+ * keyboard's two rows, an octave and a half.
+ */
+export const BASE_SPAN_SEMITONES = 17;
+
 export class BaseOctave {
   private value = 60; // C4
+  private readonly listeners = new Set<(midi: number) => void>();
 
   get(): number {
     return this.value;
@@ -20,7 +27,19 @@ export class BaseOctave {
   }
 
   set(midi: number): number {
-    this.value = Math.min(MAX_BASE, Math.max(MIN_BASE, midi));
-    return this.value;
+    const next = Math.min(MAX_BASE, Math.max(MIN_BASE, midi));
+    if (next === this.value) return next;
+    this.value = next;
+    for (const listener of this.listeners) listener(next);
+    return next;
+  }
+
+  /**
+   * Fires when the base moves. The keyboard uses this to decode the sample
+   * roots the new register needs — off-screen notes are otherwise silent.
+   */
+  subscribe(listener: (midi: number) => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
   }
 }

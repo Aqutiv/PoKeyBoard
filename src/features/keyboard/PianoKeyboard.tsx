@@ -4,7 +4,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
-import { BaseOctave } from './baseOctave';
+import { BASE_SPAN_SEMITONES, BaseOctave } from './baseOctave';
 import { ComputerKeyboardInput, isModalOpen, isTextInput } from './computerKeyboard';
 import { GamepadInput } from './gamepadInput';
 import {
@@ -93,12 +93,30 @@ export function PianoKeyboard({
     return layoutKeyboard(low, high);
   }, [anchorMidi, visibleWhites]);
 
-  // Load any sample roots the visible range needs (range shift beyond core).
+  // Shared by both input sources so Z/X and the bumpers can never disagree
+  // about the octave. Held outside the effects below, which re-run whenever the
+  // velocity or the toggle changes and would otherwise reset it to C4.
+  const [baseOctave] = useState(() => new BaseOctave());
+
+  // Load any sample roots the playable registers need: the visible range, plus
+  // wherever Z/X and the bumpers have moved the base. Those notes are off
+  // screen, so nothing else asks for them, and a root more than nine semitones
+  // away leaves getSample empty-handed — the note would just not sound.
   useEffect(() => {
-    void audioEngine.ensurePlayableRange(layout.lowMidi, layout.highMidi).catch(() => {
-      // The shared load-progress state exposes the retryable error.
-    });
-  }, [layout.lowMidi, layout.highMidi]);
+    const load = () => {
+      const base = baseOctave.get();
+      void audioEngine
+        .ensurePlayableRange(
+          Math.min(layout.lowMidi, base),
+          Math.max(layout.highMidi, base + BASE_SPAN_SEMITONES),
+        )
+        .catch(() => {
+          // The shared load-progress state exposes the retryable error.
+        });
+    };
+    load();
+    return baseOctave.subscribe(load);
+  }, [layout.lowMidi, layout.highMidi, baseOctave]);
 
   const [tracker] = useState(
     () =>
@@ -111,11 +129,6 @@ export function PianoKeyboard({
 
   // Never leave sounding keys behind when the layout shifts or we unmount.
   useEffect(() => () => tracker.releaseAll(), [tracker, layout.lowMidi, layout.highMidi]);
-
-  // Shared by both input sources so Z/X and the bumpers can never disagree
-  // about the octave. Held outside the effects below, which re-run whenever the
-  // velocity or the toggle changes and would otherwise reset it to C4.
-  const [baseOctave] = useState(() => new BaseOctave());
 
   // Desktop computer-keyboard input.
   useEffect(() => {

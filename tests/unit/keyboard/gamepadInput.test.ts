@@ -57,6 +57,9 @@ function frame(...next: PadState[]) {
 function connect() {
   pads = [{}];
   window.dispatchEvent(new Event('gamepadconnected'));
+  // The first frame adopts the resting state rather than sounding it, so a
+  // button already held as the pad appears does not fire.
+  frame({});
 }
 
 function attachInput(base = new BaseOctave()) {
@@ -118,6 +121,19 @@ describe('GamepadInput', () => {
       frame({});
     }
     expect(noteOn).toHaveBeenCalledTimes(expected.length);
+    detach();
+  });
+
+  it('does not fire a button already held as the pad appears', () => {
+    const { noteOn, detach } = attachInput();
+    pads = [{ pressed: [D_LEFT] }];
+    window.dispatchEvent(new Event('gamepadconnected'));
+    frame({ pressed: [D_LEFT] });
+    frame({ pressed: [D_LEFT] });
+    expect(noteOn).not.toHaveBeenCalled();
+    frame({});
+    frame({ pressed: [D_LEFT] });
+    expect(noteOn).toHaveBeenCalledWith(60, expect.any(Number));
     detach();
   });
 
@@ -228,13 +244,52 @@ describe('GamepadInput', () => {
     detach();
   });
 
-  it('releases everything when the window loses focus', () => {
+  it('releases everything and stops polling when the window loses focus', () => {
     const { noteOff, setSustain, detach } = attachInput();
     connect();
     frame({ pressed: [D_LEFT], analog: { [LT]: 0.9 } });
     window.dispatchEvent(new Event('blur'));
     expect(noteOff).toHaveBeenCalledWith(60);
     expect(setSustain).toHaveBeenLastCalledWith(false);
+    expect(pendingFrame).toBeNull();
+    detach();
+  });
+
+  it('does not restart a button still held across a focus loss', () => {
+    const { noteOn, setSustain, detach } = attachInput();
+    connect();
+    frame({ pressed: [D_LEFT], analog: { [LT]: 0.9 } });
+    expect(noteOn).toHaveBeenCalledTimes(1);
+
+    window.dispatchEvent(new Event('blur'));
+    window.dispatchEvent(new Event('focus'));
+    // The player never let go, so the pad still reports both as down.
+    frame({ pressed: [D_LEFT], analog: { [LT]: 0.9 } });
+    frame({ pressed: [D_LEFT], analog: { [LT]: 0.9 } });
+    expect(noteOn).toHaveBeenCalledTimes(1);
+    expect(setSustain).toHaveBeenLastCalledWith(false);
+
+    // Only a real release and press sounds again.
+    frame({});
+    frame({ pressed: [D_LEFT], analog: { [LT]: 0.9 } });
+    expect(noteOn).toHaveBeenCalledTimes(2);
+    expect(setSustain).toHaveBeenLastCalledWith(true);
+    detach();
+  });
+
+  it('does not restart a button still held while a dialog was open', () => {
+    const { noteOn, detach } = attachInput();
+    connect();
+    const dialog = openModal();
+    frame({ pressed: [X] });
+    expect(noteOn).not.toHaveBeenCalled();
+    dialog.remove();
+    frame({ pressed: [X] });
+    frame({ pressed: [X] });
+    expect(noteOn).not.toHaveBeenCalled();
+    frame({});
+    frame({ pressed: [X] });
+    expect(noteOn).toHaveBeenCalledWith(67, expect.any(Number));
     detach();
   });
 

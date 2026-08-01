@@ -35,6 +35,9 @@ const NOTE_BUTTONS: ReadonlyArray<readonly [number, number]> = [
   [0, 12], // A → C, next octave
 ];
 
+/** Every button tracked by rising/falling edge rather than by level. */
+const EDGE_BUTTONS: readonly number[] = [...NOTE_BUTTONS.map(([button]) => button), BTN_LB, BTN_RB];
+
 /**
  * Triggers are analog, so a resting pull near a single threshold would
  * chatter. That is not cosmetic: every setSustain call reaches the recorder,
@@ -52,6 +55,7 @@ export class GamepadInput {
   private callbacks: GamepadCallbacks | null = null;
   private velocity = 0.75;
   private frame: number | null = null;
+  private resync = false;
   private readonly base: BaseOctave;
 
   /** Defaults to a private octave so standalone construction still works. */
@@ -64,6 +68,7 @@ export class GamepadInput {
     window.addEventListener('gamepadconnected', this.onDeviceChange);
     window.addEventListener('gamepaddisconnected', this.onDeviceChange);
     window.addEventListener('blur', this.onBlur);
+    window.addEventListener('focus', this.onFocus);
     document.addEventListener('visibilitychange', this.onVisibilityChange);
     // Chrome hides pads until a button is pressed and fires gamepadconnected
     // then; this probe covers the browsers that expose them on load instead.
@@ -74,6 +79,7 @@ export class GamepadInput {
       window.removeEventListener('gamepadconnected', this.onDeviceChange);
       window.removeEventListener('gamepaddisconnected', this.onDeviceChange);
       window.removeEventListener('blur', this.onBlur);
+      window.removeEventListener('focus', this.onFocus);
       document.removeEventListener('visibilitychange', this.onVisibilityChange);
       this.callbacks = null;
     };
@@ -84,6 +90,10 @@ export class GamepadInput {
   }
 
   releaseAll(): void {
+    // Buttons physically held through a release stay down in the next
+    // snapshot. Without this the cleared edge state would read them as fresh
+    // presses and restart the notes we just stopped.
+    this.resync = true;
     this.pressed.clear();
     this.rtDown = false;
     if (!this.callbacks) return;
@@ -102,7 +112,14 @@ export class GamepadInput {
   };
 
   private readonly onBlur = () => {
+    // Another window has the keyboard; stop reading the pad until we get focus
+    // back, so nothing is played or recorded behind the player's back.
+    this.stop();
     this.releaseAll();
+  };
+
+  private readonly onFocus = () => {
+    this.sync();
   };
 
   private readonly onVisibilityChange = () => {
@@ -162,6 +179,16 @@ export class GamepadInput {
         // Some drivers report digital-only triggers with value 0.
         return Math.max(max, button.pressed ? Math.max(button.value, 1) : button.value);
       }, 0);
+
+    // Adopt whatever is physically held without sounding it, so anything still
+    // down from before the release stays quiet until the player lets go.
+    if (this.resync) {
+      this.resync = false;
+      for (const button of EDGE_BUTTONS) if (isDown(button)) this.pressed.add(button);
+      this.ltDown = analog(BTN_LT) >= TRIGGER_PRESS;
+      this.rtDown = analog(BTN_RT) >= TRIGGER_PRESS;
+      return;
+    }
 
     // Modifiers resolve before the note diff so that a trigger and a button
     // landing in the same frame — which happens constantly — still sharps.

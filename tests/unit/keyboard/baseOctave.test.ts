@@ -10,6 +10,25 @@ describe('BaseOctave', () => {
     expect(base.shift(-1)).toBe(60);
   });
 
+  it('announces every move so the new register can be decoded', () => {
+    const base = new BaseOctave();
+    const seen: number[] = [];
+    const unsubscribe = base.subscribe((midi) => seen.push(midi));
+
+    base.shift(1);
+    base.shift(-1);
+    expect(seen).toEqual([72, 60]);
+
+    // A shift the clamp swallows changes nothing, so it says nothing.
+    base.set(MIN_BASE);
+    base.shift(-1);
+    expect(seen).toEqual([72, 60, MIN_BASE]);
+
+    unsubscribe();
+    base.shift(1);
+    expect(seen).toEqual([72, 60, MIN_BASE]);
+  });
+
   it('clamps to the playable base range', () => {
     const base = new BaseOctave();
     for (let i = 0; i < 10; i += 1) base.shift(-1);
