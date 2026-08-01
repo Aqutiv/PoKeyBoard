@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 2     | 8         |
+| Beginner     | 3     | 7         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -24,11 +24,11 @@ _Never touched a piano → a simple piece, hands together._
 
 ### Part 1 — The instrument
 
-| #   | Chapter                                  | Teaches                                                                                        | Exercises validate                                                                            |
-| --- | ---------------------------------------- | ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| 1   | **Meet the Keyboard** ✅                 | Sound; low left / high right; black keys in 2s and 3s; C left of every pair; octaves; middle C | 3 distinct keys · a rising leap · a group of 2 and of 3 · three different Cs · an octave held |
-| 2   | **The Musical Alphabet** ✅              | A–G and how it wraps; the landmark map for every white key; octave numbering                   | walk up C→C · name a highlighted key ×5 · D then F then A · walk down C→C · two different As  |
-| 3   | Half Steps, Whole Steps & the Black Keys | Semitone vs. tone; sharps and flats; E–F and B–C; enharmonics                                  | a half/whole step up or down from a given key; a named black key by both names                |
+| #   | Chapter                                         | Teaches                                                                                        | Exercises validate                                                                                             |
+| --- | ----------------------------------------------- | ---------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| 1   | **Meet the Keyboard** ✅                        | Sound; low left / high right; black keys in 2s and 3s; C left of every pair; octaves; middle C | 3 distinct keys · a rising leap · a group of 2 and of 3 · three different Cs · an octave held                  |
+| 2   | **The Musical Alphabet** ✅                     | A–G and how it wraps; the landmark map for every white key; octave numbering                   | walk up C→C · name a highlighted key ×5 · D then F then A · walk down C→C · two different As                   |
+| 3   | **Half Steps, Whole Steps & the Black Keys** ✅ | Semitone vs. tone; the two places white keys touch; sharps, flats and enharmonics              | any two touching keys · any two a whole step apart · E F B C · name a black key ×5 · find a named black key ×5 |
 
 ### Part 2 — Reading music
 
@@ -153,13 +153,28 @@ id would.
 
 ## Step kinds and exercise specs
 
-Three step kinds (`src/features/learn/types.ts`):
+Four step kinds (`src/features/learn/types.ts`):
 
 - `theory` — prose, plus an optional keyboard diagram, staff snippet, or Listen
   demo.
 - `exercise` — carries an `ExerciseSpec`; the user plays it.
 - `quiz` — recognition instead of production; the app shows something and the
   user names it. Currently one question kind, `nameTheKey`.
+- `drill` — the mirror of a quiz: the app names something and the user plays
+  it, over several rounds. Not an `ExerciseSpec` kind — rounds cannot live in a
+  spec, since the matcher is a pure reducer with no notion of them. A drill is
+  a _sequencer over_ specs: each round hands `useExercise` a fresh
+  `ExerciseSpec`, whose new identity is exactly what resets the matcher, so all
+  the matching, hints and timers come free. Round order is shared with the quiz
+  (`rounds.ts`). Currently one pool kind, `namedKey`.
+
+Both `quiz` and `drill` render inline in the chapter card, never as a dialog —
+see the `aria-modal` constraint below.
+
+Note labels come from `noteLabel(midiOrPitchClass, spelling)`
+(`src/features/learn/noteLabel.ts`), which wraps the notation engine's own
+spelling tables so a lesson and the engraver can never disagree about whether a
+key is C♯ or D♭.
 
 `ExerciseSpec` kinds (`src/features/learn/exerciseSpec.ts`), and who needs them:
 
@@ -167,11 +182,16 @@ Three step kinds (`src/features/learn/types.ts`):
 | --------------- | ---------------------------------------------------------- | -------------- |
 | `distinctKeys`  | any N different keys                                       | B1             |
 | `risingLeap`    | a note, then one at least N semitones higher               | B1             |
-| `pitchClass`    | one named pitch class, optionally in N octaves             | B1, B2         |
+| `pitchClass`    | one named pitch class, optionally in N octaves             | B1, B2, B3     |
 | `blackKeyGroup` | a whole group of 2 or 3 black keys                         | B1             |
-| `interval`      | two notes N semitones apart, optionally pitch-class pinned | B1, I5         |
+| `interval`      | two notes N semitones apart, optionally pitch-class pinned | B1, B3, I5     |
 | `exactKeys`     | exactly these midis                                        | B9, A1         |
-| `sequence`      | these pitch classes in this order, optionally up/down      | B2, B8, I3, I4 |
+| `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I3 |
+
+An `interval` with no `lowerPitchClass` and no `together` reads the cumulative
+candidate set, which makes it "any two keys N semitones apart" rather than one
+pinned pair — that is what B3's half- and whole-step exercises are, and it is
+also what lets a one-pointer mouse play them.
 
 Likely additions: a rhythm spec judged against the click (B6, I7, A4), and a
 `playAlong` spec that follows a written line (B7, A6).

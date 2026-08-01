@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
-import { midiToNoteName } from '@/utils/midi';
+import { noteLabel, type NoteSpelling } from './noteLabel';
 import '@/features/keyboard/keyboard.css';
 
 interface KeyboardDiagramProps {
@@ -10,8 +10,10 @@ interface KeyboardDiagramProps {
   highlight?: readonly number[];
   /** A second tint, for showing one group apart from another. */
   highlightSecondary?: readonly number[];
-  /** Keys to print a letter name on. */
+  /** Keys to print a name on. */
   labels?: readonly number[];
+  /** Which name a labelled black key gets. Defaults to sharps. */
+  spelling?: NoteSpelling;
   ariaLabel: string;
 }
 
@@ -26,6 +28,7 @@ export function KeyboardDiagram({
   highlight,
   highlightSecondary,
   labels,
+  spelling,
   ariaLabel,
 }: KeyboardDiagramProps) {
   const layout = useMemo(() => layoutKeyboard(lowMidi, highMidi), [lowMidi, highMidi]);
@@ -51,10 +54,8 @@ export function KeyboardDiagram({
           }}
         >
           {labels?.includes(key.midi) ? (
-            // The letter alone: octave numbers are a chapter 1 step 9 idea.
-            <span className="learn-diagram__label">
-              {midiToNoteName(key.midi).replace(/\d/g, '')}
-            </span>
+            // The name alone: octave numbers are a chapter 1 step 9 idea.
+            <span className="learn-diagram__label">{noteLabel(key.midi, spelling)}</span>
           ) : null}
         </div>
       ));

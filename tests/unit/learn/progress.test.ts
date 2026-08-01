@@ -13,7 +13,7 @@ import {
 
 const chapterOne = findLearnChapter('meetTheKeyboard');
 /** Authored chapters keep moving; this one is deliberately still a stub. */
-const unwritten = findLearnChapter('halfStepsWholeSteps');
+const unwritten = findLearnChapter('trebleStaff');
 
 describe('chapterStatus', () => {
   it('calls an unauthored chapter coming soon, not locked', () => {

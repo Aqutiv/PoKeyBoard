@@ -46,10 +46,17 @@ export function useExercise(spec: ExerciseSpec | null): ExerciseSession {
 
   // Dropping state when a prop changes belongs in render, not an effect: an
   // effect would paint the new step once against the old step's progress.
+  //
+  // `current` matters as much as the reset. Reading `state` here would report
+  // the *previous* spec's progress for one render — harmless when a step
+  // changes on a click, but a drill hands over a new spec the instant a round
+  // is satisfied, and a stale "satisfied" would make it skip a round.
   const [activeSpec, setActiveSpec] = useState(spec);
+  let current = state;
   if (activeSpec !== spec) {
+    current = initExercise();
     setActiveSpec(spec);
-    setState(initExercise());
+    setState(current);
     setIdleTicks(0);
   }
 
@@ -83,7 +90,7 @@ export function useExercise(spec: ExerciseSpec | null): ExerciseSession {
     });
   }, [spec]);
 
-  const progress = spec ? progressOf(spec, state) : IDLE_PROGRESS;
+  const progress = spec ? progressOf(spec, current) : IDLE_PROGRESS;
 
   // Any forward progress buys more patience before we start offering help.
   const [lastDone, setLastDone] = useState(progress.done);
@@ -102,7 +109,7 @@ export function useExercise(spec: ExerciseSpec | null): ExerciseSession {
   const idleMs = idleTicks * TICK_MS;
 
   return {
-    state,
+    state: current,
     progress,
     hintAvailable: !satisfied && idleMs >= HINT_AFTER_MS,
     skipAvailable: !satisfied && idleMs >= SKIP_AFTER_MS,

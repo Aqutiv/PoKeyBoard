@@ -26,6 +26,9 @@ const PROSE: Partial<
   musicalAlphabet: {
     en: () => import('./en/musicalAlphabet').then((m) => m.musicalAlphabetEn),
   },
+  halfStepsWholeSteps: {
+    en: () => import('./en/halfStepsWholeSteps').then((m) => m.halfStepsWholeStepsEn),
+  },
 };
 
 /**

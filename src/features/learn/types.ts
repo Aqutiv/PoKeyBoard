@@ -2,6 +2,7 @@ import type { TimeSignature } from '@/domain/takeTypes';
 import type { TrackEvent } from '@/features/library/trackBuilder';
 import type { Messages } from '@/i18n/types';
 import type { ExerciseSpec, PitchClass } from './exerciseSpec';
+import type { NoteSpelling } from './noteLabel';
 import type { LearnLevelId } from './levels';
 
 /**
@@ -37,7 +38,7 @@ export interface LearnChapter {
   steps: readonly LearnStep[];
 }
 
-export type LearnStep = TheoryStep | ExerciseStep | QuizStep;
+export type LearnStep = TheoryStep | ExerciseStep | QuizStep | DrillStep;
 
 interface StepBase {
   /**
@@ -73,10 +74,37 @@ export interface QuizStep extends StepBase {
   question: QuizQuestion;
 }
 
+/**
+ * The mirror of a quiz: the app names something and the user plays it, over
+ * several rounds. A quiz tests that you can name a key; only a drill tests that
+ * you can find it.
+ *
+ * Not an `ExerciseSpec` kind — rounds cannot live in a spec, since the matcher
+ * is a pure reducer with no notion of them and `goalTotal` would become
+ * ambiguous between notes and rounds. A drill is a *sequencer over* specs, and
+ * reuses the matcher untouched.
+ */
+export interface DrillStep extends StepBase {
+  kind: 'drill';
+  /** Rounds that must be played before the step is satisfied. */
+  rounds: number;
+  /** What each round asks for; cycled deterministically. */
+  drill: DrillPool;
+}
+
+export type DrillPool = {
+  kind: 'namedKey';
+  pitchClasses: readonly PitchClass[];
+  /** Which name each round asks under. Defaults to sharps. */
+  spelling?: NoteSpelling;
+};
+
 export type QuizQuestion = {
   kind: 'nameTheKey';
   /** Drawn from in a fixed order; also the order the answer buttons appear in. */
   pitchClasses: readonly PitchClass[];
+  /** Which name the answer buttons offer. Defaults to sharps. */
+  spelling?: NoteSpelling;
 };
 
 export type LearnVisual =
@@ -88,8 +116,10 @@ export type LearnVisual =
       highlight?: readonly number[];
       /** A second tint, for showing two groups apart from each other. */
       highlightSecondary?: readonly number[];
-      /** Keys to print a letter name on. */
+      /** Keys to print a name on. */
       labels?: readonly number[];
+      /** Which name a labelled black key gets. White keys read the same either way. */
+      spelling?: NoteSpelling;
     }
   | { kind: 'staff'; phrase: LearnPhrase };
 

@@ -140,14 +140,17 @@ test.describe('learn outline', () => {
 
   test('unlocks only the authored chapters', async ({ page }) => {
     await gotoLearn(page);
-    await expect(page.getByRole('button', { name: 'Open Meet the Keyboard' })).toBeEnabled();
-    await expect(page.getByRole('button', { name: 'Open The Musical Alphabet' })).toBeEnabled();
+    for (const title of [
+      'Meet the Keyboard',
+      'The Musical Alphabet',
+      'Half Steps, Whole Steps & the Black Keys',
+    ]) {
+      await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
+    }
     await expect(
-      page.getByRole('button', {
-        name: 'Half Steps, Whole Steps & the Black Keys — coming soon',
-      }),
+      page.getByRole('button', { name: 'Reading the Treble Staff — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(8);
+    await expect(page.getByText('Coming soon')).toHaveCount(7);
   });
 });
 
@@ -423,5 +426,109 @@ test.describe('chapter two', () => {
     await expect(progressLine(page)).toHaveText('1 of 8');
     await playKey(page, 'KeyJ'); // B below it — correct
     await expect(progressLine(page)).toHaveText('2 of 8');
+  });
+});
+
+test.describe('chapter three', () => {
+  /** Open chapter 3 and step onto the first exercise. */
+  async function gotoHalfStep(page: Page): Promise<void> {
+    await openChapter(page, 'Half Steps, Whole Steps & the Black Keys');
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'Play a half step' })).toBeVisible();
+  }
+
+  /** Walk from the half-step exercise to a later step by index. */
+  async function advanceTo(page: Page, heading: string, clicks: number): Promise<void> {
+    for (let i = 0; i < clicks; i += 1) await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  }
+
+  test('accepts any two touching keys as a half step', async ({ page }) => {
+    await gotoHalfStep(page);
+    await expect(progressLine(page)).toHaveText('0 of 2');
+
+    await playKey(page, 'KeyA'); // C4
+    await expect(progressLine(page)).toHaveText('1 of 2');
+    await playKey(page, 'KeyS'); // D4 — a whole step, not a half
+    await expect(progressLine(page)).toHaveText('1 of 2');
+    await playKey(page, 'KeyW'); // C#4 — now C4/C#4 touch
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('accepts a skipped key as a whole step', async ({ page }) => {
+    await gotoHalfStep(page);
+    await playKey(page, 'KeyA');
+    await playKey(page, 'KeyW');
+    await advanceTo(page, 'Two halves make a whole', 1);
+    await advanceTo(page, 'Play a whole step', 1);
+
+    await playKey(page, 'KeyA'); // C4
+    await playKey(page, 'KeyW'); // C#4 — touching, so still only half of it
+    await expect(progressLine(page)).toHaveText('1 of 2');
+    await playKey(page, 'KeyS'); // D4 — C4 to D4 skips C#4
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('plays both touching white-key pairs without a range shift', async ({ page }) => {
+    await gotoHalfStep(page);
+    await playKey(page, 'KeyA');
+    await playKey(page, 'KeyW');
+    await advanceTo(page, 'Two halves make a whole', 1);
+    await advanceTo(page, 'Play a whole step', 1);
+    await playKey(page, 'KeyA');
+    await playKey(page, 'KeyS');
+    await advanceTo(page, 'Where the white keys touch', 1);
+    await advanceTo(page, 'Play both of them', 1);
+
+    // The step anchors at E4 so all four notes are on screen even at 7 keys.
+    await expect(page.locator('.piano__range')).toContainText('E4');
+    for (const [index, code] of ['KeyD', 'KeyF', 'KeyJ', 'KeyK'].entries()) {
+      await playKey(page, code); // E4, F4, B4, C5
+      const done = index + 1;
+      await expect(progressLine(page)).toHaveText(done === 4 ? 'Nicely done.' : `${done} of 4`);
+    }
+  });
+
+  test('names the black keys with sharps, then drills them with flats', async ({ page }) => {
+    await gotoHalfStep(page);
+    await playKey(page, 'KeyA');
+    await playKey(page, 'KeyW');
+    await advanceTo(page, 'Two halves make a whole', 1);
+    await advanceTo(page, 'Play a whole step', 1);
+    await playKey(page, 'KeyA');
+    await playKey(page, 'KeyS');
+    await advanceTo(page, 'Where the white keys touch', 1);
+    await advanceTo(page, 'Play both of them', 1);
+    for (const code of ['KeyD', 'KeyF', 'KeyJ', 'KeyK']) await playKey(page, code);
+    await advanceTo(page, 'Sharps', 1);
+    await advanceTo(page, 'Name the black key', 1);
+
+    // Sharp spelling, and the deterministic stride over five entries.
+    await expect(page.getByRole('button', { name: 'Answer C♯' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Answer D♭' })).toHaveCount(0);
+    for (const letter of ['C♯', 'G♯', 'D♯', 'A♯', 'F♯']) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+    }
+    await expect(page.locator('.learn-quiz__status')).toHaveText('Nicely done.');
+
+    await advanceTo(page, 'The same keys, named from above', 1);
+    await advanceTo(page, 'Find the key I name', 1);
+
+    // The drill asks in flats — the same five keys under their other name.
+    await expect(page.locator('.learn-exercise__prompt')).toHaveText('Play D♭.');
+    await expect(progressLine(page)).toHaveText('0 of 5');
+    await expect(nextButton(page)).toBeDisabled();
+
+    await playKey(page, 'KeyS'); // D4 — named, but not the key named
+    await expect(progressLine(page)).toHaveText('0 of 5');
+
+    await playKey(page, 'KeyW'); // C#4 is D♭
+    await expect(progressLine(page)).toHaveText('1 of 5');
+    await expect(page.locator('.learn-exercise__prompt')).toHaveText('Play A♭.');
+
+    for (const code of ['KeyY', 'KeyE', 'KeyU', 'KeyT']) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
   });
 });

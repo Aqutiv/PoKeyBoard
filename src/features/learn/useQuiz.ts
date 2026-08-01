@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 import type { PitchClass } from './exerciseSpec';
+import type { NoteSpelling } from './noteLabel';
+import { roundEntryAt } from './rounds';
 import type { QuizStep } from './types';
 
 /** The octave the quiz draws its keys from — C4 up to B4. */
@@ -19,30 +21,14 @@ export interface QuizSession {
   satisfied: boolean;
   /** The last wrong answer, cleared once the round is answered correctly. */
   wrong: PitchClass | null;
+  /** Which name the buttons and the diagram show a black key under. */
+  spelling: NoteSpelling;
   answer: (choice: PitchClass) => void;
 }
 
-function gcd(a: number, b: number): number {
-  return b === 0 ? a : gcd(b, a % b);
-}
-
-/**
- * How far to step through the pool between rounds.
- *
- * Asking the pool in plain order would put the answer to round *n* on button
- * *n*, so the whole quiz could be passed left-to-right without looking at the
- * keyboard. A stride coprime with the pool size scatters the questions while
- * still visiting every entry before repeating.
- */
-function strideFor(size: number): number {
-  for (const stride of [3, 2]) if (gcd(stride, size) === 1) return stride;
-  return 1;
-}
-
-/** Which entry of the pool round `round` asks about. Pure, so it is testable. */
+/** Which entry of the pool round `round` asks about. See `rounds.ts`. */
 export function quizPitchClassAt(pool: readonly PitchClass[], round: number): PitchClass {
-  if (pool.length === 0) return 0;
-  return pool[(round * strideFor(pool.length)) % pool.length] ?? 0;
+  return roundEntryAt(pool, round) ?? 0;
 }
 
 /**
@@ -95,6 +81,7 @@ export function useQuiz(step: QuizStep | null): QuizSession {
     total,
     satisfied,
     wrong,
+    spelling: step?.question.spelling ?? 'sharp',
     answer,
   };
 }

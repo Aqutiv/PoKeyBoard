@@ -212,6 +212,7 @@ export const es: Messages = {
     quizCorrect: 'Correcto.',
     quizWrong: ({ answer }) => `Esa es ${answer}.`,
     quizAnswerLabel: ({ note }) => `Responder ${note}`,
+    playNote: ({ note }) => `Toca ${note}.`,
     chapterTitles: {
       meetTheKeyboard: 'Conoce el teclado',
       musicalAlphabet: 'El alfabeto musical',

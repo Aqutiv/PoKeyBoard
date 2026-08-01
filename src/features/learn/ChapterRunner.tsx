@@ -15,6 +15,7 @@ import { playPhrase } from './demo';
 import { needsRangeShift, targetMidisFor, type MidiRange } from './exerciseMatcher';
 import { chapterStep, withChapterDone, withChapterStep, type LearnProgress } from './progress';
 import type { LearnChapter, LearnChapterId, LearnStep } from './types';
+import { useDrill } from './useDrill';
 import { useExercise } from './useExercise';
 import { useQuiz } from './useQuiz';
 
@@ -91,6 +92,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
   const exercise = useExercise(spec);
   const quiz = useQuiz(step?.kind === 'quiz' ? step : null);
+  const drill = useDrill(step?.kind === 'drill' ? step : null);
   const loadProgress = useSampleLoadProgress();
   // `noteOn` emits no input event when the pitch has no decoded sample, so an
   // exercise offered before the core pack lands would be quietly unwinnable.
@@ -107,12 +109,19 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
     if (step.anchorMidi !== undefined) setAnchorMidi(step.anchorMidi);
   }
 
-  const targetMidis = useMemo(() => {
-    if (!spec || !showingHint) return EMPTY_TARGETS;
-    return targetMidisFor(spec, exercise.state, range);
-  }, [spec, showingHint, exercise.state, range]);
+  // A drill is a run of exercises, so everything downstream of "what is being
+  // played right now" reads from whichever of the two is live.
+  const isDrill = step?.kind === 'drill';
+  const playing = isDrill ? drill.play : exercise;
+  const playSpec = isDrill ? drill.spec : spec;
+  const readout = isDrill ? drill.progress : exercise.progress;
 
-  const wantsShift = spec ? needsRangeShift(spec, exercise.state, range) : false;
+  const targetMidis = useMemo(() => {
+    if (!playSpec || !showingHint) return EMPTY_TARGETS;
+    return targetMidisFor(playSpec, playing.state, range);
+  }, [playSpec, showingHint, playing.state, range]);
+
+  const wantsShift = playSpec ? needsRangeShift(playSpec, playing.state, range) : false;
 
   const onRangeChange = useCallback((next: MidiRange) => setRange(next), []);
 
@@ -125,12 +134,22 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   );
 
   const isLast = steps.length > 0 && index >= steps.length - 1;
-  const canAdvance =
-    step?.kind === 'exercise'
-      ? exercise.progress.satisfied || exercise.skipAvailable
-      : step?.kind === 'quiz'
-        ? quiz.satisfied
-        : true;
+
+  // A switch, not a ternary chain ending in `true`: a new step kind that
+  // nobody remembered to gate would otherwise be silently free to advance.
+  const canAdvance = ((): boolean => {
+    switch (step?.kind) {
+      case 'exercise':
+        return exercise.progress.satisfied || exercise.skipAvailable;
+      case 'quiz':
+        return quiz.satisfied;
+      case 'drill':
+        return drill.progress.satisfied || drill.play.skipAvailable;
+      case 'theory':
+      case undefined:
+        return true;
+    }
+  })();
 
   const finish = useCallback(() => {
     onProgress(withChapterDone(progress, chapterId));
@@ -228,6 +247,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
             highlight={step.visual.highlight}
             highlightSecondary={step.visual.highlightSecondary}
             labels={step.visual.labels}
+            spelling={step.visual.spelling}
             ariaLabel={m.learn.diagramLabel}
           />
         ) : null}
@@ -248,24 +268,29 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
         {step?.kind === 'quiz' ? <QuizPanel session={quiz} /> : null}
 
-        {step?.kind === 'exercise' ? (
+        {step?.kind === 'exercise' || isDrill ? (
           <div className="learn-exercise">
-            <p className="learn-exercise__prompt">{text?.prompt}</p>
+            {/* A drill's prompt changes every round, so it is announced; an
+                exercise's is fixed prose and would only repeat itself. */}
+            <p className="learn-exercise__prompt" role={isDrill ? 'status' : undefined}>
+              {isDrill
+                ? drill.round
+                  ? m.learn.playNote({ note: drill.round.label })
+                  : ''
+                : text?.prompt}
+            </p>
             <p className="learn-exercise__progress" role="status">
               {!pianoReady
                 ? m.learn.loadingPiano
-                : exercise.progress.satisfied
+                : readout.satisfied
                   ? m.learn.exerciseDone
-                  : m.learn.progress({
-                      done: exercise.progress.done,
-                      total: exercise.progress.total,
-                    })}
+                  : m.learn.progress({ done: readout.done, total: readout.total })}
             </p>
-            {wantsShift && pianoReady && !exercise.progress.satisfied ? (
+            {wantsShift && pianoReady && !readout.satisfied ? (
               <p className="learn-exercise__shift">{m.learn.shiftHint}</p>
             ) : null}
             <div className="learn-exercise__actions">
-              {exercise.hintAvailable && !showingHint ? (
+              {playing.hintAvailable && !showingHint ? (
                 <button
                   type="button"
                   className="btn btn--small"
@@ -277,12 +302,12 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
                   {m.learn.showMe}
                 </button>
               ) : null}
-              {exercise.progress.done > 0 && !exercise.progress.satisfied ? (
+              {!isDrill && exercise.progress.done > 0 && !exercise.progress.satisfied ? (
                 <button type="button" className="btn btn--small" onClick={exercise.reset}>
                   {m.learn.tryAgain}
                 </button>
               ) : null}
-              {exercise.skipAvailable ? (
+              {playing.skipAvailable ? (
                 <button type="button" className="btn btn--small" onClick={advance}>
                   {m.learn.skipStep}
                 </button>

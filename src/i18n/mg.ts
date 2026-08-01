@@ -214,6 +214,7 @@ export const mg: Messages = {
     quizCorrect: 'Marina.',
     quizWrong: ({ answer }) => `Io dia ${answer}.`,
     quizAnswerLabel: ({ note }) => `Valio ${note}`,
+    playNote: ({ note }) => `Tendreo ${note}.`,
     chapterTitles: {
       meetTheKeyboard: 'Fantaro ny klavie',
       musicalAlphabet: 'Ny abidia mozikaly',

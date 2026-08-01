@@ -213,6 +213,7 @@ export const fr: Messages = {
     quizCorrect: 'Correct.',
     quizWrong: ({ answer }) => `Celle-ci est ${answer}.`,
     quizAnswerLabel: ({ note }) => `Répondre ${note}`,
+    playNote: ({ note }) => `Jouez ${note}.`,
     chapterTitles: {
       meetTheKeyboard: 'Découvrir le clavier',
       musicalAlphabet: 'L’alphabet musical',

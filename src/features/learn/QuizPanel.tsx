@@ -1,12 +1,7 @@
 import { useMessages } from '@/i18n/i18nContext';
-import { midiToNoteName } from '@/utils/midi';
 import { KeyboardDiagram } from './KeyboardDiagram';
-import { QUIZ_BASE_MIDI, QUIZ_HIGH_MIDI, QUIZ_LOW_MIDI, type QuizSession } from './useQuiz';
-
-/** The letter alone: octave numbers are not what is being asked about. */
-function letterOf(pitchClass: number): string {
-  return midiToNoteName(QUIZ_BASE_MIDI + pitchClass).replace(/\d/g, '');
-}
+import { noteLabel } from './noteLabel';
+import { QUIZ_HIGH_MIDI, QUIZ_LOW_MIDI, type QuizSession } from './useQuiz';
 
 interface QuizPanelProps {
   session: QuizSession;
@@ -29,6 +24,7 @@ export function QuizPanel({ session }: QuizPanelProps) {
         lowMidi={QUIZ_LOW_MIDI}
         highMidi={QUIZ_HIGH_MIDI}
         highlight={[session.midi]}
+        spelling={session.spelling}
         ariaLabel={m.learn.diagramLabel}
       />
       <p className="learn-quiz__prompt">{m.learn.quizPrompt}</p>
@@ -38,11 +34,11 @@ export function QuizPanel({ session }: QuizPanelProps) {
             key={choice}
             type="button"
             className="learn-quiz__choice"
-            aria-label={m.learn.quizAnswerLabel({ note: letterOf(choice) })}
+            aria-label={m.learn.quizAnswerLabel({ note: noteLabel(choice, session.spelling) })}
             disabled={session.satisfied}
             onClick={() => session.answer(choice)}
           >
-            {letterOf(choice)}
+            {noteLabel(choice, session.spelling)}
           </button>
         ))}
       </div>
@@ -50,7 +46,7 @@ export function QuizPanel({ session }: QuizPanelProps) {
         {session.satisfied
           ? m.learn.exerciseDone
           : session.wrong !== null
-            ? m.learn.quizWrong({ answer: letterOf(session.midi % 12) })
+            ? m.learn.quizWrong({ answer: noteLabel(session.midi, session.spelling) })
             : m.learn.progress({ done: session.done, total: session.total })}
       </p>
     </div>

@@ -323,6 +323,8 @@ export interface Messages {
     quizCorrect: string;
     quizWrong: (p: { answer: string }) => string;
     quizAnswerLabel: (p: { note: string }) => string;
+    /** Drill steps: the app names a note and the user finds it. */
+    playNote: (p: { note: string }) => string;
     chapterTitles: LearnChapterMessages;
     chapterBlurbs: LearnChapterMessages;
     partTitles: LearnPartMessages;

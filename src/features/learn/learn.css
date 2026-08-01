@@ -404,6 +404,19 @@
   color: var(--key-label, #6d6355);
 }
 
+/* Chapters 1 and 2 only ever labelled white keys, so this case had never
+   rendered: --key-label is a mid grey that all but disappears on the black-key
+   gradient. A black key is narrow, so the name also has to hold its own at a
+   smaller size. */
+.learn-diagram .piano-key--black .learn-diagram__label {
+  color: var(--ivory, #efe9dc);
+  font-size: 10px;
+}
+
+.learn-diagram .piano-key.is-diagram-mark .learn-diagram__label {
+  color: var(--accent-contrast);
+}
+
 .learn-staff {
   margin: 4px 0 12px;
 }
