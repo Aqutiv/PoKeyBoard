@@ -78,6 +78,32 @@ test.describe('app shell and piano', () => {
     await downKey.click();
     await expect(range).toHaveText(/^D4\s/);
   });
+
+  test('arrow and page keys shift the range like the on-screen buttons', async ({ page }) => {
+    await gotoAppReady(page);
+    const range = page.locator('.piano__range');
+
+    await expect(range).toHaveText(/^C3\s/);
+    await page.keyboard.press('ArrowRight');
+    await expect(range).toHaveText(/^D3\s/);
+    await page.keyboard.press('PageUp');
+    await expect(range).toHaveText(/^D4\s/);
+    await page.keyboard.press('ArrowLeft');
+    await expect(range).toHaveText(/^C4\s/);
+    await page.keyboard.press('PageDown');
+    await expect(range).toHaveText(/^C3\s/);
+  });
+
+  test('range keys stay out of the way while typing', async ({ page }) => {
+    await gotoAppReady(page);
+    const range = page.locator('.piano__range');
+    await expect(range).toHaveText(/^C3\s/);
+
+    await page.getByRole('textbox', { name: 'Beats per minute' }).click();
+    await page.keyboard.press('ArrowRight');
+    await page.keyboard.press('PageUp');
+    await expect(range).toHaveText(/^C3\s/);
+  });
 });
 
 // The offline-shell test lives in serviceWorker.spec.ts: it needs the real
