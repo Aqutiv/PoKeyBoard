@@ -28,6 +28,14 @@ const getTheme = (): 'dark' | 'light' => themeController.getResolved();
 interface StaffSnippetProps {
   phrase: LearnPhrase;
   ariaLabel: string;
+  /**
+   * Keys the user is holding, drawn lit where they match a written note.
+   *
+   * Passed only where the stave is the *answer*. A reading quiz shows a note
+   * and asks for its letter, so lighting the head there would let the whole
+   * thing be brute-forced on the keyboard — `QuizPanel` never passes this.
+   */
+  litMidis?: ReadonlySet<number>;
 }
 
 /**
@@ -36,7 +44,7 @@ interface StaffSnippetProps {
  * page inside a themed card; this path is theme-aware and carries no page
  * furniture to crop away.
  */
-export function StaffSnippet({ phrase, ariaLabel }: StaffSnippetProps) {
+export function StaffSnippet({ phrase, ariaLabel, litMidis }: StaffSnippetProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const theme = useSyncExternalStore(subscribeTheme, getTheme, getTheme);
 
@@ -59,6 +67,12 @@ export function StaffSnippet({ phrase, ariaLabel }: StaffSnippetProps) {
     return { ...score, dynamics: [], hairpins: [], rests: [] };
   }, [phrase]);
   const geometry = useMemo(() => computeScoreGeometry(layout, { staves: STAVES }), [layout]);
+
+  // Kept in a ref so the ResizeObserver can be created once and still call the
+  // current closure. The runner re-renders on every note-on and note-off, and
+  // rebuilding the observer — and reallocating the canvas backing store — that
+  // often is exactly the churn `staffPhrase.ts` was written to avoid.
+  const drawRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -106,17 +120,28 @@ export function StaffSnippet({ phrase, ariaLabel }: StaffSnippetProps) {
           recording: false,
           openNotes: [],
           ghosts: [],
+          litMidis,
         },
         SCORE_PALETTES[theme],
       );
     };
 
+    drawRef.current = draw;
     draw();
-    // A static canvas has no redraw loop of its own to catch a resize.
-    const observer = new ResizeObserver(draw);
+    // `litMidis` is safe to depend on by identity: the engine replaces its
+    // active-note set only when the set actually changes, so an equal-but-new
+    // object never reaches here.
+  }, [layout, geometry, phrase.timeSignature, theme, litMidis]);
+
+  // A static canvas has no redraw loop of its own to catch a resize. Created
+  // once and left alone; it calls whichever draw closure is current.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const observer = new ResizeObserver(() => drawRef.current());
     observer.observe(canvas);
     return () => observer.disconnect();
-  }, [layout, geometry, phrase.timeSignature, theme]);
+  }, []);
 
   return (
     <div className="learn-staff">

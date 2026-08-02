@@ -18,6 +18,9 @@
   flex: 1;
   min-width: 0;
   min-height: 40px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
   padding: 0 6px;
   border-radius: calc(var(--radius-m) - 2px);
   color: var(--text-dim);
@@ -74,10 +77,42 @@
   background: var(--surface-1);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .learn-item.is-completed {
   border-color: var(--accent);
+}
+
+/* Mouse only: on touch, :hover would stick to the last-tapped row.
+   Twin of the .library-item and .take-item blocks — keep the three in step.
+   The `:not(.is-comingSoon)` has no counterpart there and is not tidiness: an
+   unwritten chapter is a disabled button, so lifting it would promise a click
+   that does nothing. */
+@media (hover: hover) and (pointer: fine) {
+  .learn-item:not(.is-comingSoon):hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+  }
+
+  .learn-item.is-completed:hover {
+    border-color: var(--accent-strong);
+  }
+
+  .learn-levels__option:not(.is-selected):hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  /* Already at --surface-2 at rest, so it takes the step above — the same
+     reasoning the Takes ⋯ button uses. Every choice is disabled once the
+     round is answered, hence the guard. */
+  .learn-quiz__choice:not(:disabled):hover {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+  }
 }
 
 /* Unwritten chapters stay legible: the outline is how a newcomer sees where
@@ -337,6 +372,9 @@
   min-width: 38px;
   min-height: var(--touch-target);
   padding: 0 4px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
   background: var(--surface-2);
   border: 1px solid var(--border);
   border-radius: var(--radius-s);

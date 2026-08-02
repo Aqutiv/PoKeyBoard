@@ -29,6 +29,10 @@ async function openChapter(page: Page, title: string): Promise<void> {
   await gotoLearn(page);
   await page.getByRole('button', { name: `Open ${title}` }).click();
   await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
+  // And for the chapter module itself: the keyboard is live while it is still
+  // in flight, and the load handler parks the anchor on the opening step when
+  // it lands — so a range shifted before that would be silently snapped back.
+  await page.locator('.learn-card__heading').waitFor({ timeout: 30_000 });
 }
 
 async function openChapterOne(page: Page): Promise<void> {
@@ -40,6 +44,16 @@ const WALK_UP = ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK']
 
 const progressLine = (page: Page) => page.locator('.learn-exercise__progress');
 const nextButton = (page: Page) => page.getByRole('button', { name: 'Next' });
+
+/**
+ * A drill holds a correct answer on screen before asking the next one, so the
+ * note just played gets a beat to light up on the stave. Sitting out that hold
+ * is the behaviour under test, not a workaround for a race — and it is also
+ * what makes "still 0 of 5" mean anything, since the readout ticks the instant
+ * a round is credited.
+ */
+const DRILL_HOLD_MS = 500;
+const settleDrillHold = (page: Page) => page.waitForTimeout(DRILL_HOLD_MS + 150);
 
 /**
  * A persisted setting, read straight out of IndexedDB. Settings writes are
@@ -522,13 +536,19 @@ test.describe('chapter three', () => {
     await expect(nextButton(page)).toBeDisabled();
 
     await playKey(page, 'KeyS'); // D4 — named, but not the key named
+    await settleDrillHold(page);
     await expect(progressLine(page)).toHaveText('0 of 5');
 
     await playKey(page, 'KeyW'); // C#4 is D♭
+    // The readout confirms on the press; the question itself only changes once
+    // the hold is up.
     await expect(progressLine(page)).toHaveText('1 of 5');
     await expect(page.locator('.learn-exercise__prompt')).toHaveText('Play A♭.');
 
-    for (const code of ['KeyY', 'KeyE', 'KeyU', 'KeyT']) await playKey(page, code);
+    for (const code of ['KeyY', 'KeyE', 'KeyU', 'KeyT']) {
+      await playKey(page, code);
+      await settleDrillHold(page);
+    }
     await expect(progressLine(page)).toHaveText('Nicely done.');
     await expect(nextButton(page)).toBeEnabled();
   });
@@ -605,6 +625,10 @@ test.describe('chapter four', () => {
     await expect(progressLine(page)).toHaveText('0 of 5');
 
     await playKey(page, 'KeyS'); // D4 — first round asks for C
+    // C5 is a C too, but it is not the C that is written, and a reading round
+    // is about which line the note sits on.
+    await playKey(page, 'KeyK');
+    await settleDrillHold(page);
     await expect(progressLine(page)).toHaveText('0 of 5');
 
     // Same stride-3 order: C F D G E.
@@ -612,6 +636,7 @@ test.describe('chapter four', () => {
       await playKey(page, code);
       const done = index + 1;
       await expect(progressLine(page)).toHaveText(done === 5 ? 'Nicely done.' : `${done} of 5`);
+      await settleDrillHold(page);
     }
     await expect(nextButton(page)).toBeEnabled();
   });

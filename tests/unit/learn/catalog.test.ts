@@ -333,6 +333,20 @@ describe('chapter four', () => {
     }
   });
 
+  it('grades a reading round on the exact note drawn, not its pitch class', () => {
+    // The drawing is octave-pinned and the chapter is about which line a note
+    // sits on, so the octave above is a different answer, not a near-miss.
+    const drill = TREBLE_STAFF.steps.find((s) => s.kind === 'drill');
+    if (drill?.drill.kind !== 'readNote') throw new Error('expected a reading drill');
+    for (let round = 0; round < 5; round += 1) {
+      const spec = drillRoundAt(drill.drill, round)?.spec;
+      expect(spec?.kind).toBe('exactKeys');
+      if (spec?.kind !== 'exactKeys') continue;
+      expect(spec.midis).toHaveLength(1);
+      expect(spec.midis[0]).toBeGreaterThanOrEqual(TREBLE_SPLIT_MIDI);
+    }
+  });
+
   it('numbers the fingers rather than naming the keys', () => {
     const step = TREBLE_STAFF.steps.find((s) => s.id === 'fingerNumbers');
     if (step?.visual?.kind !== 'keyboard') throw new Error('expected a keyboard diagram');

@@ -391,6 +391,12 @@ export interface ScoreRenderInput {
   recording: boolean;
   openNotes: readonly OpenRecordingNote[];
   ghosts: readonly GhostNote[];
+  /**
+   * Notes to draw lit because the user is holding that key right now —
+   * independent of the playhead, which is the other reason a head lights.
+   * Learn uses it so a lesson's stave and the keyboard under it agree.
+   */
+  litMidis?: ReadonlySet<number>;
 }
 
 function staffTopFor(view: ScoreView, staff: StaffKind): number {
@@ -900,7 +906,7 @@ function drawChords(
   palette: ScorePalette,
   beamLines: BeamLines,
 ): void {
-  const { layout, playheadMs } = input;
+  const { layout, playheadMs, litMidis } = input;
   const fromMs = view.scrollMs - 2000;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
   const start = firstChordIndexAt(layout.chords, fromMs);
@@ -908,7 +914,7 @@ function drawChords(
   for (let i = start; i < layout.chords.length; i += 1) {
     const chord = layout.chords[i] as ChordGroup;
     if (chord.displayStartMs > toMs) break;
-    drawChord(ctx, view, chord, playheadMs, palette, beamLines);
+    drawChord(ctx, view, chord, playheadMs, palette, beamLines, litMidis);
   }
 }
 
@@ -919,6 +925,7 @@ function drawChord(
   playheadMs: number,
   palette: ScorePalette,
   beamLines: BeamLines,
+  litMidis?: ReadonlySet<number>,
 ): void {
   const x = xForMs(view, chord.displayStartMs);
   if (x < view.gutterPx - 40) return;
@@ -956,8 +963,11 @@ function drawChord(
     const hx = headX(note);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
+    // Two independent reasons a head lights, kept named apart rather than
+    // folded together: the cursor is inside it, or the user is holding it.
     const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
-    const color = sounding ? palette.highlight : palette.note;
+    const held = litMidis?.has(note.midi) ?? false;
+    const color = sounding || held ? palette.highlight : palette.note;
 
     ctx.save();
     ctx.translate(hx, y);

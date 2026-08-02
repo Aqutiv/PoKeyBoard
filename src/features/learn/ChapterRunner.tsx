@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
+import { useLiveActiveNotes, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { useRouter } from '@/app/routerContext';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { isBusyState } from '@/features/transport/transportMachine';
@@ -94,6 +94,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   const quiz = useQuiz(step?.kind === 'quiz' ? step : null);
   const drill = useDrill(step?.kind === 'drill' ? step : null);
   const loadProgress = useSampleLoadProgress();
+  // The same hook the piano lights its own keys from, so the stave and the
+  // keyboard under it agree by construction rather than by coincidence. It
+  // excludes scheduled playback, so a Listen demo lights nothing — matching
+  // the matcher, which also refuses to credit one.
+  const heldMidis = useLiveActiveNotes();
   // `noteOn` emits no input event when the pitch has no decoded sample, so an
   // exercise offered before the core pack lands would be quietly unwinnable.
   const pianoReady = loadProgress.phase === 'core-ready' || loadProgress.phase === 'loading-extra';
@@ -253,7 +258,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
           />
         ) : null}
         {step?.visual?.kind === 'staff' ? (
-          <StaffSnippet phrase={step.visual.phrase} ariaLabel={m.learn.staffLabel} />
+          <StaffSnippet
+            phrase={step.visual.phrase}
+            ariaLabel={m.learn.staffLabel}
+            litMidis={heldMidis}
+          />
         ) : null}
 
         {listen ? (
@@ -274,7 +283,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
             {/* A reading round asks with a picture, so the staff stands where
                 a spoken prompt otherwise would. */}
             {drill.round?.phrase ? (
-              <StaffSnippet phrase={drill.round.phrase} ariaLabel={m.learn.staffLabel} />
+              <StaffSnippet
+                phrase={drill.round.phrase}
+                ariaLabel={m.learn.staffLabel}
+                litMidis={heldMidis}
+              />
             ) : null}
             {/* A drill's prompt changes every round, so it is announced; an
                 exercise's is fixed prose and would only repeat itself. */}

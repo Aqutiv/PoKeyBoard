@@ -23,7 +23,9 @@ export function QuizPanel({ session }: QuizPanelProps) {
     <div className="learn-quiz">
       {session.phrase ? (
         // A reading round: the staff is the question. The label stays generic
-        // on purpose — naming the note here would announce the answer.
+        // on purpose — naming the note here would announce the answer, and for
+        // the same reason no `litMidis` is passed: lighting the head when the
+        // matching key is pressed would let the quiz be brute-forced.
         <StaffSnippet phrase={session.phrase} ariaLabel={m.learn.staffLabel} />
       ) : (
         <KeyboardDiagram

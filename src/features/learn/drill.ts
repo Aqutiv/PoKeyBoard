@@ -28,16 +28,24 @@ export interface DrillRound {
 export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null {
   const pitchClass = roundEntryAt(pool.pitchClasses, round);
   if (pitchClass === undefined) return null;
-  const spec: ExerciseSpec = { kind: 'pitchClass', pitchClass };
 
   if (pool.kind === 'readNote') {
-    // No label: the staff *is* the question, and writing the note's name
-    // beside it would hand over the answer.
+    const midi = (pool.baseMidi ?? DEFAULT_STAFF_BASE_MIDI) + pitchClass;
+    // The exact note, not its pitch class: the drawing is octave-pinned, and a
+    // reading round is precisely about *which line the note sits on*. Accepting
+    // the octave above would complete the round while the drawn head stayed
+    // dark, teaching the opposite of the lesson.
+    //
+    // No label either — the staff *is* the question, and writing the note's
+    // name beside it would hand over the answer.
     return {
-      spec,
+      spec: { kind: 'exactKeys', midis: [midi] },
       label: '',
-      phrase: singleNotePhrase((pool.baseMidi ?? DEFAULT_STAFF_BASE_MIDI) + pitchClass),
+      phrase: singleNotePhrase(midi),
     };
   }
-  return { spec, label: noteLabel(pitchClass, pool.spelling) };
+  return {
+    spec: { kind: 'pitchClass', pitchClass },
+    label: noteLabel(pitchClass, pool.spelling),
+  };
 }

@@ -159,14 +159,20 @@ Four step kinds (`src/features/learn/types.ts`):
   demo.
 - `exercise` — carries an `ExerciseSpec`; the user plays it.
 - `quiz` — recognition instead of production; the app shows something and the
-  user names it. Currently one question kind, `nameTheKey`.
+  user names it. Question kinds: `nameTheKey`, `readNote`.
 - `drill` — the mirror of a quiz: the app names something and the user plays
   it, over several rounds. Not an `ExerciseSpec` kind — rounds cannot live in a
   spec, since the matcher is a pure reducer with no notion of them. A drill is
   a _sequencer over_ specs: each round hands `useExercise` a fresh
   `ExerciseSpec`, whose new identity is exactly what resets the matcher, so all
   the matching, hints and timers come free. Round order is shared with the quiz
-  (`rounds.ts`). Currently one pool kind, `namedKey`.
+  (`rounds.ts`). Pool kinds: `namedKey`, `readNote`.
+
+A correct answer is **held on screen for 500ms** before the next round replaces
+it (`HOLD_MS` in `useDrill.ts`). Advancing on the same render that satisfied a
+round meant the moment being celebrated never painted — the note just found
+never got to light up. The readout ticks immediately, so the confirmation is
+instant and only the question waits.
 
 Both `quiz` and `drill` render inline in the chapter card, never as a dialog —
 see the `aria-modal` constraint below. Either can ask its question with a
@@ -175,12 +181,27 @@ pool. A reading round carries no written note name, because that would be the
 answer — which also means it cannot be completed by screen reader. See the
 limitations below.
 
+A reading round grades on `exactKeys`, not `pitchClass`: the drawing is
+octave-pinned and the whole subject is _which line the note sits on_, so the
+octave above is a different answer rather than a near-miss. It would also
+complete the round with the drawn head still dark, teaching the opposite of
+the lesson.
+
 Notation for a lesson is drawn treble-only and low-chrome: `ScoreView` takes
 `staves: 'treble' | 'bass' | 'grand'` and `chrome: 'bare' | 'full'`, and
 `computeScoreGeometry(layout, { staves })` collapses the height to match. Both
 default to the grand staff with full chrome, so the Play page is untouched.
 `StaffSnippet` also blanks `rests`, because `deriveRests` answers "what silence
 did this performance leave over" and a worked example is not a performance.
+
+A written note **lights up while the user holds that key**: `ScoreRenderInput`
+takes an optional `litMidis`, and `ChapterRunner` feeds it `useLiveActiveNotes()`
+— the same hook `PianoKeyboard` lights its own keys from, so the stave and the
+keyboard under it agree by construction. It excludes scheduled playback, so a
+Listen demo lights nothing, matching the matcher. `QuizPanel` deliberately does
+_not_ pass it: in "which note is this?" the stave is the question and the answer
+is a letter button, so lighting the played head would let the quiz be
+brute-forced on the keyboard.
 
 Note labels come from `noteLabel(midiOrPitchClass, spelling)`
 (`src/features/learn/noteLabel.ts`), which wraps the notation engine's own
@@ -253,6 +274,11 @@ Learned the hard way; violating any of these produces a silent failure.
   `role="img"` with a generic label; naming the note would announce the answer.
   A drill that asks you to read a picture is inherently visual, so the skip
   affordance is the honest escape hatch rather than a fake label.
+- **Only note heads light, not stems, flags or beams.** They stay
+  `palette.note`. Invisible so far because every Learn phrase is a whole note,
+  which `drawChord` gives no stem — but a beam can span notes with different
+  lit states, so "what colour is a half-lit beam" is a real question for
+  chapter 6's rhythm work to answer rather than for this to have guessed.
 - **A note below middle C needs an explicit `staff` hint.**
   `midiToStaffPosition` splits on `TREBLE_SPLIT_MIDI = 60`, so without one a low
   note silently moves to the bass staff. `phraseToNotes` passes the hint through

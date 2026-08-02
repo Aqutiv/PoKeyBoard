@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { drillRoundAt, type DrillRound } from './drill';
 import type { ExerciseProgress } from './exerciseMatcher';
 import type { ExerciseSpec } from './exerciseSpec';
@@ -6,6 +6,10 @@ import type { DrillStep } from './types';
 import { useExercise, type ExerciseSession } from './useExercise';
 
 const IDLE_PROGRESS: ExerciseProgress = { done: 0, total: 0, satisfied: false };
+
+/** Long enough to see the note you just found light up, short enough to keep
+ *  a five-round drill feeling brisk. */
+const HOLD_MS = 500;
 
 export interface DrillSession {
   /** The current round's spec, or null once every round is done. */
@@ -27,6 +31,8 @@ export interface DrillSession {
  */
 export function useDrill(step: DrillStep | null): DrillSession {
   const [round, setRound] = useState(0);
+  /** The round whose answer is being held on screen; -1 when none is. */
+  const [scored, setScored] = useState(-1);
 
   // Same render-phase reset the other Learn hooks use: an effect would paint
   // the new step once against the previous one's score.
@@ -34,6 +40,7 @@ export function useDrill(step: DrillStep | null): DrillSession {
   if (activeStep !== step) {
     setActiveStep(step);
     setRound(0);
+    setScored(-1);
   }
 
   const total = step?.rounds ?? 0;
@@ -48,16 +55,28 @@ export function useDrill(step: DrillStep | null): DrillSession {
 
   const play = useExercise(current?.spec ?? null);
 
-  // Advancing in render rather than an effect keeps a satisfied round from
-  // being painted before the next question replaces it. This cannot loop:
-  // `useExercise` reports the new spec's own fresh progress in the very same
-  // render, so `satisfied` is false again immediately.
-  if (play.progress.satisfied && !satisfied) setRound(round + 1);
+  // Mark the round answered in render, so the readout ticks on the same frame
+  // the note lands. Advancing happens later — see below.
+  const holding = scored === round && !satisfied;
+  if (play.progress.satisfied && !satisfied && scored !== round) setScored(round);
+
+  // Hold the answer on screen before moving on. Advancing straight away — as
+  // this did — replaced the question in the same render that satisfied it, so
+  // the moment being celebrated never painted: the note the user just found
+  // never got to light up. The timeout is cancelled by leaving the step or
+  // unmounting, so a drill can never advance into a chapter it has left.
+  useEffect(() => {
+    if (scored !== round) return;
+    const id = window.setTimeout(() => setRound((current) => current + 1), HOLD_MS);
+    return () => window.clearTimeout(id);
+  }, [scored, round]);
 
   return {
     spec: current?.spec ?? null,
     round: current,
     play,
-    progress: step ? { done: Math.min(round, total), total, satisfied } : IDLE_PROGRESS,
+    progress: step
+      ? { done: Math.min(round + (holding ? 1 : 0), total), total, satisfied }
+      : IDLE_PROGRESS,
   };
 }
