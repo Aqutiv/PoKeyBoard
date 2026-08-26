@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
+import { noteHand, type Hand } from '@/domain/hands';
 import type { PedalEvent } from '@/domain/takeTypes';
 import { scrubController } from '@/features/notation/scrubController';
 import {
@@ -11,20 +12,20 @@ import type { TransportState } from '@/features/transport/transportMachine';
 import { useTakeStore } from '@/state/useTakeStore';
 import { useTransportState } from './useTransport';
 
-const EMPTY: ReadonlySet<number> = new Set();
-let cache: ReadonlySet<number> = EMPTY;
+const EMPTY: ReadonlyMap<number, Hand> = new Map();
+let cache: ReadonlyMap<number, Hand> = EMPTY;
 
-function setsEqual(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
+function mapsEqual(a: ReadonlyMap<number, Hand>, b: ReadonlyMap<number, Hand>): boolean {
   if (a.size !== b.size) return false;
-  for (const value of a) if (!b.has(value)) return false;
+  for (const [midi, hand] of a) if (b.get(midi) !== hand) return false;
   return true;
 }
 
-function computeSnapshot(): ReadonlySet<number> {
+function computeSnapshot(): ReadonlyMap<number, Hand> {
   const state = transportController.getState();
   if (state === 'scrubbing') {
-    const scrubActive = scrubController.getActiveMidis();
-    if (setsEqual(scrubActive, cache)) return cache;
+    const scrubActive = scrubController.getActiveHands();
+    if (mapsEqual(scrubActive, cache)) return cache;
     cache = scrubActive;
     return cache;
   }
@@ -36,12 +37,15 @@ function computeSnapshot(): ReadonlySet<number> {
   }
   const playheadMs = transportController.getPlayheadMs();
   const notes = useTakeStore.getState().take.notes; // sorted by startMs
-  const next = new Set<number>();
+  const next = new Map<number, Hand>();
   for (const note of notes) {
     if (note.startMs > playheadMs) break;
-    if (playheadMs < note.startMs + note.durationMs) next.add(note.midi);
+    if (playheadMs >= note.startMs + note.durationMs) continue;
+    // A unison across the hands is rare and momentary; the first one sounding
+    // owns the key rather than the light flickering between two shades.
+    if (!next.has(note.midi)) next.set(note.midi, noteHand(note));
   }
-  if (setsEqual(next, cache)) return cache;
+  if (mapsEqual(next, cache)) return cache;
   cache = next;
   return cache;
 }
@@ -68,10 +72,11 @@ function isCuePolling(state: TransportState): boolean {
 }
 
 /**
- * Keys the keyboard should light beyond live input: notes sounding under
- * the playhead during playback, and scrub-audition flashes while scrubbing.
+ * Keys the keyboard should light beyond live input, each with the hand that
+ * plays it: notes sounding under the playhead during playback, and
+ * scrub-audition flashes while scrubbing.
  */
-export function usePlaybackActiveMidis(): ReadonlySet<number> {
+export function usePlaybackActiveHands(): ReadonlyMap<number, Hand> {
   const subscribe = usePlayheadCueSubscribe(isCuePolling(useTransportState()));
   return useSyncExternalStore(subscribe, computeSnapshot);
 }

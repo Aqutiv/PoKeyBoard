@@ -69,6 +69,15 @@
   --key-black-active-1: #8c6b25;
   --key-black-active-2: #6f5417;
   --key-black-active-3: #52400f;
+  /* Playback lights the left hand a few shades deeper down the same amber —
+     a copper against the right hand's gold, so the two read apart without a
+     second colour arriving on the key bed. */
+  --key-white-left-1: #d0904a;
+  --key-white-left-2: #e3ac6c;
+  --key-white-left-3: #d9a05c;
+  --key-black-left-1: #a05f22;
+  --key-black-left-2: #83491a;
+  --key-black-left-3: #62350f;
   --key-label: #8d846f;
 
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%23b3a996' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -119,6 +128,12 @@ html[data-theme='light'] {
   --key-black-active-1: #9a7a33;
   --key-black-active-2: #7d6122;
   --key-black-active-3: #5f4a16;
+  --key-white-left-1: #d5964f;
+  --key-white-left-2: #e9b477;
+  --key-white-left-3: #dfa766;
+  --key-black-left-1: #ac6929;
+  --key-black-left-2: #8d5320;
+  --key-black-left-3: #6b3e16;
   --key-label: #8a8171;
 
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%236b6353' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
