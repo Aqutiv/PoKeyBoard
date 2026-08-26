@@ -179,6 +179,19 @@ describe('training playback', () => {
     expect(h.inputs.size).toBe(0);
   });
 
+  it('holds the very first note instead of sounding it under the hold', () => {
+    // The gate has to exist before the scheduler's first tick: a note at the
+    // playhead sits inside the lookahead, so an unarmed tick would queue the
+    // note the hold is meant to be asking for.
+    useSettingsStore.getState().setPlaybackMode('training-both');
+    transportController.play();
+    runTo(50);
+
+    expect(transportController.isWaitingForTraining()).toBe(true);
+    expect(transportController.getTrainingTargets()).toEqual(new Set([48]));
+    expect(h.scheduled).toEqual([]);
+  });
+
   it('never gates in simple mode', () => {
     useSettingsStore.getState().setPlaybackMode('simple');
     transportController.play();
@@ -187,7 +200,7 @@ describe('training playback', () => {
     expect(h.scheduled).toEqual([48, 64, 67]);
   });
 
-  it('lets go of a hold when the mode changes under it', () => {
+  it('carries on rather than parking when the mode changes under a hold', () => {
     transportController.play();
     runTo(350);
     expect(transportController.isWaitingForTraining()).toBe(true);
@@ -196,5 +209,10 @@ describe('training playback', () => {
     transportController.refreshTrainingMode();
     expect(transportController.isWaitingForTraining()).toBe(false);
     expect(transportController.getTrainingTargets().size).toBe(0);
+    // Stripping the targets but leaving the transport parked is not what
+    // changing a mode mid-playback promises.
+    expect(transportController.getState()).toBe('playing');
+    runTo(400);
+    expect(h.scheduled).toEqual([48, 64, 67]);
   });
 });

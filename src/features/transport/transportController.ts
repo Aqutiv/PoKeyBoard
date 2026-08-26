@@ -498,8 +498,7 @@ export class TransportController {
     }
     this.send('PLAY');
     this.trainingSkipNoteIds = resume?.skipNoteIds ?? null;
-    this.beginPlaybackScheduler(notes, fromMs);
-    this.armTrainingGate(resume?.gateFromMs ?? fromMs);
+    this.beginPlaybackScheduler(notes, fromMs, resume?.gateFromMs ?? fromMs);
   }
 
   /**
@@ -507,11 +506,15 @@ export class TransportController {
    * `fromMs`. Used by playback and by overdub recording (to sound the
    * already-recorded take as backing). The clock must already be started.
    */
-  private beginPlaybackScheduler(notes: NoteEvent[], fromMs: number): void {
+  private beginPlaybackScheduler(notes: NoteEvent[], fromMs: number, gateFromMs?: number): void {
     this.clearScheduler();
     this.playNotes = notes;
     this.playCursor = notes.findIndex((note) => note.startMs >= fromMs);
     if (this.playCursor === -1) this.playCursor = notes.length;
+    // The gate must exist before the first tick. A note at the playhead sits
+    // inside the lookahead, so an unarmed tick would queue the very note the
+    // hold is about to ask for — the prompt would arrive after the answer.
+    if (gateFromMs !== undefined) this.armTrainingGate(gateFromMs);
     this.scheduleTick();
     this.schedulerTickUnsub = audioEngine.subscribeSchedulerTick(() => {
       this.scheduleTick();
@@ -595,9 +598,11 @@ export class TransportController {
    */
   refreshTrainingMode(): void {
     if (this.trainingWaiting) {
-      // Changing the mode while it holds is as good as saying "carry on".
-      this.clearTrainingGate();
-      for (const listener of this.stateListeners) listener();
+      // Changing the mode at a hold is as good as saying "carry on": let that
+      // moment through and run on under the new mode. Clearing the gate alone
+      // would strip the targets and the status but leave the transport parked,
+      // which is not what changing a mode mid-playback promises.
+      this.play();
       return;
     }
     if (this.state !== 'playing') return;
