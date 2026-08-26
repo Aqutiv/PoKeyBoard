@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
+import type { Hand } from '@/domain/hands';
 import { contributeRange } from '@/audio/playableRange';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -28,8 +29,11 @@ import { registerMidiKeyboard } from './useMidiInput';
 import './keyboard.css';
 
 interface PianoKeyboardProps {
-  /** Extra keys to light up (playback / scrub animation). */
-  extraActiveMidis?: ReadonlySet<number>;
+  /**
+   * Extra keys to light up (playback / scrub animation), each mapped to the
+   * hand that plays it so the two are told apart on the key bed.
+   */
+  extraActiveHands?: ReadonlyMap<number, Hand>;
   /** The take's pedal is down under the playhead (playback / scrub cue). */
   playbackPedalDown?: boolean;
   /** Extra controls rendered between the range shifter and Sustain. */
@@ -51,7 +55,7 @@ interface PianoKeyboardProps {
 }
 
 export function PianoKeyboard({
-  extraActiveMidis,
+  extraActiveHands,
   playbackPedalDown = false,
   controlsExtra,
   targetMidis,
@@ -291,8 +295,22 @@ export function PianoKeyboard({
   }, []);
 
   const isActive = useCallback(
-    (midi: number) => liveActive.has(midi) || (extraActiveMidis?.has(midi) ?? false),
-    [liveActive, extraActiveMidis],
+    (midi: number) => liveActive.has(midi) || (extraActiveHands?.has(midi) ?? false),
+    [liveActive, extraActiveHands],
+  );
+
+  /**
+   * The hand shade a lit key wears, or none. Live input wins: a key the user is
+   * actually holding shows the plain active colour, whichever hand the take
+   * would have played it with.
+   */
+  const handClass = useCallback(
+    (midi: number) => {
+      if (liveActive.has(midi)) return '';
+      const hand = extraActiveHands?.get(midi);
+      return hand ? ` is-hand-${hand}` : '';
+    },
+    [liveActive, extraActiveHands],
   );
 
   const isTarget = useCallback((midi: number) => targetMidis?.has(midi) ?? false, [targetMidis]);
@@ -373,9 +391,9 @@ export function PianoKeyboard({
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
               aria-pressed={isActive(key.midi)}
-              className={`piano-key piano-key--white${isActive(key.midi) ? ' is-active' : ''}${
-                isTarget(key.midi) ? ' is-target' : ''
-              }`}
+              className={`piano-key piano-key--white${
+                isActive(key.midi) ? ` is-active${handClass(key.midi)}` : ''
+              }${isTarget(key.midi) ? ' is-target' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,
@@ -398,9 +416,9 @@ export function PianoKeyboard({
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
               aria-pressed={isActive(key.midi)}
-              className={`piano-key piano-key--black${isActive(key.midi) ? ' is-active' : ''}${
-                isTarget(key.midi) ? ' is-target' : ''
-              }`}
+              className={`piano-key piano-key--black${
+                isActive(key.midi) ? ` is-active${handClass(key.midi)}` : ''
+              }${isTarget(key.midi) ? ' is-target' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,

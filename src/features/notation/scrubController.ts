@@ -1,4 +1,5 @@
 import { audioEngine } from '@/audio/AudioEngine';
+import { noteHand, type Hand } from '@/domain/hands';
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
@@ -29,8 +30,9 @@ class ScrubController {
   private sortedNotes: NoteEvent[] = [];
   private currentTimeMs = 0;
   private active = false;
-  private readonly flashes = new Map<number, number>(); // midi → expiry (performance.now ms)
-  private activeSnapshot: ReadonlySet<number> = new Set();
+  /** midi → the flash's expiry (performance.now ms) and the hand playing it. */
+  private readonly flashes = new Map<number, { expiry: number; hand: Hand }>();
+  private activeSnapshot: ReadonlyMap<number, Hand> = new Map();
 
   get isActive(): boolean {
     return this.active;
@@ -66,7 +68,7 @@ class ScrubController {
     const audition = useSettingsStore.getState().scrubAudition;
     const now = performance.now();
     for (const note of crossed) {
-      this.flashes.set(note.midi, now + KEY_FLASH_MS);
+      this.flashes.set(note.midi, { expiry: now + KEY_FLASH_MS, hand: noteHand(note) });
       if (audition) {
         audioEngine.scheduleNote(
           {
@@ -92,23 +94,38 @@ class ScrubController {
     this.refreshActiveSnapshot(performance.now());
   }
 
-  /** Keys currently flashing from scrub auditions (for the keyboard). */
-  getActiveMidis(): ReadonlySet<number> {
+  /**
+   * Keys currently flashing from scrub auditions, each with the hand that
+   * plays it (for the keyboard).
+   */
+  getActiveHands(): ReadonlyMap<number, Hand> {
     this.refreshActiveSnapshot(performance.now());
     return this.activeSnapshot;
   }
 
   private refreshActiveSnapshot(now: number): void {
     let changed = false;
-    for (const [midi, expiry] of this.flashes) {
-      if (expiry <= now) {
+    for (const [midi, flash] of this.flashes) {
+      if (flash.expiry <= now) {
         this.flashes.delete(midi);
         changed = true;
       }
     }
-    if (changed || this.flashes.size !== this.activeSnapshot.size) {
-      this.activeSnapshot = new Set(this.flashes.keys());
+    // Size alone would miss a key re-flashed from the other staff before its
+    // first flash expired: same count, same pitch, other hand — and the key
+    // bed would wear the previous hand's colour for the whole new flash.
+    if (!changed && this.flashes.size === this.activeSnapshot.size) {
+      for (const [midi, flash] of this.flashes) {
+        if (this.activeSnapshot.get(midi) !== flash.hand) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) return;
     }
+    this.activeSnapshot = new Map(
+      [...this.flashes].map(([midi, flash]) => [midi, flash.hand] as const),
+    );
   }
 }
 

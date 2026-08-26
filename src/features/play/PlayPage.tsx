@@ -1,7 +1,7 @@
 import { useState, useSyncExternalStore } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useTransportState } from '@/app/hooks/useTransport';
-import { usePlaybackActiveMidis, usePlaybackPedalDown } from '@/app/hooks/useActiveMidis';
+import { usePlaybackActiveHands, usePlaybackPedalDown } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { lifecycleService } from '@/app/lifecycle';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -34,7 +34,7 @@ export function PlayPage() {
   const takeId = useTakeStore((s) => s.take.id);
   const isLibrary = isLibraryTakeId(takeId);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
-  const playbackActiveMidis = usePlaybackActiveMidis();
+  const playbackActiveHands = usePlaybackActiveHands();
   const playbackPedalDown = usePlaybackPedalDown();
   // In short landscape the metronome row does not fit; a compact subset is
   // embedded in the piano controls row instead. Render one or the other,
@@ -120,7 +120,7 @@ export function PlayPage() {
         {compactLandscape ? null : <MetronomeControls />}
         <div className="play-layout__keyboard">
           <PianoKeyboard
-            extraActiveMidis={playbackActiveMidis}
+            extraActiveHands={playbackActiveHands}
             playbackPedalDown={playbackPedalDown}
             controlsExtra={compactLandscape ? <MetronomeControls compact /> : null}
           />
