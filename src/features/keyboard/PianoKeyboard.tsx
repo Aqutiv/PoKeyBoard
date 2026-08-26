@@ -44,6 +44,17 @@ interface PianoKeyboardProps {
    */
   targetMidis?: ReadonlySet<number>;
   /**
+   * Keys the user pressed that were not the ones being asked for. Flashed
+   * apart from both, so a wrong note reads as wrong rather than as progress.
+   */
+  wrongMidis?: ReadonlySet<number>;
+  /**
+   * Slide the key bed so a target off the visible window comes into view.
+   * Training needs it — a hold on a key the user cannot see is a dead end —
+   * while Learn keeps its own anchor and must not be moved.
+   */
+  revealTargets?: boolean;
+  /**
    * Park this keyboard here instead of at the persisted `keyboardAnchorMidi`.
    * Pass `onAnchorChange` alongside it, or the range shifter has nothing to
    * move. Learn uses this so a lesson never relocates the Play keyboard.
@@ -59,6 +70,8 @@ export function PianoKeyboard({
   playbackPedalDown = false,
   controlsExtra,
   targetMidis,
+  wrongMidis,
+  revealTargets = false,
   anchorMidi: anchorMidiOverride,
   onAnchorChange,
   onRangeChange,
@@ -170,6 +183,22 @@ export function PianoKeyboard({
   useEffect(() => {
     onRangeChange?.({ lowMidi: layout.lowMidi, highMidi: layout.highMidi });
   }, [layout.lowMidi, layout.highMidi, onRangeChange]);
+
+  // A target below or above the window would be asked for and never shown.
+  // Anchored on the lowest, so a chord that spans more than the window at
+  // least starts where the hand does.
+  useEffect(() => {
+    if (!revealTargets || !targetMidis || targetMidis.size === 0) return;
+    let lowest = Infinity;
+    let anyOutside = false;
+    for (const midi of targetMidis) {
+      lowest = Math.min(lowest, midi);
+      if (midi < layout.lowMidi || midi > layout.highMidi) anyOutside = true;
+    }
+    if (!anyOutside) return;
+    const next = anchorToReveal(lowest, layout.lowMidi, visibleWhites);
+    if (next !== layout.lowMidi) setAnchorMidi(next);
+  }, [revealTargets, targetMidis, layout.lowMidi, layout.highMidi, visibleWhites, setAnchorMidi]);
 
   const [tracker] = useState(
     () =>
@@ -336,6 +365,8 @@ export function PianoKeyboard({
 
   const isTarget = useCallback((midi: number) => targetMidis?.has(midi) ?? false, [targetMidis]);
 
+  const isWrong = useCallback((midi: number) => wrongMidis?.has(midi) ?? false, [wrongMidis]);
+
   const whiteWidthPercent = 100 / layout.whiteCount;
 
   return (
@@ -414,7 +445,7 @@ export function PianoKeyboard({
               aria-pressed={isActive(key.midi)}
               className={`piano-key piano-key--white${
                 isActive(key.midi) ? ` is-active${handClass(key.midi)}` : ''
-              }${isTarget(key.midi) ? ' is-target' : ''}`}
+              }${isTarget(key.midi) ? ' is-target' : ''}${isWrong(key.midi) ? ' is-wrong' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,
@@ -439,7 +470,7 @@ export function PianoKeyboard({
               aria-pressed={isActive(key.midi)}
               className={`piano-key piano-key--black${
                 isActive(key.midi) ? ` is-active${handClass(key.midi)}` : ''
-              }${isTarget(key.midi) ? ' is-target' : ''}`}
+              }${isTarget(key.midi) ? ' is-target' : ''}${isWrong(key.midi) ? ' is-wrong' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,

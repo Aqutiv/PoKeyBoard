@@ -18,7 +18,8 @@ src/
   workers/      mp3Encoder.worker (LAME wasm, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
-                tempoMap (piecewise beats↔ms; shared by import, library, score)
+                tempoMap (piecewise beats↔ms; shared by import, library, score),
+                hands (which hand plays a note), trainingGate (pure)
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
@@ -33,7 +34,7 @@ src/
                 scrubController, sheetLayout (pure paginated engraving),
                 sheetRenderer (print-style page canvas)
     transport/  transportMachine (pure), transportClock, transportController,
-                sustainPedal, TransportControls
+                sustainPedal, modes, TransportControls, ModeMenu
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportTakeDialog, ImportUrlDialog,
                 remoteImportMessage
@@ -62,7 +63,32 @@ Clicks come from a `ClickGrid`, not from one bpm: while the transport moves, the
 
 ## Recording
 
-The engine emits input events (`on/off/sustain`, audio-clock stamped) for live sources. The controller keeps per-`sourceId` open notes, commits each on release (prompt score display), finalizes leftovers on stop, appends pedal events, and tracks the pass's note ids for undo. Overdub is the default; replace deletes-from-playhead only after explicit confirmation. A recording interrupted by backgrounding finalizes, saves, and explains itself.
+The engine emits input events (`on/off/sustain`, audio-clock stamped) for live sources. The controller keeps per-`sourceId` open notes, commits each on release (prompt score display), finalizes leftovers on stop, appends pedal events, and tracks the pass's note ids for undo. Overdub is the default; replace deletes-from-playhead only after explicit confirmation. A recording interrupted by backgrounding finalizes, saves, and explains itself. Overdub/replace and the playback mode share one menu on the transport row (two selects do not fit a phone), and both are ordinary settings rather than component state.
+
+## Training playback
+
+Training stops playback at every note the chosen hand has to play and waits for
+the user to play it. `nextTrainingGate` (`domain/trainingGate.ts`) is pure: given
+the sorted notes, a time, and left/right/both it returns the next onset and the
+pitches due there, gathered over a 50 ms window because a chord a human played
+never lands on one millisecond. Which hand a note belongs to is `noteHand`'s
+answer — the staff an import wrote it on, or the middle-C split for a recorded
+take — so the key bed, the score and training all agree.
+
+The controller owns the gate because the clamp has to happen inside the private
+scheduler: the lookahead horizon is capped just under the gate, so nothing past
+it is scheduled early, and the tick that crosses it pauses at the gate's own
+millisecond rather than wherever the 25 ms tick landed. Waiting is an ordinary
+`paused` plus a flag, not a new transport state — nothing that switches on
+`TransportState` has to learn about training. While it holds, the controller
+subscribes to the same input stream recording uses; presses accumulate (a mouse
+is one pointer and cannot hold a chord), extra keys flash and are ignored rather
+than blocking, and the notes the user just sounded are skipped by id when
+playback resumes, or the take would echo them a beat later. Pressing Play at a
+hold lets that note through, so the feature can never wedge the transport.
+
+Only plain playback gates. An overdub pass sounds its backing through the same
+scheduler and must never stop to ask for a note.
 
 ## Choosing a piano
 

@@ -10,7 +10,7 @@ import {
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import { useTakeStore } from '@/state/useTakeStore';
-import { useTransportState } from './useTransport';
+import { useTrainingWaiting, useTransportState } from './useTransport';
 
 const EMPTY: ReadonlyMap<number, Hand> = new Map();
 let cache: ReadonlyMap<number, Hand> = EMPTY;
@@ -52,8 +52,8 @@ function computeSnapshot(): ReadonlyMap<number, Hand> {
 
 const POLL_MS = 90;
 
-/** Same cadence for every playhead-driven keyboard cue; see `computeSnapshot`. */
-function usePlayheadCueSubscribe(polling: boolean): (onStoreChange: () => void) => () => void {
+/** Same cadence for every polled keyboard cue; see `computeSnapshot`. */
+function useCueSubscribe(polling: boolean): (onStoreChange: () => void) => () => void {
   return useCallback(
     (onStoreChange: () => void) => {
       const unsubscribe = transportController.subscribeState(onStoreChange);
@@ -77,7 +77,7 @@ function isCuePolling(state: TransportState): boolean {
  * scrub-audition flashes while scrubbing.
  */
 export function usePlaybackActiveHands(): ReadonlyMap<number, Hand> {
-  const subscribe = usePlayheadCueSubscribe(isCuePolling(useTransportState()));
+  const subscribe = useCueSubscribe(isCuePolling(useTransportState()));
   return useSyncExternalStore(subscribe, computeSnapshot);
 }
 
@@ -114,6 +114,41 @@ function pedalSnapshot(): boolean {
  * is needed for the `useSyncExternalStore` contract.
  */
 export function usePlaybackPedalDown(): boolean {
-  const subscribe = usePlayheadCueSubscribe(isCuePolling(useTransportState()));
+  const subscribe = useCueSubscribe(isCuePolling(useTransportState()));
   return useSyncExternalStore(subscribe, pedalSnapshot);
+}
+
+const EMPTY_MIDIS: ReadonlySet<number> = new Set();
+let wrongCache: ReadonlySet<number> = EMPTY_MIDIS;
+
+function setsEqual(a: ReadonlySet<number>, b: ReadonlySet<number>): boolean {
+  if (a.size !== b.size) return false;
+  for (const midi of a) if (!b.has(midi)) return false;
+  return true;
+}
+
+function wrongSnapshot(): ReadonlySet<number> {
+  const next = transportController.getTrainingWrongMidis();
+  if (setsEqual(next, wrongCache)) return wrongCache;
+  wrongCache = next;
+  return wrongCache;
+}
+
+/**
+ * The keys a training wait is asking for. The gate's own set is handed back
+ * unchanged, so the snapshot is stable for as long as the wait is.
+ */
+export function useTrainingTargets(): ReadonlySet<number> {
+  return useSyncExternalStore(useCueSubscribe(false), () =>
+    transportController.getTrainingTargets(),
+  );
+}
+
+/**
+ * Keys pressed at a wait point that were not the ones being asked for. Polled
+ * like the other cues, because a flash expires on a timer rather than on an
+ * event.
+ */
+export function useTrainingWrongMidis(): ReadonlySet<number> {
+  return useSyncExternalStore(useCueSubscribe(useTrainingWaiting()), wrongSnapshot);
 }

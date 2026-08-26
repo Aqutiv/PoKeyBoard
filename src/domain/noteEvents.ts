@@ -21,6 +21,23 @@ export function sortNotes(notes: readonly NoteEvent[]): NoteEvent[] {
   return [...notes].sort(compareNoteEvents);
 }
 
+/**
+ * First index whose startMs is >= t, over notes sorted by startMs. Anything
+ * that walks a take forward from a time — scrubbing, the training gate —
+ * starts here rather than scanning a take that may hold tens of thousands of
+ * notes.
+ */
+export function lowerBoundByStart(notes: readonly NoteEvent[], t: number): number {
+  let low = 0;
+  let high = notes.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if ((notes[mid] as NoteEvent).startMs < t) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
 export function comparePedalEvents(a: PedalEvent, b: PedalEvent): number {
   if (a.atMs !== b.atMs) return a.atMs - b.atMs;
   return Number(a.down) - Number(b.down);

@@ -88,14 +88,18 @@
   font-size: 13px;
 }
 
-.transport__mode select {
+.transport__mode {
   min-height: 36px;
   background: var(--surface-2);
   color: var(--text);
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
-  padding: 0 8px;
+  padding: 0 10px;
   font-size: 13px;
+}
+
+.transport__mode:disabled {
+  opacity: 0.4;
 }
 
 .transport__seek {
@@ -119,15 +123,20 @@
   font-weight: 600;
 }
 
+.transport__status--waiting {
+  color: var(--accent);
+  font-weight: 600;
+}
+
 /* .visually-hidden lives in index.css so every chunk can rely on it. */
 
-/* Portrait phones: the mode select was wrapping onto a line of its own, which
+/* Portrait phones: the mode button was wrapping onto a line of its own, which
    cost the score a row. Dropping the total duration buys back the width.
    Keep the query in sync with src/index.css and the other feature sheets. */
 @media (orientation: portrait) and (max-width: 600px) {
   /* Dropping the total is what buys the row; the wrap stays as the safety
      valve, because Undo joins this row after a recording pass and the shell
-     hides horizontal overflow — a second line beats a clipped select. */
+     hides horizontal overflow — a second line beats a clipped button. */
   .transport__buttons {
     gap: 6px;
   }
@@ -140,9 +149,9 @@
     margin-left: 0;
   }
 
-  .transport__mode select {
+  .transport__mode {
     font-size: 12px;
-    padding: 0 6px;
+    padding: 0 8px;
   }
 }
 

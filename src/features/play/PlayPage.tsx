@@ -1,7 +1,12 @@
 import { useState, useSyncExternalStore } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useTransportState } from '@/app/hooks/useTransport';
-import { usePlaybackActiveHands, usePlaybackPedalDown } from '@/app/hooks/useActiveMidis';
+import {
+  usePlaybackActiveHands,
+  usePlaybackPedalDown,
+  useTrainingTargets,
+  useTrainingWrongMidis,
+} from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { lifecycleService } from '@/app/lifecycle';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -36,6 +41,8 @@ export function PlayPage() {
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
   const playbackActiveHands = usePlaybackActiveHands();
   const playbackPedalDown = usePlaybackPedalDown();
+  const trainingTargets = useTrainingTargets();
+  const trainingWrong = useTrainingWrongMidis();
   // In short landscape the metronome row does not fit; a compact subset is
   // embedded in the piano controls row instead. Render one or the other,
   // never both (duplicate groups would confuse assistive tech).
@@ -122,6 +129,9 @@ export function PlayPage() {
           <PianoKeyboard
             extraActiveHands={playbackActiveHands}
             playbackPedalDown={playbackPedalDown}
+            targetMidis={trainingTargets}
+            wrongMidis={trainingWrong}
+            revealTargets
             controlsExtra={compactLandscape ? <MetronomeControls compact /> : null}
           />
         </div>

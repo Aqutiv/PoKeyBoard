@@ -1,10 +1,12 @@
-import { useCallback, useState } from 'react';
-import { usePlayheadMs, useTransportState } from '@/app/hooks/useTransport';
+import { useCallback } from 'react';
+import { usePlayheadMs, useTrainingWaiting, useTransportState } from '@/app/hooks/useTransport';
 import { useMessages } from '@/i18n/i18nContext';
+import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
+import { ModeMenu } from './ModeMenu';
 import { canTransition } from './transportMachine';
-import { transportController, type RecordMode } from './transportController';
+import { transportController } from './transportController';
 import { effectivePlaybackDurationMs } from './sustainPedal';
 import './transport.css';
 
@@ -24,7 +26,8 @@ export function TransportControls() {
     (s) => s.lastPassNoteIds.length > 0 || s.lastPassPedalEvents.length > 0,
   );
   const undoLastPass = useTakeStore((s) => s.undoLastPass);
-  const [recordMode, setRecordMode] = useState<RecordMode>('overdub');
+  const recordMode = useSettingsStore((s) => s.recordMode);
+  const waitingForTraining = useTrainingWaiting();
 
   const recording = state === 'recording' || state === 'countIn';
   const playing = state === 'playing';
@@ -142,18 +145,7 @@ export function TransportControls() {
           </button>
         ) : null}
 
-        <label className="transport__mode">
-          <span className="visually-hidden">{m.transport.recordingMode}</span>
-          <select
-            value={recordMode}
-            onChange={(event) => setRecordMode(event.target.value as RecordMode)}
-            disabled={recording}
-            aria-label={m.transport.recordingMode}
-          >
-            <option value="overdub">{m.transport.overdub}</option>
-            <option value="replace">{m.transport.replace}</option>
-          </select>
-        </label>
+        <ModeMenu disabled={recording} />
       </div>
 
       <input
@@ -168,6 +160,11 @@ export function TransportControls() {
         aria-label={m.transport.seekPosition}
         aria-valuetext={formatDurationMs(playheadMs, true)}
       />
+      {waitingForTraining ? (
+        <p className="transport__status transport__status--waiting" role="status">
+          {m.transport.waitingForYou}
+        </p>
+      ) : null}
       {state === 'countIn' ? (
         <p className="transport__status" role="status">
           {m.transport.countIn}
