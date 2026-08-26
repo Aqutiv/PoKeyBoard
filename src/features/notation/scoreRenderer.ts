@@ -103,6 +103,14 @@ const HAIRPIN_MOUTH_PX = GAP * 0.55;
 /** Bottom margin below the bass staff at the default geometry. */
 const BOTTOM_MARGIN = SCORE_MIN_HEIGHT - BASS_TOP - STAFF_H;
 
+/** 'grand' is both staves; the others draw one, in the treble slot. */
+export type StaffMode = 'grand' | 'treble' | 'bass';
+
+export interface ScoreGeometryOptions {
+  /** Which staves the height has to fit. Defaults to the grand staff. */
+  staves?: StaffMode;
+}
+
 export interface ScoreGeometry {
   trebleTop: number;
   bassTop: number;
@@ -179,8 +187,18 @@ function beamExtentRel(beam: BeamGroup): { top: number; bottom: number } | null 
  * sits — the stems and beams are measured too, or they get sheared off.
  * Takes in the normal range get exactly the default constants.
  */
-export function computeScoreGeometry(layout: ScoreLayout): ScoreGeometry {
+export function computeScoreGeometry(
+  layout: ScoreLayout,
+  options: ScoreGeometryOptions = {},
+): ScoreGeometry {
   const hasDynamics = layout.dynamics.length + layout.hairpins.length > 0;
+  // On the grand staff the gap between the staves absorbs whatever a treble
+  // chord hangs down or a bass chord throws up, so each margin has exactly one
+  // staff pressing on it. With a single staff there is no gap, and that one
+  // staff has to answer for both.
+  const single = options.staves && options.staves !== 'grand' ? options.staves : null;
+  const upStaff: StaffKind = single ?? 'treble';
+  const downStaff: StaffKind = single ?? 'bass';
   // Relative to each staff's own top: above the treble staff is negative,
   // below the bass staff is greater than STAFF_H.
   let trebleReach = Number.POSITIVE_INFINITY;
@@ -192,45 +210,64 @@ export function computeScoreGeometry(layout: ScoreLayout): ScoreGeometry {
     bassReach = Math.max(bassReach, value);
   };
 
+  // Two independent `if`s rather than if/else: on the grand staff a chord is
+  // either treble or bass so this is a no-op, and with one staff the same
+  // chord legitimately presses on both margins.
   for (const chord of layout.chords) {
     const top = chord.notes[chord.notes.length - 1];
     const bottom = chord.notes[0];
-    if (chord.staff === 'treble') {
-      if (top) reachUp(yRel(top.step) - HEAD_CLEARANCE);
-    } else if (bottom) {
-      reachDown(yRel(bottom.step) + HEAD_CLEARANCE);
-    }
+    if (chord.staff === upStaff && top) reachUp(yRel(top.step) - HEAD_CLEARANCE);
+    if (chord.staff === downStaff && bottom) reachDown(yRel(bottom.step) + HEAD_CLEARANCE);
     // A tie arcs on the side the stem is not, so it can clear the head by
     // more than the head clearance allows for.
     for (const note of chord.notes) {
       if (!note.tiedFromPrev && !note.tiedToNext) continue;
-      if (chord.staff === 'treble') {
-        if (chord.stemDown) reachUp(yRel(note.step) - TIE_REACH_PX - INK_CLEARANCE);
-      } else if (!chord.stemDown) {
+      if (chord.staff === upStaff && chord.stemDown) {
+        reachUp(yRel(note.step) - TIE_REACH_PX - INK_CLEARANCE);
+      }
+      if (chord.staff === downStaff && !chord.stemDown) {
         reachDown(yRel(note.step) + TIE_REACH_PX + INK_CLEARANCE);
       }
     }
     const stem = stemExtentRel(chord);
     if (stem === null) continue;
-    if (chord.staff === 'treble') {
-      if (!chord.stemDown) reachUp(stem - INK_CLEARANCE);
-    } else if (chord.stemDown) {
-      reachDown(stem + INK_CLEARANCE);
-    }
+    if (chord.staff === upStaff && !chord.stemDown) reachUp(stem - INK_CLEARANCE);
+    if (chord.staff === downStaff && chord.stemDown) reachDown(stem + INK_CLEARANCE);
   }
 
   for (const beam of layout.beams) {
     const extent = beamExtentRel(beam);
     if (!extent) continue;
-    if (beam.staff === 'treble') {
-      if (!beam.stemDown) reachUp(extent.top - INK_CLEARANCE);
-    } else if (beam.stemDown) {
-      reachDown(extent.bottom + INK_CLEARANCE);
-    }
+    if (beam.staff === upStaff && !beam.stemDown) reachUp(extent.top - INK_CLEARANCE);
+    if (beam.staff === downStaff && beam.stemDown) reachDown(extent.bottom + INK_CLEARANCE);
   }
 
   const topExtent = trebleReach === Number.POSITIVE_INFINITY ? 0 : -trebleReach;
   const trebleTop = Math.max(TREBLE_TOP, Math.ceil(topExtent));
+
+  if (single) {
+    // One staff, so there is no gap to open for dynamics: the mark goes under
+    // the staff and the bottom margin grows for it instead.
+    const dynamicsPad = hasDynamics ? DYNAMICS_ROW_PX : 0;
+    const floor = BOTTOM_MARGIN + dynamicsPad;
+    const bottomExtent =
+      bassReach === Number.NEGATIVE_INFINITY
+        ? floor
+        : Math.max(floor, Math.ceil(bassReach - STAFF_H) + dynamicsPad);
+    const staffBottom = trebleTop + STAFF_H;
+    return {
+      trebleTop,
+      // Collapsed onto the one staff. Drawing goes through `staffTops` and
+      // `systemBottom`, so nothing should read this — but if something slips
+      // past a guard it lands on the staff, visibly wrong, rather than off the
+      // canvas or as NaN.
+      bassTop: trebleTop,
+      minHeight: staffBottom + bottomExtent,
+      pedalRow: staffBottom + Math.max(PEDAL_ROW_PX, bottomExtent - PEDAL_ROW_PX * 0.6),
+      dynamicsRow: staffBottom + GAP * 1.8,
+    };
+  }
+
   // Nothing else reserves the gap between the staves, so a take with dynamics
   // opens it up for them; one without keeps the geometry it always had.
   const staffSpacing = STAFF_SPACING + (hasDynamics ? DYNAMICS_ROW_PX : 0);
@@ -317,6 +354,20 @@ export interface ScoreView {
   dynamicsRow: number;
   /** Width of the fixed prefix; `gutterWidthFor` the take's key signature. */
   gutterPx: number;
+  /**
+   * Which staves to draw. Defaults to 'grand' — the Play page's.
+   *
+   * Must match what `computeScoreGeometry` was given: the staff origins and
+   * the height both come from there, and disagreeing draws one staff into a
+   * canvas sized for two, gutter fill and all.
+   */
+  staves?: StaffMode;
+  /**
+   * How much furniture the bar carries. 'bare' drops the time signature and
+   * the measure number — everything that describes a *bar* rather than a note,
+   * which is noise when the whole picture is one note being read.
+   */
+  chrome?: 'full' | 'bare';
 }
 
 export interface GhostNote {
@@ -340,10 +391,48 @@ export interface ScoreRenderInput {
   recording: boolean;
   openNotes: readonly OpenRecordingNote[];
   ghosts: readonly GhostNote[];
+  /**
+   * Notes to draw lit because the user is holding that key right now —
+   * independent of the playhead, which is the other reason a head lights.
+   * Learn uses it so a lesson's stave and the keyboard under it agree.
+   */
+  litMidis?: ReadonlySet<number>;
 }
 
 function staffTopFor(view: ScoreView, staff: StaffKind): number {
   return staff === 'treble' ? view.trebleTop : view.bassTop;
+}
+
+const GRAND_STAVES = ['treble', 'bass'] as const;
+const TREBLE_ONLY = ['treble'] as const;
+const BASS_ONLY = ['bass'] as const;
+
+function isGrand(view: ScoreView): boolean {
+  return view.staves === undefined || view.staves === 'grand';
+}
+
+/** The kinds of staff this view draws, top to bottom. */
+function stavesOf(view: ScoreView): readonly StaffKind[] {
+  if (isGrand(view)) return GRAND_STAVES;
+  return view.staves === 'bass' ? BASS_ONLY : TREBLE_ONLY;
+}
+
+/**
+ * The staff origins this view draws. A single staff takes the treble slot
+ * whichever clef it carries, so the collapsed geometry has only one y to give.
+ */
+function staffTops(view: ScoreView): readonly number[] {
+  return isGrand(view) ? [view.trebleTop, view.bassTop] : [view.trebleTop];
+}
+
+/** Whether this view draws `staff` at all. */
+function drawsStaff(view: ScoreView, staff: StaffKind): boolean {
+  return isGrand(view) || view.staves === staff;
+}
+
+/** Bottom line of the lowest staff — where a system ends. */
+function systemBottom(view: ScoreView): number {
+  return (isGrand(view) ? view.bassTop : view.trebleTop) + STAFF_H;
 }
 
 function yForStep(view: ScoreView, staff: StaffKind, step: number): number {
@@ -390,7 +479,7 @@ function drawStaffLines(
 ): void {
   ctx.strokeStyle = palette.staffLine;
   ctx.lineWidth = 1;
-  for (const top of [view.trebleTop, view.bassTop]) {
+  for (const top of staffTops(view)) {
     for (let line = 0; line < 5; line += 1) {
       const y = top + line * GAP + 0.5;
       ctx.beginPath();
@@ -417,16 +506,24 @@ function drawMeasures(
 
   for (const measure of layout.measures) {
     if (measure.endMs < fromMs || measure.startMs > toMs) continue;
+    // A note that exactly fills its bar spills a second, empty measure into the
+    // layout — and that measure brings a bar line and a whole rest with it. A
+    // bare view draws the music, not the silence around it.
+    if (view.chrome === 'bare' && measure.empty) continue;
     const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
     if (x >= view.gutterPx - 8) {
       ctx.lineWidth = 1;
       ctx.beginPath();
-      ctx.moveTo(x, view.trebleTop);
-      ctx.lineTo(x, view.trebleTop + STAFF_H);
-      ctx.moveTo(x, view.bassTop);
-      ctx.lineTo(x, view.bassTop + STAFF_H);
+      for (const top of staffTops(view)) {
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, top + STAFF_H);
+      }
       ctx.stroke();
-      ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
+      // A measure number describes the bar, not the notes — noise when the
+      // whole picture is one note being read.
+      if (view.chrome !== 'bare') {
+        ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
+      }
       // A new tempo is announced where it takes over, as on paper.
       const previous = layout.measures[measure.index - 1];
       if (previous && previous.bpm !== measure.bpm) {
@@ -438,9 +535,10 @@ function drawMeasures(
       const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
       if (cx > view.gutterPx && cx < view.widthPx) {
         ctx.fillStyle = palette.rest;
-        for (const top of [view.trebleTop, view.bassTop]) {
+        for (const top of staffTops(view)) {
           drawRestGlyph(ctx, WHOLE_REST, cx, top, WHOLE_REST_STEP, GAP);
         }
+
         ctx.fillStyle = palette.measureNumber;
       }
     }
@@ -450,10 +548,10 @@ function drawMeasures(
   if (endX > view.gutterPx && endX < view.widthPx + 4) {
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(endX, view.trebleTop);
-    ctx.lineTo(endX, view.trebleTop + STAFF_H);
-    ctx.moveTo(endX, view.bassTop);
-    ctx.lineTo(endX, view.bassTop + STAFF_H);
+    for (const top of staffTops(view)) {
+      ctx.moveTo(endX, top);
+      ctx.lineTo(endX, top + STAFF_H);
+    }
     ctx.stroke();
   }
 }
@@ -505,6 +603,9 @@ function drawRests(
     if (rest.displayStartMs > toMs) break; // sorted by display start
     const x = xForMs(view, rest.displayStartMs);
     if (x < view.gutterPx) continue;
+    // A rest for a staff this view is not drawing would otherwise land on the
+    // one it *is*, measured from the wrong clef.
+    if (!drawsStaff(view, rest.staff)) continue;
     drawRestGlyph(ctx, rest.symbol, x, staffTopFor(view, rest.staff), rest.step, GAP);
   }
 }
@@ -584,9 +685,8 @@ function drawOctaves(
     const x1 = openLeft ? view.gutterPx : xForMs(view, octave.fromMs) - GAP * 0.64;
     const x2 = openRight ? view.widthPx : xForMs(view, octave.toMs) + GAP * 1.3;
     if (x2 <= x1) continue;
-    const y = octave.up
-      ? staffTopFor(view, 'treble') - GAP * 2.4
-      : staffTopFor(view, 'bass') + STAFF_H + GAP * 2.4;
+    if (!drawsStaff(view, octave.staff)) continue;
+    const y = octave.up ? view.trebleTop - GAP * 2.4 : systemBottom(view) + GAP * 2.4;
 
     let lineFrom = x1;
     if (!openLeft) {
@@ -806,7 +906,7 @@ function drawChords(
   palette: ScorePalette,
   beamLines: BeamLines,
 ): void {
-  const { layout, playheadMs } = input;
+  const { layout, playheadMs, litMidis } = input;
   const fromMs = view.scrollMs - 2000;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
   const start = firstChordIndexAt(layout.chords, fromMs);
@@ -814,7 +914,7 @@ function drawChords(
   for (let i = start; i < layout.chords.length; i += 1) {
     const chord = layout.chords[i] as ChordGroup;
     if (chord.displayStartMs > toMs) break;
-    drawChord(ctx, view, chord, playheadMs, palette, beamLines);
+    drawChord(ctx, view, chord, playheadMs, palette, beamLines, litMidis);
   }
 }
 
@@ -825,6 +925,7 @@ function drawChord(
   playheadMs: number,
   palette: ScorePalette,
   beamLines: BeamLines,
+  litMidis?: ReadonlySet<number>,
 ): void {
   const x = xForMs(view, chord.displayStartMs);
   if (x < view.gutterPx - 40) return;
@@ -862,8 +963,11 @@ function drawChord(
     const hx = headX(note);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
+    // Two independent reasons a head lights, kept named apart rather than
+    // folded together: the cursor is inside it, or the user is holding it.
     const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
-    const color = sounding ? palette.highlight : palette.note;
+    const held = litMidis?.has(note.midi) ?? false;
+    const color = sounding || held ? palette.highlight : palette.note;
 
     ctx.save();
     ctx.translate(hx, y);
@@ -1024,7 +1128,7 @@ function drawPlayhead(
   ctx.lineWidth = 1.6;
   ctx.beginPath();
   ctx.moveTo(x, view.trebleTop - 16);
-  ctx.lineTo(x, view.bassTop + STAFF_H + 12);
+  ctx.lineTo(x, systemBottom(view) + 12);
   ctx.stroke();
   ctx.fillStyle = palette.playhead;
   ctx.beginPath();
@@ -1101,10 +1205,9 @@ function drawClefChanges(
     if (!previous) continue;
     const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
     if (x < view.gutterPx + INLINE_CLEF_W || x > view.widthPx) continue;
-    for (const staff of ['treble', 'bass'] as const) {
+    for (const staff of stavesOf(view)) {
       if (previous.clefs[staff] === measure.clefs[staff]) continue;
-      const top = staff === 'treble' ? view.trebleTop : view.bassTop;
-      drawInlineClef(ctx, measure.clefs[staff], x, top, palette);
+      drawInlineClef(ctx, measure.clefs[staff], x, staffTopFor(view, staff), palette);
     }
   }
 }
@@ -1160,7 +1263,7 @@ function drawGutter(
   // System bar line joining the staffs at the left edge.
   ctx.beginPath();
   ctx.moveTo(4.5, view.trebleTop);
-  ctx.lineTo(4.5, view.bassTop + STAFF_H);
+  ctx.lineTo(4.5, systemBottom(view));
   ctx.stroke();
 
   ctx.fillStyle = palette.noteDim;
@@ -1170,8 +1273,9 @@ function drawGutter(
   // The gutter sits over the music, so it has to name the clef in force where
   // the view actually starts — not the one the piece opened with.
   const clefs = clefsAt(input.layout, view.scrollMs);
-  drawGutterClef(ctx, clefs.treble, view.trebleTop, palette);
-  drawGutterClef(ctx, clefs.bass, view.bassTop, palette);
+  for (const staff of stavesOf(view)) {
+    drawGutterClef(ctx, clefs[staff], staffTopFor(view, staff), palette);
+  }
 
   // Key signature between the clef and the time signature, read under
   // whichever clef each staff currently carries.
@@ -1180,8 +1284,8 @@ function drawGutter(
     const sign = signatureAccidental(fifths);
     ctx.fillStyle = palette.noteDim;
     ctx.strokeStyle = palette.noteDim;
-    for (const staff of ['treble', 'bass'] as const) {
-      const top = staff === 'treble' ? view.trebleTop : view.bassTop;
+    for (const staff of stavesOf(view)) {
+      const top = staffTopFor(view, staff);
       const steps = signatureSteps(fifths, clefs[staff]);
       for (let i = 0; i < steps.length; i += 1) {
         const y = top + STAFF_H - ((steps[i] as number) * GAP) / 2;
@@ -1191,15 +1295,18 @@ function drawGutter(
     ctx.fillStyle = palette.noteDim;
   }
 
-  // Time signature on both staffs.
-  ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;
-  ctx.textAlign = 'center';
-  const tsX = view.gutterPx - 14;
-  for (const top of [view.trebleTop, view.bassTop]) {
-    ctx.fillText(String(timeSignature.numerator), tsX, top + GAP * 1.8);
-    ctx.fillText(String(timeSignature.denominator), tsX, top + GAP * 3.9);
+  // Time signature on every staff drawn. Like the measure number, it describes
+  // the bar rather than the note, so a bare view leaves it off.
+  if (view.chrome !== 'bare') {
+    ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;
+    ctx.textAlign = 'center';
+    const tsX = view.gutterPx - 14;
+    for (const top of staffTops(view)) {
+      ctx.fillText(String(timeSignature.numerator), tsX, top + GAP * 1.8);
+      ctx.fillText(String(timeSignature.denominator), tsX, top + GAP * 3.9);
+    }
+    ctx.textAlign = 'left';
   }
-  ctx.textAlign = 'left';
 }
 
 /** Stylized G clef: spiral around the G line plus a tall flourish. */

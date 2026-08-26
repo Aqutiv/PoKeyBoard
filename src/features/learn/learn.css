@@ -1,0 +1,467 @@
+/* Level switch: one segment per level, filling the page width. Mirrors the
+   library folder switch so the two browsing surfaces feel like one app. */
+.learn-levels {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+}
+
+/* Three segments at 320px leave ~92px each, and "Intermediate" needs ~88px at
+   14px — so the type steps down on narrow screens, and ellipsis backs it up
+   for whichever locale still overruns. */
+.learn-levels__option {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+  padding: 0 6px;
+  border-radius: calc(var(--radius-m) - 2px);
+  color: var(--text-dim);
+  font-size: clamp(11px, 3vw, 14px);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.learn-levels__option.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.learn-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.learn-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Sticks to the top of the scroller as its chapters pass beneath it — hence
+   the opaque page background rather than a transparent one. Same treatment as
+   the library's composer headings. */
+.learn-part__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0;
+  padding: 14px 2px 6px;
+  background: var(--surface-0);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.learn-part:first-child .learn-part__heading {
+  padding-top: 2px;
+}
+
+.learn-item {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+}
+
+.learn-item.is-completed {
+  border-color: var(--accent);
+}
+
+/* Mouse only: on touch, :hover would stick to the last-tapped row.
+   Twin of the .library-item and .take-item blocks — keep the three in step.
+   The `:not(.is-comingSoon)` has no counterpart there and is not tidiness: an
+   unwritten chapter is a disabled button, so lifting it would promise a click
+   that does nothing. */
+@media (hover: hover) and (pointer: fine) {
+  .learn-item:not(.is-comingSoon):hover {
+    background: var(--surface-2);
+    border-color: var(--border-strong);
+  }
+
+  .learn-item.is-completed:hover {
+    border-color: var(--accent-strong);
+  }
+
+  .learn-levels__option:not(.is-selected):hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  /* Already at --surface-2 at rest, so it takes the step above — the same
+     reasoning the Takes ⋯ button uses. Every choice is disabled once the
+     round is answered, hence the guard. */
+  .learn-quiz__choice:not(:disabled):hover {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+  }
+}
+
+/* Unwritten chapters stay legible: the outline is how a newcomer sees where
+   this goes, so a locked card is dimmed, not hidden. */
+.learn-item.is-comingSoon {
+  opacity: 0.55;
+}
+
+.learn-item__main {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 11px 12px;
+  text-align: left;
+}
+
+.learn-item__main:disabled {
+  cursor: default;
+}
+
+.learn-item__number {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.learn-item__lock {
+  width: 13px;
+  height: 13px;
+}
+
+.learn-item__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+}
+
+.learn-item__blurb {
+  margin-top: 2px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--text-dim);
+}
+
+.learn-item__meta:not(:empty) {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+/* -------------------------------- */
+/* Chapter runner                    */
+/* -------------------------------- */
+
+/* Same shape as .play-layout: the card scrolls, the keyboard keeps its band.
+   Without min-height:0 a long lesson would push the keys off the screen. */
+.learn-runner {
+  gap: 8px;
+}
+
+.learn-runner__bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.learn-runner__title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.learn-runner__step {
+  margin: 2px 0 0;
+  font-size: 12px;
+  color: var(--text-faint);
+}
+
+.learn-runner__close {
+  flex-shrink: 0;
+  width: var(--touch-target);
+  height: var(--touch-target);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+}
+
+.learn-runner__close svg {
+  width: 19px;
+  height: 19px;
+}
+
+.learn-runner__card {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-l, var(--radius-m));
+}
+
+.learn-card__heading {
+  margin: 0 0 8px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.learn-card__body {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--text-dim);
+}
+
+.learn-card__listen,
+.learn-card__outro {
+  margin-top: 4px;
+}
+
+.learn-runner__footer {
+  flex-shrink: 0;
+  display: flex;
+  gap: 8px;
+}
+
+.learn-runner__footer .btn {
+  flex: 1;
+}
+
+.learn-runner__keyboard {
+  flex: 0 0 auto;
+  height: clamp(150px, 32vh, 300px);
+  display: flex;
+  flex-direction: column;
+}
+
+.learn-runner__keyboard .piano {
+  flex: 1;
+}
+
+/* A short phone gives the card barely 180px once the keyboard, footer and nav
+   have taken their share — enough to hide a whole answer row. Buy some back
+   from the key bed and the padding; the card still scrolls beyond that. */
+@media (max-height: 640px) {
+  .learn-runner__keyboard {
+    height: clamp(130px, 26vh, 300px);
+  }
+
+  .learn-runner__card {
+    padding: 10px;
+  }
+
+  .learn-card__body {
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .learn-card__heading {
+    font-size: 16px;
+    margin-bottom: 6px;
+  }
+
+  .learn-quiz .learn-diagram__keys {
+    height: 62px;
+  }
+}
+
+/* -------------------------------- */
+/* Exercise panel                    */
+/* -------------------------------- */
+
+.learn-exercise {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.learn-exercise__prompt {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.learn-exercise__progress {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+
+.learn-exercise__shift {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.learn-exercise__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.learn-exercise__actions:not(:empty) {
+  margin-top: 10px;
+}
+
+/* -------------------------------- */
+/* Quiz panel                        */
+/* -------------------------------- */
+
+.learn-quiz {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* The answer row and the score have to be reachable without scrolling the
+   card, so the quiz gets a tighter question than a theory step's. */
+.learn-quiz .learn-diagram,
+.learn-quiz .learn-staff,
+.learn-exercise .learn-staff {
+  margin: 0 0 8px;
+}
+
+.learn-quiz .learn-diagram__keys {
+  height: 74px;
+}
+
+.learn-quiz__prompt {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+/* Wraps to two rows on a narrow phone rather than shrinking below the touch
+   target — seven letters will not fit on one line at 320px. */
+.learn-quiz__choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.learn-quiz__choice {
+  flex: 1 1 auto;
+  min-width: 38px;
+  min-height: var(--touch-target);
+  padding: 0 4px;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  font-family: var(--font-display);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.learn-quiz__choice:disabled {
+  opacity: 0.5;
+}
+
+.learn-quiz__status {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: var(--accent-strong);
+}
+
+/* -------------------------------- */
+/* Diagrams and snippets             */
+/* -------------------------------- */
+
+.learn-diagram {
+  margin: 4px 0 12px;
+}
+
+/* Positioning context for the absolutely-placed .piano-key children, which
+   carry their own look from keyboard.css. */
+.learn-diagram__keys {
+  position: relative;
+  height: 96px;
+  border-radius: 0 0 6px 6px;
+  overflow: hidden;
+}
+
+.learn-diagram .piano-key {
+  pointer-events: none;
+}
+
+/* Primary mark: painted, for whatever the step is naming. */
+.learn-diagram .piano-key--white.is-diagram-mark,
+.learn-diagram .piano-key--black.is-diagram-mark {
+  background: var(--accent);
+}
+
+/* Secondary mark: an outline. `--accent` and `--accent-strong` are within a
+   shade of each other in both themes, so two rings would read as one group of
+   ten rather than as groups of two and three — the whole point of the step. */
+.learn-diagram .piano-key--white.is-diagram-mark-2,
+.learn-diagram .piano-key--black.is-diagram-mark-2 {
+  box-shadow: inset 0 0 0 2.5px var(--accent);
+}
+
+.learn-diagram .piano-key.is-diagram-mark .learn-diagram__label {
+  color: var(--accent-contrast);
+}
+
+.learn-diagram__label {
+  position: absolute;
+  bottom: 6px;
+  left: 0;
+  width: 100%;
+  text-align: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--key-label, #6d6355);
+}
+
+/* Chapters 1 and 2 only ever labelled white keys, so this case had never
+   rendered: --key-label is a mid grey that all but disappears on the black-key
+   gradient. A black key is narrow, so the name also has to hold its own at a
+   smaller size. */
+.learn-diagram .piano-key--black .learn-diagram__label {
+  color: var(--ivory, #efe9dc);
+  font-size: 10px;
+}
+
+.learn-diagram .piano-key.is-diagram-mark .learn-diagram__label {
+  color: var(--accent-contrast);
+}
+
+.learn-staff {
+  margin: 4px 0 12px;
+}
+
+.learn-staff__canvas {
+  display: block;
+  width: 100%;
+}

@@ -30,6 +30,17 @@ const NAV_ITEMS: NavItem[] = [
     ),
   },
   {
+    route: 'learn',
+    labelKey: 'learn',
+    icon: (
+      <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
+        <path d="M12 4 2.5 8.5 12 13l9.5-4.5z" />
+        <path d="M6.5 10.6v4.6c0 .4.2.7.5.9 1.4.9 3.2 1.4 5 1.4s3.6-.5 5-1.4c.3-.2.5-.5.5-.9v-4.6" />
+        <path d="M21.5 8.5v5.5" />
+      </svg>
+    ),
+  },
+  {
     route: 'library',
     labelKey: 'library',
     icon: (

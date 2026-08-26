@@ -33,7 +33,7 @@ async function rowCount(page: Page, selector: string): Promise<number> {
   });
 }
 
-const ROWS = ['.transport__buttons', '.metronome', '.piano__controls'];
+const ROWS = ['.transport__buttons', '.metronome', '.piano__controls', '.app-nav'];
 
 test.describe('narrow portrait phone', () => {
   test.use({ viewport: { width: 320, height: 568 } });
@@ -44,6 +44,29 @@ test.describe('narrow portrait phone', () => {
     for (const selector of ROWS) {
       expect.soft(await clippedControls(page, selector), selector).toEqual([]);
     }
+  });
+
+  test('keeps the three Learn level labels inside their segments', async ({ page }) => {
+    // Three segments share ~92px each here, and "Intermediate" needs ~88px at
+    // the full 14px — hence the type step-down, with ellipsis behind it.
+    await gotoAppReady(page);
+    await page.goto('/#/learn');
+    await expect(page.getByRole('group', { name: 'Learn level' })).toBeVisible();
+    expect(await clippedControls(page, '.learn-levels')).toEqual([]);
+  });
+
+  test('keeps every nav label inside its own tab', async ({ page }) => {
+    // Six tabs leave ~52px each here, which is narrower than the longest label
+    // in some locales — the labels ellipsis rather than push each other out.
+    await gotoAppReady(page);
+    const overflowing = await page
+      .locator('.app-nav')
+      .evaluate((navBar) =>
+        [...navBar.children]
+          .filter((item) => item.scrollWidth > item.clientWidth + 0.5)
+          .map((item) => item.textContent ?? ''),
+      );
+    expect(overflowing).toEqual([]);
   });
 });
 

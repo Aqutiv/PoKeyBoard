@@ -7,6 +7,7 @@ import {
   type QuantizationSetting,
 } from '@/domain/takeTypes';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
+import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
 import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
@@ -37,6 +38,8 @@ export interface SettingsState {
   sheetPaperSize: PaperSize;
   /** The library folder last opened, restored on the next visit. */
   libraryFolder: LibraryFolderId;
+  /** The Learn level last browsed, restored on the next visit. */
+  learnLevel: LearnLevelId;
 
   setLanguage(language: SupportedLanguage): void;
   setTheme(theme: ThemePreference): void;
@@ -54,6 +57,7 @@ export interface SettingsState {
   setKeyboardAnchorMidi(midi: number): void;
   setSheetPaperSize(size: PaperSize): void;
   setLibraryFolder(folder: LibraryFolderId): void;
+  setLearnLevel(level: LearnLevelId): void;
   resetSettings(): void;
 }
 
@@ -74,6 +78,7 @@ export const SETTINGS_DEFAULTS = {
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
   sheetPaperSize: 'a4' as PaperSize,
   libraryFolder: DEFAULT_LIBRARY_FOLDER,
+  learnLevel: DEFAULT_LEARN_LEVEL,
 };
 
 /**
@@ -105,6 +110,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),
   setLibraryFolder: (libraryFolder) => set({ libraryFolder }),
+  setLearnLevel: (learnLevel) => set({ learnLevel }),
   resetSettings: () => {
     void audioEngine.setInstrument(SETTINGS_DEFAULTS.pianoInstrument);
     set({ ...SETTINGS_DEFAULTS });

@@ -23,6 +23,9 @@ src/
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
     keyboard/   geometry, per-pointer tracker, computer keyboard, PianoKeyboard
+    learn/      chapter catalog, pure exercise spec + matcher, useExercise,
+                LearnPage (outline), ChapterRunner, KeyboardDiagram,
+                StaffSnippet, per-locale lesson content
     notation/   staffMapping, quantization, notationLayout, scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
                 scrubController, sheetLayout (pure paginated engraving),
@@ -100,6 +103,42 @@ that field, a switch invalidates cached exports on its own.
 ## Scrubbing
 
 `getCrossedNoteOnsets(prev, next, sortedNotes)` is pure and binary-searched with asymmetric boundaries — forward `(prev, next]`, backward `(next, prev)` — so chords travel together and boundary jitter can't double-fire. The scrub controller adds hysteresis (3 ms), a per-move audition cap, clamped preview voices, and a key-flash set; `MusicScore` translates drags into times (playhead visually fixed, score moves) and continues feeding the controller during inertial coasting.
+
+## Learn
+
+A chapter is data, not code: an ordered list of steps, each either theory (prose
+plus an optional keyboard diagram, staff snippet, or Listen demo) or an exercise
+carrying an `ExerciseSpec`. `exerciseMatcher.ts` is a pure reducer over that spec
+— no React, no `AudioContext` — so the whole matching suite runs headless;
+`useExercise` adds only the `subscribeInput` subscription, the held-note
+bookkeeping the engine does not do for us, and the hint/skip timers. Adding a
+chapter should add content, not engine.
+
+Three facts about the engine shape the design. `scheduleNote` emits no input
+events, so a Listen demo can never be mistaken for the user playing — that is
+what makes the "press Listen, the exercise stays at 0 of 3" guarantee free.
+`noteOn` emits nothing when no sample is decoded, so the runner gates exercises
+on `subscribeLoadProgress` and reports readiness through the same
+`data-piano-ready` attribute Play uses. `noteOff` emits unconditionally, so the
+matcher tolerates orphan releases.
+
+A chapter runs full-screen on the Learn route rather than as a dialog over Play,
+because two mounted `PianoKeyboard`s would each attach a `ComputerKeyboardInput`
+to `window` — doubling every keypress into two voices under one source id — and
+the second unmount would clear the first one's sustain. The runner keeps its own
+keyboard anchor (`anchorMidi` / `onAnchorChange`) so a lesson never relocates the
+Play keyboard, and `targetMidis` lights the keys a step is asking for, styled
+apart from the keys the user is holding. Simultaneity specs always allow a short
+onset window as well as a true overlap: a mouse is one pointer and physically
+cannot hold two keys.
+
+Chapter titles and blurbs live in `Messages`, translated in all four locales;
+lesson prose lives in per-locale modules under `features/learn/content/` with a
+per-string English fallback. Prose in the catalog would ship every locale's text
+to every user (`i18n/index.ts` imports all four eagerly) and length-lock every
+paragraph across locales (the parity test walks arrays by index). The level
+toggle is an ordinary setting; chapter progress is a metadata row, Zod-parsed on
+read and therefore device-local rather than part of the settings backup.
 
 ## Persistence and cache invalidation
 

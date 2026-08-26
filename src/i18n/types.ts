@@ -59,6 +59,67 @@ export interface Repair {
 }
 
 /**
+ * One entry per Learn chapter, keyed by chapter id. Declaring the keys here
+ * rather than as a `Record<string, string>` is what makes a missing chapter
+ * title a compile error in all four locales — the same trick
+ * `library.descriptions` uses. Chapters are listed in curriculum order.
+ */
+export interface LearnChapterMessages {
+  // Beginner
+  meetTheKeyboard: string;
+  musicalAlphabet: string;
+  halfStepsWholeSteps: string;
+  trebleStaff: string;
+  bassAndGrandStaff: string;
+  rhythmAndBeat: string;
+  firstMelody: string;
+  cMajorScale: string;
+  triads: string;
+  chordsPedalAndHands: string;
+  // Intermediate
+  howToPractise: string;
+  keySignatures: string;
+  scalesBeyondC: string;
+  minorKeys: string;
+  intervals: string;
+  inversions: string;
+  rhythmBeyondFourFour: string;
+  arpeggios: string;
+  accompanimentPatterns: string;
+  dynamicsAndArticulation: string;
+  // Advanced
+  seventhChords: string;
+  functionalHarmony: string;
+  modes: string;
+  twoHandIndependence: string;
+  ornaments: string;
+  sightReading: string;
+  playingByEar: string;
+  songForm: string;
+  leadSheets: string;
+  improvising: string;
+}
+
+/**
+ * The three named parts each level is divided into, so ten chapters read as a
+ * journey rather than a list. Same compile-enforced-keys trick as above.
+ */
+export interface LearnPartMessages {
+  // Beginner
+  theInstrument: string;
+  readingMusic: string;
+  playing: string;
+  // Intermediate
+  gettingSerious: string;
+  harmonyBuildingBlocks: string;
+  playingWithStyle: string;
+  // Advanced
+  richerHarmony: string;
+  independenceAndControl: string;
+  makingItYourOwn: string;
+}
+
+/**
  * The full message catalog. Static entries are strings; dynamic entries are
  * typed functions so each locale owns its own interpolation and pluralization.
  * Declaring this as an interface makes every locale object compile-time-checked
@@ -67,6 +128,7 @@ export interface Repair {
 export interface Messages {
   nav: {
     play: string;
+    learn: string;
     library: string;
     takes: string;
     settings: string;
@@ -221,6 +283,54 @@ export interface Messages {
       goodNight: string;
       moonlightSonata: string;
     };
+  };
+  learn: {
+    title: string;
+    hint: string;
+    levelLabel: string;
+    levels: {
+      beginner: string;
+      intermediate: string;
+      advanced: string;
+    };
+    chapterNumber: (p: { order: number }) => string;
+    openLabel: (p: { title: string }) => string;
+    lockedLabel: (p: { title: string }) => string;
+    comingSoon: string;
+    completed: string;
+    resumeAt: (p: { step: number }) => string;
+    stepOf: (p: { step: number; steps: number }) => string;
+    progress: (p: { done: number; total: number }) => string;
+    exerciseDone: string;
+    listen: string;
+    showMe: string;
+    skipStep: string;
+    tryAgain: string;
+    next: string;
+    back: string;
+    finish: string;
+    close: string;
+    /** Shown when the exercise still needs notes but none are on screen. */
+    shiftHint: string;
+    loadingPiano: string;
+    loadingChapter: string;
+    diagramLabel: string;
+    staffLabel: string;
+    tryOnPlay: string;
+    backToChapters: string;
+    /** Recognition steps: a key lights up and the user names it. */
+    quizPrompt: string;
+    quizCorrect: string;
+    quizWrong: (p: { answer: string }) => string;
+    quizAnswerLabel: (p: { note: string }) => string;
+    /** Drill steps: the app names a note and the user finds it. */
+    playNote: (p: { note: string }) => string;
+    /** Reading rounds, where the question is a staff rather than a name. */
+    readNotePrompt: string;
+    playWhatYouSee: string;
+    chapterTitles: LearnChapterMessages;
+    chapterBlurbs: LearnChapterMessages;
+    partTitles: LearnPartMessages;
   };
   importDialog: {
     title: string;

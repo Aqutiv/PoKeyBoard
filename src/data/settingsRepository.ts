@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
 import { QUANTIZATION_SETTINGS } from '@/domain/takeTypes';
+import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { SETTINGS_DEFAULTS, type SettingsState } from '@/state/useSettingsStore';
 import { db } from './db';
@@ -24,6 +25,7 @@ const SETTING_SCHEMAS = {
   keyboardAnchorMidi: z.number().int().min(21).max(108),
   sheetPaperSize: z.enum(['a4', 'letter']),
   libraryFolder: z.enum(LIBRARY_FOLDER_IDS),
+  learnLevel: z.enum(LEARN_LEVEL_IDS),
 } satisfies Record<keyof PersistableSettings, z.ZodType>;
 
 /** Load persisted settings, ignoring unknown keys and bad values. */

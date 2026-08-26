@@ -175,3 +175,19 @@
     min-width: 62px;
   }
 }
+
+/* Learn targets: the key the lesson is asking for. Drawn as an accent ring on
+   the resting key rather than a fill, because `.is-active` has to stay the
+   louder signal — what the user is holding is truth, this is only a request.
+   The `:not(.is-active)` keeps that true regardless of rule order. */
+.piano-key--white.is-target:not(.is-active) {
+  box-shadow:
+    inset 0 0 0 2.5px var(--accent),
+    inset 0 -4px 6px rgba(0, 0, 0, 0.16);
+}
+
+.piano-key--black.is-target:not(.is-active) {
+  box-shadow:
+    inset 0 0 0 2px var(--accent),
+    0 4px 7px rgba(0, 0, 0, 0.55);
+}
