@@ -132,7 +132,9 @@ button {
   letter-spacing: 0.02em;
   color: var(--text-dim);
   border-radius: var(--radius-m);
-  transition: color 120ms ease, background 120ms ease;
+  transition:
+    color 120ms ease,
+    background 120ms ease;
 }
 
 .app-nav__item svg {
@@ -319,7 +321,9 @@ button {
   border-radius: var(--radius-m);
   color: var(--text);
   font-size: 14px;
-  transition: background 120ms ease, border-color 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .btn:not(:disabled):active {
