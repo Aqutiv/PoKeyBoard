@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { PitchClass } from '@/features/learn/exerciseSpec';
 import type { QuizStep } from '@/features/learn/types';
+import { phraseToNotes } from '@/features/learn/phrase';
 import { QUIZ_BASE_MIDI, quizPitchClassAt, useQuiz } from '@/features/learn/useQuiz';
 
 const WHITE: readonly PitchClass[] = [0, 2, 4, 5, 7, 9, 11];
@@ -111,5 +112,39 @@ describe('useQuiz', () => {
     const { result } = renderHook(() => useQuiz(null));
     expect(result.current.total).toBe(0);
     expect(result.current.satisfied).toBe(false);
+  });
+});
+
+describe('useQuiz reading rounds', () => {
+  it('draws a bass question on the bass staff', () => {
+    const bassStep: QuizStep = {
+      id: 'whichBassNote',
+      kind: 'quiz',
+      rounds: 5,
+      question: { kind: 'readNote', pitchClasses: [0, 2, 4, 5, 7], baseMidi: 48, staff: 'bass' },
+    };
+    const { result } = renderHook(() => useQuiz(bassStep));
+    expect(result.current.staves).toBe('bass');
+    expect(result.current.midi).toBeLessThan(60);
+    expect(phraseToNotes(result.current.phrase!)[0]?.staff).toBe('bass');
+  });
+
+  it('leaves a question that says nothing on the treble staff', () => {
+    const trebleStep: QuizStep = {
+      id: 'whichNote',
+      kind: 'quiz',
+      rounds: 5,
+      question: { kind: 'readNote', pitchClasses: [0, 2, 4, 5, 7], baseMidi: 60 },
+    };
+    const { result } = renderHook(() => useQuiz(trebleStep));
+    expect(result.current.staves).toBe('treble');
+    expect(phraseToNotes(result.current.phrase!)[0]?.staff).toBeUndefined();
+  });
+
+  it('draws nothing for a key-naming round', () => {
+    const { result } = renderHook(() => useQuiz(step));
+    expect(result.current.phrase).toBeNull();
+    // The panel shows a keyboard diagram instead, so the mode is unread.
+    expect(result.current.staves).toBe('treble');
   });
 });

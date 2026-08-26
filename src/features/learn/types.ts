@@ -1,5 +1,6 @@
-import type { TimeSignature } from '@/domain/takeTypes';
+import type { NoteStaff, TimeSignature } from '@/domain/takeTypes';
 import type { TrackEvent } from '@/features/library/trackBuilder';
+import type { StaffMode } from '@/features/notation/scoreRenderer';
 import type { Messages } from '@/i18n/types';
 import type { ExerciseSpec, PitchClass } from './exerciseSpec';
 import type { NoteSpelling } from './noteLabel';
@@ -105,6 +106,16 @@ export type DrillPool =
       pitchClasses: readonly PitchClass[];
       /** Octave the notes are drawn in, as a midi offset. C4 by default. */
       baseMidi?: number;
+      /**
+       * Which staff to write the note on, and to draw. Treble by default.
+       *
+       * Stated rather than derived from `baseMidi`, because the note the
+       * derivation would get wrong is the one the bass chapter is *about*:
+       * middle C is exactly `TREBLE_SPLIT_MIDI`, and it is legitimately
+       * written on either staff. A second splitting rule living beside
+       * `midiToStaffPosition` could only ever disagree with it.
+       */
+      staff?: NoteStaff;
     };
 
 export type QuizQuestion =
@@ -125,6 +136,8 @@ export type QuizQuestion =
        * is where every note of the first reading chapter lives.
        */
       baseMidi?: number;
+      /** Which staff to write the note on, and to draw. See `DrillPool`. */
+      staff?: NoteStaff;
     };
 
 export type LearnVisual =
@@ -143,7 +156,19 @@ export type LearnVisual =
       /** Arbitrary text per key — finger numbers, degrees — over `labels`. */
       labelText?: Readonly<Record<number, string>>;
     }
-  | { kind: 'staff'; phrase: LearnPhrase };
+  | {
+      kind: 'staff';
+      phrase: LearnPhrase;
+      /**
+       * Which staves the picture draws. Treble by default.
+       *
+       * Stated rather than derived from the notes, so that the catalog test
+       * asserting the two agree has something to compare. Making the
+       * disagreement unrepresentable would also make the renderer bug it
+       * guards against impossible to catch.
+       */
+      staves?: StaffMode;
+    };
 
 /**
  * A short musical example, in the library's authoring format — so one written

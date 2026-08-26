@@ -1,7 +1,8 @@
+import type { StaffMode } from '@/features/notation/scoreRenderer';
 import type { ExerciseSpec } from './exerciseSpec';
 import { noteLabel } from './noteLabel';
 import { roundEntryAt } from './rounds';
-import { singleNotePhrase } from './staffPhrase';
+import { singleNotePhrase, staffModeFor } from './staffPhrase';
 import type { DrillPool, LearnPhrase } from './types';
 
 /** Middle C — where the first reading chapter's five notes start. */
@@ -15,6 +16,8 @@ export interface DrillRound {
   label: string;
   /** A staff showing the note to play, for reading rounds. */
   phrase?: LearnPhrase;
+  /** Which staves that phrase is drawn on. Treble unless the pool says. */
+  staves?: StaffMode;
 }
 
 /**
@@ -41,7 +44,8 @@ export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null 
     return {
       spec: { kind: 'exactKeys', midis: [midi] },
       label: '',
-      phrase: singleNotePhrase(midi),
+      phrase: singleNotePhrase(midi, pool.staff),
+      staves: staffModeFor(pool.staff),
     };
   }
   return {

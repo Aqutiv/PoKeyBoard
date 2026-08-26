@@ -1,3 +1,6 @@
+import type { NoteStaff } from '@/domain/takeTypes';
+import type { TrackEvent } from '@/features/library/trackBuilder';
+import type { StaffMode } from '@/features/notation/scoreRenderer';
 import { midiToNoteName } from '@/utils/midi';
 import type { LearnPhrase } from './types';
 
@@ -6,10 +9,10 @@ import type { LearnPhrase } from './types';
 const PHRASE_BPM = 60;
 const BAR_BEATS = 4;
 
-const cache = new Map<number, LearnPhrase>();
+const cache = new Map<string, LearnPhrase>();
 
 /**
- * A phrase showing one note, cached by midi.
+ * A phrase showing one note, cached by midi and staff.
  *
  * The cache is not about speed — it is about **identity**. `StaffSnippet`
  * memoizes its engraved layout on the phrase object, and `ChapterRunner`
@@ -17,16 +20,33 @@ const cache = new Map<number, LearnPhrase>();
  * A phrase built inline would therefore re-run the engraver and tear down a
  * `ResizeObserver` on every keystroke; a cached one is referentially stable
  * for as long as the round lasts.
+ *
+ * The key is composite because middle C on the bass staff and middle C on the
+ * treble staff are one pitch and two different pictures.
  */
-export function singleNotePhrase(midi: number): LearnPhrase {
-  let phrase = cache.get(midi);
+export function singleNotePhrase(midi: number, staff?: NoteStaff): LearnPhrase {
+  const key = staff === undefined ? `${midi}` : `${midi}|${staff}`;
+  let phrase = cache.get(key);
   if (!phrase) {
+    const name = midiToNoteName(midi);
+    // Spelled out rather than spread, so the tuple keeps inferring as a
+    // `TrackEvent` instead of widening to an array of unions.
+    const event: TrackEvent =
+      staff === undefined ? [0, name, BAR_BEATS, 0.7] : [0, name, BAR_BEATS, 0.7, staff];
     phrase = {
       bpm: PHRASE_BPM,
       timeSignature: { numerator: 4, denominator: 4 },
-      events: [[0, midiToNoteName(midi), BAR_BEATS, 0.7]],
+      events: [event],
     };
-    cache.set(midi, phrase);
+    cache.set(key, phrase);
   }
   return phrase;
+}
+
+/**
+ * The view a note-level staff hint asks for. Undefined means the treble staff,
+ * which is what every chapter before the bass one draws.
+ */
+export function staffModeFor(staff?: NoteStaff): StaffMode {
+  return staff ?? 'treble';
 }

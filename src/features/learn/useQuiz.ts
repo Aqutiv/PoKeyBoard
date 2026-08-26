@@ -1,9 +1,10 @@
 import { useCallback, useState } from 'react';
+import type { StaffMode } from '@/features/notation/scoreRenderer';
 import type { PitchClass } from './exerciseSpec';
 import { DEFAULT_STAFF_BASE_MIDI } from './drill';
 import type { NoteSpelling } from './noteLabel';
 import { roundEntryAt } from './rounds';
-import { singleNotePhrase } from './staffPhrase';
+import { singleNotePhrase, staffModeFor } from './staffPhrase';
 import type { LearnPhrase, QuizQuestion, QuizStep } from './types';
 
 /** The octave the quiz draws its keys from — C4 up to B4. */
@@ -29,6 +30,8 @@ export interface QuizSession {
   kind: QuizQuestion['kind'];
   /** For a reading round, the staff to draw. */
   phrase: LearnPhrase | null;
+  /** Which staves that phrase is drawn on. */
+  staves: StaffMode;
   answer: (choice: PitchClass) => void;
 }
 
@@ -84,6 +87,7 @@ export function useQuiz(step: QuizStep | null): QuizSession {
   const reading = question?.kind === 'readNote';
   const midi =
     (reading ? (question.baseMidi ?? DEFAULT_STAFF_BASE_MIDI) : QUIZ_BASE_MIDI) + pitchClass;
+  const staff = reading ? question.staff : undefined;
 
   return {
     midi,
@@ -94,7 +98,8 @@ export function useQuiz(step: QuizStep | null): QuizSession {
     wrong,
     spelling: question?.spelling ?? 'sharp',
     kind: question?.kind ?? 'nameTheKey',
-    phrase: reading ? singleNotePhrase(midi) : null,
+    phrase: reading ? singleNotePhrase(midi, staff) : null,
+    staves: staffModeFor(staff),
     answer,
   };
 }

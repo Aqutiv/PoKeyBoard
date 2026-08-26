@@ -2,6 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '@/audio/AudioEngine';
 import { drillRoundAt } from '@/features/learn/drill';
+import { phraseToNotes } from '@/features/learn/phrase';
 import type { ExerciseSpec, PitchClass } from '@/features/learn/exerciseSpec';
 import type { DrillPool, DrillStep } from '@/features/learn/types';
 import { useDrill } from '@/features/learn/useDrill';
@@ -24,7 +25,28 @@ const readingStep: DrillStep = {
   drill: { kind: 'readNote', pitchClasses: [0, 2, 4, 5, 7], baseMidi: 60 },
 };
 
+/** Chapter 5's shape: the same question, drawn on the other staff. */
+const bassReadingPool: DrillPool = {
+  kind: 'readNote',
+  pitchClasses: [0, 2, 4, 5, 7],
+  baseMidi: 48,
+  staff: 'bass',
+};
+
 describe('drillRoundAt', () => {
+  it('draws a bass reading round on the bass staff', () => {
+    const round = drillRoundAt(bassReadingPool, 0);
+    expect(round?.staves).toBe('bass');
+    expect(phraseToNotes(round!.phrase!)[0]?.staff).toBe('bass');
+  });
+
+  it('leaves a reading round that says nothing on the treble staff', () => {
+    // Chapter 4 passes no staff, and must keep drawing exactly as it did.
+    const round = drillRoundAt(readingStep.drill, 0);
+    expect(round?.staves).toBe('treble');
+    expect(phraseToNotes(round!.phrase!)[0]?.staff).toBeUndefined();
+  });
+
   it('turns a round into a spec and the label to ask for', () => {
     const round = drillRoundAt(pool, 0);
     expect(round?.spec).toEqual({ kind: 'pitchClass', pitchClass: 1 });
