@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteEvent } from '@/domain/takeTypes';
+import type { NoteEvent, NoteStaff } from '@/domain/takeTypes';
 import { layoutScore, type ScoreLayout } from '@/features/notation/notationLayout';
 import {
   computeScoreGeometry,
@@ -8,6 +8,7 @@ import {
   SCORE_PALETTES,
   type ScoreRenderInput,
   type ScoreView,
+  type StaffMode,
 } from '@/features/notation/scoreRenderer';
 
 /**
@@ -86,14 +87,25 @@ const LAYOUT_OPTS = {
 } as const;
 
 /** One whole note filling its bar, as every Learn snippet is built. */
-function oneNote(midi: number): ScoreLayout {
-  const note: NoteEvent = { id: 'n', midi, startMs: 0, durationMs: 4000, velocity: 0.7 };
+function oneNote(midi: number, staff?: NoteStaff): ScoreLayout {
+  const note: NoteEvent = {
+    id: 'n',
+    midi,
+    startMs: 0,
+    durationMs: 4000,
+    velocity: 0.7,
+    ...(staff !== undefined ? { staff } : {}),
+  };
   const score = layoutScore([note], LAYOUT_OPTS);
   return { ...score, dynamics: [], hairpins: [], rests: [] };
 }
 
-function render(layout: ScoreLayout, extra: Partial<ScoreRenderInput> = {}): Recorder {
-  const geometry = computeScoreGeometry(layout, { staves: 'treble' });
+function render(
+  layout: ScoreLayout,
+  extra: Partial<ScoreRenderInput> = {},
+  staves: StaffMode = 'treble',
+): Recorder {
+  const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
   const view: ScoreView = {
     widthPx: 300,
@@ -105,7 +117,7 @@ function render(layout: ScoreLayout, extra: Partial<ScoreRenderInput> = {}): Rec
     pedalRow: geometry.pedalRow,
     dynamicsRow: geometry.dynamicsRow,
     gutterPx: gutterWidthFor(0),
-    staves: 'treble',
+    staves,
     chrome: 'bare',
   };
   drawScore(
@@ -162,5 +174,58 @@ describe('drawScore bare chrome', () => {
     const drawn = render(oneNote(60));
     expect(drawn.texts).not.toContain('4');
     expect(drawn.texts).not.toContain('1');
+  });
+});
+
+describe('drawScore single-staff filtering', () => {
+  // A single-staff view collapses `bassTop` onto `trebleTop`, so a chord from
+  // the staff it is not showing is not harmlessly off-canvas: it lands on the
+  // staff that *is* drawn, measured from the other clef's reference line —
+  // roughly a sixth from where it belongs, with nothing to say so.
+  //
+  // `litMidis` is the probe rather than a stroke count because the highlight
+  // colour is used for note heads and nothing else.
+  it('draws a note whose staff the view shows', () => {
+    const drawn = render(oneNote(60, 'bass'), { litMidis: new Set([60]) }, 'bass');
+    expect(drawn.strokes).toContain(highlight);
+  });
+
+  it('leaves out a note belonging to the staff the view does not show', () => {
+    // C4 with no hint resolves to the treble staff, so a bass-only view has
+    // no business drawing it at all.
+    const drawn = render(oneNote(60), { litMidis: new Set([60]) }, 'bass');
+    expect(drawn.strokes).not.toContain(highlight);
+  });
+
+  it('draws both staves of a grand view', () => {
+    const bass = render(oneNote(53, 'bass'), { litMidis: new Set([53]) }, 'grand');
+    expect(bass.strokes).toContain(highlight);
+    const treble = render(oneNote(60, 'treble'), { litMidis: new Set([60]) }, 'grand');
+    expect(treble.strokes).toContain(highlight);
+  });
+});
+
+describe('drawScore clefs', () => {
+  // The gutter names the clef in force with a glyph, so which clef a lesson
+  // snippet draws is assertable rather than something only a screenshot sees.
+  const TREBLE_CLEF = '\u{1D11E}';
+  const BASS_CLEF = '\u{1D122}';
+
+  it('draws a treble clef, and only that, for a treble view', () => {
+    const drawn = render(oneNote(60), {}, 'treble');
+    expect(drawn.texts).toContain(TREBLE_CLEF);
+    expect(drawn.texts).not.toContain(BASS_CLEF);
+  });
+
+  it('draws an F clef, and only that, for a bass view', () => {
+    const drawn = render(oneNote(53, 'bass'), {}, 'bass');
+    expect(drawn.texts).toContain(BASS_CLEF);
+    expect(drawn.texts).not.toContain(TREBLE_CLEF);
+  });
+
+  it('draws both clefs for a grand view', () => {
+    const drawn = render(oneNote(60, 'treble'), {}, 'grand');
+    expect(drawn.texts).toContain(TREBLE_CLEF);
+    expect(drawn.texts).toContain(BASS_CLEF);
   });
 });
