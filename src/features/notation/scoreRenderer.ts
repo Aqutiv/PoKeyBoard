@@ -914,6 +914,14 @@ function drawChords(
   for (let i = start; i < layout.chords.length; i += 1) {
     const chord = layout.chords[i] as ChordGroup;
     if (chord.displayStartMs > toMs) break;
+    // A single-staff view collapses `bassTop` onto `trebleTop`, so a chord from
+    // the staff this view is *not* showing is not harmlessly off-canvas — it
+    // lands on the staff that is, measured from the other clef's reference
+    // line, silently a third and a bit away from where it belongs. `drawRests`
+    // and `drawOctaves` already filter; this did not. `drawTies` and
+    // `computeBeamLines` still do not, but neither can fire for a lesson
+    // snippet, which is whole notes with no ties.
+    if (!drawsStaff(view, chord.staff)) continue;
     drawChord(ctx, view, chord, playheadMs, palette, beamLines, litMidis);
   }
 }

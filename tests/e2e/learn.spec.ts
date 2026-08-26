@@ -85,7 +85,13 @@ function persistedSetting(page: Page, key: string): Promise<unknown> {
   );
 }
 
-/** Press and release a computer-keyboard note (KeyA is C4). */
+/**
+ * Press and release a computer-keyboard note.
+ *
+ * `KeyA` is the C at or below the lesson's anchor — C4 for chapters 1-4, C3
+ * for the bass chapter. The two rows are chromatic from there, so `KeyK` is
+ * always the C an octave up.
+ */
 async function playKey(page: Page, code: string): Promise<void> {
   await page.keyboard.down(code);
   await page.keyboard.up(code);
@@ -159,13 +165,14 @@ test.describe('learn outline', () => {
       'The Musical Alphabet',
       'Half Steps, Whole Steps & the Black Keys',
       'Reading the Treble Staff',
+      'The Bass Staff & the Grand Staff',
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
     await expect(
-      page.getByRole('button', { name: 'The Bass Staff & the Grand Staff — coming soon' }),
+      page.getByRole('button', { name: 'Rhythm & the Beat — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(6);
+    await expect(page.getByText('Coming soon')).toHaveCount(5);
   });
 });
 
@@ -660,5 +667,162 @@ test.describe('chapter four', () => {
     await expect(page.getByRole('heading', { name: 'And back down' })).toBeVisible();
     for (const code of ['KeyG', 'KeyF', 'KeyD', 'KeyS', 'KeyA']) await playKey(page, code);
     await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+});
+
+test.describe('chapter five', () => {
+  const CHAPTER = 'The Bass Staff & the Grand Staff';
+
+  /** The reading pool's stride-3 order, shared by the quiz and the drill. */
+  const READING_LETTERS = ['C', 'F', 'D', 'G', 'E'];
+  /** The same five, as keys. With the base at C3 these are C3 F3 D3 G3 E3. */
+  const READING_CODES = ['KeyA', 'KeyF', 'KeyS', 'KeyG', 'KeyD'];
+
+  /**
+   * Each helper walks an already-open chapter one gate further and leaves the
+   * runner on the step it names. Next is disabled until a step is satisfied,
+   * so there is no way past an exercise except to play it.
+   *
+   * They never re-open the chapter: `session.ts` holds the open chapter in
+   * module state, so going back to the outline mid-lesson lands straight back
+   * in the runner rather than on the level toggle.
+   */
+  async function toPlayBassF(page: Page): Promise<void> {
+    await nextButton(page).click(); // the bass clef
+    await nextButton(page).click(); // play the F it points at
+    await expect(page.getByRole('heading', { name: 'Play what you see' })).toBeVisible();
+  }
+
+  async function toQuiz(page: Page): Promise<void> {
+    await toPlayBassF(page);
+    await playKey(page, 'KeyF'); // F3
+    // Middle C from above, the five notes, the fingering, then the quiz.
+    for (let i = 0; i < 4; i += 1) await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'Which note is this?' })).toBeVisible();
+  }
+
+  async function toDrill(page: Page): Promise<void> {
+    await toQuiz(page);
+    for (const letter of READING_LETTERS) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+    }
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'Play the note shown' })).toBeVisible();
+  }
+
+  async function toRun(page: Page): Promise<void> {
+    await toDrill(page);
+    for (const code of READING_CODES) {
+      await playKey(page, code);
+      await settleDrillHold(page);
+    }
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'Play the whole run' })).toBeVisible();
+  }
+
+  async function toGrandStaff(page: Page): Promise<void> {
+    await toRun(page);
+    for (const code of ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG']) await playKey(page, code);
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'The two staves together' })).toBeVisible();
+  }
+
+  const canvasHeight = (page: Page) =>
+    page
+      .locator('.learn-staff__canvas')
+      .first()
+      .evaluate((el) => (el as HTMLCanvasElement).clientHeight);
+
+  test('takes the computer keyboard down to the register it is teaching', async ({ page }) => {
+    // The bass chapter is the first to park below middle C. Without the base
+    // octave following the anchor, `KeyA` would sound C4 here — a note that is
+    // itself on screen, so `needsRangeShift` would stay quiet and the lesson
+    // would simply look broken.
+    await openChapter(page, CHAPTER);
+    await toPlayBassF(page);
+    await expect(page.locator('.piano__range')).toContainText('C3');
+    await expect(progressLine(page)).toHaveText('0 of 1');
+    await expect(nextButton(page)).toBeDisabled();
+
+    await playKey(page, 'KeyA'); // C3 — a bass note, but not the written one
+    await expect(progressLine(page)).toHaveText('0 of 1');
+    await playKey(page, 'KeyF'); // F3, the note the clef's two dots point at
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('draws one staff for the bass lesson and two for the grand staff', async ({ page }) => {
+    // The visible proof that `staves` reached both `computeScoreGeometry` and
+    // the draw view: only the geometry decides the canvas height, so a grand
+    // snippet that is no taller means the two disagreed.
+    await openChapter(page, CHAPTER);
+    await expect(page.getByRole('heading', { name: 'There is a second stave' })).toBeVisible();
+    const single = await canvasHeight(page);
+    expect(single).toBeGreaterThan(0);
+    expect(single).toBeLessThan(192);
+
+    await toGrandStaff(page);
+    expect(await canvasHeight(page)).toBeGreaterThan(single);
+  });
+
+  test('asks the reading quiz on a stave rather than a keyboard', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await toQuiz(page);
+    await expect(page.locator('.learn-quiz .learn-staff__canvas')).toHaveCount(1);
+    await expect(page.locator('.learn-quiz .learn-diagram')).toHaveCount(0);
+    await expect(nextButton(page)).toBeDisabled();
+
+    for (const [index, letter] of READING_LETTERS.entries()) {
+      await page.getByRole('button', { name: `Answer ${letter}` }).click();
+      const done = index + 1;
+      await expect(page.locator('.learn-quiz__status')).toHaveText(
+        done === 5 ? 'Nicely done.' : `${done} of 5`,
+      );
+    }
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('grades a bass reading round on the exact note drawn', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await toDrill(page);
+    await expect(page.locator('.learn-exercise .learn-staff__canvas')).toHaveCount(1);
+    await expect(progressLine(page)).toHaveText('0 of 5');
+
+    // A C, but the octave above the one written: same letter, different line,
+    // and the drawn head would still be dark.
+    await playKey(page, 'KeyK');
+    await settleDrillHold(page);
+    await expect(progressLine(page)).toHaveText('0 of 5');
+
+    for (const [index, code] of READING_CODES.entries()) {
+      await playKey(page, code); // C3, F3, D3, G3, E3
+      const done = index + 1;
+      await expect(progressLine(page)).toHaveText(done === 5 ? 'Nicely done.' : `${done} of 5`);
+      await settleDrillHold(page);
+    }
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('plays one note in each hand at once', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await toGrandStaff(page);
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'One note in each hand' })).toBeVisible();
+
+    // Anchored at F3 so both notes fit the seven white keys a 320px phone
+    // shows; the base still snaps down to the C below, which is why the left
+    // hand's F3 is KeyF and middle C is KeyK.
+    await expect(page.locator('.piano__range')).toContainText('F3');
+    await expect(progressLine(page)).toHaveText('0 of 2');
+
+    await page.keyboard.down('KeyF'); // F3, left hand
+    await expect(progressLine(page)).toHaveText('1 of 2');
+    await page.keyboard.down('KeyK'); // middle C, right hand — held together
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await page.keyboard.up('KeyK');
+    await page.keyboard.up('KeyF');
+    // Satisfied stays satisfied once the hands come off.
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
   });
 });

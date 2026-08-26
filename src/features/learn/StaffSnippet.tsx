@@ -7,6 +7,7 @@ import {
   gutterWidthFor,
   SCORE_LEAD_IN,
   SCORE_PALETTES,
+  type StaffMode,
 } from '@/features/notation/scoreRenderer';
 import { phraseToNotes } from './phrase';
 import type { LearnPhrase } from './types';
@@ -14,12 +15,6 @@ import type { LearnPhrase } from './types';
 /** Far enough behind the start that `drawPlayhead` bails on its own guard. */
 const NO_PLAYHEAD_MS = -1e9;
 
-/**
- * Stated once and used twice, deliberately. `computeScoreGeometry` sizes the
- * canvas and `ScoreView` decides what is drawn into it; if the two disagree,
- * a one-staff picture lands in a two-staff canvas — gutter fill and all.
- */
-const STAVES = 'treble' as const;
 const RIGHT_PAD_PX = 16;
 
 const subscribeTheme = (onChange: () => void): (() => void) => themeController.subscribe(onChange);
@@ -36,6 +31,15 @@ interface StaffSnippetProps {
    * thing be brute-forced on the keyboard — `QuizPanel` never passes this.
    */
   litMidis?: ReadonlySet<number>;
+  /**
+   * Which staves to draw. `'treble'` by default, because every chapter before
+   * the bass staff draws exactly one.
+   *
+   * Taken once and used twice, deliberately. `computeScoreGeometry` sizes the
+   * canvas and `ScoreView` decides what is drawn into it; if the two disagree,
+   * a one-staff picture lands in a two-staff canvas — gutter fill and all.
+   */
+  staves?: StaffMode;
 }
 
 /**
@@ -44,7 +48,12 @@ interface StaffSnippetProps {
  * page inside a themed card; this path is theme-aware and carries no page
  * furniture to crop away.
  */
-export function StaffSnippet({ phrase, ariaLabel, litMidis }: StaffSnippetProps) {
+export function StaffSnippet({
+  phrase,
+  ariaLabel,
+  litMidis,
+  staves = 'treble',
+}: StaffSnippetProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const theme = useSyncExternalStore(subscribeTheme, getTheme, getTheme);
 
@@ -66,7 +75,7 @@ export function StaffSnippet({ phrase, ariaLabel, litMidis }: StaffSnippetProps)
     // this performance leave over", and a worked example is not a performance.
     return { ...score, dynamics: [], hairpins: [], rests: [] };
   }, [phrase]);
-  const geometry = useMemo(() => computeScoreGeometry(layout, { staves: STAVES }), [layout]);
+  const geometry = useMemo(() => computeScoreGeometry(layout, { staves }), [layout, staves]);
 
   // Kept in a ref so the ResizeObserver can be created once and still call the
   // current closure. The runner re-renders on every note-on and note-off, and
@@ -109,7 +118,7 @@ export function StaffSnippet({ phrase, ariaLabel, litMidis }: StaffSnippetProps)
           pedalRow: geometry.pedalRow,
           dynamicsRow: geometry.dynamicsRow,
           gutterPx,
-          staves: STAVES,
+          staves,
           chrome: 'bare',
         },
         {
@@ -131,7 +140,7 @@ export function StaffSnippet({ phrase, ariaLabel, litMidis }: StaffSnippetProps)
     // `litMidis` is safe to depend on by identity: the engine replaces its
     // active-note set only when the set actually changes, so an equal-but-new
     // object never reaches here.
-  }, [layout, geometry, phrase.timeSignature, theme, litMidis]);
+  }, [layout, geometry, phrase.timeSignature, theme, litMidis, staves]);
 
   // A static canvas has no redraw loop of its own to catch a resize. Created
   // once and left alone; it calls whichever draw closure is current.

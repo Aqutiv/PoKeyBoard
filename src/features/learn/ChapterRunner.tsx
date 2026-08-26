@@ -274,6 +274,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
         {step?.visual?.kind === 'staff' ? (
           <StaffSnippet
             phrase={step.visual.phrase}
+            staves={step.visual.staves}
             ariaLabel={m.learn.staffLabel}
             litMidis={heldMidis}
           />
@@ -299,6 +300,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
             {drill.round?.phrase ? (
               <StaffSnippet
                 phrase={drill.round.phrase}
+                staves={drill.round.staves}
                 ariaLabel={m.learn.staffLabel}
                 litMidis={heldMidis}
               />

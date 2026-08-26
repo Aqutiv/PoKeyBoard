@@ -26,7 +26,11 @@ export function QuizPanel({ session }: QuizPanelProps) {
         // on purpose — naming the note here would announce the answer, and for
         // the same reason no `litMidis` is passed: lighting the head when the
         // matching key is pressed would let the quiz be brute-forced.
-        <StaffSnippet phrase={session.phrase} ariaLabel={m.learn.staffLabel} />
+        <StaffSnippet
+          phrase={session.phrase}
+          staves={session.staves}
+          ariaLabel={m.learn.staffLabel}
+        />
       ) : (
         <KeyboardDiagram
           lowMidi={QUIZ_LOW_MIDI}

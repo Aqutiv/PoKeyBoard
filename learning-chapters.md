@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 4     | 6         |
+| Beginner     | 5     | 5         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -32,11 +32,11 @@ _Never touched a piano → a simple piece, hands together._
 
 ### Part 2 — Reading music
 
-| #   | Chapter                          | Teaches                                                                                                            | Exercises validate                                                                                                 |
-| --- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
-| 4   | **Reading the Treble Staff** ✅  | Staff, lines and spaces, treble clef; middle C on its ledger line; right-hand five-finger position; finger numbers | play middle C off the stave · name a written note ×5 · play a written note ×5 · the five-note run up and back down |
-| 5   | The Bass Staff & the Grand Staff | Bass clef and its own lines and spaces; left hand below middle C; how the staves join                              | read and play bass-clef notes; a grand-staff pair, one note per hand                                               |
-| 6   | Rhythm & the Beat                | Pulse; 4/4 and the time signature; whole/half/quarter/eighth and rests; bar lines; the metronome                   | tap a steady pulse with the click; play a written rhythm on one pitch, in time                                     |
+| #   | Chapter                                 | Teaches                                                                                                            | Exercises validate                                                                                                 |
+| --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
+| 4   | **Reading the Treble Staff** ✅         | Staff, lines and spaces, treble clef; middle C on its ledger line; right-hand five-finger position; finger numbers | play middle C off the stave · name a written note ×5 · play a written note ×5 · the five-note run up and back down |
+| 5   | **The Bass Staff & the Grand Staff** ✅ | Bass clef and its own lines and spaces; left hand below middle C; how the staves join                              | read and play bass-clef notes; a grand-staff pair, one note per hand                                               |
+| 6   | Rhythm & the Beat                       | Pulse; 4/4 and the time signature; whole/half/quarter/eighth and rests; bar lines; the metronome                   | tap a steady pulse with the click; play a written rhythm on one pitch, in time                                     |
 
 ### Part 3 — Playing
 
@@ -187,10 +187,22 @@ octave above is a different answer rather than a near-miss. It would also
 complete the round with the drawn head still dark, teaching the opposite of
 the lesson.
 
-Notation for a lesson is drawn treble-only and low-chrome: `ScoreView` takes
-`staves: 'treble' | 'bass' | 'grand'` and `chrome: 'bare' | 'full'`, and
-`computeScoreGeometry(layout, { staves })` collapses the height to match. Both
-default to the grand staff with full chrome, so the Play page is untouched.
+Notation for a lesson is drawn low-chrome, on whichever staves it asks for:
+`ScoreView` takes `staves: 'treble' | 'bass' | 'grand'` and
+`chrome: 'bare' | 'full'`, and `computeScoreGeometry(layout, { staves })`
+collapses the height to match. Both default to the grand staff with full
+chrome, so the Play page is untouched. `StaffSnippet` takes `staves` as a prop
+and hands it to _both_ the geometry and the draw view — if those two disagree,
+a one-staff picture lands in a two-staff canvas.
+
+A single staff is drawn in the treble slot whichever clef it carries, so
+`bassTop` collapses onto `trebleTop`. That makes filtering by staff a
+correctness matter rather than an optimisation: `drawChords` now skips a chord
+`drawsStaff` says this view does not show, because otherwise it would be drawn
+on the staff that _is_ shown, measured from the other clef's reference line —
+the wrong line, silently. `drawTies` and `computeBeamLines` still do not
+filter; neither can fire for a lesson snippet, which is whole notes with no
+ties.
 `StaffSnippet` also blanks `rests`, because `deriveRests` answers "what silence
 did this performance leave over" and a worked example is not a performance.
 
@@ -217,7 +229,7 @@ key is C♯ or D♭.
 | `pitchClass`    | one named pitch class, optionally in N octaves             | B1, B2, B3     |
 | `blackKeyGroup` | a whole group of 2 or 3 black keys                         | B1             |
 | `interval`      | two notes N semitones apart, optionally pitch-class pinned | B1, B3, I5     |
-| `exactKeys`     | exactly these midis                                        | B9, A1         |
+| `exactKeys`     | exactly these midis                                        | B5, B9, A1     |
 | `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I3 |
 
 An `interval` with no `lowerPitchClass` and no `together` reads the cumulative
@@ -249,6 +261,16 @@ Learned the hard way; violating any of these produces a silent failure.
   a modal quiz or dialog would silently kill note input for the whole lesson.
 - **Space is the sustain pedal** and is `preventDefault`ed, so a focused button
   will not activate on it. Keep Next reachable with Enter; bind nothing to Space.
+- **The computer keyboard follows a lesson's anchor, snapped down to a C.**
+  `BaseOctave` is what Z/X move and what the letter rows play from; it is not
+  the visible range, and before chapter 5 nothing kept the two in the same
+  register. A lesson below middle C was therefore unplayable from a computer
+  keyboard — `A` sounded C4, which is _on screen_, so `needsRangeShift` stayed
+  quiet (it only fires when **no** target is in range). `PianoKeyboard` now
+  moves the base with an externally-driven anchor. Snapped down to a C, because
+  `KEY_TO_SEMITONE` is chromatic from the base with the black keys on the upper
+  row: a base that is not a C puts the black row on white keys. A step anchored
+  at E4 therefore keeps the base at C4, exactly as before.
 - **A phone shows about one octave.** At 375px the keyboard auto-sizes to ~9
   white keys, so anything needing three of the same note requires the range
   shifter. Design that in as content rather than working around it — chapter 1
@@ -279,10 +301,12 @@ Learned the hard way; violating any of these produces a silent failure.
   which `drawChord` gives no stem — but a beam can span notes with different
   lit states, so "what colour is a half-lit beam" is a real question for
   chapter 6's rhythm work to answer rather than for this to have guessed.
-- **A note below middle C needs an explicit `staff` hint.**
-  `midiToStaffPosition` splits on `TREBLE_SPLIT_MIDI = 60`, so without one a low
-  note silently moves to the bass staff. `phraseToNotes` passes the hint through
-  (the fifth element of a `TrackEvent`); chapter 4 needs none, chapter 5 will.
+- ~~**A note below middle C needs an explicit `staff` hint.**~~ Answered by
+  chapter 5. `midiToStaffPosition` still splits on `TREBLE_SPLIT_MIDI = 60`, but
+  a lesson no longer relies on it: `LearnVisual` carries `staves`, a `readNote`
+  quiz or drill pool carries `staff`, and chapter 5 states the staff on every
+  note it writes — because the note the split gets wrong is middle C itself,
+  which the chapter draws on both staves on purpose.
 
 ---
 

@@ -126,6 +126,27 @@ export function PianoKeyboard({
   // velocity or the toggle changes and would otherwise reset it to C4.
   const [baseOctave] = useState(() => new BaseOctave());
 
+  // Where the anchor is driven from outside — a Learn lesson parking the
+  // keyboard on the register it is teaching — follow it into that register, so
+  // the letter rows reach what is on screen rather than wherever Z/X last left
+  // them. Without this a lesson pitched below middle C is quietly unplayable
+  // from a computer keyboard: `A` sounds C4, the written note stays dark, and
+  // `needsRangeShift` says nothing, because it only fires when *no* target is
+  // on screen — one reachable note silences it for the other.
+  //
+  // Snapped **down to a C**, not to the anchor itself. `KEY_TO_SEMITONE` is
+  // chromatic from the base with the black keys on the upper row, so a base
+  // that is not a C puts the black row on white keys and reads as a different
+  // instrument from the one on screen. A lesson anchored at E4 therefore keeps
+  // the base at C4, exactly as before.
+  //
+  // Play passes no override — it persists its own anchor — so this is inert
+  // there, and Z/X keep their absolute meaning outside a lesson.
+  useEffect(() => {
+    if (anchorMidiOverride === undefined) return;
+    baseOctave.set(Math.floor(layout.lowMidi / 12) * 12);
+  }, [anchorMidiOverride, layout.lowMidi, baseOctave]);
+
   // Load any sample roots the playable registers need: the visible range, plus
   // wherever Z/X and the bumpers have moved the base. Those notes are off
   // screen, so nothing else asks for them, and a root more than nine semitones
