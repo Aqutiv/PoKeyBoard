@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  anchorToReveal,
   BLACK_KEY_HEIGHT,
   computeVisibleWhites,
   FULL_RANGE_HIGH,
@@ -210,6 +211,19 @@ describe('helpers', () => {
     expect(snapToWhite(61, -1)).toBe(60);
     expect(snapToWhite(61, 1)).toBe(62);
     expect(snapToWhite(60)).toBe(60);
+  });
+
+  it('reveals a midi outside the window and leaves one inside alone', () => {
+    // C3 anchor, 14 whites: C3 (48) through B4 (71).
+    expect(anchorToReveal(60, 48, 14)).toBe(48);
+    // Below: the window starts on the note itself, snapped to a white key.
+    expect(anchorToReveal(36, 48, 14)).toBe(36);
+    expect(anchorToReveal(37, 48, 14)).toBe(36);
+    // Above: the window ends on the note, so it lands at the right edge.
+    expect(anchorToReveal(84, 48, 14)).toBe(stepWhites(84, 14, -1));
+    // Clamped at both ends of the piano.
+    expect(anchorToReveal(21, 48, 14)).toBe(FULL_RANGE_LOW);
+    expect(anchorToReveal(108, 48, 14)).toBe(maxLowMidiFor(14));
   });
 
   it('produces soft-to-strong touch velocity', () => {

@@ -431,6 +431,18 @@ export const fr: Messages = {
     gamepad: 'Jouer avec une manette',
     gamepadHint:
       'La croix directionnelle et les boutons d’action jouent une octave, de do à do : gauche, haut, droite, bas, puis X, Y, B, A. Les gâchettes supérieures changent d’octave, la gâchette gauche tient la pédale et la droite monte la note d’un demi-ton. Touchez d’abord l’écran une fois : une manette seule ne peut pas démarrer l’audio.',
+    midi: 'Jouer avec un clavier MIDI',
+    midiHint:
+      'Branchez un clavier MIDI USB et jouez PoKeyBoard depuis ses propres touches, avec sa dynamique et sa pédale de sustain. Ses boutons d’octave fonctionnent : le piano suit là où vous jouez. Le pitch bend décale les touches affichées au lieu de modifier la note, et la commande de volume agit sur le volume général. Touchez d’abord l’écran une fois : un clavier MIDI seul ne peut pas démarrer l’audio.',
+    midiConnect: 'Connecter un clavier MIDI',
+    midiConnecting: 'Recherche de périphériques MIDI…',
+    midiDenied:
+      'L’accès MIDI a été bloqué. Autorisez le MIDI pour ce site dans les réglages de votre navigateur, puis réessayez.',
+    midiUnsupported:
+      'Ce navigateur ne prend pas en charge Web MIDI. Chrome, Edge et Opera le font, sur ordinateur et Android ; Safari et Firefox non.',
+    midiNoDevices: 'Aucun clavier MIDI trouvé. Branchez-en un : il est détecté automatiquement.',
+    midiDevices: ({ names }) => `Connecté : ${names}`,
+    midiError: 'Impossible de démarrer le MIDI.',
     checking: 'Vérification…',
     downloadPiano: ({ piano, size }) => `Télécharger ${piano} (${size})`,
     deletePiano: ({ piano }) => `Supprimer le téléchargement de ${piano}`,
@@ -478,6 +490,7 @@ export const fr: Messages = {
       pointerEvents: 'Événements de pointeur',
       touch: 'Saisie tactile',
       gamepad: 'API de manette de jeu',
+      webMidi: 'API Web MIDI',
     },
   },
   about: {

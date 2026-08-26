@@ -106,6 +106,22 @@ export function maxLowMidiFor(visibleWhites: number): number {
 }
 
 /**
+ * The anchor that brings `midi` into a window of `visibleWhites` whites, or
+ * `lowMidi` unchanged when it is already in view. A MIDI keyboard sends
+ * absolute pitches from wherever its own octave buttons are set — a shift the
+ * app cannot see — so the window has to follow what actually arrives.
+ */
+export function anchorToReveal(midi: number, lowMidi: number, visibleWhites: number): number {
+  const highMidi = stepWhites(lowMidi, visibleWhites, 1);
+  if (midi >= lowMidi && midi <= highMidi) return lowMidi;
+  // Snap outward, so the note that triggered this lands fully inside rather
+  // than half under the edge.
+  const next =
+    midi < lowMidi ? snapToWhite(midi, -1) : stepWhites(snapToWhite(midi, 1), visibleWhites, -1);
+  return Math.min(maxLowMidiFor(visibleWhites), Math.max(FULL_RANGE_LOW, next));
+}
+
+/**
  * Lay out the keys of an inclusive midi range. Both ends are snapped to
  * white keys so the keyboard always starts and ends with a full white key.
  */

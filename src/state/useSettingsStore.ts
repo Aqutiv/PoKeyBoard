@@ -32,6 +32,9 @@ export interface SettingsState {
   backgroundPlayback: boolean;
   /** Let a connected game controller play the piano. */
   gamepadInput: boolean;
+  /** Let a connected MIDI keyboard play the piano. Off by default: turning it
+   *  on is what raises the browser's MIDI permission prompt. */
+  midiInput: boolean;
   metronomeVolume: number;
   displayQuantization: QuantizationSetting;
   keyboardAnchorMidi: number;
@@ -52,6 +55,7 @@ export interface SettingsState {
   setScrubAudition(enabled: boolean): void;
   setBackgroundPlayback(enabled: boolean): void;
   setGamepadInput(enabled: boolean): void;
+  setMidiInput(enabled: boolean): void;
   setMetronomeVolume(value: number): void;
   setDisplayQuantization(value: QuantizationSetting): void;
   setKeyboardAnchorMidi(midi: number): void;
@@ -73,6 +77,7 @@ export const SETTINGS_DEFAULTS = {
   scrubAudition: true,
   backgroundPlayback: false,
   gamepadInput: true,
+  midiInput: false,
   metronomeVolume: 0.6,
   displayQuantization: '1/16' as QuantizationSetting,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
@@ -105,6 +110,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),
+  setMidiInput: (midiInput) => set({ midiInput }),
   setMetronomeVolume: (metronomeVolume) => set({ metronomeVolume }),
   setDisplayQuantization: (displayQuantization) => set({ displayQuantization }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),

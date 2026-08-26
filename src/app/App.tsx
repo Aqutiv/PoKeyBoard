@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useMidiInput } from '@/features/keyboard/useMidiInput';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { AppNav } from './AppNav';
 import { AppProviders } from './providers';
@@ -69,6 +70,9 @@ function ExportDialogs() {
 }
 
 function Shell() {
+  // Lives here rather than with the key bed so a connected MIDI keyboard keeps
+  // playing on every tab, not just Play.
+  useMidiInput();
   return (
     <div className="app-shell">
       <div className="app-shell__content">

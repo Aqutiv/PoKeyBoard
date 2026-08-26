@@ -428,6 +428,18 @@ export const es: Messages = {
     gamepad: 'Tocar con un mando de juego',
     gamepadHint:
       'La cruceta y los botones frontales tocan una octava, de do a do: izquierda, arriba, derecha, abajo y luego X, Y, B, A. Los botones superiores cambian de octava, el gatillo izquierdo sostiene y el derecho sube la nota un semitono. Toca la pantalla una vez primero: un mando por sí solo no puede iniciar el audio.',
+    midi: 'Tocar con un teclado MIDI',
+    midiHint:
+      'Conecta un teclado MIDI USB y toca PoKeyBoard desde sus propias teclas, con su dinámica y su pedal de resonancia. Sus botones de octava funcionan: el piano sigue allí donde toques. El pitch bend desplaza las teclas visibles en lugar de alterar la nota, y el control de volumen mueve el volumen general. Toca la pantalla una vez primero: un teclado MIDI por sí solo no puede iniciar el audio.',
+    midiConnect: 'Conectar un teclado MIDI',
+    midiConnecting: 'Buscando dispositivos MIDI…',
+    midiDenied:
+      'Se bloqueó el acceso MIDI. Permite el MIDI para este sitio en la configuración de tu navegador y vuelve a intentarlo.',
+    midiUnsupported:
+      'Este navegador no admite Web MIDI. Chrome, Edge y Opera sí lo admiten, en escritorio y Android; Safari y Firefox no.',
+    midiNoDevices: 'No se encontró ningún teclado MIDI. Conecta uno: se detecta automáticamente.',
+    midiDevices: ({ names }) => `Conectado: ${names}`,
+    midiError: 'No se pudo iniciar el MIDI.',
     checking: 'Comprobando…',
     downloadPiano: ({ piano, size }) => `Descargar ${piano} (${size})`,
     deletePiano: ({ piano }) => `Eliminar la descarga de ${piano}`,
@@ -476,6 +488,7 @@ export const es: Messages = {
       pointerEvents: 'Eventos de puntero',
       touch: 'Entrada táctil',
       gamepad: 'API de mando de juego',
+      webMidi: 'API Web MIDI',
     },
   },
   about: {

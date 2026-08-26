@@ -2,7 +2,7 @@
 
 **▶ Live app: https://aqutiv.github.io/PoKeyBoard/**
 
-Play, record, and share piano performances — entirely in your browser. PoKeyBoard is an installable, offline-capable Progressive Web App: a sample-based grand piano with a multi-touch keyboard, live grand-staff notation, a metronome, structured note-event recording, audible score scrubbing, and one-tap MP3 sharing through the OS share sheet (WhatsApp, Messages, email, …).
+Play, record, and share piano performances — entirely in your browser. PoKeyBoard is an installable, offline-capable Progressive Web App: a sample-based grand piano with a multi-touch keyboard, computer-keyboard, game-controller and USB MIDI input, live grand-staff notation, a metronome, structured note-event recording, audible score scrubbing, and one-tap MP3 sharing through the OS share sheet (WhatsApp, Messages, email, …).
 
 No account. No backend. No microphone — "recording" captures the notes you play, and "audio export" re-renders them through the same piano engine into a real MP3.
 
@@ -79,7 +79,8 @@ Core app: current Safari (iPhone/iPad), Chrome (Android/Windows/macOS/Linux), Ed
 
 - Audio pauses when the app goes to the background by default. Settings can opt recorded-take playback into continuing while minimized or unfocused (device power policies may still stop it); recordings always finalize and save safely.
 - iPhone mutes web audio while the ring/silent switch is on silent; PoKeyBoard applies the standard media-session workaround, but if you hear nothing, check the switch.
-- One sustain-pedal timeline (no half-pedaling), single instrument, no external MIDI input, no cloud sync in v1.
+- One sustain-pedal timeline (no half-pedaling), single instrument, no cloud sync in v1.
+- MIDI input needs Web MIDI (Chrome, Edge and Opera, on desktop and Android; not Safari or Firefox) and is off until you enable it in Settings → **Playing**, which is what raises the browser's permission prompt. Every connected input plays, from any tab rather than only from Play; pitch bend shifts the visible keys and CC7 moves the master volume, since a sampled piano has no pitch to bend.
 - MusicXML import (Takes → _Import_ → _Music score (MXL)_, `.mxl`/`.musicxml`/`.xml`) is one-way: scores become playable takes, but repeats/ornaments are not expanded and there is no MusicXML export.
 - Importing from a link — Takes → _Import_ → _From a link (URL)_, or dragging a link straight onto the Takes screen — only works when the hosting site allows downloads from other origins. Raw GitHub, gists and jsDelivr do; most file-sharing and publisher pages do not. There is no proxy — a static host cannot have one — so when a link is refused, download the file and use the file picker instead.
 - Very long takes (over ~8 minutes) warn before export; renders are capped at 20 minutes to protect memory.
