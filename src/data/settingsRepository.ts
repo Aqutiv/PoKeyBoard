@@ -3,6 +3,7 @@ import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
 import { QUANTIZATION_SETTINGS } from '@/domain/takeTypes';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
+import { PLAYBACK_MODES, RECORD_MODES } from '@/features/transport/modes';
 import { SETTINGS_DEFAULTS, type SettingsState } from '@/state/useSettingsStore';
 import { db } from './db';
 
@@ -27,6 +28,8 @@ const SETTING_SCHEMAS = {
   sheetPaperSize: z.enum(['a4', 'letter']),
   libraryFolder: z.enum(LIBRARY_FOLDER_IDS),
   learnLevel: z.enum(LEARN_LEVEL_IDS),
+  recordMode: z.enum(RECORD_MODES),
+  playbackMode: z.enum(PLAYBACK_MODES),
 } satisfies Record<keyof PersistableSettings, z.ZodType>;
 
 /** Load persisted settings, ignoring unknown keys and bad values. */

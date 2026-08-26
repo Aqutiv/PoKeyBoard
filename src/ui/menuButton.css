@@ -41,3 +41,29 @@
 .menu-button__item:focus-visible {
   background: var(--surface-3);
 }
+
+/* Radio groups: a menu that holds settings rather than actions (transport
+   modes). The check column is always reserved so labels never shift. */
+.menu-button__group-label {
+  margin: 6px 12px 2px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.menu-button__item--radio {
+  width: 100%;
+  gap: 8px;
+}
+
+.menu-button__item--radio.is-checked {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.menu-button__check {
+  flex: 0 0 auto;
+  width: 12px;
+  text-align: center;
+}

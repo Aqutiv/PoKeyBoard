@@ -169,10 +169,18 @@ export interface Messages {
     stop: string;
     undoLastPass: string;
     undoPass: string;
+    modes: string;
+    modesMenu: string;
     recordingMode: string;
     overdub: string;
     replace: string;
     replaceConfirm: string;
+    playbackMode: string;
+    simple: string;
+    trainingLeft: string;
+    trainingRight: string;
+    trainingBoth: string;
+    waitingForYou: string;
     countIn: string;
     recording: string;
     emptyHint: string;

@@ -14,10 +14,12 @@ import {
   type PedalEvent,
 } from '@/domain/takeTypes';
 import { countInMsAt, createTakeTempoMap } from '@/domain/tempoMap';
+import { CHORD_WINDOW_MS, nextTrainingGate, type TrainingGate } from '@/domain/trainingGate';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { newId } from '@/utils/ids';
 import { beatDurationMs, clamp } from '@/utils/timing';
+import { trainingHandFor, type RecordMode } from './modes';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
 import { TransportClock } from './transportClock';
 import {
@@ -27,13 +29,15 @@ import {
   type TransportState,
 } from './transportMachine';
 
-export type RecordMode = 'overdub' | 'replace';
-
 const SCHEDULER_INTERVAL_MS = 25;
 const SCHEDULE_AHEAD_MS = 150;
 const START_SLACK_S = 0.06;
 /** Lead-in before the first practice click, so it is never scheduled late. */
 const PRACTICE_CLICK_LEAD_S = 0.05;
+/** How long a key the user got wrong stays lit; matches the scrub flash. */
+const WRONG_FLASH_MS = 260;
+
+const EMPTY_MIDIS: ReadonlySet<number> = new Set();
 
 interface OpenNote {
   id: string;
@@ -75,6 +79,16 @@ export class TransportController {
   private playNotes: NoteEvent[] = [];
   private playCursor = 0;
   private playDurationMs = 0;
+
+  // Training playback
+  private trainingGate: TrainingGate | null = null;
+  private trainingWaiting = false;
+  private readonly trainingSatisfied = new Set<number>();
+  private trainingInputUnsub: (() => void) | null = null;
+  /** Wrong keys pressed at a wait point, midi → when the flash expires. */
+  private readonly trainingWrong = new Map<number, number>();
+  /** Notes the user has just played live, so the take must not echo them. */
+  private trainingSkipNoteIds: ReadonlySet<string> | null = null;
 
   /** Callbacks fired when a recording pass has been finalized (autosave). */
   readonly onRecordingFinalized = new Set<() => void>();
@@ -175,6 +189,7 @@ export class TransportController {
   /** Enter scrubbing from idle/paused. The scrub controller drives times. */
   beginScrub(): boolean {
     if (!canTransition(this.state, 'SCRUB_START')) return false;
+    this.clearTrainingGate();
     this.scrubTimeMs = this.pausedPlayheadMs;
     return this.send('SCRUB_START');
   }
@@ -196,6 +211,7 @@ export class TransportController {
 
   seek(takeMs: number): void {
     if (this.state === 'playing' || this.state === 'recording' || this.state === 'countIn') return;
+    this.clearTrainingGate();
     const duration = this.takeDurationMs();
     this.pausedPlayheadMs = clamp(Math.round(takeMs), 0, duration);
     this.clock.seek(this.pausedPlayheadMs);
@@ -278,6 +294,7 @@ export class TransportController {
 
   async record(mode: RecordMode = 'overdub'): Promise<void> {
     if (!canTransition(this.state, 'RECORD')) return;
+    this.clearTrainingGate();
     await audioEngine.unlockFromUserGesture();
 
     // A library track is read-only: fork it into a fresh user take before
@@ -452,6 +469,20 @@ export class TransportController {
   // -------------------------------------------------------- playback --
 
   play(): void {
+    // Pressing Play at a training wait point lets that note through rather
+    // than fighting the hold: the take sounds it, since the user did not.
+    if (this.trainingWaiting && this.trainingGate) {
+      const gateMs = this.trainingGate.atMs;
+      this.endTrainingWait();
+      this.startPlayback({ skipNoteIds: null, gateFromMs: gateMs + CHORD_WINDOW_MS + 1 });
+      return;
+    }
+    this.startPlayback(null);
+  }
+
+  private startPlayback(
+    resume: { skipNoteIds: ReadonlySet<string> | null; gateFromMs: number } | null,
+  ): void {
     if (!canTransition(this.state, 'PLAY')) return;
     void audioEngine.unlockFromUserGesture();
 
@@ -466,7 +497,9 @@ export class TransportController {
       this.metronome.start(this.takeGrid());
     }
     this.send('PLAY');
+    this.trainingSkipNoteIds = resume?.skipNoteIds ?? null;
     this.beginPlaybackScheduler(notes, fromMs);
+    this.armTrainingGate(resume?.gateFromMs ?? fromMs);
   }
 
   /**
@@ -496,10 +529,24 @@ export class TransportController {
       this.stop();
       return;
     }
-    const horizonMs = this.clock.currentTakeMs() + SCHEDULE_AHEAD_MS;
+    // Training: stop dead on the gate rather than wherever this 25ms tick
+    // landed, so the playhead parks exactly on the note being asked for.
+    const gateMs = this.trainingGate?.atMs ?? null;
+    if (gateMs !== null && this.clock.currentTakeMs() >= gateMs) {
+      this.beginTrainingWait();
+      return;
+    }
+    const horizonMs = Math.min(
+      this.clock.currentTakeMs() + SCHEDULE_AHEAD_MS,
+      gateMs === null ? Infinity : gateMs - 1,
+    );
     while (this.playCursor < this.playNotes.length) {
       const note = this.playNotes[this.playCursor] as NoteEvent;
       if (note.startMs > horizonMs) break;
+      if (this.trainingSkipNoteIds?.has(note.id)) {
+        this.playCursor += 1;
+        continue;
+      }
       audioEngine.scheduleNote(
         { midi: note.midi, velocity: note.velocity, durationMs: note.durationMs },
         this.clock.audioTimeForTakeMs(note.startMs),
@@ -517,12 +564,118 @@ export class TransportController {
     }
   }
 
+  // -------------------------------------------------------- training --
+
+  /** True while playback is holding for the user to play the lit keys. */
+  isWaitingForTraining(): boolean {
+    return this.trainingWaiting;
+  }
+
+  /** The keys being asked for, empty unless a training wait is holding. */
+  getTrainingTargets(): ReadonlySet<number> {
+    if (!this.trainingWaiting || !this.trainingGate) return EMPTY_MIDIS;
+    return this.trainingGate.midis;
+  }
+
+  /** Keys pressed at a wait point that were not being asked for. */
+  getTrainingWrongMidis(): ReadonlySet<number> {
+    if (this.trainingWrong.size === 0) return EMPTY_MIDIS;
+    const now = Date.now();
+    for (const [midi, expiry] of this.trainingWrong) {
+      if (expiry <= now) this.trainingWrong.delete(midi);
+    }
+    if (this.trainingWrong.size === 0) return EMPTY_MIDIS;
+    return new Set(this.trainingWrong.keys());
+  }
+
+  /**
+   * Re-read the playback mode. Called when the user changes it, so a switch
+   * mid-flight takes effect without stopping. Modelled on
+   * `refreshMetronomeConfig`: the setting is read here, never pushed in.
+   */
+  refreshTrainingMode(): void {
+    if (this.trainingWaiting) {
+      // Changing the mode while it holds is as good as saying "carry on".
+      this.clearTrainingGate();
+      for (const listener of this.stateListeners) listener();
+      return;
+    }
+    if (this.state !== 'playing') return;
+    // Notes inside the lookahead are already scheduled and will sound; a gate
+    // on one of them would stop after it had been heard.
+    this.armTrainingGate(this.clock.currentTakeMs() + SCHEDULE_AHEAD_MS);
+    for (const listener of this.stateListeners) listener();
+  }
+
+  private armTrainingGate(fromMs: number): void {
+    this.trainingGate = null;
+    // Only ever gates plain playback: an overdub pass sounds its backing
+    // through the same scheduler and must never stop to ask for a note.
+    if (this.state !== 'playing') return;
+    const hand = trainingHandFor(useSettingsStore.getState().playbackMode);
+    if (hand === null) return;
+    this.trainingGate = nextTrainingGate(this.playNotes, Math.max(0, fromMs), hand);
+  }
+
+  private beginTrainingWait(): void {
+    const gate = this.trainingGate;
+    if (!gate) return;
+    this.trainingWaiting = true;
+    this.trainingSatisfied.clear();
+    this.trainingWrong.clear();
+    // An ordinary pause, parked exactly on the gate: no new transport state,
+    // so nothing that switches on one has to learn about training.
+    this.pauseInternal(gate.atMs);
+    this.trainingInputUnsub = audioEngine.subscribeInput((event) => this.onTrainingInput(event));
+    for (const listener of this.stateListeners) listener();
+  }
+
+  private onTrainingInput(event: InputNoteEvent): void {
+    const gate = this.trainingGate;
+    if (!this.trainingWaiting || !gate || event.type !== 'on') return;
+    if (gate.midis.has(event.midi)) {
+      // Presses accumulate rather than having to land together: a mouse is one
+      // pointer and physically cannot hold a chord.
+      this.trainingSatisfied.add(event.midi);
+    } else {
+      // Wrong keys sound and are flagged, but never block the way forward.
+      this.trainingWrong.set(event.midi, Date.now() + WRONG_FLASH_MS);
+    }
+    for (const listener of this.stateListeners) listener();
+    if (this.trainingSatisfied.size >= gate.midis.size) this.resumeFromTrainingGate(gate);
+  }
+
+  private resumeFromTrainingGate(gate: TrainingGate): void {
+    this.endTrainingWait();
+    this.startPlayback({
+      skipNoteIds: gate.noteIds,
+      gateFromMs: gate.atMs + CHORD_WINDOW_MS + 1,
+    });
+  }
+
+  private endTrainingWait(): void {
+    this.trainingWaiting = false;
+    this.trainingSatisfied.clear();
+    this.trainingWrong.clear();
+    this.trainingInputUnsub?.();
+    this.trainingInputUnsub = null;
+  }
+
+  private clearTrainingGate(): void {
+    this.endTrainingWait();
+    this.trainingGate = null;
+    this.trainingSkipNoteIds = null;
+  }
+
   pause(): void {
     if (this.state !== 'playing') return;
     this.pauseInternal(Math.round(this.clock.currentTakeMs()));
   }
 
   private pauseInternal(atMs: number): void {
+    // A training wait is a pause that keeps its gate; every other pause drops
+    // it, so resuming by hand never lands back on the same hold.
+    if (!this.trainingWaiting) this.clearTrainingGate();
     this.clearScheduler();
     this.metronome.stop();
     audioEngine.allNotesOff();
@@ -591,6 +744,7 @@ export class TransportController {
 
   /** Hard cleanup used by stop, failures, and lifecycle interruptions. */
   private stopEverything(): void {
+    this.clearTrainingGate();
     this.clearScheduler();
     if (this.countInTimer !== null) {
       clearTimeout(this.countInTimer);
@@ -607,6 +761,7 @@ export class TransportController {
 
   /** Called by the lifecycle layer when the page hides mid-activity. */
   handleInterruption(): void {
+    this.clearTrainingGate();
     if (this.state === 'recording' || this.state === 'countIn') {
       this.stop();
     } else if (this.state === 'playing') {
@@ -621,6 +776,9 @@ export class TransportController {
    * survives the route change; recording does not, because its UI is gone.
    */
   handleNavigation(): void {
+    // A wait left armed on another route would resume playback from a
+    // keypress the user meant for that page's keyboard.
+    this.clearTrainingGate();
     if (this.state === 'recording' || this.state === 'countIn') {
       this.stop();
     } else if (this.state === 'scrubbing') {

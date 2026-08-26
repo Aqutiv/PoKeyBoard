@@ -8,6 +8,11 @@ export function useTransportState(): TransportState {
   return useSyncExternalStore(subscribe, () => transportController.getState());
 }
 
+/** Playback is holding for the user to play the keys training has lit. */
+export function useTrainingWaiting(): boolean {
+  return useSyncExternalStore(subscribe, () => transportController.isWaitingForTraining());
+}
+
 export function useMetronomeOn(): boolean {
   return useSyncExternalStore(subscribe, () => transportController.isMetronomeOn());
 }

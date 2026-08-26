@@ -9,6 +9,7 @@ import {
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
 import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
+import type { PlaybackMode, RecordMode } from '@/features/transport/modes';
 import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
 
@@ -43,6 +44,10 @@ export interface SettingsState {
   libraryFolder: LibraryFolderId;
   /** The Learn level last browsed, restored on the next visit. */
   learnLevel: LearnLevelId;
+  /** What a recording pass does to what is already there. */
+  recordMode: RecordMode;
+  /** Straight-through playback, or training on one hand (or both). */
+  playbackMode: PlaybackMode;
 
   setLanguage(language: SupportedLanguage): void;
   setTheme(theme: ThemePreference): void;
@@ -62,6 +67,8 @@ export interface SettingsState {
   setSheetPaperSize(size: PaperSize): void;
   setLibraryFolder(folder: LibraryFolderId): void;
   setLearnLevel(level: LearnLevelId): void;
+  setRecordMode(mode: RecordMode): void;
+  setPlaybackMode(mode: PlaybackMode): void;
   resetSettings(): void;
 }
 
@@ -84,6 +91,8 @@ export const SETTINGS_DEFAULTS = {
   sheetPaperSize: 'a4' as PaperSize,
   libraryFolder: DEFAULT_LIBRARY_FOLDER,
   learnLevel: DEFAULT_LEARN_LEVEL,
+  recordMode: 'overdub' as RecordMode,
+  playbackMode: 'simple' as PlaybackMode,
 };
 
 /**
@@ -117,6 +126,8 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),
   setLibraryFolder: (libraryFolder) => set({ libraryFolder }),
   setLearnLevel: (learnLevel) => set({ learnLevel }),
+  setRecordMode: (recordMode) => set({ recordMode }),
+  setPlaybackMode: (playbackMode) => set({ playbackMode }),
   resetSettings: () => {
     void audioEngine.setInstrument(SETTINGS_DEFAULTS.pianoInstrument);
     set({ ...SETTINGS_DEFAULTS });

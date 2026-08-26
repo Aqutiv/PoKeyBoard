@@ -12,12 +12,28 @@ export interface MenuButtonItem {
   onSelect: () => void;
 }
 
+/** One choice within a group: a radio, not an action. */
+export interface MenuButtonChoice {
+  label: string;
+  checked: boolean;
+  onSelect: () => void;
+}
+
+/** A titled set of mutually exclusive choices inside the panel. */
+export interface MenuButtonGroup {
+  label: string;
+  choices: MenuButtonChoice[];
+}
+
 interface MenuButtonProps {
   /** Trigger text; the ▾ caret is appended here. */
   label: string;
   /** Accessible name of the popup. */
   menuLabel: string;
-  items: MenuButtonItem[];
+  /** Flat actions. Give either these or `groups`. */
+  items?: MenuButtonItem[];
+  /** Titled radio groups, for a menu that holds settings rather than actions. */
+  groups?: MenuButtonGroup[];
   disabled?: boolean;
   /** Trigger styling: play header accent button or takes small button. */
   triggerClassName: string;
@@ -30,6 +46,7 @@ export function MenuButton({
   label,
   menuLabel,
   items,
+  groups,
   disabled,
   triggerClassName,
   align = 'right',
@@ -80,7 +97,7 @@ export function MenuButton({
           role="menu"
           aria-label={menuLabel}
         >
-          {items.map((item) => (
+          {items?.map((item) => (
             <button
               key={item.label}
               type="button"
@@ -96,6 +113,34 @@ export function MenuButton({
             >
               {item.label}
             </button>
+          ))}
+          {groups?.map((group) => (
+            <div key={group.label} role="group" aria-label={group.label}>
+              <p className="menu-button__group-label" aria-hidden="true">
+                {group.label}
+              </p>
+              {group.choices.map((choice) => (
+                <button
+                  key={choice.label}
+                  type="button"
+                  role="menuitemradio"
+                  aria-checked={choice.checked}
+                  className={`menu-button__item menu-button__item--radio${
+                    choice.checked ? ' is-checked' : ''
+                  }`}
+                  onClick={() => {
+                    setOpen(false);
+                    choice.onSelect();
+                    triggerRef.current?.focus();
+                  }}
+                >
+                  <span className="menu-button__check" aria-hidden="true">
+                    {choice.checked ? '✓' : ''}
+                  </span>
+                  {choice.label}
+                </button>
+              ))}
+            </div>
           ))}
         </div>
       ) : null}
