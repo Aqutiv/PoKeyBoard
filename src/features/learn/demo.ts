@@ -20,11 +20,18 @@ export async function playPhrase(phrase: LearnPhrase): Promise<number> {
   const notes = phraseToNotes(phrase);
   if (notes.length === 0) return 0;
 
+  // Unlocked first, before anything that can take a while: transient user
+  // activation expires, and fetching a cold range can outlive the click that
+  // asked for it — leaving `resume()` to be refused and the demo scheduled
+  // into a suspended context. `transportController.record` orders it the same
+  // way. The app also unlocks on its first interaction, so this is the
+  // second line of defence rather than the first.
+  await audioEngine.unlockFromUserGesture();
+
   const midis = notes.map((note) => note.midi);
   // A demo can name notes well outside the visible window, and scheduleNote is
   // silent for any pitch with no decoded sample.
   await audioEngine.ensurePlayableRange(Math.min(...midis), Math.max(...midis));
-  await audioEngine.unlockFromUserGesture();
 
   const startTime = audioEngine.currentTime + START_SLACK_S;
   for (const note of notes) {

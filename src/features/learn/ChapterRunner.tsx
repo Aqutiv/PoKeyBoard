@@ -184,15 +184,29 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   );
 
   const onListen = useCallback(() => {
-    if (!listen) return;
-    void playPhrase(listen).then((durationMs) => {
-      // Scheduled notes cannot be unscheduled, and `allNotesOff` would cut the
-      // user's own keys — so the button simply waits the phrase out.
-      setDemoPlaying(true);
-      window.clearTimeout(demoTimer.current);
-      demoTimer.current = window.setTimeout(() => setDemoPlaying(false), durationMs);
-    });
-  }, [listen]);
+    // Guarded here rather than only by the button's `disabled`, because the
+    // "Show me" hint calls this too.
+    if (!listen || demoPlaying) return;
+    // Claimed before the await, not after it. Preparing a cold range can take
+    // seconds, and the button used to stay live for every one of them — each
+    // extra click scheduling another copy over the first. Scheduled notes
+    // cannot be unscheduled, and `allNotesOff` would cut the user's own keys,
+    // so the only defence is not starting the second one.
+    setDemoPlaying(true);
+    window.clearTimeout(demoTimer.current);
+    void playPhrase(listen).then(
+      (durationMs) => {
+        // The button simply waits the phrase out.
+        demoTimer.current = window.setTimeout(() => setDemoPlaying(false), durationMs);
+      },
+      (error: unknown) => {
+        // Never strand the button: a demo that could not be prepared is a
+        // demo that is not playing.
+        console.warn('Learn demo failed to play:', error);
+        setDemoPlaying(false);
+      },
+    );
+  }, [demoPlaying, listen]);
 
   const title = m.learn.chapterTitles[chapterId];
   const text = step ? prose?.[step.id] : undefined;

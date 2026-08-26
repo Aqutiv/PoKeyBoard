@@ -53,9 +53,12 @@ export const TREBLE_STAFF: LearnChapter = {
     },
     {
       id: 'playMiddleC',
+      // The exact key, for the same reason the reading drill below is exact:
+      // the stave shows one particular C on one particular ledger line, and
+      // any other C would complete the step with the drawn note still dark.
       kind: 'exercise',
       anchorMidi: MIDDLE_C,
-      spec: { kind: 'pitchClass', pitchClass: 0 },
+      spec: { kind: 'exactKeys', midis: [MIDDLE_C] },
     },
     {
       id: 'fiveNotes',

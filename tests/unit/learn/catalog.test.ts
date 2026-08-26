@@ -323,6 +323,16 @@ describe('chapter four', () => {
     expect(drill?.drill.pitchClasses).toEqual([0, 2, 4, 5, 7]);
   });
 
+  it('asks for the exact middle C the stave draws, not any C', () => {
+    // The step right after "middle C hangs below on its ledger line". A
+    // pitch class would take C3 or C5 and call it read, with the drawn head
+    // still dark — the same reason the reading drill below grades exactly.
+    const step = TREBLE_STAFF.steps.find((s) => s.id === 'playMiddleC');
+    if (step?.kind !== 'exercise') throw new Error('expected an exercise');
+    expect(step.spec).toEqual({ kind: 'exactKeys', midis: [60] });
+    expect(step.anchorMidi).toBe(60);
+  });
+
   it('gives a reading round no spoken label, since the staff is the question', () => {
     const drill = TREBLE_STAFF.steps.find((s) => s.kind === 'drill');
     if (drill?.drill.kind !== 'readNote') throw new Error('expected a reading drill');
