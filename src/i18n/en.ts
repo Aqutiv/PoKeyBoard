@@ -432,6 +432,18 @@ export const en: Messages = {
     gamepad: 'Play with a game controller',
     gamepadHint:
       'The D-pad and face buttons play one octave, C to C: Left, Up, Right, Down, then X, Y, B, A. The bumpers shift the octave, the left trigger sustains, and the right trigger raises the note a semitone. Tap the screen once first — a controller alone cannot start the audio.',
+    midi: 'Play with a MIDI keyboard',
+    midiHint:
+      'Connect a USB MIDI keyboard and play PoKeyBoard from its own keys, with its velocity and its sustain pedal. Its octave buttons work — the piano follows wherever you play. Pitch bend shifts the visible keys instead of bending the note, and the volume control moves the master volume. Tap the screen once first — a MIDI keyboard alone cannot start the audio.',
+    midiConnect: 'Connect a MIDI keyboard',
+    midiConnecting: 'Looking for MIDI devices…',
+    midiDenied:
+      'MIDI access was blocked. Allow MIDI for this site in your browser’s site settings, then try again.',
+    midiUnsupported:
+      'This browser does not support Web MIDI. Chrome, Edge and Opera do, on desktop and Android; Safari and Firefox do not.',
+    midiNoDevices: 'No MIDI keyboard found. Plug one in — it is picked up automatically.',
+    midiDevices: ({ names }) => `Connected: ${names}`,
+    midiError: 'MIDI could not be started.',
     checking: 'Checking…',
     downloadPiano: ({ piano, size }) => `Download ${piano} (${size})`,
     deletePiano: ({ piano }) => `Delete ${piano} download`,
@@ -476,6 +488,7 @@ export const en: Messages = {
       pointerEvents: 'Pointer events',
       touch: 'Touch input',
       gamepad: 'Game controller API',
+      webMidi: 'Web MIDI API',
     },
   },
   about: {

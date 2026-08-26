@@ -447,6 +447,15 @@ export interface Messages {
     backgroundPlaybackHint: string;
     gamepad: string;
     gamepadHint: string;
+    midi: string;
+    midiHint: string;
+    midiConnect: string;
+    midiConnecting: string;
+    midiDenied: string;
+    midiUnsupported: string;
+    midiNoDevices: string;
+    midiDevices: (p: { names: string }) => string;
+    midiError: string;
     checking: string;
     downloadPiano: (p: { piano: string; size: string }) => string;
     deletePiano: (p: { piano: string }) => string;
@@ -488,6 +497,7 @@ export interface Messages {
       pointerEvents: string;
       touch: string;
       gamepad: string;
+      webMidi: string;
     };
   };
   about: {

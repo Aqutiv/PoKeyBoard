@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
+import { contributeRange } from '@/audio/playableRange';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
@@ -8,6 +9,7 @@ import { BASE_SPAN_SEMITONES, BaseOctave } from './baseOctave';
 import { ComputerKeyboardInput, isModalOpen, isTextInput } from './computerKeyboard';
 import { GamepadInput } from './gamepadInput';
 import {
+  anchorToReveal,
   BLACK_KEY_HEIGHT,
   computeVisibleWhites,
   FULL_RANGE_HIGH,
@@ -22,6 +24,7 @@ import {
   type KeyboardLayout,
 } from './keyboardGeometry';
 import { KeyboardPointerTracker } from './pointerTracker';
+import { registerMidiKeyboard } from './useMidiInput';
 import './keyboard.css';
 
 interface PianoKeyboardProps {
@@ -122,18 +125,17 @@ export function PianoKeyboard({
   // Load any sample roots the playable registers need: the visible range, plus
   // wherever Z/X and the bumpers have moved the base. Those notes are off
   // screen, so nothing else asks for them, and a root more than nine semitones
-  // away leaves getSample empty-handed — the note would just not sound.
+  // away leaves getSample empty-handed — the note would just not sound. MIDI
+  // input contributes its own register alongside this one; the engine is told
+  // the union of the two.
   useEffect(() => {
     const load = () => {
       const base = baseOctave.get();
-      void audioEngine
-        .ensurePlayableRange(
-          Math.min(layout.lowMidi, base),
-          Math.max(layout.highMidi, base + BASE_SPAN_SEMITONES),
-        )
-        .catch(() => {
-          // The shared load-progress state exposes the retryable error.
-        });
+      contributeRange(
+        'keyboard',
+        Math.min(layout.lowMidi, base),
+        Math.max(layout.highMidi, base + BASE_SPAN_SEMITONES),
+      );
     };
     load();
     return baseOctave.subscribe(load);
@@ -260,6 +262,27 @@ export function PianoKeyboard({
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [shiftRange]);
+
+  /**
+   * The on-screen half of MIDI input. The MIDI device itself is owned by the
+   * app shell so it plays on every tab; these two only make sense while a key
+   * bed is mounted, so they are lent for as long as this one is.
+   */
+  useEffect(
+    () =>
+      registerMidiKeyboard({
+        reveal: (midi) => {
+          const next = anchorToReveal(midi, layout.lowMidi, visibleWhites);
+          if (next === layout.lowMidi) return;
+          // The keys are about to move out from under any held pointer,
+          // exactly as they do when the shift buttons are used.
+          tracker.releaseAll();
+          setAnchorMidi(next);
+        },
+        shiftOctave: (direction) => shiftRange(direction, 'octave'),
+      }),
+    [layout.lowMidi, visibleWhites, setAnchorMidi, tracker, shiftRange],
+  );
 
   // Toggling against the engine rather than a local latch means a panic reset
   // that dropped the pedal is recovered by the very next click.

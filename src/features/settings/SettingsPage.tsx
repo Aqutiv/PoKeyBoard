@@ -12,6 +12,7 @@ import { updateManager } from '@/pwa/updateManager';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { formatMB } from './formatBytes';
+import { MidiSection } from './MidiSection';
 import { PianoSection } from './PianoSection';
 import './settings.css';
 
@@ -29,6 +30,7 @@ const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
   'pointerEvents',
   'touch',
   'gamepad',
+  'webMidi',
 ];
 
 function useUpdateAvailable(): boolean {
@@ -166,6 +168,7 @@ export function SettingsPage() {
           />
         </label>
         <p className="settings__hint">{m.settings.gamepadHint}</p>
+        <MidiSection />
 
         <h2 className="settings__section">{m.settings.appearance}</h2>
         <label className="setting-row">

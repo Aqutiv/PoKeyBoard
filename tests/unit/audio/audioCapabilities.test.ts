@@ -17,6 +17,8 @@ describe('detectCapabilities', () => {
       'webCodecsAudioEncoder',
       'pointerEvents',
       'touch',
+      'gamepad',
+      'webMidi',
     ];
     for (const key of expectedKeys) {
       expect(typeof caps[key as keyof typeof caps]).toBe('boolean');

@@ -434,6 +434,18 @@ export const mg: Messages = {
     gamepad: 'Mitendry amin’ny kapila lalao',
     gamepadHint:
       'Ny lakroa sy ny bokotra eo anoloana dia mitendry oktavy iray, do ka hatramin’ny do: ankavia, ambony, ankavanana, ambany, avy eo X, Y, B, A. Ny bokotra ambony manova oktavy, ny kitro havia mihazona ny feo, ary ny havanana manondrotra ny naoty amin’ny antsasa-kentona. Kasiho aloha indray mandeha ny efijery: tsy afaka mampandeha ny feo irery ny kapila.',
+    midi: 'Mitendry amin’ny klavie MIDI',
+    midiHint:
+      'Ampifandraiso klavie MIDI USB dia tendreo ny PoKeyBoard amin’ny kitendriny manokana, miaraka amin’ny heriny sy ny pedaliny mihazona feo. Miasa ny bokotra oktavy: manaraka izay itendrenao ny piano. Ny pitch bend mampifindra ny kitendry hita fa tsy manova ny naoty, ary ny fanovana feo manetsika ny feo fototra. Kasiho aloha indray mandeha ny efijery: tsy afaka mampandeha ny feo irery ny klavie MIDI.',
+    midiConnect: 'Ampifandraiso klavie MIDI',
+    midiConnecting: 'Mitady fitaovana MIDI…',
+    midiDenied:
+      'Voasakana ny fidirana MIDI. Avelao ny MIDI ho an’ity tranokala ity ao amin’ny kirakira navigateranao, dia andramo indray.',
+    midiUnsupported:
+      'Tsy mandray ny Web MIDI ity navigatera ity. Mandray izany ny Chrome, Edge sy Opera, amin’ny ordinatera sy Android; tsy mandray kosa ny Safari sy Firefox.',
+    midiNoDevices: 'Tsy nahitana klavie MIDI. Ampifandraiso iray: fantatra ho azy izy.',
+    midiDevices: ({ names }) => `Mifandray: ${names}`,
+    midiError: 'Tsy afaka nampandeha ny MIDI.',
     checking: 'Mijery…',
     downloadPiano: ({ piano, size }) => `Alaivo ${piano} (${size})`,
     deletePiano: ({ piano }) => `Fafao ny ${piano} voatariny`,
@@ -481,6 +493,7 @@ export const mg: Messages = {
       pointerEvents: 'Hetsiky ny mpanondro',
       touch: 'Fidirana kasika',
       gamepad: 'API kapila lalao',
+      webMidi: 'API Web MIDI',
     },
   },
   about: {

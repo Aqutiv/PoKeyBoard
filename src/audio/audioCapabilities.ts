@@ -13,6 +13,7 @@ export interface AppCapabilities {
   pointerEvents: boolean;
   touch: boolean;
   gamepad: boolean;
+  webMidi: boolean;
 }
 
 interface NavigatorMaybeStandalone extends Navigator {
@@ -57,5 +58,6 @@ export function detectCapabilities(): AppCapabilities {
     pointerEvents: 'PointerEvent' in globalThis,
     touch: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
     gamepad: typeof navigator.getGamepads === 'function',
+    webMidi: typeof navigator.requestMIDIAccess === 'function',
   };
 }
