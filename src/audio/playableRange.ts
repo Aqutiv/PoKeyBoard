@@ -12,10 +12,17 @@ import { audioEngine } from './AudioEngine';
 export type RangeContributor = 'keyboard' | 'midi';
 
 const spans = new Map<RangeContributor, { low: number; high: number }>();
+/** The most recent load, so a caller can wait for roots that are still coming. */
+let pending: Promise<void> = Promise.resolve();
 
-export function contributeRange(who: RangeContributor, low: number, high: number): void {
+/**
+ * Returns the load this contribution is waiting on — already resolved when
+ * the union did not move. A caller that needs a note to sound can await it
+ * and try again, rather than dropping the note that asked for the register.
+ */
+export function contributeRange(who: RangeContributor, low: number, high: number): Promise<void> {
   const current = spans.get(who);
-  if (current && current.low === low && current.high === high) return;
+  if (current && current.low === low && current.high === high) return pending;
   spans.set(who, { low, high });
   let unionLow = Infinity;
   let unionHigh = -Infinity;
@@ -23,9 +30,10 @@ export function contributeRange(who: RangeContributor, low: number, high: number
     unionLow = Math.min(unionLow, span.low);
     unionHigh = Math.max(unionHigh, span.high);
   }
-  void audioEngine.ensurePlayableRange(unionLow, unionHigh).catch(() => {
+  pending = audioEngine.ensurePlayableRange(unionLow, unionHigh).catch(() => {
     // The shared load-progress state exposes the retryable error.
   });
+  return pending;
 }
 
 /**
@@ -35,4 +43,5 @@ export function contributeRange(who: RangeContributor, low: number, high: number
  */
 export function __resetForTests(): void {
   spans.clear();
+  pending = Promise.resolve();
 }

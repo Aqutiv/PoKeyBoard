@@ -53,10 +53,15 @@ const BEND_RELEASE_AT = 0.3;
 const BEND_CENTER = 8192;
 
 export class MidiInput {
-  private readonly down = new Set<number>();
+  /**
+   * Held pitch to the port that started it, and the ports currently holding
+   * the pedal. Ownership matters when two keyboards are connected: unplugging
+   * one must not cut off notes the other is still holding.
+   */
+  private readonly down = new Map<number, EventTarget>();
+  private readonly sustainPorts = new Set<EventTarget>();
   private readonly boundPorts = new Set<MIDIInput>();
   private callbacks: MidiCallbacks | null = null;
-  private sustainDown = false;
   private bendLatched = false;
   private velocity = 0.75;
   private velocityMode: VelocityMode = 'touch';
@@ -89,20 +94,17 @@ export class MidiInput {
     this.velocityMode = mode;
   }
 
-  releaseAll(): void {
-    if (!this.callbacks) {
-      this.down.clear();
-      this.sustainDown = false;
-      return;
-    }
-    for (const midi of [...this.down]) {
+  /** Releases one port's notes and pedal, or everything when none is given. */
+  releaseAll(port?: EventTarget): void {
+    const sustained = this.sustainPorts.size > 0;
+    for (const [midi, owner] of [...this.down]) {
+      if (port && owner !== port) continue;
       this.down.delete(midi);
-      this.callbacks.noteOff(midi);
+      this.callbacks?.noteOff(midi);
     }
-    if (this.sustainDown) {
-      this.sustainDown = false;
-      this.callbacks.setSustain(false);
-    }
+    if (port) this.sustainPorts.delete(port);
+    else this.sustainPorts.clear();
+    if (sustained && this.sustainPorts.size === 0) this.callbacks?.setSustain(false);
   }
 
   private readonly bindPorts = (inputs: readonly MIDIInput[]) => {
@@ -112,7 +114,7 @@ export class MidiInput {
       // An unplugged device never sends the note-off for what it was holding.
       port.removeEventListener('midimessage', this.onMidiMessage);
       this.boundPorts.delete(port);
-      this.releaseAll();
+      this.releaseAll(port);
     }
     for (const port of inputs) {
       if (this.boundPorts.has(port)) continue;
@@ -129,7 +131,8 @@ export class MidiInput {
 
   private readonly onMidiMessage = (event: Event) => {
     const data = (event as MIDIMessageEvent).data;
-    if (!this.callbacks || !data || data.length < 2) return;
+    const port = event.target;
+    if (!this.callbacks || !port || !data || data.length < 2) return;
     const status = data[0]!;
     // Web MIDI delivers whole messages with running status already expanded,
     // so a data byte here is something we do not understand and guessing at
@@ -141,7 +144,7 @@ export class MidiInput {
     const data2 = (data[2] ?? 0) & 0x7f;
 
     if (command === NOTE_ON && data2 > 0) {
-      this.start(data1, data2);
+      this.start(data1, data2, port);
       return;
     }
     // A Note On with velocity 0 is a Note Off. Not a curiosity: it is the
@@ -157,7 +160,7 @@ export class MidiInput {
     }
     if (command !== CONTROL_CHANGE) return;
     if (data1 === CC_SUSTAIN) {
-      this.pedal(data2 >= SUSTAIN_THRESHOLD);
+      this.pedal(data2 >= SUSTAIN_THRESHOLD, port);
       return;
     }
     if (data1 === CC_VOLUME) {
@@ -170,11 +173,11 @@ export class MidiInput {
     if (data1 === CC_ALL_SOUND_OFF || data1 === CC_ALL_NOTES_OFF) this.releaseAll();
   };
 
-  private start(midi: number, rawVelocity: number): void {
+  private start(midi: number, rawVelocity: number, port: EventTarget): void {
     if (midi < MIDI_MIN || midi > MIDI_MAX) return;
     if (this.suppressed()) return;
     if (this.down.has(midi)) return;
-    this.down.add(midi);
+    this.down.set(midi, port);
     this.callbacks?.noteOn(midi, this.velocityFor(rawVelocity));
   }
 
@@ -183,14 +186,18 @@ export class MidiInput {
     this.callbacks?.noteOff(midi);
   }
 
-  private pedal(down: boolean): void {
-    // Edge-only. Some pedals stream CC64 continuously, and every setSustain
-    // reaches the recorder, so a chattering pedal would write a run of
-    // meaningless events into the take.
-    if (down === this.sustainDown) return;
+  private pedal(down: boolean, port: EventTarget): void {
+    // Refcounted per port and edge-only on the total, mirroring how the
+    // engine refcounts sustain per source. Some pedals stream CC64
+    // continuously, and every setSustain reaches the recorder, so a
+    // chattering pedal would write a run of meaningless events into the take.
+    if (down === this.sustainPorts.has(port)) return;
     if (down && this.suppressed()) return;
-    this.sustainDown = down;
-    this.callbacks?.setSustain(down);
+    const was = this.sustainPorts.size > 0;
+    if (down) this.sustainPorts.add(port);
+    else this.sustainPorts.delete(port);
+    const now = this.sustainPorts.size > 0;
+    if (now !== was) this.callbacks?.setSustain(now);
   }
 
   private bend(normalized: number): void {

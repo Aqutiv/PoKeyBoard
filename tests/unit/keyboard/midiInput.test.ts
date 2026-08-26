@@ -284,6 +284,45 @@ describe('MidiInput', () => {
     expect(noteOff).toHaveBeenCalledWith(60);
   });
 
+  // Two keyboards connected: pulling one must not cut off the other.
+  it('releases only the unplugged port, leaving another device holding', async () => {
+    const a = new FakePort('a', 'first');
+    const b = new FakePort('b', 'second');
+    plug(a);
+    plug(b);
+    const { noteOn, noteOff, setSustain } = await attachInput();
+
+    a.dispatchEvent(new MessageEvent('midimessage', { data: Uint8Array.from([NOTE_ON, 60, 90]) }));
+    b.dispatchEvent(new MessageEvent('midimessage', { data: Uint8Array.from([NOTE_ON, 67, 90]) }));
+    b.dispatchEvent(new MessageEvent('midimessage', { data: Uint8Array.from([CC, 64, 127]) }));
+    expect(noteOn).toHaveBeenCalledTimes(2);
+
+    unplug(a);
+
+    expect(noteOff).toHaveBeenCalledWith(60);
+    expect(noteOff).not.toHaveBeenCalledWith(67);
+    // The pedal belongs to the device still connected.
+    expect(setSustain).not.toHaveBeenCalledWith(false);
+  });
+
+  it('keeps the pedal down while any port still holds it', async () => {
+    const a = new FakePort('a', 'first');
+    const b = new FakePort('b', 'second');
+    plug(a);
+    plug(b);
+    const { setSustain } = await attachInput();
+
+    a.dispatchEvent(new MessageEvent('midimessage', { data: Uint8Array.from([CC, 64, 127]) }));
+    b.dispatchEvent(new MessageEvent('midimessage', { data: Uint8Array.from([CC, 64, 127]) }));
+    expect(setSustain).toHaveBeenCalledTimes(1);
+
+    a.dispatchEvent(new MessageEvent('midimessage', { data: Uint8Array.from([CC, 64, 0]) }));
+    expect(setSustain).toHaveBeenCalledTimes(1);
+
+    b.dispatchEvent(new MessageEvent('midimessage', { data: Uint8Array.from([CC, 64, 0]) }));
+    expect(setSustain).toHaveBeenLastCalledWith(false);
+  });
+
   it('stands down while the tab is hidden and swallows the release that follows', async () => {
     const port = new FakePort('a', 'pad');
     plug(port);

@@ -48,7 +48,9 @@ export function useMidiInput(): void {
   const setMasterVolume = useSettingsStore((s) => s.setMasterVolume);
 
   const inputRef = useRef<MidiInput | null>(null);
-  const heldRef = useRef(0);
+  /** Pitches currently held, so a note that arrives before its samples do can
+   *  be checked for still being down when they land. */
+  const heldRef = useRef(new Set<number>());
   const spanRef = useRef<{ low: number; high: number } | null>(null);
   const volumeFrameRef = useRef<number | null>(null);
   const pendingVolumeRef = useRef(0);
@@ -59,16 +61,16 @@ export function useMidiInput(): void {
    * than nine semitones away leave getSample empty-handed and the note simply
    * does not sound, so what arrives has to widen the load.
    */
-  const widenForMidi = useCallback((midi: number) => {
+  const widenForMidi = useCallback((midi: number): Promise<void> => {
     const low = Math.max(FULL_RANGE_LOW, midi - LOOKAHEAD_SEMITONES);
     const high = Math.min(FULL_RANGE_HIGH, midi + LOOKAHEAD_SEMITONES);
     const span = spanRef.current;
-    if (span && span.low <= low && span.high >= high) return;
-    spanRef.current = {
-      low: Math.min(span?.low ?? low, low),
-      high: Math.max(span?.high ?? high, high),
-    };
-    contributeRange('midi', spanRef.current.low, spanRef.current.high);
+    const next =
+      span && span.low <= low && span.high >= high
+        ? span
+        : { low: Math.min(span?.low ?? low, low), high: Math.max(span?.high ?? high, high) };
+    spanRef.current = next;
+    return contributeRange('midi', next.low, next.high);
   }, []);
 
   // A CC7 ramp arrives ~18 times a second and every store write re-renders
@@ -94,20 +96,29 @@ export function useMidiInput(): void {
 
   useEffect(() => {
     if (!enabled) return;
+    const held = heldRef.current;
     const input = new MidiInput();
     inputRef.current = input;
     const detach = input.attach({
       noteOn: (midi, velocity) => {
         // Anchor a chord on its first note: re-aiming at every note of a
         // spread wider than the window would leave the view ping-ponging.
-        const first = heldRef.current === 0;
-        heldRef.current += 1;
-        widenForMidi(midi);
+        const first = held.size === 0;
+        held.add(midi);
+        const loaded = widenForMidi(midi);
         if (first) keyboardHandlers?.reveal(midi);
-        audioEngine.noteOn(midi, velocity, 'midi');
+        if (audioEngine.noteOn(midi, velocity, 'midi')) return;
+        // No sample for this register yet. The engine drops the note
+        // outright — not even recorded — so the first key pressed in a
+        // register the app has never visited would be swallowed. Sound it
+        // when its roots land, unless the key was let go in the meantime.
+        void loaded.then(() => {
+          if (!held.has(midi)) return;
+          audioEngine.noteOn(midi, velocity, 'midi');
+        });
       },
       noteOff: (midi) => {
-        heldRef.current = Math.max(0, heldRef.current - 1);
+        held.delete(midi);
         audioEngine.noteOff(midi, 'midi');
       },
       setSustain: (down) => audioEngine.setSustain(down, 'midi-pedal'),
@@ -120,7 +131,7 @@ export function useMidiInput(): void {
     return () => {
       detach();
       inputRef.current = null;
-      heldRef.current = 0;
+      held.clear();
     };
   }, [enabled, widenForMidi, setVolumeCoalesced]);
 

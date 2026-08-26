@@ -1,4 +1,4 @@
-import { render } from '@testing-library/react';
+import { cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '@/audio/AudioEngine';
 import { __resetForTests as resetRange } from '@/audio/playableRange';
@@ -60,6 +60,10 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  // No `globals: true`, so RTL's auto-cleanup is not registered — without
+  // this every mounted shell stays attached and re-handles the next test's
+  // messages.
+  cleanup();
   vi.restoreAllMocks();
   resetAccess();
   resetRange();
@@ -121,6 +125,52 @@ describe('useMidiInput', () => {
     reveal.mockClear();
     send(NOTE_ON, 40, 100);
     expect(reveal).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The engine drops a note with no decoded sample outright — it is not even
+   * recorded — so the first key pressed in a register the app has never
+   * visited would be swallowed entirely.
+   */
+  it('sounds a note whose samples were still loading', async () => {
+    let release!: () => void;
+    vi.spyOn(audioEngine, 'ensurePlayableRange').mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const noteOn = vi.spyOn(audioEngine, 'noteOn').mockReturnValue(false);
+    await mountShell();
+
+    send(NOTE_ON, 30, 100);
+    expect(noteOn).toHaveBeenCalledTimes(1);
+
+    // Samples land while the key is still held.
+    noteOn.mockReturnValue(true);
+    release();
+    await vi.waitFor(() => expect(noteOn).toHaveBeenCalledTimes(2));
+    expect(noteOn).toHaveBeenLastCalledWith(30, 100 / 127, 'midi');
+  });
+
+  it('does not sound a late note whose key was already released', async () => {
+    let release!: () => void;
+    vi.spyOn(audioEngine, 'ensurePlayableRange').mockReturnValue(
+      new Promise<void>((resolve) => {
+        release = resolve;
+      }),
+    );
+    const noteOn = vi.spyOn(audioEngine, 'noteOn').mockReturnValue(false);
+    vi.spyOn(audioEngine, 'noteOff').mockReturnValue(undefined);
+    await mountShell();
+
+    send(NOTE_ON, 30, 100);
+    send(NOTE_ON, 30, 0); // released before the roots arrived
+    noteOn.mockReturnValue(true);
+    release();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(noteOn).toHaveBeenCalledTimes(1);
   });
 
   it('does nothing at all while the setting is off', async () => {

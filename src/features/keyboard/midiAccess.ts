@@ -140,6 +140,11 @@ export function subscribe(listener: () => void): () => void {
 }
 
 export function getSnapshot(): MidiAccessSnapshot {
+  // Derived rather than captured at import: a browser with no Web MIDI has to
+  // read as unsupported before anything asks for access, or Settings shows a
+  // live-looking toggle that can never work. UNSUPPORTED is a module constant,
+  // so repeated calls stay referentially stable for useSyncExternalStore.
+  if (snapshot === IDLE && !isSupported()) return UNSUPPORTED;
   return snapshot;
 }
 
