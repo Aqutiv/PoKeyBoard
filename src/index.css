@@ -131,7 +131,10 @@ button {
   font-size: 11px;
   letter-spacing: 0.02em;
   color: var(--text-dim);
-  transition: color 120ms ease;
+  border-radius: var(--radius-m);
+  transition:
+    color 120ms ease,
+    background 120ms ease;
 }
 
 .app-nav__item svg {
@@ -151,6 +154,24 @@ button {
 
 .app-nav__item[aria-current='page'] {
   color: var(--accent-strong);
+}
+
+/* Mouse only: on touch, :hover would stick to the last-tapped tab.
+   Twin of the .library-item block in library.css - keep the two in step. */
+@media (hover: hover) and (pointer: fine) {
+  .app-nav__item:hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+
+  /* The active tab keeps its accent colour; only the surface responds. */
+  .app-nav__item[aria-current='page']:hover {
+    color: var(--accent-strong);
+  }
+}
+
+.app-nav__item:active {
+  background: var(--surface-3);
 }
 
 /* Playback keeps running across tabs; this marks where the sound comes from. */
@@ -198,11 +219,18 @@ button {
   .app-nav__item {
     flex: 0 0 auto;
     min-height: 60px;
-    border-radius: var(--radius-m);
   }
 
   .app-nav__item[aria-current='page'] {
     background: var(--surface-2);
+  }
+
+  /* The rail's active tab already sits at --surface-2, so hover steps
+     one further, the same way .piano-card--active does in settings.css. */
+  @media (hover: hover) and (pointer: fine) {
+    .app-nav__item[aria-current='page']:hover {
+      background: var(--surface-3);
+    }
   }
 }
 
@@ -293,7 +321,9 @@ button {
   border-radius: var(--radius-m);
   color: var(--text);
   font-size: 14px;
-  transition: background 120ms ease;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease;
 }
 
 .btn:not(:disabled):active {
@@ -324,6 +354,25 @@ button {
 .btn--danger {
   color: var(--record);
   border-color: var(--record-tint-border);
+}
+
+/* Mouse only, matching the rest of the app; :not(:disabled) mirrors the
+   :active rules above so the dimmed disabled state stays inert. */
+@media (hover: hover) and (pointer: fine) {
+  .btn:not(:disabled):hover {
+    background: var(--surface-3);
+    border-color: var(--border-strong);
+  }
+
+  .btn--primary:not(:disabled):hover {
+    background: var(--accent-strong);
+    border-color: var(--accent-strong);
+  }
+
+  .btn--danger:not(:disabled):hover {
+    background: var(--record-tint-bg);
+    border-color: var(--record);
+  }
 }
 
 /* Shared modal styling (import dialog, export dialogs). Global for the
