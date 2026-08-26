@@ -32,6 +32,9 @@ const PROSE: Partial<
   trebleStaff: {
     en: () => import('./en/trebleStaff').then((m) => m.trebleStaffEn),
   },
+  bassAndGrandStaff: {
+    en: () => import('./en/bassAndGrandStaff').then((m) => m.bassAndGrandStaffEn),
+  },
 };
 
 /**

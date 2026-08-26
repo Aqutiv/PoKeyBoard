@@ -9,10 +9,11 @@ import {
 import { HALF_STEPS_WHOLE_STEPS } from '@/features/learn/chapters/halfStepsWholeSteps';
 import { MUSICAL_ALPHABET } from '@/features/learn/chapters/musicalAlphabet';
 import { TREBLE_STAFF } from '@/features/learn/chapters/trebleStaff';
+import { BASS_AND_GRAND_STAFF } from '@/features/learn/chapters/bassAndGrandStaff';
 import { drillRoundAt } from '@/features/learn/drill';
 import { phraseToNotes } from '@/features/learn/phrase';
-import { TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
-import { stepWhites } from '@/features/keyboard/keyboardGeometry';
+import { midiToStaffPosition, TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
+import { MIN_VISIBLE_WHITES, stepWhites } from '@/features/keyboard/keyboardGeometry';
 import { loadChapterProse } from '@/features/learn/content';
 import { goalTotal } from '@/features/learn/exerciseSpec';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
@@ -58,6 +59,7 @@ describe('learn catalog', () => {
       'musicalAlphabet',
       'halfStepsWholeSteps',
       'trebleStaff',
+      'bassAndGrandStaff',
     ]);
   });
 
@@ -366,6 +368,180 @@ describe('chapter four', () => {
   it('writes English prose, with a prompt for every exercise', async () => {
     const prose = await loadChapterProse('trebleStaff', 'en');
     for (const step of TREBLE_STAFF.steps) {
+      const text = prose[step.id];
+      expect(text?.heading, step.id).toBeTruthy();
+      expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);
+      if (step.kind === 'exercise') expect(text?.prompt, step.id).toBeTruthy();
+    }
+  });
+});
+
+describe('chapter five', () => {
+  it('mirrors chapter four, then joins the staves', () => {
+    const kinds = BASS_AND_GRAND_STAFF.steps.map((step) => step.kind);
+    expect(kinds).toHaveLength(12);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(3);
+    expect(kinds.filter((kind) => kind === 'quiz')).toHaveLength(1);
+    expect(kinds.filter((kind) => kind === 'drill')).toHaveLength(1);
+  });
+
+  it('gives every step a unique id', () => {
+    const ids = BASS_AND_GRAND_STAFF.steps.map((step) => step.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('states a reachable goal for every exercise', () => {
+    for (const step of BASS_AND_GRAND_STAFF.steps) {
+      if (step.kind !== 'exercise') continue;
+      expect(goalTotal(step.spec), step.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('draws every note on a staff its snippet actually shows', () => {
+    // Chapter four's treble-only check, grown up. A single-staff view collapses
+    // `bassTop` onto `trebleTop`, so a note whose resolved staff disagrees with
+    // the view is not dropped — it lands on the staff that is drawn, measured
+    // from the other clef's reference line. Wrong line, no error.
+    for (const step of BASS_AND_GRAND_STAFF.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      const staves = step.visual.staves ?? 'treble';
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        const resolved = midiToStaffPosition(note.midi, note.staff).staff;
+        if (staves === 'grand') expect(['treble', 'bass']).toContain(resolved);
+        else expect(resolved, `${step.id}: ${note.midi}`).toBe(staves);
+      }
+    }
+  });
+
+  it('names the staff on every note it writes', () => {
+    // Never left to `midiToStaffPosition`'s split at middle C: this is the one
+    // chapter whose subject is that the split is a choice.
+    for (const step of BASS_AND_GRAND_STAFF.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        expect(note.staff, `${step.id}: ${note.midi}`).toBeDefined();
+      }
+    }
+  });
+
+  it('sounds both staves in every bar of a grand snippet, so neither is left blank', () => {
+    // What keeps `StaffSnippet` blanking rests honest: an empty staff with no
+    // rest on it reads as an engraving slip rather than a silence, and rests
+    // are chapter six.
+    for (const step of BASS_AND_GRAND_STAFF.steps) {
+      if (step.visual?.kind !== 'staff' || step.visual.staves !== 'grand') continue;
+      const byStart = new Map<number, Set<string>>();
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        const at = byStart.get(note.startMs) ?? new Set<string>();
+        at.add(midiToStaffPosition(note.midi, note.staff).staff);
+        byStart.set(note.startMs, at);
+      }
+      expect(byStart.size, step.id).toBeGreaterThan(0);
+      for (const [startMs, staves] of byStart) {
+        expect([...staves].sort(), `${step.id}@${startMs}`).toEqual(['bass', 'treble']);
+      }
+    }
+  });
+
+  it('fills every bar, so no rest is engraved beside the note', () => {
+    for (const step of BASS_AND_GRAND_STAFF.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        expect(note.durationMs, step.id).toBe(4000);
+      }
+    }
+  });
+
+  it('writes middle C above the bass staff, not below the treble one', () => {
+    // The hinge of the chapter, and the one note a split at middle C gets
+    // wrong: C4 is exactly TREBLE_SPLIT_MIDI.
+    const step = BASS_AND_GRAND_STAFF.steps.find((s) => s.id === 'middleCAbove');
+    if (step?.visual?.kind !== 'staff') throw new Error('expected a stave');
+    expect(step.visual.staves).toBe('bass');
+    const notes = phraseToNotes(step.visual.phrase);
+    expect(notes[0]?.midi).toBe(TREBLE_SPLIT_MIDI);
+    expect(midiToStaffPosition(notes[0]!.midi, notes[0]!.staff).staff).toBe('bass');
+    // Step 0 is the bottom line and 8 the top one, so 10 is the first ledger
+    // line above the staff — the mirror of the ledger line chapter four hung
+    // the same note below the treble staff on.
+    expect(midiToStaffPosition(notes[0]!.midi, notes[0]!.staff).step).toBe(10);
+  });
+
+  it('asks the quiz and the drill about the same five bass notes', () => {
+    const quiz = BASS_AND_GRAND_STAFF.steps.find((s) => s.kind === 'quiz');
+    const drill = BASS_AND_GRAND_STAFF.steps.find((s) => s.kind === 'drill');
+    if (quiz?.question.kind !== 'readNote') throw new Error('expected a reading quiz');
+    if (drill?.drill.kind !== 'readNote') throw new Error('expected a reading drill');
+    expect(quiz.question.pitchClasses).toEqual([0, 2, 4, 5, 7]);
+    expect(drill.drill.pitchClasses).toEqual([0, 2, 4, 5, 7]);
+    expect(quiz.question.baseMidi).toBe(48);
+    expect(drill.drill.baseMidi).toBe(48);
+    expect(quiz.question.staff).toBe('bass');
+    expect(drill.drill.staff).toBe('bass');
+  });
+
+  it('draws each reading round on the bass staff, at the note it grades', () => {
+    const drill = BASS_AND_GRAND_STAFF.steps.find((s) => s.kind === 'drill');
+    if (drill?.drill.kind !== 'readNote') throw new Error('expected a reading drill');
+    for (let round = 0; round < 5; round += 1) {
+      const asked = drillRoundAt(drill.drill, round);
+      expect(asked?.label).toBe('');
+      expect(asked?.staves).toBe('bass');
+      const spec = asked?.spec;
+      if (spec?.kind !== 'exactKeys') throw new Error('expected exactKeys');
+      expect(spec.midis).toHaveLength(1);
+      expect(spec.midis[0]).toBeLessThan(TREBLE_SPLIT_MIDI);
+      // The picture and the answer are the same note, on the staff drawn.
+      const notes = phraseToNotes(asked!.phrase!);
+      expect(notes[0]?.midi).toBe(spec.midis[0]);
+      expect(midiToStaffPosition(notes[0]!.midi, notes[0]!.staff).staff).toBe('bass');
+    }
+  });
+
+  it('gives the drill no Listen phrase', () => {
+    const drill = BASS_AND_GRAND_STAFF.steps.find((s) => s.kind === 'drill');
+    expect(drill?.listen).toBeUndefined();
+  });
+
+  it('numbers the left hand down from the little finger', () => {
+    const step = BASS_AND_GRAND_STAFF.steps.find((s) => s.id === 'leftHandFingers');
+    if (step?.visual?.kind !== 'keyboard') throw new Error('expected a keyboard diagram');
+    expect(step.visual.labelText).toEqual({ 48: '5', 50: '4', 52: '3', 53: '2', 55: '1' });
+  });
+
+  it('lets a one-pointer mouse finish the hands-together step', () => {
+    const step = BASS_AND_GRAND_STAFF.steps.find((s) => s.id === 'handsTogether');
+    if (step?.kind !== 'exercise') throw new Error('expected an exercise');
+    expect(step.spec).toEqual({
+      kind: 'exactKeys',
+      midis: [53, 60],
+      together: { overlap: true, onsetWindowMs: 400 },
+    });
+  });
+
+  it('parks every playing step where its notes fit the narrowest phone', () => {
+    // `anchorMidi` is the LOW edge, not a centre, and MIN_VISIBLE_WHITES is 7.
+    // The default of 60 would leave every bass note off the key bed, and an
+    // anchor whose targets outrun seven white keys would strand one off screen
+    // with nothing to say so — `needsRangeShift` only fires when *no* target
+    // is in range, so one reachable note silences it for the other.
+    for (const step of BASS_AND_GRAND_STAFF.steps) {
+      if (step.kind !== 'exercise' && step.kind !== 'drill') continue;
+      const anchor = step.anchorMidi;
+      expect(anchor, step.id).toBeDefined();
+      const high = stepWhites(anchor!, MIN_VISIBLE_WHITES, 1);
+      const spec = step.kind === 'exercise' ? step.spec : drillRoundAt(step.drill, 0)?.spec;
+      if (spec?.kind !== 'exactKeys') continue;
+      for (const midi of spec.midis) {
+        expect(midi, `${step.id}: ${midi}`).toBeGreaterThanOrEqual(anchor!);
+        expect(midi, `${step.id}: ${midi}`).toBeLessThanOrEqual(high);
+      }
+    }
+  });
+
+  it('writes English prose, with a prompt for every exercise (ch5)', async () => {
+    const prose = await loadChapterProse('bassAndGrandStaff', 'en');
+    for (const step of BASS_AND_GRAND_STAFF.steps) {
       const text = prose[step.id];
       expect(text?.heading, step.id).toBeTruthy();
       expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);
