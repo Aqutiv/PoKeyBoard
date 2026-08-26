@@ -111,11 +111,21 @@ class ScrubController {
         changed = true;
       }
     }
-    if (changed || this.flashes.size !== this.activeSnapshot.size) {
-      this.activeSnapshot = new Map(
-        [...this.flashes].map(([midi, flash]) => [midi, flash.hand] as const),
-      );
+    // Size alone would miss a key re-flashed from the other staff before its
+    // first flash expired: same count, same pitch, other hand — and the key
+    // bed would wear the previous hand's colour for the whole new flash.
+    if (!changed && this.flashes.size === this.activeSnapshot.size) {
+      for (const [midi, flash] of this.flashes) {
+        if (this.activeSnapshot.get(midi) !== flash.hand) {
+          changed = true;
+          break;
+        }
+      }
+      if (!changed) return;
     }
+    this.activeSnapshot = new Map(
+      [...this.flashes].map(([midi, flash]) => [midi, flash.hand] as const),
+    );
   }
 }
 
