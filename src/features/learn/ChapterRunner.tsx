@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { audioEngine } from '@/audio/AudioEngine';
 import { useLiveActiveNotes, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { useRouter } from '@/app/routerContext';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
@@ -17,9 +18,15 @@ import { chapterStep, withChapterDone, withChapterStep, type LearnProgress } fro
 import type { LearnChapter, LearnChapterId, LearnStep } from './types';
 import { useDrill } from './useDrill';
 import { useExercise } from './useExercise';
+import { useLessonClick } from './useLessonClick';
 import { useQuiz } from './useQuiz';
 
 const DEFAULT_ANCHOR_MIDI = 60;
+/** Every Learn phrase is written at this tempo, so the click matches them. */
+const LESSON_BPM = 60;
+const LESSON_TIME_SIGNATURE = { numerator: 4, denominator: 4 } as const;
+/** Enough that the bar line chosen for a demo is never already passing. */
+const LISTEN_LEAD_S = 0.25;
 const EMPTY_TARGETS: ReadonlySet<number> = new Set();
 
 interface ChapterRunnerProps {
@@ -43,6 +50,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   const { navigate } = useRouter();
   const meta = findLearnChapter(chapterId);
 
+  const sectionRef = useRef<HTMLElement | null>(null);
   const [chapter, setChapter] = useState<LearnChapter | null>(null);
   const [prose, setProse] = useState<ChapterProse | null>(null);
   // Held apart from `index` so the async load handler can close over a value
@@ -59,6 +67,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   // when a chapter opens. A lesson cannot compete with it.
   useEffect(() => {
     if (isBusyState(transportController.getState())) transportController.stop();
+    // A lesson cannot compete with the Play metronome either, and that one
+    // survives navigation whether or not the transport was busy — an idle
+    // transport with the click left on is exactly the case the line above
+    // does not cover. Two clicks at two tempi is unusable.
+    transportController.setMetronomeOn(false);
   }, []);
 
   useEffect(() => {
@@ -90,18 +103,25 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   const step: LearnStep | undefined = steps[Math.min(index, steps.length - 1)];
   const spec = step?.kind === 'exercise' ? step.spec : null;
 
-  const exercise = useExercise(spec);
+  const loadProgress = useSampleLoadProgress();
+  // `noteOn` emits no input event when the pitch has no decoded sample, so an
+  // exercise offered before the core pack lands would be quietly unwinnable.
+  // Read before the exercise hooks because the click depends on it.
+  const pianoReady = loadProgress.phase === 'core-ready' || loadProgress.phase === 'loading-extra';
+  // Derived, with an override: a rhythm spec can never be authored without its
+  // click, while a theory card can still start one early to introduce the pulse
+  // before anything is asked of the reader.
+  const wantsClick = step?.click === true || spec?.kind === 'rhythm';
+  const click = useLessonClick(wantsClick && pianoReady, LESSON_BPM, LESSON_TIME_SIGNATURE);
+
+  const exercise = useExercise(spec, click.beatsAt);
   const quiz = useQuiz(step?.kind === 'quiz' ? step : null);
   const drill = useDrill(step?.kind === 'drill' ? step : null);
-  const loadProgress = useSampleLoadProgress();
   // The same hook the piano lights its own keys from, so the stave and the
   // keyboard under it agree by construction rather than by coincidence. It
   // excludes scheduled playback, so a Listen demo lights nothing — matching
   // the matcher, which also refuses to credit one.
   const heldMidis = useLiveActiveNotes();
-  // `noteOn` emits no input event when the pitch has no decoded sample, so an
-  // exercise offered before the core pack lands would be quietly unwinnable.
-  const pianoReady = loadProgress.phase === 'core-ready' || loadProgress.phase === 'loading-extra';
 
   // Everything that resets when the step changes, adjusted during render
   // rather than in an effect — an effect would paint the new step once with
@@ -166,6 +186,19 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
     else goTo(index + 1);
   }, [finish, goTo, index, isLast]);
 
+  // Published for the same reason as `data-piano-ready`: a timing-gated
+  // exercise is otherwise raced rather than driven. Written to the DOM rather
+  // than rendered, because the click's origin is a fact about a running
+  // external system and mirroring it into React state would mean a setState
+  // inside the effect that starts it.
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
+    const origin = click.originMs();
+    if (origin === null) section.removeAttribute('data-click-origin-ms');
+    else section.setAttribute('data-click-origin-ms', String(origin));
+  });
+
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
@@ -194,7 +227,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
     // so the only defence is not starting the second one.
     setDemoPlaying(true);
     window.clearTimeout(demoTimer.current);
-    void playPhrase(listen).then(
+    // Started on the next bar line whenever a click is running, so the demo is
+    // heard *against* the beat rather than merely near it. A whole bar of lead
+    // is deliberate: it doubles as the count-in.
+    const startAt = click.nextBarAudioTime(audioEngine.currentTime + LISTEN_LEAD_S);
+    void playPhrase(listen, startAt ?? undefined).then(
       (durationMs) => {
         // The button simply waits the phrase out.
         demoTimer.current = window.setTimeout(() => setDemoPlaying(false), durationMs);
@@ -206,7 +243,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
         setDemoPlaying(false);
       },
     );
-  }, [demoPlaying, listen]);
+  }, [click, demoPlaying, listen]);
 
   const title = m.learn.chapterTitles[chapterId];
   const text = step ? prose?.[step.id] : undefined;
@@ -216,6 +253,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
       className="page learn-runner"
       aria-label={title}
       data-piano-ready={pianoReady ? 'true' : 'false'}
+      ref={sectionRef}
     >
       <header className="learn-runner__bar">
         <div className="learn-runner__heading">
@@ -275,6 +313,8 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
           <StaffSnippet
             phrase={step.visual.phrase}
             staves={step.visual.staves}
+            showRests={step.visual.rests}
+            chrome={step.visual.chrome}
             ariaLabel={m.learn.staffLabel}
             litMidis={heldMidis}
           />
@@ -316,7 +356,13 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
                     : ''
                 : text?.prompt}
             </p>
-            <p className="learn-exercise__progress" role="status">
+            {/* A rhythm attempt that resets mid-bar would fire this live
+                region up to four times a second, so the announcement is
+                dropped for those and the text is left to be read visually. */}
+            <p
+              className="learn-exercise__progress"
+              role={spec?.kind === 'rhythm' ? undefined : 'status'}
+            >
               {!pianoReady
                 ? m.learn.loadingPiano
                 : readout.satisfied
