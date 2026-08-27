@@ -35,6 +35,9 @@ const PROSE: Partial<
   bassAndGrandStaff: {
     en: () => import('./en/bassAndGrandStaff').then((m) => m.bassAndGrandStaffEn),
   },
+  rhythmAndBeat: {
+    en: () => import('./en/rhythmAndBeat').then((m) => m.rhythmAndBeatEn),
+  },
 };
 
 /**

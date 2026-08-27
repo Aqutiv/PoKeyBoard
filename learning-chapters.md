@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 5     | 5         |
+| Beginner     | 6     | 4         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -36,7 +36,7 @@ _Never touched a piano → a simple piece, hands together._
 | --- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------ |
 | 4   | **Reading the Treble Staff** ✅         | Staff, lines and spaces, treble clef; middle C on its ledger line; right-hand five-finger position; finger numbers | play middle C off the stave · name a written note ×5 · play a written note ×5 · the five-note run up and back down |
 | 5   | **The Bass Staff & the Grand Staff** ✅ | Bass clef and its own lines and spaces; left hand below middle C; how the staves join                              | read and play bass-clef notes; a grand-staff pair, one note per hand                                               |
-| 6   | Rhythm & the Beat                       | Pulse; 4/4 and the time signature; whole/half/quarter/eighth and rests; bar lines; the metronome                   | tap a steady pulse with the click; play a written rhythm on one pitch, in time                                     |
+| 6   | **Rhythm & the Beat** ✅                | Pulse; 4/4 and the time signature; whole/half/quarter/eighth and rests; bar lines; the metronome                   | tap a steady pulse with the click; play a written rhythm on one pitch, in time                                     |
 
 ### Part 3 — Playing
 
@@ -187,6 +187,20 @@ octave above is a different answer rather than a near-miss. It would also
 complete the round with the drawn head still dark, teaching the opposite of
 the lesson.
 
+The click a rhythm lesson is judged against is Learn's own `MetronomeEngine`
+(`lessonClick.ts`), not `transportController.metronome`. Sharing that one would
+mean sharing its hazards — every transport stop path calls `stop()` on it — but
+the sharper problem is that a Play metronome left switched on while the
+transport sits _idle_ is already running when a chapter opens, which the
+runner's stop-a-busy-transport guard does not cover. A module singleton rather
+than one per mount, because `MetronomeEngine` has no `dispose()` and `attach`
+connects a `GainNode` nothing ever disconnects.
+
+A step gets the click if its spec is a `rhythm` or if it says `click: true`.
+Derived with an override, so a rhythm spec can never be authored without the
+click it is graded against, while a theory card can still start one early —
+which chapter 6 does, so the pulse is heard a step before it is graded.
+
 Notation for a lesson is drawn low-chrome, on whichever staves it asks for:
 `ScoreView` takes `staves: 'treble' | 'bass' | 'grand'` and
 `chrome: 'bare' | 'full'`, and `computeScoreGeometry(layout, { staves })`
@@ -194,6 +208,19 @@ collapses the height to match. Both default to the grand staff with full
 chrome, so the Play page is untouched. `StaffSnippet` takes `staves` as a prop
 and hands it to _both_ the geometry and the draw view — if those two disagree,
 a one-staff picture lands in a two-staff canvas.
+
+`chrome` has three values, not two. `'lesson'` keeps the time signature but
+still leaves off the measure number and the empty spill bar — chapter 6 teaches
+the time signature, and `'full'` would have brought a floating measure number
+with it. The checks read through `chromeOf(view)`, which defaults to `'full'`,
+because the Play page passes no `chrome` at all: compared raw, every piece of
+furniture would have quietly switched off for the live score.
+
+`StaffSnippet` blanks derived rests by default and takes `showRests` to keep
+them. `deriveRests` answers "what silence did this performance leave over", and
+a worked example is not a performance — except in the chapter where the silence
+_is_ the subject. Note it fills **both** staves, so a rhythm phrase must stay
+treble-only or a grand snippet sprouts a bar of bass whole rests.
 
 A single staff is drawn in the treble slot whichever clef it carries, so
 `bassTop` collapses onto `trebleTop`. That makes filtering by staff a
@@ -231,14 +258,36 @@ key is C♯ or D♭.
 | `interval`      | two notes N semitones apart, optionally pitch-class pinned | B1, B3, I5     |
 | `exactKeys`     | exactly these midis                                        | B5, B9, A1     |
 | `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I3 |
+| `rhythm`        | these beat offsets, in time with the click                 | B6, I7, A4     |
 
 An `interval` with no `lowerPitchClass` and no `together` reads the cumulative
 candidate set, which makes it "any two keys N semitones apart" rather than one
 pinned pair — that is what B3's half- and whole-step exercises are, and it is
 also what lets a one-pointer mouse play them.
 
-Likely additions: a rhythm spec judged against the click (B6, I7, A4), and a
-`playAlong` spec that follows a written line (B7, A6).
+`rhythm` is the only kind judged on _when_ rather than _what_, and the only one
+that needs something outside the reducer to mean anything. Its `beats` are
+offsets from a bar line rather than absolute positions, so a pattern matches at
+any bar and the user can listen for a bar or two before joining in — which is
+all that counting in ever means. `ExerciseInput` carries `atBeats`, converted
+from the audio clock by the adapter, so the reducer never sees wall time or the
+grid and stays as pure as the rest.
+
+It grades in order, against the next target only, exactly as `sequence` does.
+That is what distinguishes playing the rhythm from hitting some of the beats,
+and it is the only way an extra note can be noticed at all. A press that is not
+within tolerance of the next target resets the attempt and is then re-tested as
+a possible _start_ — one rule that forgives a late note, forgives a whole bad
+bar, and stops the step being passed by mashing, since a press between targets
+is on neither the next beat nor a bar line.
+
+Tolerance is `DEFAULT_RHYTHM_TOLERANCE_BEATS`, a quarter of a beat either side,
+stated in beats rather than milliseconds so it means the same thing at any
+tempo. Two windows must not overlap, so a chapter authoring anything shorter
+than an eighth note has to tighten it — a catalog test enforces the relationship
+rather than the number.
+
+Still likely: a `playAlong` spec that follows a written line (B7, A6).
 
 ---
 
@@ -271,6 +320,15 @@ Learned the hard way; violating any of these produces a silent failure.
   `KEY_TO_SEMITONE` is chromatic from the base with the black keys on the upper
   row: a base that is not a C puts the black row on white keys. A step anchored
   at E4 therefore keeps the base at C4, exactly as before.
+- **A rhythm lesson is unwinnable by ear at `metronomeVolume: 0`.** The setting
+  is persisted and user-editable, and the lesson honours it as it stands: the
+  click still runs and the exercise still grades, but there is nothing to hear.
+  Overriding a volume somebody deliberately set would be the worse failure.
+- **`MetronomeEngine` has no `dispose()`,** and `attach` no-ops when the context
+  is unchanged — so rebuilding the audio graph under a live context (an
+  instrument switch) leaves the click connected to a stale destination. This is
+  pre-existing in `transportController.configureMetronome`, and Learn inherits
+  it rather than introduces it.
 - **A phone shows about one octave.** At 375px the keyboard auto-sizes to ~9
   white keys, so anything needing three of the same note requires the range
   shifter. Design that in as content rather than working around it — chapter 1
@@ -296,11 +354,12 @@ Learned the hard way; violating any of these produces a silent failure.
   `role="img"` with a generic label; naming the note would announce the answer.
   A drill that asks you to read a picture is inherently visual, so the skip
   affordance is the honest escape hatch rather than a fake label.
-- **Only note heads light, not stems, flags or beams.** They stay
-  `palette.note`. Invisible so far because every Learn phrase is a whole note,
-  which `drawChord` gives no stem — but a beam can span notes with different
-  lit states, so "what colour is a half-lit beam" is a real question for
-  chapter 6's rhythm work to answer rather than for this to have guessed.
+- ~~**Only note heads light, not stems, flags or beams.**~~ Answered by
+  chapter 6, and the answer is _deliberately nothing_. A head says which note is
+  sounding; a stem and a flag are part of how long it lasts, and a beam belongs
+  to the group rather than to any one note — so there is no half-lit beam to
+  colour, and lighting one would say something untrue about the others under it.
+  A `scoreDraw` test pins it, so a later refactor cannot quietly change its mind.
 - ~~**A note below middle C needs an explicit `staff` hint.**~~ Answered by
   chapter 5. `midiToStaffPosition` still splits on `TREBLE_SPLIT_MIDI = 60`, but
   a lesson no longer relies on it: `LearnVisual` carries `staves`, a `readNote`

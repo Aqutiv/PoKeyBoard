@@ -10,12 +10,14 @@ import { HALF_STEPS_WHOLE_STEPS } from '@/features/learn/chapters/halfStepsWhole
 import { MUSICAL_ALPHABET } from '@/features/learn/chapters/musicalAlphabet';
 import { TREBLE_STAFF } from '@/features/learn/chapters/trebleStaff';
 import { BASS_AND_GRAND_STAFF } from '@/features/learn/chapters/bassAndGrandStaff';
+import { RHYTHM_AND_BEAT } from '@/features/learn/chapters/rhythmAndBeat';
 import { drillRoundAt } from '@/features/learn/drill';
 import { phraseToNotes } from '@/features/learn/phrase';
+import { layoutScore } from '@/features/notation/notationLayout';
 import { midiToStaffPosition, TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
 import { MIN_VISIBLE_WHITES, stepWhites } from '@/features/keyboard/keyboardGeometry';
 import { loadChapterProse } from '@/features/learn/content';
-import { goalTotal } from '@/features/learn/exerciseSpec';
+import { DEFAULT_RHYTHM_TOLERANCE_BEATS, goalTotal } from '@/features/learn/exerciseSpec';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { catalogs } from '@/i18n';
 import { SUPPORTED_LANGUAGES } from '@/i18n/types';
@@ -60,6 +62,7 @@ describe('learn catalog', () => {
       'halfStepsWholeSteps',
       'trebleStaff',
       'bassAndGrandStaff',
+      'rhythmAndBeat',
     ]);
   });
 
@@ -542,6 +545,175 @@ describe('chapter five', () => {
   it('writes English prose, with a prompt for every exercise (ch5)', async () => {
     const prose = await loadChapterProse('bassAndGrandStaff', 'en');
     for (const step of BASS_AND_GRAND_STAFF.steps) {
+      const text = prose[step.id];
+      expect(text?.heading, step.id).toBeTruthy();
+      expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);
+      if (step.kind === 'exercise') expect(text?.prompt, step.id).toBeTruthy();
+    }
+  });
+});
+
+describe('chapter six', () => {
+  /** The tempo the chapter is written at and the runner clicks at. */
+  const BEAT_MS = 1000;
+  const BAR_BEATS = 4;
+
+  const rhythmSteps = RHYTHM_AND_BEAT.steps.filter((step) => step.kind === 'exercise');
+
+  it('teaches through production, with no quiz or drill', () => {
+    const kinds = RHYTHM_AND_BEAT.steps.map((step) => step.kind);
+    expect(kinds).toHaveLength(12);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(4);
+    // On a rhythm card the answer is already printed on the staff, so there is
+    // nothing a recognition round could ask that the picture does not say.
+    expect(kinds.filter((kind) => kind === 'quiz')).toHaveLength(0);
+    expect(kinds.filter((kind) => kind === 'drill')).toHaveLength(0);
+  });
+
+  it('gives every step a unique id', () => {
+    const ids = RHYTHM_AND_BEAT.steps.map((step) => step.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('states a reachable goal for every exercise', () => {
+    for (const step of rhythmSteps) {
+      expect(goalTotal(step.spec), step.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('grades only rhythm, and always against a bar of four', () => {
+    for (const step of rhythmSteps) {
+      expect(step.spec.kind, step.id).toBe('rhythm');
+      if (step.spec.kind !== 'rhythm') continue;
+      // The bar arithmetic is exact only because this matches the click grid's
+      // numerator — the grid's beat 0 is a downbeat by construction.
+      expect(step.spec.barBeats, step.id).toBe(BAR_BEATS);
+      expect(step.spec.beats[0], step.id).toBe(0);
+      for (let i = 1; i < step.spec.beats.length; i += 1) {
+        expect(step.spec.beats[i], `${step.id}[${i}]`).toBeGreaterThan(
+          step.spec.beats[i - 1] as number,
+        );
+      }
+    }
+  });
+
+  it('writes exactly the rhythm it grades', () => {
+    // The failure mode of a rhythm chapter, and invisible to every other test:
+    // a picture that disagrees with the gate teaches one thing and marks
+    // another.
+    for (const step of rhythmSteps) {
+      if (step.spec.kind !== 'rhythm') continue;
+      if (step.visual?.kind !== 'staff') continue;
+      const onsets = phraseToNotes(step.visual.phrase).map((note) => note.startMs / BEAT_MS);
+      expect(onsets, step.id).toEqual([...step.spec.beats]);
+    }
+  });
+
+  it('leaves room between targets for the tolerance window', () => {
+    // Two windows that overlap would make one press credit either of two
+    // targets. Holds exactly at eighth notes; this is the guard against
+    // somebody later authoring sixteenths at the same tolerance.
+    for (const step of rhythmSteps) {
+      if (step.spec.kind !== 'rhythm') continue;
+      const tolerance = step.spec.toleranceBeats ?? DEFAULT_RHYTHM_TOLERANCE_BEATS;
+      for (let i = 1; i < step.spec.beats.length; i += 1) {
+        const gap = (step.spec.beats[i] as number) - (step.spec.beats[i - 1] as number);
+        expect(gap, `${step.id}[${i}]`).toBeGreaterThanOrEqual(2 * tolerance);
+      }
+    }
+  });
+
+  it('runs the click through every step that needs one', () => {
+    // A rhythm spec brings its own click, so only the steps that want it
+    // *early* have to say so. The pulse has to be heard before it is graded.
+    const first = RHYTHM_AND_BEAT.steps[0];
+    expect(first?.click, 'the chapter opens on the pulse').toBe(true);
+    for (const step of RHYTHM_AND_BEAT.steps) {
+      if (step.kind !== 'exercise') continue;
+      expect(step.spec.kind, step.id).toBe('rhythm');
+    }
+  });
+
+  it('sounds a note on the final beat of every Listen phrase', () => {
+    // `phraseDurationMs` is max(start + duration), so a phrase that ends in a
+    // rest re-enables the Listen button early and a second press overlaps the
+    // tail still ringing.
+    for (const step of RHYTHM_AND_BEAT.steps) {
+      if (!step.listen) continue;
+      const notes = phraseToNotes(step.listen);
+      const end = Math.max(...notes.map((note) => note.startMs + note.durationMs));
+      expect(end % (BAR_BEATS * BEAT_MS), step.id).toBe(0);
+    }
+  });
+
+  it('keeps every note on the treble staff', () => {
+    // `deriveRests` fills BOTH staves, so a grand-staff phrase here would
+    // sprout a bar of bass whole rests the moment rests are drawn.
+    for (const step of RHYTHM_AND_BEAT.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      expect(step.visual.staves, step.id).toBe('treble');
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        expect(midiToStaffPosition(note.midi, note.staff).staff, step.id).toBe('treble');
+      }
+    }
+  });
+
+  it('never carries a note across a bar line', () => {
+    // A tie would be the one thing in the chapter `drawTies` has to filter by
+    // staff for, and it is not what a first rhythm lesson should introduce.
+    for (const step of RHYTHM_AND_BEAT.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      const barMs = BAR_BEATS * BEAT_MS;
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        const startBar = Math.floor(note.startMs / barMs);
+        const endBar = Math.ceil((note.startMs + note.durationMs) / barMs) - 1;
+        expect(endBar, `${step.id}: ${note.startMs}`).toBe(startBar);
+      }
+    }
+  });
+
+  it('shows the time signature, and shows rests only where they are the point', () => {
+    const withRests = RHYTHM_AND_BEAT.steps.filter(
+      (step) => step.visual?.kind === 'staff' && step.visual.rests === true,
+    );
+    expect(withRests.map((step) => step.id)).toEqual(['theRest', 'playWithARest']);
+    for (const step of RHYTHM_AND_BEAT.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      expect(step.visual.chrome, step.id).toBe('lesson');
+    }
+  });
+
+  it('parks every playing step where its note fits the narrowest phone', () => {
+    for (const step of rhythmSteps) {
+      const anchor = step.anchorMidi;
+      expect(anchor, step.id).toBeDefined();
+      if (step.spec.kind !== 'rhythm' || step.spec.midi === undefined) continue;
+      expect(step.spec.midi, step.id).toBeGreaterThanOrEqual(anchor as number);
+      expect(step.spec.midi, step.id).toBeLessThanOrEqual(
+        stepWhites(anchor as number, MIN_VISIBLE_WHITES, 1),
+      );
+    }
+  });
+
+  it('beams its eighth notes per beat, as the prose describes them', () => {
+    // `buildBeamGroups` groups by the beat in simple meter, so a bar of eight
+    // eighths engraves as four clean pairs rather than one long smear. The
+    // prose says exactly that, and this is what stops the two drifting apart.
+    const step = RHYTHM_AND_BEAT.steps.find((s) => s.id === 'quarterAndEighth');
+    if (step?.visual?.kind !== 'staff') throw new Error('expected a stave');
+    const score = layoutScore(phraseToNotes(step.visual.phrase), {
+      bpm: 60,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+      minMeasures: 1,
+    });
+    expect(score.beams).toHaveLength(4);
+    expect(score.beams.map((beam) => beam.members.length)).toEqual([2, 2, 2, 2]);
+  });
+
+  it('writes English prose, with a prompt for every exercise (ch6)', async () => {
+    const prose = await loadChapterProse('rhythmAndBeat', 'en');
+    for (const step of RHYTHM_AND_BEAT.steps) {
       const text = prose[step.id];
       expect(text?.heading, step.id).toBeTruthy();
       expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);

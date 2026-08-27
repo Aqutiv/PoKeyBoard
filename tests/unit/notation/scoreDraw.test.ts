@@ -7,6 +7,7 @@ import {
   gutterWidthFor,
   SCORE_PALETTES,
   type ScoreRenderInput,
+  type ScoreChrome,
   type ScoreView,
   type StaffMode,
 } from '@/features/notation/scoreRenderer';
@@ -100,10 +101,46 @@ function oneNote(midi: number, staff?: NoteStaff): ScoreLayout {
   return { ...score, dynamics: [], hairpins: [], rests: [] };
 }
 
+/**
+ * A bar of notes at the given beats, one beat each, as the rhythm chapter
+ * writes them. Rests are kept rather than blanked — the silence is the point.
+ */
+function bar(beats: readonly number[], midi = 60, staff: NoteStaff = 'treble'): ScoreLayout {
+  const notes: NoteEvent[] = beats.map((beat, index) => ({
+    id: `n${index}`,
+    midi,
+    startMs: beat * 1000,
+    durationMs: 1000,
+    velocity: 0.7,
+    staff,
+  }));
+  const score = layoutScore(notes, LAYOUT_OPTS);
+  return { ...score, dynamics: [], hairpins: [] };
+}
+
+/** Two beamed eighths on one beat, as the rhythm chapter's last figure has. */
+function eighths(
+  midis: readonly [number, number] = [60, 62],
+  staff: NoteStaff = 'treble',
+): ScoreLayout {
+  const notes: NoteEvent[] = [0, 0.5].map((beat, index) => ({
+    id: `e${index}`,
+    midi: midis[index] as number,
+    startMs: beat * 1000,
+    durationMs: 500,
+    velocity: 0.7,
+    staff,
+  }));
+  const score = layoutScore(notes, LAYOUT_OPTS);
+  return { ...score, dynamics: [], hairpins: [], rests: [] };
+}
+
 function render(
   layout: ScoreLayout,
   extra: Partial<ScoreRenderInput> = {},
   staves: StaffMode = 'treble',
+  /** `null` omits the property entirely, which is what the Play page does. */
+  chrome: ScoreChrome | null = 'bare',
 ): Recorder {
   const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
@@ -118,7 +155,7 @@ function render(
     dynamicsRow: geometry.dynamicsRow,
     gutterPx: gutterWidthFor(0),
     staves,
-    chrome: 'bare',
+    ...(chrome === null ? {} : { chrome }),
   };
   drawScore(
     recorder.ctx,
@@ -227,5 +264,81 @@ describe('drawScore clefs', () => {
     const drawn = render(oneNote(60, 'treble'), {}, 'grand');
     expect(drawn.texts).toContain(TREBLE_CLEF);
     expect(drawn.texts).toContain(BASS_CLEF);
+  });
+});
+
+describe('drawScore lesson chrome', () => {
+  const { rest } = SCORE_PALETTES.dark;
+
+  it('draws the rests the engraver derived', () => {
+    // A bar with a hole on beat two. `StaffSnippet` blanks rests by default,
+    // because a worked example is not a performance — but the rhythm chapter
+    // teaches the rest as a symbol, so it asks for them back.
+    const drawn = render(bar([0, 2, 3]), {}, 'treble', 'lesson');
+    expect(drawn.fills).toContain(rest);
+  });
+
+  it('draws none once they are blanked', () => {
+    const withRests = bar([0, 2, 3]);
+    const drawn = render({ ...withRests, rests: [] }, {}, 'treble', 'lesson');
+    expect(drawn.fills).not.toContain(rest);
+  });
+
+  it('prints the time signature under lesson chrome, and not under bare', () => {
+    expect(render(bar([0, 1, 2, 3]), {}, 'treble', 'lesson').texts).toContain('4');
+    // The regression guard: adding a third value changed nothing for 'bare'.
+    expect(render(bar([0, 1, 2, 3]), {}, 'treble', 'bare').texts).not.toContain('4');
+  });
+
+  it('leaves the measure number off under lesson chrome', () => {
+    // Diffed against 'full' rather than asserted directly: a measure number
+    // '1' and a time-signature '4' are both just text, and counting is the
+    // honest way to tell one apart from the other.
+    const full = render(bar([0, 1, 2, 3]), {}, 'treble', 'full');
+    const lesson = render(bar([0, 1, 2, 3]), {}, 'treble', 'lesson');
+    expect(full.texts.length).toBeGreaterThan(lesson.texts.length);
+    // 4/4 prints two of them, one over the other, on the single staff drawn.
+    expect(lesson.texts.filter((text) => text === '4')).toHaveLength(2);
+  });
+
+  it('suppresses the empty spill bar, as bare does', () => {
+    // A bar that is exactly filled spills a second, empty measure into the
+    // layout, and that measure brings a bar line and a whole rest with it. A
+    // lesson draws the music, not the silence after it.
+    //
+    // Counted through the bar line rather than the rest: a whole rest is a
+    // `fillRect`, and the recording context only sees `fill()`.
+    const filled = bar([0, 1, 2, 3]);
+    const barLines = (drawn: Recorder) =>
+      drawn.strokes.filter((stroke) => stroke === SCORE_PALETTES.dark.barLine).length;
+    expect(barLines(render(filled, {}, 'treble', 'full'))).toBeGreaterThan(
+      barLines(render(filled, {}, 'treble', 'lesson')),
+    );
+  });
+
+  it('treats an unset chrome as full, which is what the Play page passes', () => {
+    // `MusicScore` passes no chrome at all. Comparing `view.chrome === 'full'`
+    // without defaulting would turn every piece of furniture off for the live
+    // score, which is the regression this guards.
+    const drawn = render(bar([0, 2, 3]), {}, 'treble', null);
+    expect(drawn.texts).toContain('4');
+    expect(drawn.fills).toContain(rest);
+  });
+});
+
+describe('drawScore beams', () => {
+  it('lights the head that is held and leaves the beam alone', () => {
+    // The answer to "what colour is a half-lit beam": nothing. A head says
+    // which note is sounding; a beam belongs to the group, so there is no half
+    // of one to colour. Pinned so a later refactor cannot quietly change it.
+    const drawn = render(eighths([60, 62]), { litMidis: new Set([60]) });
+    expect(drawn.fills.filter((fill) => fill === highlight)).toHaveLength(1);
+    expect(drawn.fills).toContain(note);
+  });
+
+  it('leaves out a beam belonging to the staff the view does not show', () => {
+    const grand = render(eighths([48, 50], 'bass'), {}, 'grand');
+    const trebleOnly = render(eighths([48, 50], 'bass'), {}, 'treble');
+    expect(trebleOnly.fills.length).toBeLessThan(grand.fills.length);
   });
 });

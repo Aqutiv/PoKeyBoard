@@ -28,6 +28,15 @@ export interface Togetherness {
 /** The window that reads as one gesture without feeling like a race. */
 export const DEFAULT_ONSET_WINDOW_MS = 400;
 
+/**
+ * How far off the beat still counts as on it.
+ *
+ * Generous on purpose — at 60bpm this is a quarter of a second either side.
+ * Stated in beats rather than milliseconds so it means the same thing at any
+ * tempo, the way a musician's sense of "in time" does.
+ */
+export const DEFAULT_RHYTHM_TOLERANCE_BEATS = 0.25;
+
 export type ExerciseSpec =
   /** Any `count` distinct keys — the unfailable opener. */
   | { kind: 'distinctKeys'; count: number }
@@ -63,10 +72,36 @@ export type ExerciseSpec =
       pitchClasses: readonly PitchClass[];
       /** 'up'/'down' require each note to move that way against the previous. */
       direction?: 'up' | 'down' | 'any';
+    }
+  /**
+   * A written rhythm, judged against the lesson's click. The only kind that
+   * grades *when* rather than *what*.
+   *
+   * `beats` are offsets from a bar line rather than absolute positions, so the
+   * pattern matches at any bar and the user can listen for a bar or two before
+   * joining in — which is all that counting in ever means.
+   *
+   * Beats rather than milliseconds because the reducer has to stay pure: the
+   * adapter owns the click grid and converts before anything reaches here. A
+   * tolerance in beats also survives a tempo change that one in milliseconds
+   * would quietly betray.
+   */
+  | {
+      kind: 'rhythm';
+      /** Offsets from a bar line, ascending, starting at 0. */
+      beats: readonly number[];
+      /** Beats per bar. Must equal the click grid's numerator. */
+      barBeats: number;
+      /** Omitted means any key: the pulse step, where the point is when, not what. */
+      midi?: number;
+      toleranceBeats?: number;
     };
 
-/** Every kind but `sequence`, which is counted by position rather than membership. */
-export type UnorderedSpec = Exclude<ExerciseSpec, { kind: 'sequence' }>;
+/**
+ * Every kind counted by membership. `sequence` and `rhythm` are counted by
+ * position instead — one through the keyboard, the other through the bar.
+ */
+export type UnorderedSpec = Exclude<ExerciseSpec, { kind: 'sequence' } | { kind: 'rhythm' }>;
 
 /** Denominator of the "{done} of {total}" readout. */
 export function goalTotal(spec: ExerciseSpec): number {
@@ -85,6 +120,8 @@ export function goalTotal(spec: ExerciseSpec): number {
       return spec.size;
     case 'sequence':
       return spec.pitchClasses.length;
+    case 'rhythm':
+      return spec.beats.length;
   }
 }
 

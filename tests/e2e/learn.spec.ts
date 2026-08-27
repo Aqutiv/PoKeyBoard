@@ -166,13 +166,14 @@ test.describe('learn outline', () => {
       'Half Steps, Whole Steps & the Black Keys',
       'Reading the Treble Staff',
       'The Bass Staff & the Grand Staff',
+      'Rhythm & the Beat',
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
     await expect(
-      page.getByRole('button', { name: 'Rhythm & the Beat — coming soon' }),
+      page.getByRole('button', { name: 'Your First Melody — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(5);
+    await expect(page.getByText('Coming soon')).toHaveCount(4);
   });
 });
 
@@ -824,5 +825,145 @@ test.describe('chapter five', () => {
     // Satisfied stays satisfied once the hands come off.
     await expect(progressLine(page)).toHaveText('Nicely done.');
     await expect(nextButton(page)).toBeEnabled();
+  });
+});
+
+test.describe('chapter six', () => {
+  const CHAPTER = 'Rhythm & the Beat';
+  /** The chapter is written, and clicked, at 60bpm in 4/4. */
+  const BEAT_MS = 1000;
+  const BAR_MS = BEAT_MS * 4;
+
+  /**
+   * Wall-clock ms of the click's first beat.
+   *
+   * Published by the runner for the same reason as `data-piano-ready`: a
+   * timing-gated exercise is otherwise raced rather than driven.
+   */
+  async function clickOrigin(page: Page): Promise<number> {
+    const section = page.locator('section[data-click-origin-ms]');
+    await section.waitFor({ timeout: 30_000 });
+    const value = await section.getAttribute('data-click-origin-ms');
+    return Number(value);
+  }
+
+  /**
+   * Play `beats` of one bar, in time, from inside the page.
+   *
+   * The whole take runs in a single `evaluate` so no CDP round trip sits in
+   * the timing loop, and `computerKeyboard` never checks `isTrusted`, so a
+   * dispatched keydown drives the real input path. Aims a bar ahead rather
+   * than at the first one — the matcher accepts the pattern at any bar, so
+   * there is nothing to race.
+   */
+  async function playInTime(
+    page: Page,
+    beats: readonly number[],
+    options: { offsetBeats?: number } = {},
+  ): Promise<void> {
+    const originMs = await clickOrigin(page);
+    await page.evaluate(
+      async ({ originMs, beats, barMs, beatMs, offsetBeats }) => {
+        const press = (): void => {
+          window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA', bubbles: true }));
+          window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyA', bubbles: true }));
+        };
+        const bar = Math.ceil((performance.now() - originMs) / barMs) + 1;
+        for (const beat of beats) {
+          const at = originMs + bar * barMs + (beat + offsetBeats) * beatMs;
+          await new Promise((resolve) => setTimeout(resolve, Math.max(0, at - performance.now())));
+          press();
+        }
+      },
+      {
+        originMs,
+        beats: [...beats],
+        barMs: BAR_MS,
+        beatMs: BEAT_MS,
+        offsetBeats: options.offsetBeats ?? 0,
+      },
+    );
+  }
+
+  /** Open the chapter and click Next `clicks` times, checking where we landed. */
+  async function gotoStep(page: Page, heading: string, clicks: number): Promise<void> {
+    for (let i = 0; i < clicks; i += 1) await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: heading })).toBeVisible();
+  }
+
+  test('starts the click on the opening card, before anything is asked', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await expect(page.getByRole('heading', { name: 'Listen for the pulse' })).toBeVisible();
+    // The pulse has to be heard before it is graded, so the very first card
+    // runs the click — a step earlier than any rhythm spec would bring it.
+    expect(await clickOrigin(page)).toBeGreaterThan(0);
+    // Nothing to play yet: a theory card is never gated.
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('credits a pulse tapped in time with the click', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await gotoStep(page, 'Play along with it', 1);
+    await expect(progressLine(page)).toHaveText('0 of 4');
+    await expect(nextButton(page)).toBeDisabled();
+
+    await playInTime(page, [0, 1, 2, 3]);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('cannot be passed by mashing', async ({ page }) => {
+    // The integration-level guard for the hole that would make the chapter's
+    // headline validation passable by a robot.
+    await openChapter(page, CHAPTER);
+    await gotoStep(page, 'Play along with it', 1);
+    await expect(progressLine(page)).toHaveText('0 of 4');
+
+    await page.evaluate(async () => {
+      for (let i = 0; i < 40; i += 1) {
+        window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyA', bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyA', bubbles: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    });
+
+    await expect(progressLine(page)).not.toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeDisabled();
+  });
+
+  test('rejects a rhythm played off the beat', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await gotoStep(page, 'Play along with it', 1);
+    // Half a beat late is twice the tolerance: in time with nothing.
+    await playInTime(page, [0, 1, 2, 3], { offsetBeats: 0.5 });
+    await expect(progressLine(page)).not.toHaveText('Nicely done.');
+  });
+
+  test('draws a time signature and no measure number', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await gotoStep(page, 'Play along with it', 1);
+    await playInTime(page, [0, 1, 2, 3]);
+    await gotoStep(page, 'Beats come in bars', 1);
+    // The lesson chrome exists for this: a stave that shows the bar it is
+    // teaching about, without the page furniture that would come with 'full'.
+    await expect(page.locator('.learn-staff__canvas')).toHaveCount(1);
+  });
+
+  test('plays a written rhythm on one pitch, rest and all', async ({ page }) => {
+    await openChapter(page, CHAPTER);
+    await gotoStep(page, 'Play along with it', 1);
+    await playInTime(page, [0, 1, 2, 3]);
+    await gotoStep(page, 'Play four quarter notes', 5);
+    await playInTime(page, [0, 1, 2, 3]);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+
+    await gotoStep(page, 'Play it, rest and all', 2);
+    await expect(progressLine(page)).toHaveText('0 of 3');
+    // Playing *through* the rest is the failure the step is about, and the
+    // hole at beat one is what ordered matching catches.
+    await playInTime(page, [0, 1, 2, 3]);
+    await expect(progressLine(page)).toHaveText('0 of 3');
+    await playInTime(page, [0, 2, 3]);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
   });
 });

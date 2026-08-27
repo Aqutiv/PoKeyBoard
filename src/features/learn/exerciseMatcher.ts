@@ -1,5 +1,6 @@
 import {
   blackGroupRootPitchClass,
+  DEFAULT_RHYTHM_TOLERANCE_BEATS,
   goalTotal,
   pitchClassOf,
   type ExerciseSpec,
@@ -17,10 +18,37 @@ import {
  * input log rather than of engine state.
  */
 
-/** Normalized user input. `held` is the adapter's own bookkeeping. */
+/**
+ * Normalized user input. `held` is the adapter's own bookkeeping.
+ *
+ * `atBeats` is the moment in fractional click-grid beats, or `null` when no
+ * click is running. Nullable rather than optional on purpose: the "nothing to
+ * judge against" branch then has to be written once, visibly, instead of
+ * arriving as an `undefined` nobody handled.
+ */
 export type ExerciseInput =
-  | { kind: 'press'; midi: number; atMs: number; held: ReadonlySet<number> }
-  | { kind: 'release'; midi: number; atMs: number; held: ReadonlySet<number> };
+  | {
+      kind: 'press';
+      midi: number;
+      atMs: number;
+      atBeats: number | null;
+      held: ReadonlySet<number>;
+    }
+  | {
+      kind: 'release';
+      midi: number;
+      atMs: number;
+      atBeats: number | null;
+      held: ReadonlySet<number>;
+    };
+
+/** `rhythm` only: the attempt in progress. */
+export interface RhythmRun {
+  /** Grid beat of the bar line this attempt started from. */
+  origin: number;
+  /** Targets landed so far, which is also the index of the next one due. */
+  hits: number;
+}
 
 export interface ExerciseState {
   /** Midis counted toward the goal. Grows monotonically for cumulative specs;
@@ -31,6 +59,10 @@ export interface ExerciseState {
   run: readonly number[];
   /** Last press time per midi, audio-clock ms — backs `onsetWindowMs`. */
   onsets: ReadonlyMap<number, number>;
+  /** `rhythm` only. Cannot live in `onsets`, which is keyed by midi and so
+   *  holds only the last press of a pitch — a rhythm on one note would
+   *  overwrite itself every time. */
+  rhythm: RhythmRun | null;
   satisfied: boolean;
 }
 
@@ -46,7 +78,7 @@ export interface MidiRange {
 }
 
 export function initExercise(): ExerciseState {
-  return { credited: new Set(), run: [], onsets: new Map(), satisfied: false };
+  return { credited: new Set(), run: [], onsets: new Map(), rhythm: null, satisfied: false };
 }
 
 /**
@@ -62,6 +94,14 @@ export function reduceExercise(
   input: ExerciseInput,
 ): ExerciseState {
   if (state.satisfied) return state;
+
+  if (spec.kind === 'rhythm') {
+    // Order is a story about onsets; a release says nothing about where in the
+    // bar you are — the same reason `sequence` ignores them. `onsets` is left
+    // untouched rather than cloned, since nothing here reads it.
+    const rhythm = input.kind === 'press' ? advanceRhythm(spec, state.rhythm, input) : state.rhythm;
+    return { ...state, rhythm, satisfied: (rhythm?.hits ?? 0) >= goalTotal(spec) };
+  }
 
   const onsets = new Map(state.onsets);
   if (input.kind === 'press') onsets.set(input.midi, input.atMs);
@@ -80,7 +120,7 @@ export function reduceExercise(
 
 export function progressOf(spec: ExerciseSpec, state: ExerciseState): ExerciseProgress {
   const total = goalTotal(spec);
-  const done = spec.kind === 'sequence' ? state.run.length : state.credited.size;
+  const done = doneFor(spec, state);
   return {
     done: state.satisfied ? total : Math.min(done, total),
     total,
@@ -145,6 +185,12 @@ export function targetMidisFor(
       return out;
     }
 
+    case 'rhythm':
+      // Nothing to point at when any key will do. A pinned pitch is the same
+      // key every time, so it simply stays lit for the whole attempt.
+      if (spec.midi !== undefined && inRange(spec.midi)) out.add(spec.midi);
+      return out;
+
     case 'sequence': {
       // Only the next note is a target: showing the whole line at once would
       // tell the user the answer instead of where they are in it.
@@ -173,10 +219,84 @@ export function needsRangeShift(
   if (state.satisfied) return false;
   // Open-ended specs have no targets by design; absence is not a hint here.
   if (spec.kind === 'distinctKeys' || spec.kind === 'risingLeap') return false;
+  if (spec.kind === 'rhythm' && spec.midi === undefined) return false;
   return targetMidisFor(spec, state, range).size === 0;
 }
 
 // ---- internals ----------------------------------------------------------
+
+/**
+ * How much of the goal is done, per kind.
+ *
+ * A switch rather than a ternary: the expression this replaced read
+ * `sequence ? run.length : credited.size`, which failed open — a kind nobody
+ * remembered to add here would have reported 0 forever, with nothing to say so.
+ */
+function doneFor(spec: ExerciseSpec, state: ExerciseState): number {
+  switch (spec.kind) {
+    case 'sequence':
+      return state.run.length;
+    case 'rhythm':
+      return state.rhythm?.hits ?? 0;
+    default:
+      return state.credited.size;
+  }
+}
+
+/**
+ * Walk the attempt on by one note.
+ *
+ * A press that is not where the next note was due breaks the attempt — but if
+ * it could *begin* one, it begins there, exactly as `advanceRun` restarts a
+ * broken sequence. That one rule does all the work: it forgives a single late
+ * note, it forgives a whole bad bar, and it is what stops the step being
+ * passed by mashing, since an extra press between targets is neither on the
+ * next beat nor on a bar line and so resets to nothing.
+ */
+function advanceRhythm(
+  spec: Extract<ExerciseSpec, { kind: 'rhythm' }>,
+  run: RhythmRun | null,
+  input: Extract<ExerciseInput, { kind: 'press' }>,
+): RhythmRun | null {
+  const at = input.atBeats;
+  // No click running: there is nothing to be in time with, so nothing happens
+  // rather than something arbitrary. The runner never offers a rhythm step
+  // without its click, so this is a guard rather than a state anyone meets.
+  if (at === null) return run;
+  // A pinned pitch is part of the answer, not a filter on the input: playing
+  // the rhythm on the wrong key is a wrong attempt, not an absent one.
+  if (spec.midi !== undefined && input.midi !== spec.midi) return null;
+
+  const tolerance = spec.toleranceBeats ?? DEFAULT_RHYTHM_TOLERANCE_BEATS;
+  if (run !== null) {
+    const expected = run.origin + (spec.beats[run.hits] as number);
+    if (Math.abs(at - expected) <= tolerance) return { origin: run.origin, hits: run.hits + 1 };
+  }
+  return startRhythm(spec, at, tolerance);
+}
+
+/**
+ * Begin an attempt, if this press lands on a bar line.
+ *
+ * The grid's beat 0 is a downbeat by construction — `constantClickGrid` accents
+ * `index % numerator === 0` — so bar lines are exactly the whole multiples of
+ * `barBeats` and this is arithmetic rather than a search.
+ */
+function startRhythm(
+  spec: Extract<ExerciseSpec, { kind: 'rhythm' }>,
+  at: number,
+  tolerance: number,
+): RhythmRun | null {
+  const first = spec.beats[0] as number;
+  // Subtract the first offset *before* snapping. Snapping first would pick the
+  // wrong bar for any press in the first half of one whenever `beats[0]` is not
+  // itself 0.
+  const origin = Math.round((at - first) / spec.barBeats) * spec.barBeats;
+  // A press before the click's own first beat would otherwise be measured
+  // against a bar that never sounded.
+  if (origin < 0) return null;
+  return Math.abs(at - (origin + first)) <= tolerance ? { origin, hits: 1 } : null;
+}
 
 /**
  * Walk the run on by one note.

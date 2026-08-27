@@ -15,8 +15,14 @@ const START_SLACK_S = 0.06;
  * Returns how long the phrase lasts, so the caller can keep the button
  * disabled for the duration: scheduled notes cannot be cancelled, and
  * `allNotesOff` would cut the user's own held keys as well.
+ *
+ * `startAtAudioTime` picks the moment the phrase begins. A rhythm lesson
+ * passes the next bar line of its click, so the demo lands *on* the beats the
+ * user is about to be graded against — played from wherever the button
+ * happened to be pressed, the same phrase would drift against the click and
+ * teach the opposite of the step. Omitted, it starts as soon as it safely can.
  */
-export async function playPhrase(phrase: LearnPhrase): Promise<number> {
+export async function playPhrase(phrase: LearnPhrase, startAtAudioTime?: number): Promise<number> {
   const notes = phraseToNotes(phrase);
   if (notes.length === 0) return 0;
 
@@ -33,7 +39,11 @@ export async function playPhrase(phrase: LearnPhrase): Promise<number> {
   // silent for any pitch with no decoded sample.
   await audioEngine.ensurePlayableRange(Math.min(...midis), Math.max(...midis));
 
-  const startTime = audioEngine.currentTime + START_SLACK_S;
+  // Never earlier than the slack allows, however stale the requested time is
+  // by the time the range above finished loading.
+  const earliest = audioEngine.currentTime + START_SLACK_S;
+  const startTime = Math.max(earliest, startAtAudioTime ?? earliest);
+  const waitedMs = (startTime - audioEngine.currentTime) * 1000;
   for (const note of notes) {
     audioEngine.scheduleNote(
       { midi: note.midi, velocity: note.velocity, durationMs: note.durationMs },
@@ -41,5 +51,5 @@ export async function playPhrase(phrase: LearnPhrase): Promise<number> {
       'learn',
     );
   }
-  return phraseDurationMs(notes) + START_SLACK_S * 1000;
+  return phraseDurationMs(notes) + waitedMs;
 }

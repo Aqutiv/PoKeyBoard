@@ -1,6 +1,6 @@
 import type { NoteStaff, TimeSignature } from '@/domain/takeTypes';
 import type { TrackEvent } from '@/features/library/trackBuilder';
-import type { StaffMode } from '@/features/notation/scoreRenderer';
+import type { ScoreChrome, StaffMode } from '@/features/notation/scoreRenderer';
 import type { Messages } from '@/i18n/types';
 import type { ExerciseSpec, PitchClass } from './exerciseSpec';
 import type { NoteSpelling } from './noteLabel';
@@ -52,6 +52,15 @@ interface StepBase {
   listen?: LearnPhrase;
   /** Where the keyboard should park for this step. Omitted leaves it alone. */
   anchorMidi?: number;
+  /**
+   * Run the lesson click through this step.
+   *
+   * Only ever needed to turn the click on *early* — a `rhythm` exercise brings
+   * its own, since a step judged against a click it never started would be
+   * unwinnable. This is what lets a theory card introduce the pulse before
+   * anything is asked of the reader.
+   */
+  click?: true;
 }
 
 export interface TheoryStep extends StepBase {
@@ -168,6 +177,10 @@ export type LearnVisual =
        * guards against impossible to catch.
        */
       staves?: StaffMode;
+      /** Draw the rests the engraver derived. See `StaffSnippet`. */
+      rests?: boolean;
+      /** Bar furniture; 'bare' unless the lesson is about the bar itself. */
+      chrome?: ScoreChrome;
     };
 
 /**

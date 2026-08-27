@@ -103,6 +103,21 @@ const HAIRPIN_MOUTH_PX = GAP * 0.55;
 /** Bottom margin below the bass staff at the default geometry. */
 const BOTTOM_MARGIN = SCORE_MIN_HEIGHT - BASS_TOP - STAFF_H;
 
+/** How much bar furniture a view carries. See `ScoreView.chrome`. */
+export type ScoreChrome = 'full' | 'bare' | 'lesson';
+
+/**
+ * A view's chrome, defaulted.
+ *
+ * Normalized in one place rather than compared inline, because `chrome` is
+ * optional and the Play page passes nothing at all: written as `=== 'full'`
+ * against a raw `view.chrome`, every furniture check would silently turn off
+ * for the live score.
+ */
+function chromeOf(view: ScoreView): ScoreChrome {
+  return view.chrome ?? 'full';
+}
+
 /** 'grand' is both staves; the others draw one, in the treble slot. */
 export type StaffMode = 'grand' | 'treble' | 'bass';
 
@@ -363,11 +378,15 @@ export interface ScoreView {
    */
   staves?: StaffMode;
   /**
-   * How much furniture the bar carries. 'bare' drops the time signature and
-   * the measure number — everything that describes a *bar* rather than a note,
-   * which is noise when the whole picture is one note being read.
+   * How much furniture the bar carries.
+   *
+   * 'bare' drops everything that describes a *bar* rather than a note, which is
+   * noise when the whole picture is one note being read. 'lesson' sits between:
+   * it keeps the time signature, for the chapter whose subject the time
+   * signature is, but still leaves off the measure number and the empty spill
+   * bar. Defaults to 'full' — see `chromeOf`.
    */
-  chrome?: 'full' | 'bare';
+  chrome?: ScoreChrome;
 }
 
 export interface GhostNote {
@@ -509,7 +528,7 @@ function drawMeasures(
     // A note that exactly fills its bar spills a second, empty measure into the
     // layout — and that measure brings a bar line and a whole rest with it. A
     // bare view draws the music, not the silence around it.
-    if (view.chrome === 'bare' && measure.empty) continue;
+    if (chromeOf(view) !== 'full' && measure.empty) continue;
     const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
     if (x >= view.gutterPx - 8) {
       ctx.lineWidth = 1;
@@ -521,7 +540,7 @@ function drawMeasures(
       ctx.stroke();
       // A measure number describes the bar, not the notes — noise when the
       // whole picture is one note being read.
-      if (view.chrome !== 'bare') {
+      if (chromeOf(view) === 'full') {
         ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
       }
       // A new tempo is announced where it takes over, as on paper.
@@ -785,6 +804,10 @@ function drawTies(
   for (const chord of layout.chords) {
     if (chord.displayStartMs < fromMs) continue;
     if (chord.displayStartMs > toMs) break; // sorted by display start
+    // Same rule as `drawChords`: a single-staff view has one set of staff
+    // origins, so a tie from the staff it is not showing would arc across the
+    // one it is.
+    if (!drawsStaff(view, chord.staff)) continue;
     for (const note of chord.notes) {
       if (!note.tiedFromPrev && !note.tiedToNext) continue;
       const key = `${note.staff}|${note.step}`;
@@ -854,6 +877,13 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
     const first = beam.members[0] as ChordGroup;
     const last = beam.members[beam.members.length - 1] as ChordGroup;
     if (last.displayStartMs < fromMs || first.displayStartMs > toMs) continue;
+    // A beam belongs to one staff, and a single-staff view collapses `bassTop`
+    // onto `trebleTop` — so an unfiltered beam from the other staff would be
+    // drawn across the staff that *is* shown. Safe to drop here rather than at
+    // paint time: `drawChord` looks its beam up by id and would fall back to a
+    // flag, but `drawChords` has already dropped that chord by the same rule,
+    // so the lookup never happens.
+    if (!drawsStaff(view, first.staff)) continue;
 
     const xs = beam.members.map((chord) => stemXFor(view, chord));
     const anchors = beam.members.map((chord) => beamAnchorY(view, chord));
@@ -917,10 +947,10 @@ function drawChords(
     // A single-staff view collapses `bassTop` onto `trebleTop`, so a chord from
     // the staff this view is *not* showing is not harmlessly off-canvas — it
     // lands on the staff that is, measured from the other clef's reference
-    // line, silently a third and a bit away from where it belongs. `drawRests`
-    // and `drawOctaves` already filter; this did not. `drawTies` and
-    // `computeBeamLines` still do not, but neither can fire for a lesson
-    // snippet, which is whole notes with no ties.
+    // line, silently a third and a bit away from where it belongs. `drawRests`,
+    // `drawOctaves`, `drawTies` and `computeBeamLines` all guard the same way.
+    // The last two used to be excused on the grounds that a lesson snippet was
+    // whole notes with no ties; the rhythm chapter's beamed eighths ended that.
     if (!drawsStaff(view, chord.staff)) continue;
     drawChord(ctx, view, chord, playheadMs, palette, beamLines, litMidis);
   }
@@ -1305,7 +1335,7 @@ function drawGutter(
 
   // Time signature on every staff drawn. Like the measure number, it describes
   // the bar rather than the note, so a bare view leaves it off.
-  if (view.chrome !== 'bare') {
+  if (chromeOf(view) !== 'bare') {
     ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;
     ctx.textAlign = 'center';
     const tsX = view.gutterPx - 14;

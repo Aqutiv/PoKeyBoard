@@ -9,8 +9,14 @@ import {
 } from '@/features/learn/exerciseMatcher';
 import { goalTotal, type ExerciseSpec } from '@/features/learn/exerciseSpec';
 
-/** One scripted event: press or release a midi at an audio-clock millisecond. */
-type Beat = ['on' | 'off', number, number?];
+/**
+ * One scripted event: press or release a midi at an audio-clock millisecond,
+ * and optionally at a fractional click beat.
+ *
+ * `atBeats` defaults to `null` — no click running — which is what every spec
+ * but `rhythm` is judged under.
+ */
+type Beat = ['on' | 'off', number, number?, (number | null)?];
 
 /**
  * Fold a script through the same normalization `useExercise` applies, so the
@@ -20,14 +26,26 @@ type Beat = ['on' | 'off', number, number?];
 function run(spec: ExerciseSpec, script: readonly Beat[]): ExerciseState {
   const held = new Set<number>();
   let state = initExercise();
-  for (const [type, midi, atMs = 0] of script) {
+  for (const [type, midi, atMs = 0, atBeats = null] of script) {
     if (type === 'on') {
       if (held.has(midi)) continue;
       held.add(midi);
-      state = reduceExercise(spec, state, { kind: 'press', midi, atMs, held: new Set(held) });
+      state = reduceExercise(spec, state, {
+        kind: 'press',
+        midi,
+        atMs,
+        atBeats,
+        held: new Set(held),
+      });
     } else {
       if (!held.delete(midi)) continue;
-      state = reduceExercise(spec, state, { kind: 'release', midi, atMs, held: new Set(held) });
+      state = reduceExercise(spec, state, {
+        kind: 'release',
+        midi,
+        atMs,
+        atBeats,
+        held: new Set(held),
+      });
     }
   }
   return state;
@@ -497,5 +515,147 @@ describe('satisfaction is sticky', () => {
   it('reports a fresh state as zero', () => {
     const spec: ExerciseSpec = { kind: 'distinctKeys', count: 3 };
     expect(progressOf(spec, initExercise())).toEqual({ done: 0, total: 3, satisfied: false });
+  });
+});
+
+describe('rhythm', () => {
+  const C4 = 60;
+  const PULSE: ExerciseSpec = { kind: 'rhythm', beats: [0, 1, 2, 3], barBeats: 4 };
+  const ON_C4: ExerciseSpec = { kind: 'rhythm', beats: [0, 1, 2, 3], barBeats: 4, midi: C4 };
+  /** The chapter's rest figure: a hole where beat 1 would be. */
+  const WITH_REST: ExerciseSpec = { kind: 'rhythm', beats: [0, 2, 3], barBeats: 4, midi: C4 };
+
+  /** Press `midi` at each of these grid beats. Time in ms is irrelevant here. */
+  function atBeats(midi: number, beats: readonly number[]): Beat[] {
+    return beats.flatMap((beat): Beat[] => [
+      ['on', midi, 0, beat],
+      ['off', midi, 0, beat],
+    ]);
+  }
+
+  it('credits a pattern played on the beat', () => {
+    expect(progress(PULSE, atBeats(C4, [0, 1, 2, 3]))).toBe('4/4 ok');
+  });
+
+  it('accepts the pattern at any bar, so nobody has to catch the first one', () => {
+    // The whole reason `beats` are offsets from a bar line: you listen for a
+    // bar or two, then come in. That is what counting in means.
+    expect(progress(PULSE, atBeats(C4, [8, 9, 10, 11]))).toBe('4/4 ok');
+  });
+
+  it('forgives playing consistently a little behind', () => {
+    expect(progress(PULSE, atBeats(C4, [0.2, 1.2, 2.2, 3.2]))).toBe('4/4 ok');
+  });
+
+  it('drops the attempt on a note that is properly late, and takes the next bar', () => {
+    // 2.4 is 0.4 from the beat it was due on and 1.6 from the nearest bar
+    // line, so it neither continues the attempt nor begins one: the readout
+    // goes to nothing rather than back to one.
+    expect(progress(PULSE, atBeats(C4, [0, 1, 2.4]))).toBe('0/4');
+    // The point of resetting rather than failing: the next clean bar stands on
+    // its own, so a slip costs a bar and not the step.
+    expect(progress(PULSE, atBeats(C4, [0, 1, 2.4, 4, 5, 6, 7]))).toBe('4/4 ok');
+  });
+
+  it('cannot be passed by mashing', () => {
+    // The reason a press that misses is *re-tested as a start* rather than
+    // ignored. Ignoring it would let a press land inside every window in order.
+    const mash: number[] = [];
+    for (let beat = 0; beat < 8; beat += 0.125) mash.push(beat);
+    expect(progress(PULSE, atBeats(C4, mash))).toBe('1/4');
+  });
+
+  it('counts an extra note between targets as a wrong attempt', () => {
+    // Only ordered matching can see this at all: graded independently, every
+    // one of these presses is on or near a beat.
+    expect(progress(PULSE, atBeats(C4, [0, 0.5, 1, 2, 3]))).toBe('0/4');
+    expect(progress(PULSE, atBeats(C4, [0, 0.5, 1, 2, 3, 4, 5, 6, 7]))).toBe('4/4 ok');
+  });
+
+  it('does not credit a press in a rest', () => {
+    // Ordered matching earning its keep: graded against the nearest target,
+    // a press at beat 1 would be credited to beat 2 and the hole would vanish.
+    expect(progress(WITH_REST, atBeats(C4, [0, 1, 2, 3]))).toBe('0/3');
+    expect(progress(WITH_REST, atBeats(C4, [0, 2, 3]))).toBe('3/3 ok');
+  });
+
+  it('takes any key when no pitch is pinned', () => {
+    expect(
+      progress(PULSE, [
+        ['on', 60, 0, 0],
+        ['off', 60, 0, 0],
+        ['on', 64, 0, 1],
+        ['off', 64, 0, 1],
+        ['on', 67, 0, 2],
+        ['off', 67, 0, 2],
+        ['on', 72, 0, 3],
+        ['off', 72, 0, 3],
+      ]),
+    ).toBe('4/4 ok');
+  });
+
+  it('treats the wrong key as a wrong attempt when a pitch is pinned', () => {
+    // Not merely ignored: otherwise a two-finger user passes a one-pitch
+    // rhythm by alternating hands.
+    expect(
+      progress(ON_C4, [
+        ['on', 60, 0, 0],
+        ['off', 60, 0, 0],
+        ['on', 62, 0, 1],
+        ['off', 62, 0, 1],
+        ['on', 60, 0, 2],
+        ['off', 60, 0, 2],
+      ]),
+    ).toBe('0/4');
+  });
+
+  it('ignores releases', () => {
+    expect(
+      progress(ON_C4, [
+        ['on', C4, 0, 0],
+        ['off', C4, 0, 0.5],
+        ['on', C4, 0, 1],
+        ['off', C4, 0, 1.5],
+      ]),
+    ).toBe('2/4');
+  });
+
+  it('neither credits nor resets while no click is running', () => {
+    // `atBeats` defaults to null in the helper: nothing to be in time with, so
+    // nothing happens rather than something arbitrary.
+    expect(
+      progress(ON_C4, [
+        ['on', C4],
+        ['off', C4],
+        ['on', C4],
+        ['off', C4],
+      ]),
+    ).toBe('0/4');
+    // And a press before the click cannot poison an attempt made after it.
+    expect(progress(ON_C4, [['on', C4], ['off', C4], ...atBeats(C4, [0, 1, 2, 3])])).toBe('4/4 ok');
+  });
+
+  it('never starts an attempt against a bar that has not clicked yet', () => {
+    expect(progress(ON_C4, atBeats(C4, [-4, -3, -2, -1]))).toBe('0/4');
+  });
+
+  it('keeps satisfaction once the pattern lands', () => {
+    const state = run(PULSE, atBeats(C4, [0, 1, 2, 3, 4, 5.7, 6.3]));
+    expect(state.satisfied).toBe(true);
+    expect(progressOf(PULSE, state).done).toBe(4);
+  });
+
+  it('offers the pinned note as a hint target, and nothing when any key will do', () => {
+    const range = { lowMidi: 60, highMidi: 72 };
+    expect([...targetMidisFor(ON_C4, initExercise(), range)]).toEqual([C4]);
+    expect([...targetMidisFor(PULSE, initExercise(), range)]).toEqual([]);
+  });
+
+  it('asks for a range shift only when the pinned note is off screen', () => {
+    const offScreen = { lowMidi: 72, highMidi: 84 };
+    expect(needsRangeShift(ON_C4, initExercise(), offScreen)).toBe(true);
+    expect(needsRangeShift(ON_C4, initExercise(), { lowMidi: 60, highMidi: 72 })).toBe(false);
+    // "Any key" has no targets by design, so an empty set is not a hint.
+    expect(needsRangeShift(PULSE, initExercise(), offScreen)).toBe(false);
   });
 });
