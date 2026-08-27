@@ -34,7 +34,12 @@ export interface ExerciseSession {
  * the two patience timers. Idle time is counted in ticks rather than read off
  * a clock, so nothing here is impure at render time.
  */
-export function useExercise(spec: ExerciseSpec | null): ExerciseSession {
+export function useExercise(
+  spec: ExerciseSpec | null,
+  /** Converts an audio-clock time to fractional click beats; `null` when no
+   *  click is running. Must be referentially stable — see `LessonClick`. */
+  beatsAt?: (audioTimeSeconds: number) => number | null,
+): ExerciseSession {
   const [state, setState] = useState<ExerciseState>(initExercise);
   const [idleTicks, setIdleTicks] = useState(0);
   const heldRef = useRef<Set<number>>(new Set());
@@ -69,6 +74,10 @@ export function useExercise(spec: ExerciseSpec | null): ExerciseSession {
     return audioEngine.subscribeInput((event) => {
       if (event.type === 'sustain') return;
       const atMs = event.audioTime * 1000;
+      // From seconds, not from `atMs`: the grid speaks audio-clock seconds, so
+      // routing through the rounded millisecond value would lose precision for
+      // nothing.
+      const atBeats = beatsAt?.(event.audioTime) ?? null;
       const held = heldRef.current;
       let input: ExerciseInput;
 
@@ -77,18 +86,21 @@ export function useExercise(spec: ExerciseSpec | null): ExerciseSession {
         // keyboard would take; ignoring it costs nothing and immunizes us.
         if (held.has(event.midi)) return;
         held.add(event.midi);
-        input = { kind: 'press', midi: event.midi, atMs, held: new Set(held) };
+        input = { kind: 'press', midi: event.midi, atMs, atBeats, held: new Set(held) };
       } else {
         // `AudioEngine.noteOff` emits unconditionally, even for a note that
         // never sounded because no sample was decoded for it.
         if (!held.delete(event.midi)) return;
-        input = { kind: 'release', midi: event.midi, atMs, held: new Set(held) };
+        input = { kind: 'release', midi: event.midi, atMs, atBeats, held: new Set(held) };
       }
 
       // The reducer is pure, so a double invocation under StrictMode is safe.
       setState((current) => reduceExercise(spec, current, input));
     });
-  }, [spec]);
+    // `beatsAt` must be referentially stable — `useLessonClick` returns a
+    // ref-backed callback for exactly this reason. An unstable one would
+    // resubscribe on every render and drop the held set with each rebuild.
+  }, [spec, beatsAt]);
 
   const progress = spec ? progressOf(spec, current) : IDLE_PROGRESS;
 
