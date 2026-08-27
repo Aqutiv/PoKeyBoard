@@ -71,14 +71,22 @@ export function useLessonClick(
     lessonMetronome.start(grid);
     originRef.current = performance.now() + (grid.audioTimeAt(0) - audioEngine.currentTime) * 1000;
 
-    // Nothing else stops a Learn click when the page hides: `handleInterruption`
-    // is a no-op from an idle transport, and the engine's 25ms lookahead is
-    // throttled to about a second in a hidden tab — eight times its scheduling
-    // horizon, so the click would come back ragged rather than steady.
+    // Top the schedule up from the audio-render tick, not just the engine's own
+    // 25ms timer, exactly as `beginPlaybackScheduler` does for the transport.
     //
-    // The *same* grid is restarted on return, never a fresh one. `start` seeks
-    // to the next beat by itself, and rebuilding would move beat 0 out from
-    // under an attempt whose origin is stated in it.
+    // `scheduleWindow` only schedules a beat still ahead of the clock, but
+    // advances `nextBeatIndex` either way — so any beat whose moment passed
+    // during a main-thread stall longer than the 120ms horizon is dropped
+    // silently. `beatsAt` keeps grading against the unbroken mathematical grid,
+    // so the user hears a gap, plays to what they heard, and is marked late for
+    // it. The worklet tick keeps firing when ordinary timers do not, which is
+    // what closes that gap.
+    const stopTick = audioEngine.subscribeSchedulerTick(() => lessonMetronome.topUpSchedule());
+
+    // A click nobody is in the room for is just noise, so it stops with the
+    // page. The *same* grid is restarted on return, never a fresh one: `start`
+    // seeks to the next beat by itself, and rebuilding would move beat 0 out
+    // from under an attempt whose origin is stated in it.
     const onVisibility = (): void => {
       if (document.visibilityState === 'hidden') lessonMetronome.stop();
       else if (gridRef.current) lessonMetronome.start(gridRef.current);
@@ -87,6 +95,7 @@ export function useLessonClick(
 
     return () => {
       document.removeEventListener('visibilitychange', onVisibility);
+      stopTick();
       lessonMetronome.stop();
       gridRef.current = null;
       originRef.current = null;
