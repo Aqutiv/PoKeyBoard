@@ -7,6 +7,7 @@ import {
   gutterWidthFor,
   SCORE_LEAD_IN,
   SCORE_PALETTES,
+  type ScoreChrome,
   type StaffMode,
 } from '@/features/notation/scoreRenderer';
 import { phraseToNotes } from './phrase';
@@ -40,6 +41,21 @@ interface StaffSnippetProps {
    * a one-staff picture lands in a two-staff canvas — gutter fill and all.
    */
   staves?: StaffMode;
+  /**
+   * Keep the rests the engraver derived, instead of blanking them.
+   *
+   * Off by default, because `deriveRests` answers "what silence did this
+   * performance leave over" and a worked example is not a performance. The
+   * rhythm chapter is the exception that proves it: there, the silence *is*
+   * the subject.
+   */
+  showRests?: boolean;
+  /**
+   * Bar furniture. 'bare' by default — a lesson about one written note has no
+   * use for a time signature. The rhythm chapter passes 'lesson' to get the
+   * time signature without the measure number.
+   */
+  chrome?: ScoreChrome;
 }
 
 /**
@@ -53,6 +69,8 @@ export function StaffSnippet({
   ariaLabel,
   litMidis,
   staves = 'treble',
+  showRests = false,
+  chrome = 'bare',
 }: StaffSnippetProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const theme = useSyncExternalStore(subscribeTheme, getTheme, getTheme);
@@ -73,8 +91,8 @@ export function StaffSnippet({
     // on its own: that only drops the *bass* rests, while a phrase shorter than
     // its bar also leaves treble ones. `deriveRests` answers "what silence did
     // this performance leave over", and a worked example is not a performance.
-    return { ...score, dynamics: [], hairpins: [], rests: [] };
-  }, [phrase]);
+    return { ...score, dynamics: [], hairpins: [], rests: showRests ? score.rests : [] };
+  }, [phrase, showRests]);
   const geometry = useMemo(() => computeScoreGeometry(layout, { staves }), [layout, staves]);
 
   // Kept in a ref so the ResizeObserver can be created once and still call the
@@ -119,7 +137,7 @@ export function StaffSnippet({
           dynamicsRow: geometry.dynamicsRow,
           gutterPx,
           staves,
-          chrome: 'bare',
+          chrome,
         },
         {
           layout,
@@ -140,7 +158,7 @@ export function StaffSnippet({
     // `litMidis` is safe to depend on by identity: the engine replaces its
     // active-note set only when the set actually changes, so an equal-but-new
     // object never reaches here.
-  }, [layout, geometry, phrase.timeSignature, theme, litMidis, staves]);
+  }, [layout, geometry, phrase.timeSignature, theme, litMidis, staves, chrome]);
 
   // A static canvas has no redraw loop of its own to catch a resize. Created
   // once and left alone; it calls whichever draw closure is current.
