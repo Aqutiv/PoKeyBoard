@@ -1,0 +1,1033 @@
+{
+  "version": "wurlitzer-ep203w-v1",
+  "source": "Wurlitzer EP203W by Greg Sullivan; SFZ mapping by kinwie",
+  "sourceUrl": "https://github.com/sfzinstruments/GregSullivan.E-Pianos",
+  "sourceRevision": "8c3e581acda3594b553948ff0222d4f84a698376",
+  "license": "CC-BY 3.0",
+  "format": "flac-16bit-44.1khz-mono",
+  "velocityLayers": [
+    {
+      "index": 0,
+      "sourceLayer": 1,
+      "label": "pp"
+    },
+    {
+      "index": 1,
+      "sourceLayer": 2,
+      "label": "mp"
+    },
+    {
+      "index": 2,
+      "sourceLayer": 3,
+      "label": "f"
+    },
+    {
+      "index": 3,
+      "sourceLayer": 4,
+      "label": "ff"
+    }
+  ],
+  "envelope": {
+    "attack": 0.001,
+    "hold": 5,
+    "decay": 25,
+    "release": 0.1
+  },
+  "levelMatch": 0.87027,
+  "coreBytes": 1557368,
+  "totalBytes": 2391082,
+  "files": [
+    {
+      "file": "a1f.sample",
+      "midi": 33,
+      "layer": 2,
+      "bytes": 82944,
+      "pack": "full",
+      "loop": {
+        "start": 4.389909297052154,
+        "end": 4.480657596371882
+      }
+    },
+    {
+      "file": "a1ff.sample",
+      "midi": 33,
+      "layer": 3,
+      "bytes": 105352,
+      "pack": "full",
+      "loop": {
+        "start": 5.418367346938775,
+        "end": 5.581927437641723
+      }
+    },
+    {
+      "file": "a1mp.sample",
+      "midi": 33,
+      "layer": 1,
+      "bytes": 57475,
+      "pack": "full",
+      "loop": {
+        "start": 2.6018140589569163,
+        "end": 2.801156462585034
+      }
+    },
+    {
+      "file": "a1pp.sample",
+      "midi": 33,
+      "layer": 0,
+      "bytes": 48339,
+      "pack": "full",
+      "loop": {
+        "start": 2.2206802721088437,
+        "end": 2.4200226757369614
+      }
+    },
+    {
+      "file": "a2mp.sample",
+      "midi": 45,
+      "layer": 1,
+      "bytes": 47711,
+      "pack": "core",
+      "loop": {
+        "start": 2.307641723356009,
+        "end": 2.3529478458049886
+      }
+    },
+    {
+      "file": "ab2pp.sample",
+      "midi": 44,
+      "layer": 0,
+      "bytes": 66420,
+      "pack": "core",
+      "loop": {
+        "start": 3.5358503401360544,
+        "end": 3.785170068027211
+      }
+    },
+    {
+      "file": "ab3f.sample",
+      "midi": 56,
+      "layer": 2,
+      "bytes": 60967,
+      "pack": "core",
+      "loop": {
+        "start": 2.4275056689342405,
+        "end": 2.4801133786848073
+      }
+    },
+    {
+      "file": "ab3ff.sample",
+      "midi": 56,
+      "layer": 3,
+      "bytes": 80959,
+      "pack": "core",
+      "loop": {
+        "start": 3.0706122448979594,
+        "end": 3.1952380952380954
+      }
+    },
+    {
+      "file": "ab3mp.sample",
+      "midi": 56,
+      "layer": 1,
+      "bytes": 56479,
+      "pack": "core",
+      "loop": {
+        "start": 2.6274149659863943,
+        "end": 2.6513151927437644
+      }
+    },
+    {
+      "file": "ab3pp.sample",
+      "midi": 56,
+      "layer": 0,
+      "bytes": 26084,
+      "pack": "core",
+      "loop": {
+        "start": 0.9832199546485261,
+        "end": 1.0118820861678004
+      }
+    },
+    {
+      "file": "ab4f.sample",
+      "midi": 68,
+      "layer": 2,
+      "bytes": 67295,
+      "pack": "core",
+      "loop": {
+        "start": 2.5620861678004534,
+        "end": 2.7065532879818592
+      }
+    },
+    {
+      "file": "ab6f.sample",
+      "midi": 92,
+      "layer": 2,
+      "bytes": 39063,
+      "pack": "full",
+      "loop": {
+        "start": 0.9847619047619047,
+        "end": 1.0520408163265307
+      }
+    },
+    {
+      "file": "ab6mp.sample",
+      "midi": 92,
+      "layer": 0,
+      "bytes": 31738,
+      "pack": "full",
+      "loop": {
+        "start": 0.7797278911564626,
+        "end": 0.8301814058956916
+      }
+    },
+    {
+      "file": "b2f.sample",
+      "midi": 47,
+      "layer": 2,
+      "bytes": 76172,
+      "pack": "core",
+      "loop": {
+        "start": 3.653469387755102,
+        "end": 3.8466213151927438
+      }
+    },
+    {
+      "file": "b2ff.sample",
+      "midi": 47,
+      "layer": 3,
+      "bytes": 94318,
+      "pack": "core",
+      "loop": {
+        "start": 3.6473696145124714,
+        "end": 3.849387755102041
+      }
+    },
+    {
+      "file": "b4mp.sample",
+      "midi": 71,
+      "layer": 1,
+      "bytes": 25935,
+      "pack": "core",
+      "loop": {
+        "start": 0.71140589569161,
+        "end": 0.7780045351473923
+      }
+    },
+    {
+      "file": "c2f.sample",
+      "midi": 36,
+      "layer": 2,
+      "bytes": 92770,
+      "pack": "full",
+      "loop": {
+        "start": 4.75077097505669,
+        "end": 4.933424036281179
+      }
+    },
+    {
+      "file": "c2ff.sample",
+      "midi": 36,
+      "layer": 3,
+      "bytes": 116608,
+      "pack": "full",
+      "loop": {
+        "start": 5.027959183673469,
+        "end": 5.180657596371882
+      }
+    },
+    {
+      "file": "db4f.sample",
+      "midi": 61,
+      "layer": 2,
+      "bytes": 64401,
+      "pack": "core",
+      "loop": {
+        "start": 2.067369614512472,
+        "end": 2.1466666666666665
+      }
+    },
+    {
+      "file": "db4ff.sample",
+      "midi": 61,
+      "layer": 3,
+      "bytes": 77533,
+      "pack": "core",
+      "loop": {
+        "start": 2.7390249433106577,
+        "end": 2.8656009070294783
+      }
+    },
+    {
+      "file": "db4mp.sample",
+      "midi": 61,
+      "layer": 1,
+      "bytes": 47182,
+      "pack": "core",
+      "loop": {
+        "start": 2.0309297052154194,
+        "end": 2.0705668934240364
+      }
+    },
+    {
+      "file": "db4pp.sample",
+      "midi": 61,
+      "layer": 0,
+      "bytes": 35255,
+      "pack": "core",
+      "loop": {
+        "start": 0.88281179138322,
+        "end": 0.9981859410430839
+      }
+    },
+    {
+      "file": "db5f.sample",
+      "midi": 73,
+      "layer": 2,
+      "bytes": 58401,
+      "pack": "core",
+      "loop": {
+        "start": 1.7160090702947846,
+        "end": 1.7990249433106575
+      }
+    },
+    {
+      "file": "db5ff.sample",
+      "midi": 73,
+      "layer": 3,
+      "bytes": 48573,
+      "pack": "core",
+      "loop": {
+        "start": 1.4786848072562357,
+        "end": 1.518390022675737
+      }
+    },
+    {
+      "file": "db5mp.sample",
+      "midi": 73,
+      "layer": 1,
+      "bytes": 31992,
+      "pack": "core",
+      "loop": {
+        "start": 1.0015419501133787,
+        "end": 1.0538548752834467
+      }
+    },
+    {
+      "file": "db5pp.sample",
+      "midi": 73,
+      "layer": 0,
+      "bytes": 15919,
+      "pack": "core",
+      "loop": {
+        "start": 0.30854875283446714,
+        "end": 0.3570975056689342
+      }
+    },
+    {
+      "file": "db6f.sample",
+      "midi": 85,
+      "layer": 2,
+      "bytes": 34214,
+      "pack": "core",
+      "loop": {
+        "start": 0.9937868480725623,
+        "end": 1.0875963718820862
+      }
+    },
+    {
+      "file": "db6mp.sample",
+      "midi": 85,
+      "layer": 0,
+      "bytes": 38353,
+      "pack": "core",
+      "loop": {
+        "start": 1.146530612244898,
+        "end": 1.2403401360544217
+      }
+    },
+    {
+      "file": "e2mp.sample",
+      "midi": 40,
+      "layer": 1,
+      "bytes": 44472,
+      "pack": "full",
+      "loop": {
+        "start": 2.154172335600907,
+        "end": 2.2024716553287984
+      }
+    },
+    {
+      "file": "e3f.sample",
+      "midi": 52,
+      "layer": 2,
+      "bytes": 56270,
+      "pack": "core",
+      "loop": {
+        "start": 2.2558049886621316,
+        "end": 2.364557823129252
+      }
+    },
+    {
+      "file": "e3ff.sample",
+      "midi": 52,
+      "layer": 3,
+      "bytes": 75586,
+      "pack": "core",
+      "loop": {
+        "start": 2.8036961451247167,
+        "end": 2.9187981859410432
+      }
+    },
+    {
+      "file": "e4ff.sample",
+      "midi": 64,
+      "layer": 3,
+      "bytes": 74051,
+      "pack": "core",
+      "loop": {
+        "start": 2.5120408163265306,
+        "end": 2.5514285714285716
+      }
+    },
+    {
+      "file": "eb3mp.sample",
+      "midi": 51,
+      "layer": 1,
+      "bytes": 45305,
+      "pack": "core",
+      "loop": {
+        "start": 2.1396825396825396,
+        "end": 2.171655328798186
+      }
+    },
+    {
+      "file": "eb3pp.sample",
+      "midi": 51,
+      "layer": 0,
+      "bytes": 42992,
+      "pack": "core",
+      "loop": {
+        "start": 2.351700680272109,
+        "end": 2.3899773242630387
+      }
+    },
+    {
+      "file": "f2f.sample",
+      "midi": 41,
+      "layer": 2,
+      "bytes": 89272,
+      "pack": "full",
+      "loop": {
+        "start": 4.513968253968254,
+        "end": 4.685011337868481
+      }
+    },
+    {
+      "file": "f2ff.sample",
+      "midi": 41,
+      "layer": 3,
+      "bytes": 125681,
+      "pack": "full",
+      "loop": {
+        "start": 5.245283446712018,
+        "end": 5.451292517006802
+      }
+    },
+    {
+      "file": "g4ff.sample",
+      "midi": 67,
+      "layer": 3,
+      "bytes": 54754,
+      "pack": "core",
+      "loop": {
+        "start": 1.7051700680272108,
+        "end": 1.769002267573696
+      }
+    },
+    {
+      "file": "g4pp.sample",
+      "midi": 67,
+      "layer": 0,
+      "bytes": 27051,
+      "pack": "core",
+      "loop": {
+        "start": 0.8701587301587301,
+        "end": 0.9465532879818594
+      }
+    },
+    {
+      "file": "g5f.sample",
+      "midi": 79,
+      "layer": 2,
+      "bytes": 35062,
+      "pack": "core",
+      "loop": {
+        "start": 0.891156462585034,
+        "end": 0.9457142857142857
+      }
+    },
+    {
+      "file": "g5ff.sample",
+      "midi": 79,
+      "layer": 3,
+      "bytes": 30552,
+      "pack": "core",
+      "loop": {
+        "start": 0.7723809523809524,
+        "end": 0.8168027210884353
+      }
+    },
+    {
+      "file": "g5mp.sample",
+      "midi": 79,
+      "layer": 0,
+      "bytes": 23809,
+      "pack": "core",
+      "loop": {
+        "start": 0.605827664399093,
+        "end": 0.6641950113378685
+      }
+    },
+    {
+      "file": "gb4mp.sample",
+      "midi": 66,
+      "layer": 1,
+      "bytes": 37773,
+      "pack": "core",
+      "loop": {
+        "start": 1.4565532879818595,
+        "end": 1.478185941043084
+      }
+    }
+  ],
+  "regions": [
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "a1pp.sample",
+      "lowKey": 21,
+      "highKey": 35,
+      "root": 33,
+      "tune": -5,
+      "gain": 0.6918309709189365
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "a1pp.sample",
+      "lowKey": 36,
+      "highKey": 38,
+      "root": 33,
+      "tune": -5,
+      "gain": 0.6683439175686147
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "ab2pp.sample",
+      "lowKey": 39,
+      "highKey": 47,
+      "root": 44,
+      "tune": -8,
+      "gain": 0.6165950018614821
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "eb3pp.sample",
+      "lowKey": 48,
+      "highKey": 53,
+      "root": 51,
+      "tune": -10,
+      "gain": 0.5821032177708714
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "ab3pp.sample",
+      "lowKey": 54,
+      "highKey": 59,
+      "root": 56,
+      "tune": -12,
+      "gain": 0.5308844442309884
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "db4pp.sample",
+      "lowKey": 60,
+      "highKey": 62,
+      "root": 61,
+      "tune": -2,
+      "gain": 0.5495408738576245
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "g4pp.sample",
+      "lowKey": 63,
+      "highKey": 68,
+      "root": 67,
+      "tune": -2,
+      "gain": 0.5495408738576245
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "db5pp.sample",
+      "lowKey": 69,
+      "highKey": 74,
+      "root": 73,
+      "tune": -5,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "g5mp.sample",
+      "lowKey": 75,
+      "highKey": 80,
+      "root": 79,
+      "tune": -8,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "db6mp.sample",
+      "lowKey": 81,
+      "highKey": 89,
+      "root": 85,
+      "tune": 6,
+      "gain": 0.5248074602497727
+    },
+    {
+      "lowVelocity": 1,
+      "highVelocity": 37,
+      "layer": 0,
+      "file": "ab6mp.sample",
+      "lowKey": 90,
+      "highKey": 108,
+      "root": 92,
+      "tune": 2,
+      "gain": 0.5188000389289611
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "a1mp.sample",
+      "lowKey": 21,
+      "highKey": 35,
+      "root": 33,
+      "tune": -5,
+      "gain": 0.6456542290346555
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "e2mp.sample",
+      "lowKey": 36,
+      "highKey": 41,
+      "root": 40,
+      "tune": -4,
+      "gain": 0.6165950018614821
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "a2mp.sample",
+      "lowKey": 42,
+      "highKey": 47,
+      "root": 45,
+      "tune": -2,
+      "gain": 0.5821032177708714
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "eb3mp.sample",
+      "lowKey": 48,
+      "highKey": 53,
+      "root": 51,
+      "tune": -9,
+      "gain": 0.5559042572704036
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "ab3mp.sample",
+      "lowKey": 54,
+      "highKey": 59,
+      "root": 56,
+      "tune": -8,
+      "gain": 0.5432503314924332
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "db4mp.sample",
+      "lowKey": 60,
+      "highKey": 62,
+      "root": 61,
+      "tune": 4,
+      "gain": 0.5432503314924332
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "gb4mp.sample",
+      "lowKey": 63,
+      "highKey": 68,
+      "root": 66,
+      "tune": 7,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "b4mp.sample",
+      "lowKey": 69,
+      "highKey": 71,
+      "root": 71,
+      "tune": -5,
+      "gain": 0.5495408738576245
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "db5mp.sample",
+      "lowKey": 72,
+      "highKey": 74,
+      "root": 73,
+      "tune": 3,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "g5mp.sample",
+      "lowKey": 75,
+      "highKey": 80,
+      "root": 79,
+      "tune": -8,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "db6mp.sample",
+      "lowKey": 81,
+      "highKey": 89,
+      "root": 85,
+      "tune": 6,
+      "gain": 0.5248074602497727
+    },
+    {
+      "lowVelocity": 38,
+      "highVelocity": 65,
+      "layer": 1,
+      "file": "ab6mp.sample",
+      "lowKey": 90,
+      "highKey": 108,
+      "root": 92,
+      "tune": 2,
+      "gain": 0.5188000389289611
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "a1f.sample",
+      "lowKey": 21,
+      "highKey": 35,
+      "root": 33,
+      "tune": -5,
+      "gain": 0.5821032177708714
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "c2f.sample",
+      "lowKey": 36,
+      "highKey": 38,
+      "root": 36,
+      "tune": -7,
+      "gain": 0.5623413251903491
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "f2f.sample",
+      "lowKey": 39,
+      "highKey": 44,
+      "root": 41,
+      "tune": -6,
+      "gain": 0.5821032177708714
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "b2f.sample",
+      "lowKey": 45,
+      "highKey": 50,
+      "root": 47,
+      "tune": -8,
+      "gain": 0.5623413251903491
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "e3f.sample",
+      "lowKey": 51,
+      "highKey": 53,
+      "root": 52,
+      "tune": -4,
+      "gain": 0.5821032177708714
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "ab3f.sample",
+      "lowKey": 54,
+      "highKey": 59,
+      "root": 56,
+      "tune": -11,
+      "gain": 0.5754399373371569
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "db4f.sample",
+      "lowKey": 60,
+      "highKey": 65,
+      "root": 61,
+      "tune": -2,
+      "gain": 0.5754399373371569
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "ab4f.sample",
+      "lowKey": 66,
+      "highKey": 71,
+      "root": 68,
+      "tune": 0,
+      "gain": 0.5623413251903491
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "db5f.sample",
+      "lowKey": 72,
+      "highKey": 77,
+      "root": 73,
+      "tune": 3,
+      "gain": 0.5011872336272722
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "g5f.sample",
+      "lowKey": 78,
+      "highKey": 80,
+      "root": 79,
+      "tune": -7,
+      "gain": 0.5069907082747043
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "db6f.sample",
+      "lowKey": 81,
+      "highKey": 89,
+      "root": 85,
+      "tune": 0,
+      "gain": 0.5069907082747043
+    },
+    {
+      "lowVelocity": 66,
+      "highVelocity": 89,
+      "layer": 2,
+      "file": "ab6f.sample",
+      "lowKey": 90,
+      "highKey": 108,
+      "root": 92,
+      "tune": 0,
+      "gain": 0.5069907082747043
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "a1ff.sample",
+      "lowKey": 21,
+      "highKey": 35,
+      "root": 33,
+      "tune": -5,
+      "gain": 0.5432503314924332
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "c2ff.sample",
+      "lowKey": 36,
+      "highKey": 38,
+      "root": 36,
+      "tune": -7,
+      "gain": 0.5432503314924332
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "f2ff.sample",
+      "lowKey": 39,
+      "highKey": 44,
+      "root": 41,
+      "tune": -6,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "b2ff.sample",
+      "lowKey": 45,
+      "highKey": 50,
+      "root": 47,
+      "tune": -8,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "e3ff.sample",
+      "lowKey": 51,
+      "highKey": 53,
+      "root": 52,
+      "tune": -2,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "ab3ff.sample",
+      "lowKey": 54,
+      "highKey": 59,
+      "root": 56,
+      "tune": -8,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "db4ff.sample",
+      "lowKey": 60,
+      "highKey": 62,
+      "root": 61,
+      "tune": 2,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "e4ff.sample",
+      "lowKey": 63,
+      "highKey": 65,
+      "root": 64,
+      "tune": -3,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "g4ff.sample",
+      "lowKey": 66,
+      "highKey": 68,
+      "root": 67,
+      "tune": 3,
+      "gain": 0.5370317963702527
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "db5ff.sample",
+      "lowKey": 69,
+      "highKey": 77,
+      "root": 73,
+      "tune": -1,
+      "gain": 0.6683439175686147
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "g5ff.sample",
+      "lowKey": 78,
+      "highKey": 80,
+      "root": 79,
+      "tune": -7,
+      "gain": 0.5688529308438414
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "db6f.sample",
+      "lowKey": 81,
+      "highKey": 89,
+      "root": 85,
+      "tune": 0,
+      "gain": 0.5308844442309884
+    },
+    {
+      "lowVelocity": 90,
+      "highVelocity": 127,
+      "layer": 3,
+      "file": "ab6f.sample",
+      "lowKey": 90,
+      "highKey": 108,
+      "root": 92,
+      "tune": 0,
+      "gain": 0.5011872336272722
+    }
+  ]
+}

@@ -425,6 +425,7 @@ export const en: Messages = {
       'Pianos stream as you play. Download one to keep every key playable offline — each downloads and deletes on its own, and your takes are never affected.',
     pianoSalamanderDesc: 'Yamaha C5 concert grand, bright and close',
     pianoHeadroomDesc: 'Yamaha C3 grand, warm and intimate',
+    pianoWurlitzerDesc: 'EP203W electric piano',
     pianoSwitching: 'Loading the new piano…',
     pianoVolume: 'Piano volume',
     reverb: 'Reverb',
@@ -539,6 +540,8 @@ export const en: Messages = {
     installBody:
       'Add PoKeyBoard to your home screen or desktop and it launches full-screen, starts without a connection, and stays out of the browser’s way. Install before you record anything you want to keep, since the installed app can use storage separate from the browser tab.',
     credits: 'Credits',
+    wurlitzerAttribution:
+      'Wurlitzer EP203W samples by Greg Sullivan; SFZ mapping by kinwie. Adapted for the web with sustain loops, tuning, and an extended 88-key range.',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
       'Pianos: Salamander Grand Piano v3 by Alexander Holm (CC-BY 3.0) and Headroom Piano by Bengt Nilsson (CC-BY 4.0), both adapted for the web. MP3 encoding by the LAME encoder compiled to WebAssembly. Full notices ship with the source in THIRD_PARTY_NOTICES.md.',

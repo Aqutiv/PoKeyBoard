@@ -35,6 +35,10 @@ function buildStubManifest(packDir: string): SamplePackManifest {
     readFileSync(path.resolve('public', packDir, 'manifest.json'), 'utf8'),
   ) as SamplePackManifest;
 
+  // The compact Wurlitzer pack has explicit regions with shared files. Keep
+  // its real mapping; thinning roots would leave silent keys and dangling regions.
+  if (realManifest.regions) return realManifest;
+
   const roots = realManifest.files
     .filter((entry) => entry.layer === STUB_LAYER)
     .sort((a, b) => a.midi - b.midi);

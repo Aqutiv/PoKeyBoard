@@ -58,17 +58,21 @@ describe.each(PIANO_INSTRUMENTS)('the $packVersion pack on disk', (instrument) =
     readFileSync(path.join(packDir, 'manifest.json'), 'utf8'),
   ) as SamplePackManifest;
 
-  it('describes itself and carries three velocity layers', () => {
+  it('describes itself and carries its recorded velocity layers', () => {
     expect(manifest.version).toBe(instrument.packVersion);
     expect(manifest.license).toMatch(/^CC-BY/);
     expect(manifest.sourceUrl).toMatch(/^https:\/\//);
-    expect(manifest.velocityLayers.map((layer) => layer.index)).toEqual([0, 1, 2]);
+    expect(manifest.velocityLayers.map((layer) => layer.index)).toEqual(
+      manifest.regions ? [0, 1, 2, 3] : [0, 1, 2],
+    );
   });
 
-  it('is stereo and lossless', () => {
+  it('preserves the native channel layout in lossless FLAC', () => {
     // The mono downmix was the single biggest fidelity loss, and a lossy codec
     // costs attack timing — neither should come back by accident on a rebuild.
-    expect(manifest.format).toMatch(/^flac-16bit-\d+(\.\d+)?khz-stereo$/);
+    expect(manifest.format).toMatch(
+      manifest.regions ? /^flac-16bit-44\.1khz-mono$/ : /^flac-16bit-\d+(\.\d+)?khz-stereo$/,
+    );
   });
 
   it('starts every sample with the attack, not codec priming silence', () => {
@@ -81,6 +85,21 @@ describe.each(PIANO_INSTRUMENTS)('the $packVersion pack on disk', (instrument) =
   });
 
   it('covers every root in all three layers', () => {
+    if (manifest.regions) {
+      for (let key = 21; key <= 108; key++)
+        for (let velocity = 1; velocity <= 127; velocity++) {
+          const regions = manifest.regions.filter(
+            (r) =>
+              key >= r.lowKey &&
+              key <= r.highKey &&
+              velocity >= r.lowVelocity &&
+              velocity <= r.highVelocity,
+          );
+          expect(regions).toHaveLength(1);
+          expect(manifest.files.some((file) => file.file === regions[0]?.file)).toBe(true);
+        }
+      return;
+    }
     expect(manifest.files).toHaveLength(ROOTS.length * 3);
     for (const layer of [0, 1, 2]) {
       const midis = manifest.files
@@ -93,7 +112,11 @@ describe.each(PIANO_INSTRUMENTS)('the $packVersion pack on disk', (instrument) =
 
   it('marks the visible keyboard range as the core pack', () => {
     for (const entry of manifest.files) {
-      const core = entry.midi >= CORE_ROOT_MIN && entry.midi <= CORE_ROOT_MAX;
+      const core = manifest.regions
+        ? manifest.regions.some(
+            (r) => r.file === entry.file && r.lowKey <= CORE_ROOT_MAX && r.highKey >= CORE_ROOT_MIN,
+          )
+        : entry.midi >= CORE_ROOT_MIN && entry.midi <= CORE_ROOT_MAX;
       expect(entry.pack).toBe(core ? 'core' : 'full');
     }
   });

@@ -15,6 +15,7 @@ export default tseslint.config(
       'blob-report',
       'samples-staging',
       'node_modules',
+      '.claude/**',
     ],
   },
   {
@@ -29,6 +30,7 @@ export default tseslint.config(
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'module',
+      parserOptions: { tsconfigRootDir: import.meta.dirname },
     },
   },
 );

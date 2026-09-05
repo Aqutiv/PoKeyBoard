@@ -6,6 +6,8 @@ import { gotoAppReady, nav } from './helpers';
 // Read from the registry so a pack-version bump cannot leave these stale.
 const SALAMANDER_PACK = pianoInstrument('salamander-grand').packVersion;
 const HEADROOM_PACK = pianoInstrument('headroom-grand').packVersion;
+const WURLITZER_PACK = pianoInstrument('wurlitzer-ep203w').packVersion;
+const WURLITZER = /^Wurlitzer/;
 
 const SALAMANDER = /^Salamander/;
 const HEADROOM = /^Headroom/;
@@ -73,6 +75,62 @@ async function storedTakePacks(page: Page): Promise<string[]> {
 }
 
 test.describe('choosing a piano', () => {
+  for (const mobile of [false, true]) {
+    test(`Wurlitzer selection, decoding, and persistence (${mobile ? 'mobile' : 'desktop'})`, async ({
+      page,
+    }) => {
+      if (mobile) await page.setViewportSize({ width: 390, height: 844 });
+      await gotoAppReady(page);
+      await nav(page).getByRole('button', { name: 'Settings' }).click();
+      await pianoRadio(page, WURLITZER).check();
+      await expect.poll(() => storedPiano(page)).toBe('wurlitzer-ep203w');
+      await expect.poll(() => storedTakePacks(page)).toEqual([WURLITZER_PACK]);
+      await page.reload();
+      await nav(page).getByRole('button', { name: 'Settings' }).click();
+      await expect(pianoRadio(page, WURLITZER)).toBeChecked();
+      await nav(page).getByRole('button', { name: 'Play' }).click();
+      await readyKeyboard(page).waitFor();
+      await page.getByRole('button', { name: 'C4 key' }).click();
+      await nav(page).getByRole('button', { name: 'Settings' }).click();
+      await pianoRadio(page, SALAMANDER).check();
+      await expect.poll(() => storedTakePacks(page)).toEqual([SALAMANDER_PACK]);
+    });
+  }
+
+  test('downloads and deletes Wurlitzer independently of the acoustic packs', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    const acousticRow = page
+      .locator('.piano-card')
+      .filter({ has: page.locator('strong', { hasText: /^Headroom$/ }) });
+    await acousticRow.getByRole('button', { name: /^Download / }).click();
+    await expect(acousticRow.getByRole('button', { name: /^Delete / })).toBeVisible();
+    // Each piano card owns its download and delete controls.
+    const packRow = page
+      .locator('.piano-card')
+      .filter({ has: page.locator('strong', { hasText: /^Wurlitzer$/ }) });
+    await packRow.getByRole('button', { name: /^Download / }).click();
+    await expect(packRow.getByRole('button', { name: /^Delete / })).toBeVisible({
+      timeout: 30_000,
+    });
+    const cachedUrls = () =>
+      page.evaluate(async () => {
+        const urls: string[] = [];
+        for (const name of await caches.keys())
+          for (const key of await (await caches.open(name)).keys()) urls.push(key.url);
+        return urls;
+      });
+    const before = await cachedUrls();
+    expect(
+      before.filter((url) => url.includes(WURLITZER_PACK) && url.endsWith('.sample')),
+    ).toHaveLength(42);
+    const other = before.filter((url) => !url.includes(WURLITZER_PACK));
+    page.once('dialog', (dialog) => void dialog.accept());
+    await packRow.getByRole('button', { name: /^Delete / }).click();
+    await expect(packRow.getByRole('button', { name: /^Download / })).toBeVisible();
+    expect((await cachedUrls()).sort()).toEqual(other.sort());
+    await expect(acousticRow.getByRole('button', { name: /^Delete / })).toBeVisible();
+  });
   test('switches the live piano and remembers the choice', async ({ page }) => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Settings' }).click();
@@ -124,7 +182,7 @@ test.describe('choosing a piano', () => {
 
     // One card per piano: the download button names the piano and is sized from
     // that piano's own manifest.
-    for (const name of ['Salamander', 'Headroom']) {
+    for (const name of ['Salamander', 'Headroom', 'Wurlitzer']) {
       await expect(group.getByRole('radio', { name: new RegExp(`^${name}`) })).toHaveCount(1);
       await expect(
         group.getByRole('button', { name: new RegExp(`^Download ${name} \\(\\d`) }),
@@ -134,5 +192,42 @@ test.describe('choosing a piano', () => {
     // The description belongs to the choice, so no second row repeats it.
     await expect(page.getByText('Yamaha C5 concert grand, bright and close')).toHaveCount(1);
     await expect(page.getByText('Yamaha C3 grand, warm and intimate')).toHaveCount(1);
+  });
+});
+
+test.describe('Wurlitzer offline launch', () => {
+  test.use({ serviceWorkers: 'allow', samplePack: 'real' });
+  test('reloads the selected Wurlitzer without a network connection', async ({ page, context }) => {
+    await gotoAppReady(page);
+    await page.evaluate(async () => {
+      await navigator.serviceWorker.ready;
+    });
+    await expect.poll(() => page.evaluate(() => !!navigator.serviceWorker.controller)).toBe(true);
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await pianoRadio(page, WURLITZER).check();
+    const row = page
+      .locator('.piano-card')
+      .filter({ has: page.locator('strong', { hasText: /^Wurlitzer$/ }) });
+    await row.getByRole('button', { name: /^Download / }).click();
+    await expect(row.getByRole('button', { name: /^Delete / })).toBeVisible();
+    await expect.poll(() => storedPiano(page)).toBe('wurlitzer-ep203w');
+    await context.setOffline(true);
+    await page.reload();
+    await nav(page).getByRole('button', { name: 'Play' }).click();
+    await readyKeyboard(page).waitFor();
+    await page.getByRole('button', { name: 'C4 key' }).click();
+    expect(
+      await page.evaluate(async () => {
+        const manifest = await (await fetch('/piano/wurlitzer-ep203w-v1/manifest.json')).json();
+        const audio = new OfflineAudioContext(1, 48000, 48000);
+        for (const file of manifest.files) {
+          const response = await fetch(`/piano/wurlitzer-ep203w-v1/${file.file}`);
+          const buffer = await audio.decodeAudioData(await response.arrayBuffer());
+          if (buffer.duration + 1 / buffer.sampleRate < file.loop.end)
+            throw new Error(`Invalid loop: ${file.file}`);
+        }
+        return manifest.files.length;
+      }),
+    ).toBe(42);
   });
 });

@@ -6,7 +6,7 @@
  * `packVersion` (see DEPLOYMENT.md), because takes record the version they were
  * played with and the export cache keys off it.
  */
-export type PianoInstrumentId = 'salamander-grand' | 'headroom-grand';
+export type PianoInstrumentId = 'salamander-grand' | 'headroom-grand' | 'wurlitzer-ep203w';
 
 export interface PianoInstrument {
   id: PianoInstrumentId;
@@ -38,6 +38,12 @@ export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
     packVersion: 'headroom-grand-v2',
     name: 'Headroom',
     path: 'piano/headroom-grand-v2/',
+  },
+  {
+    id: 'wurlitzer-ep203w',
+    name: 'Wurlitzer',
+    packVersion: 'wurlitzer-ep203w-v1',
+    path: 'piano/wurlitzer-ep203w-v1/',
   },
 ];
 

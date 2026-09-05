@@ -19,6 +19,27 @@ export interface SamplePackFileEntry {
   layer: number;
   pack: 'core' | 'full';
   bytes: number;
+  /** Seconds in the source audio, independent of the context's decode rate. */
+  loop?: { start: number; end: number };
+}
+
+export interface SampleEnvelope {
+  attack: number;
+  hold: number;
+  decay: number;
+  release: number;
+}
+
+export interface SampleRegion {
+  file: string;
+  lowKey: number;
+  highKey: number;
+  root: number;
+  lowVelocity: number;
+  highVelocity: number;
+  layer: number;
+  tune: number;
+  gain: number;
 }
 
 export interface SamplePackManifest {
@@ -31,6 +52,11 @@ export interface SamplePackManifest {
   coreBytes: number;
   totalBytes: number;
   files: SamplePackFileEntry[];
+  /** Explicit mapping for instruments with irregular roots and velocity bands. */
+  regions?: SampleRegion[];
+  envelope?: SampleEnvelope;
+  /** One instrument-wide gain, preserving the source's relative dynamics. */
+  levelMatch?: number;
 }
 
 /** A resolved sample for one note-on. */
@@ -40,6 +66,8 @@ export interface SampleSelection {
   playbackRate: number;
   /** Combined layer trim and velocity gain to apply to the voice. */
   gain: number;
+  loop?: { start: number; end: number };
+  envelope?: SampleEnvelope;
 }
 
 export type SampleLoadPhase =

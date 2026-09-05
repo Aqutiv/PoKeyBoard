@@ -8,7 +8,7 @@ import { ExportError } from '@/utils/errors';
 import { audioEngine } from './AudioEngine';
 import { scheduleClicksForRange } from './MetronomeEngine';
 import { createPianoGraph } from './PianoGraphFactory';
-import { ATTACK_S, RELEASE_STOP_AFTER_S, RELEASE_TC } from './VoiceManager';
+import { releaseSampleVoice, startSampleVoice } from './sampleVoice';
 
 const RENDER_SAMPLE_RATE = 48_000;
 /** Ring-out after the last note: release plus the reverb tail. */
@@ -89,17 +89,8 @@ export async function renderTakeToBuffer(
     }
     const when = note.startMs / 1000;
     const releaseAt = when + note.durationMs / 1000;
-    const source = context.createBufferSource();
-    source.buffer = sample.buffer;
-    source.playbackRate.value = sample.playbackRate;
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(0, when);
-    gain.gain.linearRampToValueAtTime(sample.gain, when + ATTACK_S);
-    gain.gain.setTargetAtTime(0, releaseAt, RELEASE_TC);
-    source.connect(gain);
-    gain.connect(graph.voiceDestination);
-    source.start(when);
-    source.stop(releaseAt + RELEASE_STOP_AFTER_S);
+    const voice = startSampleVoice(context, graph.voiceDestination, sample, when);
+    releaseSampleVoice(voice, releaseAt);
   }
   if (missingSamples > 0) {
     throw new ExportError(
