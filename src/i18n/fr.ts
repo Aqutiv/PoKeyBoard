@@ -180,6 +180,8 @@ export const fr: Messages = {
         'Une tendre berceuse au clair de lune en 6/8, avec une mélodie chantante et des arpèges au doux balancement.',
       moonlightSonata:
         'L’Adagio sostenuto de Beethoven, complet : de lents triolets au clair de lune sous une mélodie qui chante à mi-voix.',
+      whereStarlightLingers:
+        'Un nocturne enchanteur de deux minutes pour piano : une tendre mélodie se déploie entre harmonies lumineuses, voix entrelacées et élan passionné, avant de revenir à un adieu intime qui se prolonge.',
     },
   },
   learn: {

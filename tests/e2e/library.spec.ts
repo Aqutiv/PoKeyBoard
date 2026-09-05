@@ -59,7 +59,7 @@ test.describe('library folders', () => {
       'aria-pressed',
       'true',
     );
-    await expect(trackButtons(page)).toHaveCount(6);
+    await expect(trackButtons(page)).toHaveCount(7);
     await expect(page.getByRole('button', { name: 'Open A Beautiful Day' })).toBeVisible();
 
     await folders(page).getByRole('button', { name: 'Classics' }).click();
@@ -134,7 +134,7 @@ test.describe('vendored classics', () => {
 
   test('files the pack under composer headings, authored tracks on top', async ({ page }) => {
     await gotoLibrary(page);
-    // Six tracks need no grouping.
+    // The smaller Originals folder needs no grouping.
     await expect(page.locator('.library-group__heading')).toHaveCount(0);
 
     await folders(page).getByRole('button', { name: 'Classics' }).click();
@@ -158,7 +158,7 @@ test.describe('vendored classics', () => {
     });
 
     await gotoLibrary(page);
-    // Six tracks need no filter.
+    // The smaller Originals folder needs no filter.
     await expect(page.getByRole('searchbox', { name: 'Filter classics' })).toHaveCount(0);
 
     await folders(page).getByRole('button', { name: 'Classics' }).click();

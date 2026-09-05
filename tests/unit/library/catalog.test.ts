@@ -25,6 +25,7 @@ describe('library catalog', () => {
       'blues-in-c',
       'good-night',
       'moonlight-sonata',
+      'where-starlight-lingers',
     ]);
   });
 
@@ -36,6 +37,7 @@ describe('library catalog', () => {
       'crooked-lantern-waltz',
       'blues-in-c',
       'good-night',
+      'where-starlight-lingers',
     ]);
     // Classics leads with the authored transcriptions, then the vendored pack.
     expect(
@@ -71,7 +73,7 @@ describe('library catalog', () => {
   });
 
   it('lays each folder out as a pinned run then composer groups', () => {
-    // Originals is six tracks; grouping it would be noise.
+    // The smaller Originals folder needs no grouping.
     expect(LIBRARY_FOLDER_SECTIONS.originals).toHaveLength(1);
     expect(LIBRARY_FOLDER_SECTIONS.originals[0]?.composer).toBeNull();
 
