@@ -4,6 +4,7 @@
  * Usage: node scripts/build-sample-pack.mjs <pack-version>
  *   salamander-grand-v3  Salamander Grand Piano v3 (Yamaha C5, Alexander Holm)
  *   headroom-grand-v2    Headroom Piano (Yamaha C3, Bengt Nilsson)
+ *   wurlitzer-ep203w-v1  Wurlitzer EP203W (Greg Sullivan), native looped FLACs
  *
  * Build the reference pack first — every other pack is level-matched against
  * its converted files on disk.
@@ -24,6 +25,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { buildWurlitzer } from './lib/wurlitzer.mjs';
 
 const STAGING_ROOT = 'samples-staging';
 
@@ -450,6 +452,13 @@ if (pkg.name !== 'pokeyboard') {
 }
 
 const requested = process.argv[2];
+if (requested === 'wurlitzer-ep203w-v1') {
+  await buildWurlitzer().catch((error) => {
+    console.error(error);
+    process.exitCode = 1;
+  });
+  process.exit(process.exitCode ?? 0);
+}
 if (RETIRED_PACKS.has(requested)) {
   console.error(
     `${requested} is published and immutable — rebuilding it would rewrite audio ` +
@@ -461,7 +470,7 @@ if (RETIRED_PACKS.has(requested)) {
 if (!requested || !(requested in INSTRUMENTS)) {
   console.error(
     `Usage: node scripts/build-sample-pack.mjs <pack-version>\n` +
-      `Known packs: ${Object.keys(INSTRUMENTS).join(', ')}`,
+      `Known packs: ${[...Object.keys(INSTRUMENTS), 'wurlitzer-ep203w-v1'].join(', ')}`,
   );
   process.exit(1);
 }

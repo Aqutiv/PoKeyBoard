@@ -62,6 +62,12 @@ export function AboutPage() {
         <h2 className="about__section">{m.about.credits}</h2>
         <p className="page__hint">{m.about.creditLine}</p>
         <p className="page__hint">{m.about.attribution}</p>
+        <p className="page__hint">
+          {m.about.wurlitzerAttribution}{' '}
+          <a href="https://github.com/sfzinstruments/GregSullivan.E-Pianos">Wurlitzer EP203W</a>
+          {' · '}
+          <a href="https://creativecommons.org/licenses/by/3.0/">CC BY 3.0</a>
+        </p>
         <p className="page__hint">{m.about.version({ version: APP_BUILD_LABEL })}</p>
       </div>
     </section>

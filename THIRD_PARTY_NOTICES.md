@@ -43,6 +43,26 @@ Attribution is also shown in the app's About view.
 
 Attribution is also shown in the app's About view.
 
+## Wurlitzer EP203W (electric piano samples)
+
+- **Author:** Greg Sullivan; SFZ mapping by kinwie.
+- **License:** Creative Commons Attribution 3.0 Unported (CC BY 3.0),
+  <https://creativecommons.org/licenses/by/3.0/>. The full license is included
+  in `public/piano/wurlitzer-ep203w-v1/LICENSE.txt`.
+- **Source:** <https://github.com/sfzinstruments/GregSullivan.E-Pianos>, revision
+  `8c3e581acda3594b553948ff0222d4f84a698376`, Wurlitzer EP200 directory.
+  Greg recorded his own EP203W, a member of the EP200 family.
+- **Files:** `public/piano/wurlitzer-ep203w-v1/*.sample`, 42 original mono,
+  44.1 kHz, 16-bit FLAC recordings. Audio bytes are unchanged; only the file
+  extension is renamed. Source loop points are extracted into the manifest.
+- **Adaptations:** SFZ note/velocity regions, tuning and gain corrections
+  converted to a web manifest; outer regions extended to A0–C8; a shared
+  1 ms attack, 5 s hold, 25 s linear decay and 100 ms release envelope; v²
+  velocity response and one measured pack gain. No added effects or sample
+  trimming. Builds use `node scripts/build-sample-pack.mjs wurlitzer-ep203w-v1`.
+
+Attribution and source/license links are also shown in the app's About view.
+
 ## LAME MP3 encoder (via wasm-media-encoders)
 
 - **Package:** `wasm-media-encoders` (MIT license) bundling the LAME MP3

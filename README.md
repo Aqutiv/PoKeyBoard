@@ -2,7 +2,7 @@
 
 **▶ Live app: https://aqutiv.github.io/PoKeyBoard/**
 
-Play, record, and share piano performances — entirely in your browser. PoKeyBoard is an installable, offline-capable Progressive Web App: a sample-based grand piano with a multi-touch keyboard, computer-keyboard, game-controller and USB MIDI input, live grand-staff notation, a metronome, structured note-event recording, audible score scrubbing, and one-tap MP3 sharing through the OS share sheet (WhatsApp, Messages, email, …).
+Play, record, and share piano performances — entirely in your browser. PoKeyBoard is an installable, offline-capable Progressive Web App: sampled acoustic and electric pianos with a multi-touch keyboard, computer-keyboard, game-controller and USB MIDI input, live grand-staff notation, a metronome, structured note-event recording, audible score scrubbing, and one-tap MP3 sharing through the OS share sheet (WhatsApp, Messages, email, …).
 
 No account. No backend. No microphone — "recording" captures the notes you play, and "audio export" re-renders them through the same piano engine into a real MP3.
 
@@ -20,10 +20,13 @@ The piano sample packs ship in `public/piano/` (committed) — one directory per
 ```bash
 node scripts/build-sample-pack.mjs salamander-grand-v3   # Yamaha C5, the default piano
 node scripts/build-sample-pack.mjs headroom-grand-v2     # Yamaha C3, the warmer alternative
+node scripts/build-sample-pack.mjs wurlitzer-ep203w-v1   # Wurlitzer EP203W electric piano
 node scripts/build-icons.mjs                             # PWA icons from assets/branding
 ```
 
-Each run downloads the FLAC subset it needs into the gitignored `samples-staging/`, converts to stereo 16-bit FLAC (`.sample` files), and measures the pack's loudness against the default piano so the two match in the app. Build the default piano first — it is the reference the others are matched against. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean.
+Acoustic pack builds download the FLAC subset they need into the gitignored `samples-staging/`, convert to stereo 16-bit FLAC (`.sample` files), and measure loudness against the default piano. Build the default piano first — it is the reference the others are matched against. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean.
+
+The Wurlitzer pack preserves all 42 original mono FLAC recordings (2.39 MB), four velocity layers, tuning, and embedded sustain loops. Its upstream revision is pinned; only the file extension changes. A single gain matches its level to Salamander, and its outer sample regions extend to the app's full A0–C8 range. Live playback and MP3 exports share the same loop and envelope scheduler.
 
 ## Commands
 
@@ -46,7 +49,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 
 1. `npm run build && npm run preview -- --host` and open `http://<your-ip>:4173` **only for quick layout checks** (no SW on plain http), or deploy to an HTTPS host for the full experience.
 2. First visit online; the app shell caches automatically.
-3. Settings → **Piano** → **Download Salamander** (or **Download Headroom**) to pin a full sample pack — each piano card downloads on its own.
+3. Settings → **Piano** → **Download Salamander** (or **Download Headroom** / **Download Wurlitzer**) to pin a full sample pack — each piano card downloads on its own.
 
 ## Installing
 
@@ -57,7 +60,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 ## Offline behavior
 
 - The app shell (HTML/JS/CSS/icons/fonts, ~2.0 MB) is precached on first visit — the app starts with no connection.
-- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use the **Download** button on a piano card in Settings → **Piano** (~24-28 MB per piano, downloaded and deleted independently, without touching takes).
+- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use the **Download** button on a piano card in Settings → **Piano** (~24–28 MB per acoustic piano, 2.39 MB for Wurlitzer, downloaded and deleted independently, without touching takes).
 - Updates download in the background and apply only when you choose (Settings → App) — never mid-recording.
 
 ## Your data

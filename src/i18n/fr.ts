@@ -424,6 +424,7 @@ export const fr: Messages = {
       'Les pianos se chargent au fil du jeu. Téléchargez-en un pour garder chaque touche jouable hors ligne — chaque piano se télécharge et se supprime séparément, sans jamais toucher à vos prises.',
     pianoSalamanderDesc: 'Piano de concert Yamaha C5, brillant et proche',
     pianoHeadroomDesc: 'Piano à queue Yamaha C3, chaleureux et intime',
+    pianoWurlitzerDesc: 'piano électrique EP203W',
     pianoSwitching: 'Chargement du nouveau piano…',
     pianoVolume: 'Volume du piano',
     reverb: 'Réverbération',
@@ -544,6 +545,8 @@ export const fr: Messages = {
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
       'Pianos : Salamander Grand Piano v3 par Alexander Holm (CC-BY 3.0) et Headroom Piano par Bengt Nilsson (CC-BY 4.0), tous deux adaptés pour le web. Encodage MP3 par l’encodeur LAME compilé en WebAssembly. Les mentions complètes accompagnent le code source dans THIRD_PARTY_NOTICES.md.',
+    wurlitzerAttribution:
+      'Échantillons Wurlitzer EP203W par Greg Sullivan ; mapping SFZ par kinwie. Adaptés pour le web avec boucles de sustain, accordage et une étendue de 88 touches.',
     version: ({ version }) => `Version ${version}.`,
   },
   errors: {

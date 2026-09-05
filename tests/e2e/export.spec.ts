@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { gotoAppReady, recordShortTake } from './helpers';
+import { gotoAppReady, nav, recordShortTake } from './helpers';
 
 test.describe('MP3 export', () => {
   // The suite's guarantee that the real 42-file core pack still decodes and
@@ -7,34 +7,43 @@ test.describe('MP3 export', () => {
   // assertions below fail on a silent or empty render.
   test.use({ samplePack: 'real' });
 
-  test('renders a take to a real MP3 and downloads it', async ({ page }) => {
-    await gotoAppReady(page);
-    await recordShortTake(page);
+  for (const wurlitzer of [false, true])
+    test(`renders a ${wurlitzer ? 'Wurlitzer' : 'Salamander'} take to a real MP3 and downloads it`, async ({
+      page,
+    }) => {
+      await gotoAppReady(page);
+      if (wurlitzer) {
+        await nav(page).getByRole('button', { name: 'Settings' }).click();
+        await page.getByRole('radio', { name: /^Wurlitzer/ }).check();
+        await nav(page).getByRole('button', { name: 'Play' }).click();
+        await page.locator('section[data-piano-ready="true"]').waitFor();
+      }
+      await recordShortTake(page);
 
-    await page.getByRole('button', { name: 'Share', exact: true }).click();
-    await page.getByRole('menuitem', { name: 'Audio (MP3)' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Export audio' });
-    await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Render audio' }).click();
+      await page.getByRole('button', { name: 'Share', exact: true }).click();
+      await page.getByRole('menuitem', { name: 'Audio (MP3)' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Export audio' });
+      await expect(dialog).toBeVisible();
+      await dialog.getByRole('button', { name: 'Render audio' }).click();
 
-    await expect(dialog.getByText(/Audio ready/)).toBeVisible({ timeout: 30_000 });
+      await expect(dialog.getByText(/Audio ready/)).toBeVisible({ timeout: 30_000 });
 
-    // Headless Chromium has no share targets → Share audio falls back to
-    // a download. This IS the download-fallback path from the spec.
-    const downloadPromise = page.waitForEvent('download');
-    await dialog.getByRole('button', { name: 'Share audio' }).click();
-    const download = await downloadPromise;
-    expect(download.suggestedFilename()).toMatch(/^PoKeyBoard - .*\.mp3$/);
+      // Headless Chromium has no share targets → Share audio falls back to
+      // a download. This IS the download-fallback path from the spec.
+      const downloadPromise = page.waitForEvent('download');
+      await dialog.getByRole('button', { name: 'Share audio' }).click();
+      const download = await downloadPromise;
+      expect(download.suggestedFilename()).toMatch(/^PoKeyBoard - .*\.mp3$/);
 
-    const filePath = await download.path();
-    expect(filePath).not.toBeNull();
-    const { statSync, readFileSync } = await import('node:fs');
-    expect(statSync(filePath!).size).toBeGreaterThan(5_000);
-    const head = readFileSync(filePath!).subarray(0, 2);
-    const isMp3 = head[0] === 0xff && ((head[1] ?? 0) & 0xe0) === 0xe0;
-    const isId3 = head[0] === 0x49 && head[1] === 0x44;
-    expect(isMp3 || isId3).toBe(true);
-  });
+      const filePath = await download.path();
+      expect(filePath).not.toBeNull();
+      const { statSync, readFileSync } = await import('node:fs');
+      expect(statSync(filePath!).size).toBeGreaterThan(5_000);
+      const head = readFileSync(filePath!).subarray(0, 2);
+      const isMp3 = head[0] === 0xff && ((head[1] ?? 0) & 0xe0) === 0xe0;
+      const isId3 = head[0] === 0x49 && head[1] === 0x44;
+      expect(isMp3 || isId3).toBe(true);
+    });
 
   test('reuses the cached export for an unchanged take', async ({ page }) => {
     await gotoAppReady(page);

@@ -1,22 +1,21 @@
 import type { NoteSourceId, SampleSelection } from './audioTypes';
+import {
+  holdSampleVoice,
+  releaseSampleVoice,
+  startSampleVoice,
+  type SampleVoice,
+} from './sampleVoice';
 
 export const MAX_VOICES = 48;
 /** Envelope constants shared with the offline renderer so exports match. */
-export const ATTACK_S = 0.003;
-/** Time constant for the exponential-ish release ramp. */
-export const RELEASE_TC = 0.07;
-/** How long after release begins the source is hard-stopped. */
-export const RELEASE_STOP_AFTER_S = 0.6;
+export { ATTACK_S, RELEASE_TC, RELEASE_STOP_AFTER_S } from './sampleVoice';
 const STEAL_FADE_TC = 0.012;
 const ALL_OFF_FADE_TC = 0.02;
 
-interface Voice {
+interface Voice extends SampleVoice {
   id: number;
   midi: number;
   sourceId: NoteSourceId;
-  startTime: number;
-  source: AudioBufferSourceNode;
-  gain: GainNode;
   releasing: boolean;
   heldByPedal: boolean;
   /** Counts toward the shared active-note model (live input only). */
@@ -57,31 +56,20 @@ export class VoiceManager {
   ): Voice {
     this.stealIfNeeded();
 
-    const source = this.context.createBufferSource();
-    source.buffer = sample.buffer;
-    source.playbackRate.value = sample.playbackRate;
-
-    const gain = this.context.createGain();
-    gain.gain.setValueAtTime(0, when);
-    gain.gain.linearRampToValueAtTime(sample.gain, when + ATTACK_S);
-
-    source.connect(gain);
-    gain.connect(this.destination);
-    source.start(when);
+    const playback = startSampleVoice(this.context, this.destination, sample, when);
 
     const voice: Voice = {
+      ...playback,
       id: this.nextVoiceId++,
       midi,
       sourceId,
       startTime: when,
-      source,
-      gain,
       releasing: false,
       heldByPedal: false,
       uiActive,
     };
     this.voices.add(voice);
-    source.onended = () => {
+    voice.source.onended = () => {
       this.voices.delete(voice);
       this.disconnectVoice(voice);
     };
@@ -160,7 +148,7 @@ export class VoiceManager {
       }
       if (!voice.releasing) {
         voice.releasing = true;
-        voice.gain.gain.cancelScheduledValues(now);
+        holdSampleVoice(voice, now);
         voice.gain.gain.setTargetAtTime(0, now, ALL_OFF_FADE_TC);
         this.safeStop(voice, now + 0.25);
       }
@@ -200,9 +188,7 @@ export class VoiceManager {
     }
     voice.heldByPedal = false;
     const start = Math.max(when, this.context.currentTime);
-    voice.gain.gain.cancelScheduledValues(start);
-    voice.gain.gain.setTargetAtTime(0, start, RELEASE_TC);
-    this.safeStop(voice, start + RELEASE_STOP_AFTER_S);
+    releaseSampleVoice(voice, start);
   }
 
   /**
@@ -217,7 +203,7 @@ export class VoiceManager {
         this.oldestWhere(() => true);
       if (!candidate) return;
       const now = this.context.currentTime;
-      candidate.gain.gain.cancelScheduledValues(now);
+      holdSampleVoice(candidate, now);
       candidate.gain.gain.setTargetAtTime(0, now, STEAL_FADE_TC);
       this.safeStop(candidate, now + 0.08);
       this.voices.delete(candidate);

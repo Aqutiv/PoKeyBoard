@@ -442,6 +442,7 @@ export interface Messages {
     pianoHint: string;
     pianoSalamanderDesc: string;
     pianoHeadroomDesc: string;
+    pianoWurlitzerDesc: string;
     pianoSwitching: string;
     pianoVolume: string;
     reverb: string;
@@ -525,6 +526,7 @@ export interface Messages {
     credits: string;
     creditLine: string;
     attribution: string;
+    wurlitzerAttribution: string;
     version: (p: { version: string }) => string;
   };
   errors: Record<ErrorMessageKey, string>;

@@ -141,11 +141,20 @@ export class SampleBank {
     highMidi: number,
   ): Promise<void> {
     const manifest = await this.loadManifest();
+    const mappedFiles = manifest.regions
+      ? new Set(
+          manifest.regions
+            .filter((region) => region.lowKey <= highMidi && region.highKey >= lowMidi)
+            .map((region) => region.file),
+        )
+      : null;
     const needed = manifest.files.filter(
       (entry) =>
         !this.buffers.has(entry.file) &&
-        entry.midi >= lowMidi - MAX_ROOT_DISTANCE_SEMITONES &&
-        entry.midi <= highMidi + MAX_ROOT_DISTANCE_SEMITONES,
+        (mappedFiles
+          ? mappedFiles.has(entry.file)
+          : entry.midi >= lowMidi - MAX_ROOT_DISTANCE_SEMITONES &&
+            entry.midi <= highMidi + MAX_ROOT_DISTANCE_SEMITONES),
     );
     if (needed.length === 0) return;
     if (this.phase === 'core-ready') this.setPhase('loading-extra');
@@ -190,6 +199,12 @@ export class SampleBank {
 
   /** True when a playable buffer exists near this key (any layer). */
   isMidiPlayable(midi: number): boolean {
+    if (this.manifest?.regions) {
+      return this.manifest.regions.some(
+        (region) =>
+          midi >= region.lowKey && midi <= region.highKey && this.buffers.has(region.file),
+      );
+    }
     for (const layer of this.layers.values()) {
       for (const root of layer.loadedRoots) {
         if (Math.abs(root - midi) <= MAX_ROOT_DISTANCE_SEMITONES) return true;
@@ -203,6 +218,7 @@ export class SampleBank {
    * nearest loaded root in any layer so partially loaded states still sound.
    */
   getSample(midi: number, velocity: number): SampleSelection | null {
+    if (this.manifest?.regions) return this.getMappedSample(midi, velocity);
     const preferredLayer = velocityToLayer(velocity);
     const order = [preferredLayer, 1, 0, 2].filter((v, i, arr) => arr.indexOf(v) === i);
     for (const layerIndex of order) {
@@ -223,6 +239,33 @@ export class SampleBank {
         // resolved, not the requested one, because it describes how loudly that
         // file was recorded — during a partial load those differ.
         gain: velocityGain(velocity, preferredLayer) * this.levelMatchFor(layerIndex),
+      };
+    }
+    return null;
+  }
+
+  private getMappedSample(midi: number, velocity: number): SampleSelection | null {
+    const manifest = this.manifest!;
+    const clamped = Math.min(1, Math.max(0, velocity));
+    const midiVelocity = Math.max(1, Math.round(clamped * 127));
+    // Keep the right key mapping during partial loads; fall back only in velocity.
+    const candidates = manifest
+      .regions!.filter((region) => midi >= region.lowKey && midi <= region.highKey)
+      .sort((a, b) => {
+        const distance = (r: typeof a) =>
+          Math.max(r.lowVelocity - midiVelocity, midiVelocity - r.highVelocity, 0);
+        return distance(a) - distance(b);
+      });
+    for (const region of candidates) {
+      const buffer = this.buffers.get(region.file);
+      if (!buffer) continue;
+      const loop = manifest.files.find((entry) => entry.file === region.file)?.loop;
+      return {
+        buffer,
+        playbackRate: Math.pow(2, (midi - region.root + region.tune / 100) / 12),
+        gain: clamped * clamped * region.gain * (manifest.levelMatch ?? 1),
+        ...(loop ? { loop } : {}),
+        ...(manifest.envelope ? { envelope: manifest.envelope } : {}),
       };
     }
     return null;
