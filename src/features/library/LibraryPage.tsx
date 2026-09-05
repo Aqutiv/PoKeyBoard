@@ -24,7 +24,7 @@ export function LibraryPage() {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
-  // Classics runs to 63 tracks; Originals is six and needs no filter.
+  // Classics has a large catalog; the smaller Originals folder needs no filter.
   const [query, setQuery] = useState('');
   const filterInput = useRef<HTMLInputElement>(null);
   const showFilter = folder === 'classics';

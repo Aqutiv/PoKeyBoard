@@ -15,6 +15,7 @@ import { FUR_ELISE } from './tracks/furElise';
 import { GOOD_NIGHT } from './tracks/goodNight';
 import { GYMNOPEDIE_1 } from './tracks/gymnopedie1';
 import { MOONLIGHT_SONATA } from './tracks/moonlightSonata';
+import { WHERE_STARLIGHT_LINGERS } from './tracks/whereStarlightLingers';
 
 /**
  * The built-in library, in display order. This module must stay free of
@@ -31,6 +32,7 @@ export const LIBRARY_TRACKS: readonly LibraryTrackDef[] = [
   BLUES_IN_C,
   GOOD_NIGHT,
   MOONLIGHT_SONATA,
+  WHERE_STARLIGHT_LINGERS,
 ];
 
 export interface LibraryTrackSummary {
@@ -159,7 +161,7 @@ function byComposer(tracks: readonly LibraryTrackSummary[]): LibrarySection[] {
 
 /**
  * How each folder is laid out: a run of ungrouped tracks, then any composer
- * groups. Originals is six tracks and stays flat; Classics leads with the
+ * groups. The smaller Originals folder stays flat; Classics leads with the
  * authored transcriptions — the only ones carrying a description — and files
  * the vendored pack under its composers.
  */

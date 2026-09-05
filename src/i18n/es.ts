@@ -180,6 +180,8 @@ export const es: Messages = {
         'Una tierna nana a la luz de la luna en 6/8, con una melodía cantabile y arpegios que se mecen suavemente.',
       moonlightSonata:
         'El Adagio sostenuto de Beethoven, completo: tresillos lentos a la luz de la luna bajo una melodía que canta en voz baja.',
+      whereStarlightLingers:
+        'Un nocturno encantador de dos minutos para piano: una tierna melodía se despliega entre armonías luminosas, voces entrelazadas y un ascenso apasionado, antes de volver a una despedida íntima que perdura.',
     },
   },
   learn: {

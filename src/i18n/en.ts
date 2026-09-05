@@ -181,6 +181,8 @@ export const en: Messages = {
         'A tender moonlit lullaby in 6/8, with a singing melody and gently rocking arpeggios.',
       moonlightSonata:
         'Beethoven’s Adagio sostenuto, complete — slow moonlit triplets beneath a quiet singing melody.',
+      whereStarlightLingers:
+        'An enchanting two-minute piano nocturne: a tender melody unfolds through luminous harmonies, interwoven voices, and a passionate ascent before returning to a lingering, intimate farewell.',
     },
   },
   learn: {

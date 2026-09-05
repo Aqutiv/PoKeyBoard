@@ -183,6 +183,8 @@ export const mg: Messages = {
         'Hira fampatoriana malefaka eo ambanin’ny hazavan’ny volana amin’ny gadona 6/8, misy feonkira toy ny mihira sy arpège mihozongozona moramora.',
       moonlightSonata:
         'Ny Adagio sostenuto an’i Beethoven, feno — triolet miadana toy ny tara-bolana eo ambanin’ny feon-kira mitony.',
+      whereStarlightLingers:
+        'Hira piano mahavariana maharitra roa minitra: feonkira malefaka mivelatra miaraka amin’ny firindrana mamiratra sy feo mifampirary, miakatra feno fihetseham-po, ary miverina amin’ny veloma mangina sady mamy izay mbola manako.',
     },
   },
   learn: {

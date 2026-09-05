@@ -290,6 +290,7 @@ export interface Messages {
       bluesInC: string;
       goodNight: string;
       moonlightSonata: string;
+      whereStarlightLingers: string;
     };
   };
   learn: {
