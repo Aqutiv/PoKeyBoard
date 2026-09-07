@@ -17,6 +17,7 @@ const h = vi.hoisted(() => ({
   scheduled: [] as number[],
   inputs: new Set<(event: InputNoteEvent) => void>(),
   phase: 'core-ready' as SampleLoadPhase,
+  coreReady: true,
   switchPromise: null as Promise<void> | null,
 }));
 
@@ -27,6 +28,7 @@ vi.mock('@/audio/AudioEngine', () => ({
     },
     unlockFromUserGesture: vi.fn(async () => {}),
     getLoadProgress: vi.fn(() => ({ phase: h.phase })),
+    bank: { isCoreReady: () => h.coreReady },
     setInstrument: vi.fn(() => h.switchPromise ?? Promise.resolve()),
     scheduleNote: vi.fn((event: { midi: number }) => h.scheduled.push(event.midi)),
     subscribeSchedulerTick: vi.fn(() => () => {}),
@@ -95,6 +97,7 @@ describe('training playback', () => {
     h.scheduled = [];
     h.inputs.clear();
     h.phase = 'core-ready';
+    h.coreReady = true;
     h.switchPromise = null;
     useSettingsStore.setState({ pianoInstrument: 'salamander-grand' });
     useTakeStore.getState().setTake(createEmptyTake({ notes: NOTES, durationMs: 900 }));
@@ -152,13 +155,27 @@ describe('training playback', () => {
 
   it('keeps playback blocked after failed decoding and permits it after retry succeeds', async () => {
     h.phase = 'error';
+    h.coreReady = false;
     expect(await transportController.selectPiano('headroom-grand')).toBe(false);
     expect(transportController.isPianoSwitching()).toBe(false);
     transportController.play();
     expect(transportController.getState()).toBe('idle');
     h.phase = 'core-ready';
+    h.coreReady = true;
     transportController.play();
     expect(transportController.getState()).toBe('playing');
+  });
+
+  it('allows playback and recording after optional sample loading fails with the core intact', async () => {
+    h.phase = 'error';
+    h.switchPromise = Promise.reject(new Error('Optional range samples unavailable'));
+    expect(await transportController.selectPiano('headroom-grand')).toBe(true);
+    expect(transportController.isPianoReady()).toBe(true);
+    transportController.play();
+    expect(transportController.getState()).toBe('playing');
+    transportController.stop();
+    await transportController.record();
+    expect(transportController.getState()).toBe('countIn');
   });
 
   it('plays the other hand through and then holds at the trained hand', () => {

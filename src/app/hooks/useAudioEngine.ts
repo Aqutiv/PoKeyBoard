@@ -17,6 +17,7 @@ export function useEngineStatus(): EngineStatus {
 const subscribeProgress = (onStoreChange: () => void) =>
   audioEngine.subscribeLoadProgress(onStoreChange);
 const getProgress = () => audioEngine.getLoadProgress();
+const getCoreReady = () => audioEngine.bank.isCoreReady();
 
 export function useSampleLoadProgress(): SampleLoadProgress {
   return useSyncExternalStore(subscribeProgress, getProgress);
@@ -24,8 +25,8 @@ export function useSampleLoadProgress(): SampleLoadProgress {
 
 export function usePianoReady(): boolean {
   const switching = usePianoSwitching();
-  const { phase } = useSampleLoadProgress();
-  return !switching && (phase === 'core-ready' || phase === 'loading-extra');
+  const coreReady = useSyncExternalStore(subscribeProgress, getCoreReady);
+  return !switching && coreReady;
 }
 
 const subscribeActiveNotes = (onStoreChange: () => void) =>

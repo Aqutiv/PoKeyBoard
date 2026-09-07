@@ -111,8 +111,7 @@ export class TransportController {
   }
 
   isPianoReady(): boolean {
-    const phase = audioEngine.getLoadProgress().phase;
-    return !this.pianoSwitching && (phase === 'core-ready' || phase === 'loading-extra');
+    return !this.pianoSwitching && audioEngine.bank.isCoreReady();
   }
 
   /** Pause before replacing the sample bank; transport stays locked until decoding finishes. */
@@ -130,15 +129,11 @@ export class TransportController {
     try {
       useSettingsStore.getState().setPianoInstrument(id);
       await audioEngine.setInstrument(id);
-      const progress = audioEngine.getLoadProgress();
-      if (progress.phase !== 'core-ready') {
-        throw new Error(progress.error ?? 'Could not load piano samples.');
-      }
-      return true;
+      return audioEngine.bank.isCoreReady();
     } catch {
-      // Sample progress exposes the loading error and existing retry control.
-      // Keep the transport paused so a successful retry can resume it.
-      return false;
+      // Optional range samples can fail after the core has decoded. Progress
+      // still exposes the error, but the usable core must remain available.
+      return audioEngine.bank.isCoreReady();
     } finally {
       this.pianoSwitching = false;
       for (const listener of this.stateListeners) listener();
