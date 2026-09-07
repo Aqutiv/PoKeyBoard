@@ -23,7 +23,7 @@ type PackState =
   | { kind: 'offline-ready'; totalBytes: number }
   | { kind: 'error'; message: string; totalBytes: number };
 
-// Standard preview note for the sound sliders: middle C, mezzo-forte, long
+// Standard preview note for instrument selection: middle C, mezzo-forte, long
 // enough for the reverb tail to be audible after it releases.
 const PREVIEW_MIDI = 60;
 const PREVIEW_VELOCITY = 0.7;
@@ -103,8 +103,7 @@ export function PianoSection() {
     [refreshPackState, m],
   );
 
-  // Play a standard mid-note so the volume/reverb sliders preview their effect
-  // (routes through the master + reverb graph, so it reflects the live value).
+  // Audition the selected piano through the current master and reverb settings.
   const previewNote = useCallback(() => {
     void audioEngine.unlockFromUserGesture();
     audioEngine.scheduleNote(
@@ -233,8 +232,6 @@ export function PianoSection() {
           step={0.05}
           value={instrument.masterVolume}
           onChange={(e) => settings.setMasterVolume(Number(e.target.value))}
-          onPointerDown={previewNote}
-          onPointerUp={previewNote}
         />
       </label>
       <label className="setting-row">
@@ -246,8 +243,6 @@ export function PianoSection() {
           step={0.05}
           value={instrument.reverbMix}
           onChange={(e) => settings.setReverbMix(Number(e.target.value))}
-          onPointerDown={previewNote}
-          onPointerUp={previewNote}
         />
       </label>
     </>

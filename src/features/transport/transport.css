@@ -173,3 +173,27 @@
     flex-basis: 100%;
   }
 }
+
+.practice-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+  padding: 2px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+}
+.practice-options button {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-s);
+  font-size: 13px;
+  color: var(--text-dim);
+}
+.practice-options button[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+.practice-options button:disabled {
+  opacity: 0.5;
+}

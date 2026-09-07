@@ -163,7 +163,7 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
         ♩
       </button>
 
-      <div className="metronome__bpm">
+      <div className="metronome__bpm" title={m.workflow.tempoHint}>
         <button
           type="button"
           className="metronome__step"
@@ -182,6 +182,7 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
             if (event.key === 'Enter') (event.target as HTMLInputElement).blur();
           }}
           aria-label={m.metronome.bpmLabel}
+          aria-description={m.workflow.tempoHint}
         />
         <button
           type="button"
@@ -239,19 +240,22 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
               <option value="2">{m.metronome.twoBars}</option>
             </select>
 
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={metronomeVolume}
-              onChange={(event) => {
-                setMetronomeVolume(Number(event.target.value));
-                transportController.refreshMetronomeConfig();
-              }}
-              aria-label={m.metronome.volumeLabel}
-              className="metronome__volume"
-            />
+            <label className="metronome__volume-label">
+              <span>{m.workflow.clickVolume}</span>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={metronomeVolume}
+                onChange={(event) => {
+                  setMetronomeVolume(Number(event.target.value));
+                  transportController.refreshMetronomeConfig();
+                }}
+                aria-label={m.workflow.clickVolume}
+                className="metronome__volume"
+              />
+            </label>
           </div>
         </>
       )}
@@ -264,6 +268,7 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
           />
         ))}
       </div>
+      {!compact && <span className="metronome__tempo-hint">{m.workflow.tempoHint}</span>}
     </div>
   );
 }

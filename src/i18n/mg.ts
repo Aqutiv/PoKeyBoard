@@ -3,6 +3,23 @@ import type { Messages } from './types';
 /** Malagasy. Malagasy nouns are not inflected for plural, so count-bearing
  * strings interpolate the number without changing the noun. */
 export const mg: Messages = {
+  workflow: {
+    listen: 'Hihaino',
+    practiceLeft: 'Hanao fanazaran-tena ankavia',
+    practiceRight: 'Hanao fanazaran-tena ankavanana',
+    practiceBoth: 'Hanao fanazaran-tena roa tanana',
+    practiceHint: 'Miandry ny naoty lalaovinao ny famerenana.',
+    recording: 'Fandraisam-peo',
+    clickVolume: 'Hamafin’ny kitika',
+    tempoHint:
+      'Manova ny metronome sy ny tsipika ao amin’ny solfa ny tempo, fa tsy ny hafainganam-pamerenana ny voarakitra.',
+    searchTakes: 'Hitady rakipeo',
+    noTakesMatch: 'Tsy misy rakipeo mifanaraka amin’ny fikarohanao.',
+    clearSearch: 'Hamafa fikarohana',
+    upcoming: 'Lesona ho avy',
+    updateAvailable: 'Misy fanavaozana',
+    availableLessons: ({ count }) => `Lesona ${count} azo ianarana`,
+  },
   nav: {
     play: 'Mitendry',
     learn: 'Mianatra',
@@ -43,6 +60,7 @@ export const mg: Messages = {
     recordActive: 'Mandrakitra, mavitrika — ajanony ny fandraketana',
     recordInactive: 'Mandrakitra, tsy mavitrika',
     pause: 'Miato',
+    resume: 'Tohizo',
     play: 'Alefaso',
     stop: 'Ajanony',
     undoLastPass: 'Foano ny fandalovam-pandraketana farany',

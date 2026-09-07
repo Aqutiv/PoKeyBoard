@@ -335,7 +335,7 @@ export const SCORE_PALETTES: Record<'dark' | 'light', ScorePalette> = {
     ghost: 'rgba(242, 236, 223, 0.4)',
     playhead: '#f0b954',
     gutterBg: 'rgba(29, 25, 22, 0.96)',
-    measureNumber: '#7d7466',
+    measureNumber: '#b3a996',
     rest: '#9c9280',
   },
   light: {
@@ -349,7 +349,7 @@ export const SCORE_PALETTES: Record<'dark' | 'light', ScorePalette> = {
     ghost: 'rgba(33, 29, 21, 0.35)',
     playhead: '#8a6410',
     gutterBg: 'rgba(255, 253, 248, 0.96)',
-    measureNumber: '#99917e',
+    measureNumber: '#6b6353',
     rest: '#857c68',
   },
 };

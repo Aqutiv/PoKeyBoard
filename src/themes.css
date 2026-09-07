@@ -37,7 +37,7 @@
 
   --text: #f2ecdf;
   --text-dim: #b3a996;
-  --text-faint: #7d7466;
+  --text-faint: #b3a996;
 
   --accent: #d9a441; /* restrained amber */
   --accent-strong: #f0b954; /* accent as text/outline on surfaces */
@@ -82,7 +82,7 @@
      key bed uses for everything that is going right. */
   --key-wrong: #8f3030;
   --key-wrong-edge: #d05a5a;
-  --key-label: #8d846f;
+  --key-label: #5f553f;
 
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%23b3a996' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 
@@ -100,7 +100,7 @@ html[data-theme='light'] {
 
   --text: #211d15;
   --text-dim: #6b6353;
-  --text-faint: #99917e;
+  --text-faint: #6b6353;
 
   --accent: #8a6410; /* deep bronze */
   --accent-strong: #7f5c10;
@@ -140,7 +140,7 @@ html[data-theme='light'] {
   --key-black-left-3: #6b3e16;
   --key-wrong: #d98080;
   --key-wrong-edge: #a83636;
-  --key-label: #8a8171;
+  --key-label: #5f553f;
 
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M2 4.5l4 4 4-4' fill='none' stroke='%236b6353' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
 

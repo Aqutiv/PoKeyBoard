@@ -70,6 +70,18 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 - **Backups:** Takes → _Backup all takes_ writes a single JSON with every take and your settings; _Restore backup_ merges it back (colliding ids become copies). Individual takes export/import as `*.pokeyboard.json`.
 - Cross-device sync is not part of version 1 — move takes with JSON files.
 
+## Daily listening and practice
+
+- On desktop, **Play** includes piano selection and **Piano volume** beside the metronome. **Click volume** controls the metronome independently.
+- Choose **Listen**, **Practice left**, **Practice right**, or **Practice both** next to the transport. Practice waits for you to play the highlighted notes. **Recording** holds Overdub/Replace; compact screens keep the combined **Modes** menu.
+- Library remembers your filter and scroll position while you move between pages during the current session. **Clear filter** restores the full list; reloading starts a fresh search.
+- While a take plays on another page, the **Now playing** bar offers Pause and Stop. Pausing keeps the bar visible with Resume; stopping dismisses it. Select its title to return to Play.
+- Select a personal take's title on Play to rename it. Enter saves and Escape cancels; library titles stay fixed. Takes also supports title search.
+- Learn shows the available lesson count for the selected level. Expand **Upcoming lessons** to see the remaining curriculum.
+- A badge on Settings indicates a waiting update. Settings shows the running build's commit and date; updates still apply only when you choose at a safe time.
+
+The BPM field changes the metronome and score grid, including tempo changes from a chosen bar. It does **not** change the playback speed of recorded notes. Independent playback speed and A–B passage looping are separate future transport features.
+
 ## Sharing audio
 
 Open a take → **Share audio** → _Render audio_. The take renders offline through the same piano engine (never the microphone) and encodes to MP3 (128 or 192 kbps) in a Web Worker. Where the browser supports sharing files (iOS/Android), the OS share sheet opens with compatible apps — WhatsApp appears if it's installed; PoKeyBoard never assumes it is. Elsewhere the MP3 downloads. Unchanged takes reuse their cached MP3 instantly.

@@ -19,3 +19,13 @@ export function rememberLibraryScroll(folder: LibraryFolderId, top: number): voi
 export function readLibraryScroll(folder: LibraryFolderId): number {
   return scrollTops[folder];
 }
+
+const queries: Partial<Record<LibraryFolderId, string>> = {};
+
+export function readLibraryQuery(folder: LibraryFolderId): string {
+  return queries[folder] ?? '';
+}
+
+export function rememberLibraryQuery(folder: LibraryFolderId, query: string): void {
+  queries[folder] = query;
+}

@@ -4,6 +4,22 @@ import type { Messages } from './types';
  * verbatim so the English-locale default keeps existing behavior (and the
  * English-coupled e2e suite) unchanged. */
 export const en: Messages = {
+  workflow: {
+    listen: 'Listen',
+    practiceLeft: 'Practice left',
+    practiceRight: 'Practice right',
+    practiceBoth: 'Practice both',
+    practiceHint: 'Playback waits for your notes.',
+    recording: 'Recording',
+    clickVolume: 'Click volume',
+    tempoHint: 'Tempo changes the metronome and score grid, not recorded playback speed.',
+    searchTakes: 'Search takes',
+    noTakesMatch: 'No takes match your search.',
+    clearSearch: 'Clear search',
+    upcoming: 'Upcoming lessons',
+    updateAvailable: 'Update available',
+    availableLessons: ({ count }) => `${count} lesson${count === 1 ? '' : 's'} available`,
+  },
   nav: {
     play: 'Play',
     learn: 'Learn',
@@ -43,6 +59,7 @@ export const en: Messages = {
     recordActive: 'Record, active — stop recording',
     recordInactive: 'Record, inactive',
     pause: 'Pause',
+    resume: 'Resume',
     play: 'Play',
     stop: 'Stop',
     undoLastPass: 'Undo last recording pass',

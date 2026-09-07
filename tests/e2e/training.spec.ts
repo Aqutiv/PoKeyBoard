@@ -1,10 +1,14 @@
 import { expect, test } from './fixtures';
 import { gotoAppReady, recordShortTake, transport, transportTime } from './helpers';
 
-/** Pick a mode out of the transport's one mode menu. */
+/** Choose the visible desktop practice mode. */
 async function chooseMode(page: import('@playwright/test').Page, name: RegExp): Promise<void> {
-  await transport(page).getByRole('button', { name: 'Modes' }).click();
-  await page.getByRole('menuitemradio', { name }).click();
+  const label = name.test('both hands')
+    ? 'Practice both'
+    : name.test('left hand')
+      ? 'Practice left'
+      : 'Practice right';
+  await page.getByRole('button', { name: label, exact: true }).click();
 }
 
 test.describe('training playback', () => {
@@ -58,12 +62,10 @@ test.describe('training playback', () => {
     await page.reload();
     await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
 
-    await transport(page).getByRole('button', { name: 'Modes' }).click();
-    await expect(page.getByRole('menuitemradio', { name: /left hand/ })).toHaveAttribute(
-      'aria-checked',
+    await expect(page.getByRole('button', { name: 'Practice left', exact: true })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
-    await page.keyboard.press('Escape');
 
     // Both recorded notes are right-hand, so training the left hand never
     // holds: playback runs to the end on its own.

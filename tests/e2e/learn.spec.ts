@@ -122,7 +122,10 @@ test.describe('learn outline', () => {
 
     for (const level of ['Beginner', 'Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
+      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 6 : 0);
+      await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
+      await page.getByText('Upcoming lessons', { exact: true }).click();
     }
   });
 
@@ -170,6 +173,8 @@ test.describe('learn outline', () => {
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
+    await expect(page.getByText('6 lessons available')).toBeVisible();
+    await page.getByText('Upcoming lessons', { exact: true }).click();
     await expect(
       page.getByRole('button', { name: 'Your First Melody — coming soon' }),
     ).toBeDisabled();
