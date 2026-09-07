@@ -78,6 +78,19 @@ test('Now playing stays visible when paused, resumes, and disappears on stop', a
   await expect(page.locator('.transport__time')).toHaveText(stoppedAt);
 });
 
+test('Now playing disappears when playback finishes naturally', async ({ page }) => {
+  await gotoAppReady(page);
+  await recordShortTake(page, 1000);
+  await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+  await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+  await nav(page).getByRole('button', { name: 'Library' }).click();
+  const bar = page.getByRole('complementary', { name: 'Now playing' });
+  await expect(bar).toBeVisible();
+  await expect(bar).toHaveCount(0, { timeout: 10_000 });
+  await nav(page).getByRole('button', { name: 'Settings' }).click();
+  await expect(bar).toHaveCount(0);
+});
+
 test('rename on Play persists and Takes search handles accents and no matches', async ({
   page,
 }) => {
