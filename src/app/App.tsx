@@ -77,9 +77,11 @@ function Shell() {
   return (
     <div className="app-shell">
       <div className="app-shell__content">
-        <Suspense fallback={<div className="app-boot">Loading…</div>}>
-          <CurrentView />
-        </Suspense>
+        <div className="app-shell__viewport">
+          <Suspense fallback={<div className="app-boot">Loading…</div>}>
+            <CurrentView />
+          </Suspense>
+        </div>
         <NowPlaying />
       </div>
       <AppNav />

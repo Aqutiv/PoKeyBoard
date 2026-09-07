@@ -1,4 +1,5 @@
 import { useTransportState } from './hooks/useTransport';
+import { usePianoReady } from './hooks/useAudioEngine';
 import { useRouter } from './routerContext';
 import { transportController } from '@/features/transport/transportController';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
@@ -8,6 +9,7 @@ import { useTakeStore } from '@/state/useTakeStore';
 export function NowPlaying() {
   const { route, navigate } = useRouter();
   const state = useTransportState();
+  const pianoReady = usePianoReady();
   const take = useTakeStore((s) => s.take);
   const m = useMessages();
   if (route === 'play' || (state !== 'playing' && state !== 'paused')) return null;
@@ -27,6 +29,7 @@ export function NowPlaying() {
       <button
         type="button"
         className="btn btn--small"
+        disabled={state === 'paused' && !pianoReady}
         onClick={() =>
           state === 'playing' ? transportController.pause() : transportController.play()
         }

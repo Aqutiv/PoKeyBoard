@@ -2,6 +2,7 @@ import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { TooltipButton } from '@/ui/TooltipButton';
 import { useCallback } from 'react';
 import { usePlayheadMs, useTrainingWaiting, useTransportState } from '@/app/hooks/useTransport';
+import { usePianoReady } from '@/app/hooks/useAudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -22,6 +23,7 @@ export function TransportControls() {
   const desktop = useMediaQuery('(min-width: 900px) and (min-height: 501px)');
   const playbackMode = useSettingsStore((s) => s.playbackMode);
   const state = useTransportState();
+  const pianoReady = usePianoReady();
   const playheadMs = usePlayheadMs();
   const take = useTakeStore((s) => s.take);
   const durationMs = effectivePlaybackDurationMs(take);
@@ -97,6 +99,7 @@ export function TransportControls() {
           aria-label={recording ? m.transport.recordActive : m.transport.recordInactive}
           aria-pressed={recording}
           onClick={onRecord}
+          disabled={!recording && !pianoReady}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
             <circle cx="12" cy="12" r="7" />
@@ -107,7 +110,7 @@ export function TransportControls() {
           className="transport__btn transport__btn--play"
           aria-label={playing ? m.transport.pause : m.transport.play}
           onClick={onPlayPause}
-          disabled={!playing && !canTransition(state, 'PLAY')}
+          disabled={!playing && (!pianoReady || !canTransition(state, 'PLAY'))}
         >
           {playing ? (
             <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>

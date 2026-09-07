@@ -1,4 +1,5 @@
 import { audioEngine, type InputNoteEvent } from '@/audio/AudioEngine';
+import type { PianoInstrumentId } from '@/audio/instruments';
 import {
   constantClickGrid,
   gridForTake,
@@ -59,6 +60,7 @@ export class TransportController {
   private state: TransportState = 'idle';
   private readonly stateListeners = new Set<() => void>();
   private errorMessage: string | null = null;
+  private pianoSwitching = false;
 
   private metronomeOn = false;
   private pausedPlayheadMs = 0;
@@ -102,6 +104,45 @@ export class TransportController {
 
   getError(): string | null {
     return this.errorMessage;
+  }
+
+  isPianoSwitching(): boolean {
+    return this.pianoSwitching;
+  }
+
+  isPianoReady(): boolean {
+    const phase = audioEngine.getLoadProgress().phase;
+    return !this.pianoSwitching && (phase === 'core-ready' || phase === 'loading-extra');
+  }
+
+  /** Pause before replacing the sample bank; transport stays locked until decoding finishes. */
+  async selectPiano(id: PianoInstrumentId): Promise<boolean> {
+    if (
+      this.pianoSwitching ||
+      id === useSettingsStore.getState().pianoInstrument ||
+      (this.state !== 'idle' && this.state !== 'paused' && this.state !== 'playing')
+    )
+      return false;
+    this.pause();
+    this.clearTrainingGate();
+    this.pianoSwitching = true;
+    for (const listener of this.stateListeners) listener();
+    try {
+      useSettingsStore.getState().setPianoInstrument(id);
+      await audioEngine.setInstrument(id);
+      const progress = audioEngine.getLoadProgress();
+      if (progress.phase !== 'core-ready') {
+        throw new Error(progress.error ?? 'Could not load piano samples.');
+      }
+      return true;
+    } catch {
+      // Sample progress exposes the loading error and existing retry control.
+      // Keep the transport paused so a successful retry can resume it.
+      return false;
+    } finally {
+      this.pianoSwitching = false;
+      for (const listener of this.stateListeners) listener();
+    }
   }
 
   subscribeState(listener: () => void): () => void {
@@ -295,9 +336,10 @@ export class TransportController {
   // ------------------------------------------------------- recording --
 
   async record(mode: RecordMode = 'overdub'): Promise<void> {
-    if (!canTransition(this.state, 'RECORD')) return;
+    if (!this.isPianoReady() || !canTransition(this.state, 'RECORD')) return;
     this.clearTrainingGate();
     await audioEngine.unlockFromUserGesture();
+    if (!this.isPianoReady() || !canTransition(this.state, 'RECORD')) return;
 
     // A library track is read-only: fork it into a fresh user take before
     // any capture so the pass lands there. The fork starts clean (not
@@ -471,6 +513,7 @@ export class TransportController {
   // -------------------------------------------------------- playback --
 
   play(): void {
+    if (!this.isPianoReady()) return;
     // Pressing Play at a training wait point lets that note through rather
     // than fighting the hold: the take sounds it, since the user did not.
     if (this.trainingWaiting && this.trainingGate) {
@@ -485,7 +528,7 @@ export class TransportController {
   private startPlayback(
     resume: { skipNoteIds: ReadonlySet<string> | null; gateFromMs: number } | null,
   ): void {
-    if (!canTransition(this.state, 'PLAY')) return;
+    if (!this.isPianoReady() || !canTransition(this.state, 'PLAY')) return;
     void audioEngine.unlockFromUserGesture();
 
     const take = useTakeStore.getState().take;

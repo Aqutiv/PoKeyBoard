@@ -4,6 +4,8 @@ import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
+import { usePianoSwitching, useTransportState } from '@/app/hooks/useTransport';
+import { transportController } from '@/features/transport/transportController';
 import { formatMB } from './formatBytes';
 
 /** Descriptions only — the piano's name comes from the registry, untranslated. */
@@ -40,7 +42,8 @@ export function PianoSection() {
   const instrument = useTakeStore((state) => state.take.instrument);
 
   const [packs, setPacks] = useState<Partial<Record<PianoInstrumentId, PackState>>>({});
-  const [switching, setSwitching] = useState(false);
+  const switching = usePianoSwitching();
+  const transportState = useTransportState();
 
   const setPack = useCallback((id: PianoInstrumentId, state: PackState) => {
     setPacks((current) => ({ ...current, [id]: state }));
@@ -117,18 +120,12 @@ export function PianoSection() {
   // returns nothing and the note would be silent.
   const selectPiano = useCallback(
     (id: PianoInstrumentId) => {
-      if (id === settings.pianoInstrument) return;
-      setSwitching(true);
-      // Switching the engine and re-stamping the take are the persistence
-      // layer's job, on any route to a new piano; this only awaits the switch
-      // so the preview note lands on samples that have finished decoding.
-      settings.setPianoInstrument(id);
-      void audioEngine
-        .setInstrument(id)
-        .then(previewNote)
-        .finally(() => setSwitching(false));
+      const audition = transportController.getState() === 'idle';
+      void transportController.selectPiano(id).then((changed) => {
+        if (changed && audition && transportController.getState() === 'idle') previewNote();
+      });
     },
-    [settings, previewNote],
+    [previewNote],
   );
 
   return (
@@ -152,7 +149,12 @@ export function PianoSection() {
                   type="radio"
                   name="piano-instrument"
                   checked={active}
-                  disabled={switching}
+                  disabled={
+                    switching ||
+                    (transportState !== 'idle' &&
+                      transportState !== 'paused' &&
+                      transportState !== 'playing')
+                  }
                   onChange={() => selectPiano(piano.id)}
                 />
                 <span className="piano-card__text">

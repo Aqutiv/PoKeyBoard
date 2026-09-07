@@ -73,9 +73,10 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 ## Daily listening and practice
 
 - On desktop, **Play** includes piano selection and **Piano volume** beside the metronome. **Click volume** controls the metronome independently.
+- Changing piano pauses playback and waits for the selected instrument to load before Play, Resume, or Record become available. Resume when ready; the playback position is preserved.
 - Choose **Listen**, **Practice left**, **Practice right**, or **Practice both** next to the transport. Practice waits for you to play the highlighted notes. **Recording** holds Overdub/Replace; compact screens keep the combined **Modes** menu.
 - Library remembers your filter and scroll position while you move between pages during the current session. **Clear filter** restores the full list; reloading starts a fresh search.
-- While a take plays on another page, the **Now playing** bar offers Pause and Stop. Pausing keeps the bar visible with Resume; stopping dismisses it. Select its title to return to Play.
+- While a take plays on another page, the **Now playing** bar stays visible below scrolling content and offers Pause and Stop. Pausing keeps the bar visible with Resume; stopping or reaching the end dismisses it. Select its title to return to Play.
 - Select a personal take's title on Play to rename it. Enter saves and Escape cancels; library titles stay fixed. Takes also supports title search.
 - Learn shows the available lesson count for the selected level. Expand **Upcoming lessons** to see the remaining curriculum.
 - A badge on Settings indicates a waiting update. Settings shows the running build's commit and date; updates still apply only when you choose at a safe time.
