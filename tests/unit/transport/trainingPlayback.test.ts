@@ -117,6 +117,31 @@ describe('training playback', () => {
     expect(transportController.getState()).toBe('paused');
   });
 
+  it.each(['release', 'navigation', 'interruption'] as const)(
+    'restores idle or paused after a scrub ends through %s',
+    (ending) => {
+      const end = () => {
+        if (ending === 'release') transportController.endScrub(200);
+        else if (ending === 'navigation') transportController.handleNavigation();
+        else transportController.handleInterruption();
+      };
+      transportController.stop();
+      expect(transportController.beginScrub()).toBe(true);
+      transportController.setScrubTime(200);
+      end();
+      expect(transportController.getState()).toBe('idle');
+      expect(transportController.getPlayheadMs()).toBe(200);
+
+      transportController.play();
+      transportController.pause();
+      expect(transportController.beginScrub()).toBe(true);
+      transportController.setScrubTime(200);
+      end();
+      expect(transportController.getState()).toBe('paused');
+      expect(transportController.getPlayheadMs()).toBe(200);
+    },
+  );
+
   it('flags a wrong key without letting it through, and resumes on the right ones', () => {
     transportController.play();
     runTo(350);

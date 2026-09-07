@@ -24,6 +24,7 @@ describe('transport state machine', () => {
     expect(transition('idle', 'SCRUB_START')).toBe('scrubbing');
     expect(transition('paused', 'SCRUB_START')).toBe('scrubbing');
     expect(transition('scrubbing', 'SCRUB_END')).toBe('paused');
+    expect(transition('scrubbing', 'SCRUB_END_IDLE')).toBe('idle');
     expect(transition('playing', 'SCRUB_START')).toBeNull();
     expect(transition('recording', 'SCRUB_START')).toBeNull();
   });

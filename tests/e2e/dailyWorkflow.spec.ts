@@ -91,6 +91,40 @@ test('Now playing disappears when playback finishes naturally', async ({ page })
   await expect(bar).toHaveCount(0);
 });
 
+test('scrubbing before playback does not show Now playing, but scrubbing a pause keeps Resume', async ({
+  page,
+}) => {
+  await gotoAppReady(page);
+  await nav(page).getByRole('button', { name: 'Library' }).click();
+  await page.getByRole('button', { name: 'Open Where Starlight Lingers' }).click();
+  const scrub = async () => {
+    const box = await page.locator('.score__canvas').boundingBox();
+    await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box!.x + box!.width / 2 - 30, box!.y + box!.height / 2, { steps: 5 });
+    // Release without inertia so this checks the final scrub state.
+    await page.waitForTimeout(150);
+    await page.mouse.up();
+  };
+  await scrub();
+  await nav(page).getByRole('button', { name: 'Library' }).click();
+  const bar = page.getByRole('complementary', { name: 'Now playing' });
+  await expect(bar).toHaveCount(0);
+  await nav(page).getByRole('button', { name: 'Play', exact: true }).click();
+  await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+  await transport(page).getByRole('button', { name: 'Pause', exact: true }).click();
+  await scrub();
+  await nav(page).getByRole('button', { name: 'Library' }).click();
+  await expect(bar.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+  await bar.getByRole('button', { name: 'Resume', exact: true }).click();
+  await expect(bar.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await bar.getByRole('button', { name: 'Stop', exact: true }).click();
+  await nav(page).getByRole('button', { name: 'Play', exact: true }).click();
+  await scrub();
+  await nav(page).getByRole('button', { name: 'Library' }).click();
+  await expect(bar).toHaveCount(0);
+});
+
 test('rename on Play persists and Takes search handles accents and no matches', async ({
   page,
 }) => {

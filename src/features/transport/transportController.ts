@@ -63,6 +63,7 @@ export class TransportController {
   private metronomeOn = false;
   private pausedPlayheadMs = 0;
   private scrubTimeMs = 0;
+  private scrubReturnState: 'idle' | 'paused' = 'idle';
 
   // Recording
   private recordStartMs = 0;
@@ -189,6 +190,7 @@ export class TransportController {
   /** Enter scrubbing from idle/paused. The scrub controller drives times. */
   beginScrub(): boolean {
     if (!canTransition(this.state, 'SCRUB_START')) return false;
+    this.scrubReturnState = this.state === 'paused' ? 'paused' : 'idle';
     this.clearTrainingGate();
     this.scrubTimeMs = this.pausedPlayheadMs;
     return this.send('SCRUB_START');
@@ -199,14 +201,14 @@ export class TransportController {
     this.scrubTimeMs = clamp(takeMs, 0, this.takeDurationMs());
   }
 
-  /** Leave scrubbing; normal playback resumes from this position. */
+  /** Restore the pre-scrub state at the chosen position without starting playback. */
   endScrub(finalTakeMs: number): void {
     if (this.state !== 'scrubbing') return;
     const duration = this.takeDurationMs();
     this.pausedPlayheadMs = clamp(Math.round(finalTakeMs), 0, duration);
     this.clock.seek(this.pausedPlayheadMs);
     useTakeStore.getState().setPlayheadMs(this.pausedPlayheadMs);
-    this.send('SCRUB_END');
+    this.send(this.scrubReturnState === 'idle' ? 'SCRUB_END_IDLE' : 'SCRUB_END');
   }
 
   seek(takeMs: number): void {
@@ -772,7 +774,7 @@ export class TransportController {
     } else if (this.state === 'playing') {
       this.pause();
     } else if (this.state === 'scrubbing') {
-      this.send('SCRUB_END');
+      this.endScrub(this.scrubTimeMs);
     }
   }
 
@@ -787,7 +789,7 @@ export class TransportController {
     if (this.state === 'recording' || this.state === 'countIn') {
       this.stop();
     } else if (this.state === 'scrubbing') {
-      this.send('SCRUB_END');
+      this.endScrub(this.scrubTimeMs);
     }
   }
 
