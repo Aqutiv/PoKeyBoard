@@ -23,6 +23,7 @@ export type TransportEvent =
   | 'STOP'
   | 'SCRUB_START'
   | 'SCRUB_END'
+  | 'SCRUB_END_IDLE'
   | 'SHEET_EXPORT_START'
   | 'SHEET_EXPORT_DONE'
   | 'SHEET_EXPORT_CANCEL'
@@ -68,6 +69,7 @@ const TRANSITIONS: Record<TransportState, Partial<Record<TransportEvent, Transpo
   },
   scrubbing: {
     SCRUB_END: 'paused',
+    SCRUB_END_IDLE: 'idle',
     STOP: 'idle',
     FAIL: 'error',
   },

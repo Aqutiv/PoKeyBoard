@@ -1,3 +1,4 @@
+import { TooltipButton } from '@/ui/TooltipButton';
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -372,7 +373,7 @@ export function PianoKeyboard({
   return (
     <div className="piano">
       <div className="piano__controls">
-        <button
+        <TooltipButton
           type="button"
           className="piano__shift"
           onClick={() => shiftRange(-1, 'octave')}
@@ -380,8 +381,8 @@ export function PianoKeyboard({
           aria-label={m.piano.shiftDown}
         >
           ‹‹
-        </button>
-        <button
+        </TooltipButton>
+        <TooltipButton
           type="button"
           className="piano__shift"
           onClick={() => shiftRange(-1, 'key')}
@@ -389,11 +390,11 @@ export function PianoKeyboard({
           aria-label={m.piano.shiftDownKey}
         >
           ‹
-        </button>
+        </TooltipButton>
         <span className="piano__range" aria-live="polite">
           {midiToNoteName(layout.lowMidi)} – {midiToNoteName(layout.highMidi)}
         </span>
-        <button
+        <TooltipButton
           type="button"
           className="piano__shift"
           onClick={() => shiftRange(1, 'key')}
@@ -401,8 +402,8 @@ export function PianoKeyboard({
           aria-label={m.piano.shiftUpKey}
         >
           ›
-        </button>
-        <button
+        </TooltipButton>
+        <TooltipButton
           type="button"
           className="piano__shift"
           onClick={() => shiftRange(1, 'octave')}
@@ -410,7 +411,7 @@ export function PianoKeyboard({
           aria-label={m.piano.shiftUp}
         >
           ››
-        </button>
+        </TooltipButton>
         {controlsExtra}
         <button
           type="button"

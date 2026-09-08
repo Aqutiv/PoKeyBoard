@@ -1,3 +1,5 @@
+import { PianoControls } from './PianoControls';
+import { TakeTitle } from './TakeTitle';
 import { useState, useSyncExternalStore } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useTransportState } from '@/app/hooks/useTransport';
@@ -35,7 +37,6 @@ export function PlayPage() {
   const percent =
     progress.totalFiles > 0 ? Math.round((progress.loadedFiles / progress.totalFiles) * 100) : 0;
 
-  const title = useTakeStore((s) => s.take.title);
   const takeId = useTakeStore((s) => s.take.id);
   const isLibrary = isLibraryTakeId(takeId);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
@@ -56,7 +57,7 @@ export function PlayPage() {
     >
       <div className="play-layout" data-compact-view={compactView}>
         <header className="play-header">
-          <h1 className="play-header__title">{title}</h1>
+          <TakeTitle key={takeId} disabled={isBusyState(transportState)} />
           {isLibrary ? <span className="play-header__library">{m.library.chip}</span> : null}
           <div className="play-view-switch" role="group" aria-label={m.play.viewLabel}>
             <button
@@ -124,7 +125,12 @@ export function PlayPage() {
           ) : null}
           <MusicScore />
         </div>
-        {compactLandscape ? null : <MetronomeControls />}
+        {compactLandscape ? null : (
+          <div className="play-sound-row">
+            <MetronomeControls />
+            <PianoControls />
+          </div>
+        )}
         <div className="play-layout__keyboard">
           <PianoKeyboard
             extraActiveHands={playbackActiveHands}

@@ -1,13 +1,50 @@
 import { expect, test } from './fixtures';
-import { gotoAppReady, recordShortTake, transport, transportTime } from './helpers';
+import { gotoAppReady, nav, recordShortTake, transport, transportTime } from './helpers';
 
-/** Pick a mode out of the transport's one mode menu. */
+/** Choose the visible desktop practice mode. */
 async function chooseMode(page: import('@playwright/test').Page, name: RegExp): Promise<void> {
-  await transport(page).getByRole('button', { name: 'Modes' }).click();
-  await page.getByRole('menuitemradio', { name }).click();
+  const label = name.test('both hands')
+    ? 'Practice both'
+    : name.test('left hand')
+      ? 'Practice left'
+      : 'Practice right';
+  await page.getByRole('button', { name: label, exact: true }).click();
 }
 
 test.describe('training playback', () => {
+  test('returning to practice from another page does not resume an invisible training wait', async ({
+    page,
+  }) => {
+    await gotoAppReady(page);
+    await recordShortTake(page, 350);
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    await chooseMode(page, /both hands/);
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'C4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+    );
+    const pausedAt = await transportTime(page).innerText();
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    const bar = page.getByRole('complementary', { name: 'Now playing' });
+    await expect(bar.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+    await bar.getByRole('button', { name: 'Return to practice', exact: true }).click();
+    await expect(page).toHaveURL(/#\/play$/);
+    await expect(bar).toHaveCount(0);
+    await expect(transportTime(page)).toHaveText(pausedAt);
+    await expect(page.locator('.piano-key[data-target="true"]')).toHaveCount(0);
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'C4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+    );
+    await page.keyboard.press('KeyA');
+    await expect(page.getByRole('button', { name: 'E4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+    );
+  });
+
   test('holds for the user at every note, then carries on', async ({ page }) => {
     await gotoAppReady(page);
     // Long enough notes that the two onsets are clearly apart in the take.
@@ -58,12 +95,10 @@ test.describe('training playback', () => {
     await page.reload();
     await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
 
-    await transport(page).getByRole('button', { name: 'Modes' }).click();
-    await expect(page.getByRole('menuitemradio', { name: /left hand/ })).toHaveAttribute(
-      'aria-checked',
+    await expect(page.getByRole('button', { name: 'Practice left', exact: true })).toHaveAttribute(
+      'aria-pressed',
       'true',
     );
-    await page.keyboard.press('Escape');
 
     // Both recorded notes are right-hand, so training the left hand never
     // holds: playback runs to the end on its own.

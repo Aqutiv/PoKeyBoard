@@ -1,5 +1,8 @@
+import { useMediaQuery } from '@/app/hooks/useMediaQuery';
+import { TooltipButton } from '@/ui/TooltipButton';
 import { useCallback } from 'react';
 import { usePlayheadMs, useTrainingWaiting, useTransportState } from '@/app/hooks/useTransport';
+import { usePianoReady } from '@/app/hooks/useAudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -17,7 +20,10 @@ const strokeProps = {
 
 export function TransportControls() {
   const m = useMessages();
+  const desktop = useMediaQuery('(min-width: 900px) and (min-height: 501px)');
+  const playbackMode = useSettingsStore((s) => s.playbackMode);
   const state = useTransportState();
+  const pianoReady = usePianoReady();
   const playheadMs = usePlayheadMs();
   const take = useTakeStore((s) => s.take);
   const durationMs = effectivePlaybackDurationMs(take);
@@ -77,7 +83,7 @@ export function TransportControls() {
   return (
     <div className="transport" role="group" aria-label={m.transport.groupLabel}>
       <div className="transport__buttons">
-        <button
+        <TooltipButton
           type="button"
           className="transport__btn"
           aria-label={m.transport.returnToStart}
@@ -86,24 +92,25 @@ export function TransportControls() {
           <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
             <path d="M6 5h2v14H6zM20 5v14L9 12z" />
           </svg>
-        </button>
-        <button
+        </TooltipButton>
+        <TooltipButton
           type="button"
           className={`transport__btn transport__btn--record${recording ? ' is-active' : ''}`}
           aria-label={recording ? m.transport.recordActive : m.transport.recordInactive}
           aria-pressed={recording}
           onClick={onRecord}
+          disabled={!recording && !pianoReady}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
             <circle cx="12" cy="12" r="7" />
           </svg>
-        </button>
-        <button
+        </TooltipButton>
+        <TooltipButton
           type="button"
           className="transport__btn transport__btn--play"
           aria-label={playing ? m.transport.pause : m.transport.play}
           onClick={onPlayPause}
-          disabled={!playing && !canTransition(state, 'PLAY')}
+          disabled={!playing && (!pianoReady || !canTransition(state, 'PLAY'))}
         >
           {playing ? (
             <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
@@ -114,8 +121,8 @@ export function TransportControls() {
               <path d="M8 5v14l11-7z" />
             </svg>
           )}
-        </button>
-        <button
+        </TooltipButton>
+        <TooltipButton
           type="button"
           className="transport__btn"
           aria-label={m.transport.stop}
@@ -125,7 +132,7 @@ export function TransportControls() {
           <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
             <rect x="6" y="6" width="12" height="12" rx="1" />
           </svg>
-        </button>
+        </TooltipButton>
 
         <span className="transport__time" aria-live="off">
           {formatDurationMs(playheadMs, true)}
@@ -145,7 +152,7 @@ export function TransportControls() {
           </button>
         ) : null}
 
-        <ModeMenu disabled={recording} />
+        <ModeMenu disabled={recording} desktop={desktop} />
       </div>
 
       <input
@@ -160,6 +167,9 @@ export function TransportControls() {
         aria-label={m.transport.seekPosition}
         aria-valuetext={formatDurationMs(playheadMs, true)}
       />
+      {desktop && playbackMode !== 'simple' && !recording && !waitingForTraining ? (
+        <p className="transport__status">{m.workflow.practiceHint}</p>
+      ) : null}
       {waitingForTraining ? (
         <p className="transport__status transport__status--waiting" role="status">
           {m.transport.waitingForYou}

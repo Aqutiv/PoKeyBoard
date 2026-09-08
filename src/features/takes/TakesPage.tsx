@@ -1,3 +1,4 @@
+import { matchesSearch } from '@/utils/search';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
 import { listTakeSummaries, type TakeSummary } from '@/data/takeRepository';
@@ -47,6 +48,7 @@ export function TakesPage() {
   const m = useMessages();
   const { locale } = useI18n();
   const activeTakeId = useTakeStore((s) => s.take.id);
+  const [query, setQuery] = useState('');
   const [summaries, setSummaries] = useState<TakeSummary[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [preparedShare, setPreparedShare] = useState<{ id: string; file: File } | null>(null);
@@ -247,159 +249,188 @@ export function TakesPage() {
         </p>
       ) : null}
 
+      {summaries !== null && summaries.length > 0 ? (
+        <div className="takes-search">
+          <input
+            type="search"
+            aria-label={m.workflow.searchTakes}
+            placeholder={m.workflow.searchTakes}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          {query && (
+            <button type="button" className="btn btn--small" onClick={() => setQuery('')}>
+              {m.workflow.clearSearch}
+            </button>
+          )}
+        </div>
+      ) : null}
+      {summaries !== null &&
+      summaries.length > 0 &&
+      !summaries.some((s) => matchesSearch(s.title, query)) ? (
+        <p className="page__hint" role="status">
+          {m.workflow.noTakesMatch}
+        </p>
+      ) : null}
       {summaries === null ? (
         <p className="page__hint">{m.takes.loading}</p>
       ) : summaries.length === 0 ? (
         <p className="page__hint">{m.takes.empty}</p>
       ) : (
         <ul className="take-list">
-          {summaries.map((summary) => {
-            const isActive = summary.id === activeTakeId;
-            const expanded = expandedId === summary.id;
-            return (
-              <li key={summary.id} className={`take-item${isActive ? ' is-active' : ''}`}>
-                <div className="take-item__row">
-                  <button
-                    type="button"
-                    className="take-item__main"
-                    onClick={() =>
-                      void act(async () => {
-                        await openTake(summary.id);
-                        navigate('play');
-                      })
-                    }
-                    aria-label={m.takes.openLabel({ title: summary.title })}
-                  >
-                    <span className="take-item__title">
-                      {summary.title}
-                      {summary.isDraft ? (
-                        <span className="take-item__draft">{m.takes.draft}</span>
-                      ) : null}
-                      {isActive ? (
-                        <span
-                          className="take-item__active-dot"
-                          aria-label={m.takes.currentlyOpen}
-                        />
-                      ) : null}
-                    </span>
-                    <span className="take-item__meta">
-                      {m.takes.meta({
-                        notes: summary.noteCount,
-                        duration: formatDurationMs(summary.durationMs),
-                        bpm: Math.round(summary.bpm),
-                        updated: formatUpdated(summary.updatedAt, locale),
-                      })}
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="take-item__more"
-                    aria-expanded={expanded}
-                    aria-label={m.takes.moreActionsLabel({ title: summary.title })}
-                    onClick={() => setExpandedId(expanded ? null : summary.id)}
-                  >
-                    ⋯
-                  </button>
-                </div>
+          {summaries
+            .filter((summary) => matchesSearch(summary.title, query))
+            .map((summary) => {
+              const isActive = summary.id === activeTakeId;
+              const expanded = expandedId === summary.id;
+              return (
+                <li key={summary.id} className={`take-item${isActive ? ' is-active' : ''}`}>
+                  <div className="take-item__row">
+                    <button
+                      type="button"
+                      className="take-item__main"
+                      onClick={() =>
+                        void act(async () => {
+                          await openTake(summary.id);
+                          navigate('play');
+                        })
+                      }
+                      aria-label={m.takes.openLabel({ title: summary.title })}
+                    >
+                      <span className="take-item__title">
+                        {summary.title}
+                        {summary.isDraft ? (
+                          <span className="take-item__draft">{m.takes.draft}</span>
+                        ) : null}
+                        {isActive ? (
+                          <span
+                            className="take-item__active-dot"
+                            aria-label={m.takes.currentlyOpen}
+                          />
+                        ) : null}
+                      </span>
+                      <span className="take-item__meta">
+                        {m.takes.meta({
+                          notes: summary.noteCount,
+                          duration: formatDurationMs(summary.durationMs),
+                          bpm: Math.round(summary.bpm),
+                          updated: formatUpdated(summary.updatedAt, locale),
+                        })}
+                      </span>
+                    </button>
+                    <button
+                      type="button"
+                      className="take-item__more"
+                      aria-expanded={expanded}
+                      aria-label={m.takes.moreActionsLabel({ title: summary.title })}
+                      onClick={() => setExpandedId(expanded ? null : summary.id)}
+                    >
+                      ⋯
+                    </button>
+                  </div>
 
-                {expanded ? (
-                  <div className="take-item__actions">
-                    {renamingId === summary.id ? (
-                      <form
-                        className="take-item__rename"
-                        onSubmit={(event) => {
-                          event.preventDefault();
-                          commitRename(summary.id);
+                  {expanded ? (
+                    <div className="take-item__actions">
+                      {renamingId === summary.id ? (
+                        <form
+                          className="take-item__rename"
+                          onSubmit={(event) => {
+                            event.preventDefault();
+                            commitRename(summary.id);
+                          }}
+                        >
+                          <input
+                            autoFocus
+                            value={renameText}
+                            onChange={(event) => setRenameText(event.target.value)}
+                            onBlur={() => commitRename(summary.id)}
+                            aria-label={m.takes.newTitle}
+                            maxLength={200}
+                          />
+                        </form>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn--small"
+                          onClick={() => {
+                            setRenamingId(summary.id);
+                            setRenameText(summary.title);
+                          }}
+                        >
+                          {m.takes.rename}
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        onClick={() =>
+                          void act(() => duplicateTake(summary.id), m.takes.duplicated)
+                        }
+                      >
+                        {m.takes.duplicate}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        onClick={() =>
+                          void act(async () => {
+                            const file = await takeJsonFile(summary.id);
+                            if (file) downloadBlob(file, file.name);
+                          })
+                        }
+                      >
+                        {m.takes.exportJson}
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn--small"
+                        disabled={preparedShare?.id !== summary.id}
+                        onClick={() => {
+                          if (preparedShare?.id !== summary.id) return;
+                          void shareOrDownloadFile(preparedShare.file).then((how) => {
+                            if (how !== 'cancelled') {
+                              setMessage(how === 'shared' ? m.takes.shared : m.takes.downloaded);
+                            }
+                          });
                         }}
                       >
-                        <input
-                          autoFocus
-                          value={renameText}
-                          onChange={(event) => setRenameText(event.target.value)}
-                          onBlur={() => commitRename(summary.id)}
-                          aria-label={m.takes.newTitle}
-                          maxLength={200}
-                        />
-                      </form>
-                    ) : (
+                        {m.takes.shareJson}
+                      </button>
+                      <ShareMenu
+                        takeId={summary.id}
+                        disabled={summary.noteCount === 0}
+                        triggerClassName="btn btn--small"
+                        align="left"
+                      />
                       <button
                         type="button"
                         className="btn btn--small"
                         onClick={() => {
-                          setRenamingId(summary.id);
-                          setRenameText(summary.title);
+                          if (
+                            window.confirm(m.takes.removeNotesConfirm({ title: summary.title }))
+                          ) {
+                            void act(() => clearTakeNotes(summary.id), m.takes.notesCleared);
+                          }
                         }}
                       >
-                        {m.takes.rename}
+                        {m.takes.clearNotes}
                       </button>
-                    )}
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      onClick={() => void act(() => duplicateTake(summary.id), m.takes.duplicated)}
-                    >
-                      {m.takes.duplicate}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      onClick={() =>
-                        void act(async () => {
-                          const file = await takeJsonFile(summary.id);
-                          if (file) downloadBlob(file, file.name);
-                        })
-                      }
-                    >
-                      {m.takes.exportJson}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      disabled={preparedShare?.id !== summary.id}
-                      onClick={() => {
-                        if (preparedShare?.id !== summary.id) return;
-                        void shareOrDownloadFile(preparedShare.file).then((how) => {
-                          if (how !== 'cancelled') {
-                            setMessage(how === 'shared' ? m.takes.shared : m.takes.downloaded);
+                      <button
+                        type="button"
+                        className="btn btn--small btn--danger"
+                        onClick={() => {
+                          if (window.confirm(m.takes.deleteConfirm({ title: summary.title }))) {
+                            void act(() => deleteTake(summary.id), m.takes.deleted);
                           }
-                        });
-                      }}
-                    >
-                      {m.takes.shareJson}
-                    </button>
-                    <ShareMenu
-                      takeId={summary.id}
-                      disabled={summary.noteCount === 0}
-                      triggerClassName="btn btn--small"
-                      align="left"
-                    />
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      onClick={() => {
-                        if (window.confirm(m.takes.removeNotesConfirm({ title: summary.title }))) {
-                          void act(() => clearTakeNotes(summary.id), m.takes.notesCleared);
-                        }
-                      }}
-                    >
-                      {m.takes.clearNotes}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn btn--small btn--danger"
-                      onClick={() => {
-                        if (window.confirm(m.takes.deleteConfirm({ title: summary.title }))) {
-                          void act(() => deleteTake(summary.id), m.takes.deleted);
-                        }
-                      }}
-                    >
-                      {m.takes.delete}
-                    </button>
-                  </div>
-                ) : null}
-              </li>
-            );
-          })}
+                        }}
+                      >
+                        {m.takes.delete}
+                      </button>
+                    </div>
+                  ) : null}
+                </li>
+              );
+            })}
         </ul>
       )}
 

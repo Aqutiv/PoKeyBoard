@@ -1,3 +1,4 @@
+import { useUpdateAvailable } from '@/pwa/useUpdateAvailable';
 import type { ReactNode } from 'react';
 import { useMessages } from '@/i18n/i18nContext';
 import type { Messages } from '@/i18n/types';
@@ -83,10 +84,10 @@ const NAV_ITEMS: NavItem[] = [
 
 export function AppNav() {
   const { route, navigate } = useRouter();
+  const updateAvailable = useUpdateAvailable();
   const m = useMessages();
   const transportState = useTransportState();
-  // Playback survives tab changes, so the Play tab carries the only cue that
-  // sound is still coming from a page you are not looking at.
+  // Keep the Play destination marked while the compact player is visible.
   const showPlayingDot = transportState === 'playing' && route !== 'play';
   return (
     <nav className="app-nav" aria-label={m.nav.mainLabel}>
@@ -95,11 +96,22 @@ export function AppNav() {
           key={item.route}
           type="button"
           className="app-nav__item"
+          aria-label={
+            item.route === 'settings' && updateAvailable
+              ? `${m.nav.settings} ${m.workflow.updateAvailable}`
+              : undefined
+          }
           aria-current={route === item.route ? 'page' : undefined}
           onClick={() => navigate(item.route)}
         >
           {item.icon}
           <span>{m.nav[item.labelKey]}</span>
+          {item.route === 'settings' && updateAvailable && (
+            <>
+              <span className="app-nav__update-dot" aria-hidden="true" />
+              <span className="visually-hidden"> {m.workflow.updateAvailable}</span>
+            </>
+          )}
           {item.route === 'play' && showPlayingDot && (
             <>
               <span className="app-nav__playing-dot" aria-hidden="true" />

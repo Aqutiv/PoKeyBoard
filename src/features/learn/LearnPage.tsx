@@ -112,12 +112,32 @@ export function LearnPage() {
     );
   };
 
+  const sections = LEARN_SECTIONS_BY_LEVEL[level];
+  const availableCount = sections.reduce(
+    (count, section) => count + section.chapters.filter((c) => c.load !== null).length,
+    0,
+  );
+  const renderSections = (upcoming: boolean) =>
+    sections.map((section) => {
+      const chapters = section.chapters.filter((chapter) => (chapter.load === null) === upcoming);
+      if (!chapters.length) return null;
+      const headingId = `learn-part-${section.part}-${upcoming ? 'upcoming' : 'available'}`;
+      return (
+        <section className="learn-part" key={section.part} aria-labelledby={headingId}>
+          <h2 className="learn-part__heading" id={headingId}>
+            {m.learn.partTitles[section.part]}
+          </h2>
+          <ul className="learn-list">{chapters.map(renderChapter)}</ul>
+        </section>
+      );
+    });
+
   return (
     <section className="page" aria-label={m.learn.title}>
       <header className="page__header">
         <h1 className="page__title">{m.learn.title}</h1>
       </header>
-      <p className="page__hint">{m.learn.hint}</p>
+      <p className="page__hint">{m.workflow.availableLessons({ count: availableCount })}</p>
       <div className="learn-levels" role="group" aria-label={m.learn.levelLabel}>
         {LEARN_LEVEL_IDS.map((id: LearnLevelId) => (
           <button
@@ -134,17 +154,13 @@ export function LearnPage() {
       {/* One scroller over all the parts, not one per part, so the headings
           can stick as their chapters pass beneath them. */}
       <div className="learn-scroll">
-        {LEARN_SECTIONS_BY_LEVEL[level].map((section) => {
-          const headingId = `learn-part-${section.part}`;
-          return (
-            <section className="learn-part" key={section.part} aria-labelledby={headingId}>
-              <h2 className="learn-part__heading" id={headingId}>
-                {m.learn.partTitles[section.part]}
-              </h2>
-              <ul className="learn-list">{section.chapters.map(renderChapter)}</ul>
-            </section>
-          );
-        })}
+        {renderSections(false)}
+        {sections.some((section) => section.chapters.some((chapter) => chapter.load === null)) && (
+          <details className="learn-upcoming" key={level}>
+            <summary>{m.workflow.upcoming}</summary>
+            {renderSections(true)}
+          </details>
+        )}
       </div>
     </section>
   );

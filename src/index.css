@@ -94,6 +94,15 @@ button {
 }
 
 .app-shell__content {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.app-shell__viewport {
+  flex: 1;
   min-height: 0;
   overflow: hidden auto;
   display: flex;
@@ -561,6 +570,7 @@ button {
   /* The metronome row never fits in short landscape; the score and
      keyboard alternate via the header switch. */
   .play-layout > .metronome,
+  .play-layout > .play-sound-row,
   .play-layout[data-compact-view='notation'] > .play-layout__keyboard,
   .play-layout[data-compact-view='keyboard'] > .play-layout__score {
     display: none;
@@ -578,5 +588,128 @@ button {
   .play-layout__keyboard {
     height: clamp(180px, 27vh, 240px);
     height: clamp(180px, 27svh, 240px); /* iOS: size against the small viewport */
+  }
+}
+
+/* Daily controls share the desktop sound row; compact layouts keep their existing controls. */
+.play-sound-row {
+  display: contents;
+}
+.play-piano-controls {
+  display: none;
+}
+.take-title {
+  min-width: 0;
+  flex: 1;
+}
+.take-title .play-header__title button {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+}
+.take-title__edit {
+  color: var(--text-dim);
+  font: 14px system-ui;
+}
+.take-title form {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.take-title input {
+  min-width: 0;
+  width: 100%;
+  max-width: 340px;
+  min-height: 34px;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  padding: 4px 8px;
+  font: inherit;
+}
+.now-playing {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-strong);
+  background: var(--surface-1);
+}
+.now-playing__title {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.now-playing__title span {
+  color: var(--text-dim);
+}
+.app-nav__update-dot {
+  position: absolute;
+  top: 6px;
+  left: calc(50% + 12px);
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-strong);
+}
+.control-tooltip {
+  position: fixed;
+  z-index: 100;
+  width: max-content;
+  max-width: min(240px, calc(100vw - 16px));
+  padding: 6px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-s);
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow: var(--shadow-1);
+  font-size: 12px;
+  pointer-events: none;
+}
+@media (min-width: 900px) and (min-height: 501px) {
+  .play-sound-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 8px 24px;
+  }
+  .play-sound-row > .metronome {
+    flex: 1;
+  }
+  .play-piano-controls {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    align-items: center;
+  }
+  .play-piano-controls label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    color: var(--text-dim);
+  }
+  .play-piano-controls select {
+    min-height: 40px;
+    max-width: 160px;
+    background: var(--surface-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-m);
+    padding: 0 8px;
+    font: inherit;
+  }
+  .play-piano-controls input {
+    width: 100px;
+    min-height: 28px;
+    accent-color: var(--accent);
   }
 }

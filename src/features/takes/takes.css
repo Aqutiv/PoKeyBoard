@@ -227,3 +227,21 @@
   font-size: 13px;
   color: var(--record);
 }
+
+.takes-search {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.takes-search input {
+  flex: 1;
+  min-width: 0;
+  min-height: var(--touch-target);
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  padding: 0 12px;
+  font: inherit;
+}

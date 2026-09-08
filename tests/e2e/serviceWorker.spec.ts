@@ -63,7 +63,10 @@ test.describe('service worker update prompt', () => {
       // A navigation triggers the browser's SW update check.
       await page.reload();
       await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
-      await page.getByRole('button', { name: 'Settings' }).click();
+      await expect(
+        nav(page).getByRole('button', { name: 'Settings Update available' }),
+      ).toBeVisible({ timeout: 20_000 });
+      await nav(page).getByRole('button', { name: 'Settings Update available' }).click();
       await expect(page.getByText('An update is ready.')).toBeVisible({ timeout: 20_000 });
       await expect(page.getByRole('button', { name: 'Apply update and reload' })).toBeEnabled();
     } finally {

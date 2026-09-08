@@ -465,3 +465,13 @@
   display: block;
   width: 100%;
 }
+
+.learn-upcoming {
+  margin-top: 18px;
+}
+.learn-upcoming > summary {
+  cursor: pointer;
+  padding: 12px 2px;
+  font-size: 14px;
+  color: var(--text-dim);
+}

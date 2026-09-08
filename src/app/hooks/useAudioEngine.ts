@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import type { EngineStatus, SampleLoadProgress } from '@/audio/audioTypes';
+import { usePianoSwitching } from './useTransport';
 
 // Subscribe functions must be referentially stable across renders, and every
 // getSnapshot must return a stable reference until an event fires — both are
@@ -16,9 +17,16 @@ export function useEngineStatus(): EngineStatus {
 const subscribeProgress = (onStoreChange: () => void) =>
   audioEngine.subscribeLoadProgress(onStoreChange);
 const getProgress = () => audioEngine.getLoadProgress();
+const getCoreReady = () => audioEngine.bank.isCoreReady();
 
 export function useSampleLoadProgress(): SampleLoadProgress {
   return useSyncExternalStore(subscribeProgress, getProgress);
+}
+
+export function usePianoReady(): boolean {
+  const switching = usePianoSwitching();
+  const coreReady = useSyncExternalStore(subscribeProgress, getCoreReady);
+  return !switching && coreReady;
 }
 
 const subscribeActiveNotes = (onStoreChange: () => void) =>

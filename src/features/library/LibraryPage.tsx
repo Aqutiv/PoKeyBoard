@@ -7,7 +7,12 @@ import { formatDurationMs } from '@/utils/timing';
 import { filterLibrarySections, LIBRARY_FOLDER_SECTIONS } from './catalog';
 import { LIBRARY_FOLDER_IDS, type LibraryFolderId } from './folders';
 import { openLibraryTrack } from './libraryService';
-import { readLibraryScroll, rememberLibraryScroll } from './scrollMemory';
+import {
+  readLibraryScroll,
+  rememberLibraryScroll,
+  readLibraryQuery,
+  rememberLibraryQuery,
+} from './scrollMemory';
 import './library.css';
 
 /** Curated built-in tracks: open one on Play to listen, learn, or record over. */
@@ -25,7 +30,7 @@ export function LibraryPage() {
   const [failed, setFailed] = useState(false);
 
   // Classics has a large catalog; the smaller Originals folder needs no filter.
-  const [query, setQuery] = useState('');
+  const [query, setQuery] = useState(() => readLibraryQuery(folder));
   const filterInput = useRef<HTMLInputElement>(null);
   const showFilter = folder === 'classics';
   const sections = useMemo(
@@ -42,8 +47,8 @@ export function LibraryPage() {
     if (groups.current) rememberLibraryScroll(folder, groups.current.scrollTop);
   };
 
-  // Restored before paint, so the list never flashes at the top. Keyed on the
-  // folder alone: filtering the classics must not jump the list around.
+  // Restore before paint on folder changes; editing a search explicitly starts
+  // its new results at the top.
   useLayoutEffect(() => {
     openFolder.current = folder;
     if (groups.current) groups.current.scrollTop = readLibraryScroll(folder);
@@ -62,14 +67,15 @@ export function LibraryPage() {
     // Recorded before the switch, not on the way out of the effect above: by
     // then the shorter list has rendered and clamped the offset it would read.
     rememberCurrentScroll();
-    // A filter left behind in a hidden folder would silently shorten the list
-    // the next time it is opened.
-    setQuery('');
+    setQuery(readLibraryQuery(id));
     setFolder(id);
   };
 
   const clearFilter = (): void => {
     setQuery('');
+    rememberLibraryQuery(folder, '');
+    rememberLibraryScroll(folder, 0);
+    if (groups.current) groups.current.scrollTop = 0;
     filterInput.current?.focus();
   };
 
@@ -140,7 +146,12 @@ export function LibraryPage() {
             aria-label={m.library.filterLabel}
             placeholder={m.library.filterPlaceholder}
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => {
+              setQuery(event.target.value);
+              rememberLibraryQuery(folder, event.target.value);
+              rememberLibraryScroll(folder, 0);
+              if (groups.current) groups.current.scrollTop = 0;
+            }}
           />
           {query !== '' ? (
             <button

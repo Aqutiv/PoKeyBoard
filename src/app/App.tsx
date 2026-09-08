@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useMidiInput } from '@/features/keyboard/useMidiInput';
 import { useExportUiStore } from '@/state/useExportUiStore';
+import { NowPlaying } from './NowPlaying';
 import { AppNav } from './AppNav';
 import { AppProviders } from './providers';
 import { useRouter } from './routerContext';
@@ -76,9 +77,12 @@ function Shell() {
   return (
     <div className="app-shell">
       <div className="app-shell__content">
-        <Suspense fallback={<div className="app-boot">Loading…</div>}>
-          <CurrentView />
-        </Suspense>
+        <div className="app-shell__viewport">
+          <Suspense fallback={<div className="app-boot">Loading…</div>}>
+            <CurrentView />
+          </Suspense>
+        </div>
+        <NowPlaying />
       </div>
       <AppNav />
       <ExportDialogs />

@@ -2,6 +2,24 @@ import type { Messages } from './types';
 
 /** Français. */
 export const fr: Messages = {
+  workflow: {
+    listen: 'Écouter',
+    practiceLeft: 'Pratiquer gauche',
+    practiceRight: 'Pratiquer droite',
+    practiceBoth: 'Pratiquer les deux',
+    practiceHint: 'La lecture attend vos notes.',
+    returnToPractice: 'Retour à la pratique',
+    recording: 'Enregistrement',
+    clickVolume: 'Volume du clic',
+    tempoHint:
+      'Le tempo modifie le métronome et la grille de la partition, pas la vitesse de lecture enregistrée.',
+    searchTakes: 'Rechercher des prises',
+    noTakesMatch: 'Aucune prise ne correspond à votre recherche.',
+    clearSearch: 'Effacer la recherche',
+    upcoming: 'Leçons à venir',
+    updateAvailable: 'Mise à jour disponible',
+    availableLessons: ({ count }) => `${count} leçons disponibles`,
+  },
   nav: {
     play: 'Jouer',
     learn: 'Apprendre',
@@ -42,6 +60,7 @@ export const fr: Messages = {
     recordActive: 'Enregistrer, actif — arrêter l’enregistrement',
     recordInactive: 'Enregistrer, inactif',
     pause: 'Pause',
+    resume: 'Reprendre',
     play: 'Lecture',
     stop: 'Arrêter',
     undoLastPass: 'Annuler la dernière passe d’enregistrement',

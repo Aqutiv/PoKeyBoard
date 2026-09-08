@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InputNoteEvent } from '@/audio/AudioEngine';
+import type { SampleLoadPhase } from '@/audio/audioTypes';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
@@ -15,6 +16,9 @@ const h = vi.hoisted(() => ({
   now: 0,
   scheduled: [] as number[],
   inputs: new Set<(event: InputNoteEvent) => void>(),
+  phase: 'core-ready' as SampleLoadPhase,
+  coreReady: true,
+  switchPromise: null as Promise<void> | null,
 }));
 
 vi.mock('@/audio/AudioEngine', () => ({
@@ -23,6 +27,9 @@ vi.mock('@/audio/AudioEngine', () => ({
       return h.now;
     },
     unlockFromUserGesture: vi.fn(async () => {}),
+    getLoadProgress: vi.fn(() => ({ phase: h.phase })),
+    bank: { isCoreReady: () => h.coreReady },
+    setInstrument: vi.fn(() => h.switchPromise ?? Promise.resolve()),
     scheduleNote: vi.fn((event: { midi: number }) => h.scheduled.push(event.midi)),
     subscribeSchedulerTick: vi.fn(() => () => {}),
     subscribeInput: vi.fn((listener: (event: InputNoteEvent) => void) => {
@@ -89,6 +96,10 @@ describe('training playback', () => {
     h.now = 0;
     h.scheduled = [];
     h.inputs.clear();
+    h.phase = 'core-ready';
+    h.coreReady = true;
+    h.switchPromise = null;
+    useSettingsStore.setState({ pianoInstrument: 'salamander-grand' });
     useTakeStore.getState().setTake(createEmptyTake({ notes: NOTES, durationMs: 900 }));
     useSettingsStore.getState().setPlaybackMode('training-right');
     transportController.seek(0);
@@ -98,6 +109,73 @@ describe('training playback', () => {
     transportController.stop();
     useSettingsStore.getState().setPlaybackMode('simple');
     vi.useRealTimers();
+  });
+
+  it('pauses and rejects playback, recording, and another selection until the piano is decoded', async () => {
+    useSettingsStore.getState().setPlaybackMode('simple');
+    transportController.play();
+    runTo(100);
+    let finish!: () => void;
+    h.switchPromise = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const switching = transportController.selectPiano('headroom-grand');
+    expect(transportController.getState()).toBe('paused');
+    const position = transportController.getPlayheadMs();
+    transportController.play();
+    await transportController.record();
+    expect(await transportController.selectPiano('wurlitzer-ep203w')).toBe(false);
+    expect(transportController.getState()).toBe('paused');
+    expect(transportController.getPlayheadMs()).toBe(position);
+    finish();
+    expect(await switching).toBe(true);
+    transportController.play();
+    expect(transportController.getState()).toBe('playing');
+    // Playback schedules its first sound 60 ms ahead of the audio clock.
+    h.now += 0.06;
+    expect(transportController.getPlayheadMs()).toBeCloseTo(position);
+  });
+
+  it('disarms a training hold when changing piano so a keypress cannot resume during loading', async () => {
+    transportController.play();
+    runTo(350);
+    expect(transportController.isWaitingForTraining()).toBe(true);
+    let finish!: () => void;
+    h.switchPromise = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    const switching = transportController.selectPiano('headroom-grand');
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    press(64);
+    press(67);
+    expect(transportController.getState()).toBe('paused');
+    finish();
+    await switching;
+  });
+
+  it('keeps playback blocked after failed decoding and permits it after retry succeeds', async () => {
+    h.phase = 'error';
+    h.coreReady = false;
+    expect(await transportController.selectPiano('headroom-grand')).toBe(false);
+    expect(transportController.isPianoSwitching()).toBe(false);
+    transportController.play();
+    expect(transportController.getState()).toBe('idle');
+    h.phase = 'core-ready';
+    h.coreReady = true;
+    transportController.play();
+    expect(transportController.getState()).toBe('playing');
+  });
+
+  it('allows playback and recording after optional sample loading fails with the core intact', async () => {
+    h.phase = 'error';
+    h.switchPromise = Promise.reject(new Error('Optional range samples unavailable'));
+    expect(await transportController.selectPiano('headroom-grand')).toBe(true);
+    expect(transportController.isPianoReady()).toBe(true);
+    transportController.play();
+    expect(transportController.getState()).toBe('playing');
+    transportController.stop();
+    await transportController.record();
+    expect(transportController.getState()).toBe('countIn');
   });
 
   it('plays the other hand through and then holds at the trained hand', () => {
@@ -116,6 +194,31 @@ describe('training playback', () => {
     expect(transportController.getPlayheadMs()).toBe(300);
     expect(transportController.getState()).toBe('paused');
   });
+
+  it.each(['release', 'navigation', 'interruption'] as const)(
+    'restores idle or paused after a scrub ends through %s',
+    (ending) => {
+      const end = () => {
+        if (ending === 'release') transportController.endScrub(200);
+        else if (ending === 'navigation') transportController.handleNavigation();
+        else transportController.handleInterruption();
+      };
+      transportController.stop();
+      expect(transportController.beginScrub()).toBe(true);
+      transportController.setScrubTime(200);
+      end();
+      expect(transportController.getState()).toBe('idle');
+      expect(transportController.getPlayheadMs()).toBe(200);
+
+      transportController.play();
+      transportController.pause();
+      expect(transportController.beginScrub()).toBe(true);
+      transportController.setScrubTime(200);
+      end();
+      expect(transportController.getState()).toBe('paused');
+      expect(transportController.getPlayheadMs()).toBe(200);
+    },
+  );
 
   it('flags a wrong key without letting it through, and resumes on the right ones', () => {
     transportController.play();

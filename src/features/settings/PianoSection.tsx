@@ -4,6 +4,8 @@ import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
+import { usePianoSwitching, useTransportState } from '@/app/hooks/useTransport';
+import { transportController } from '@/features/transport/transportController';
 import { formatMB } from './formatBytes';
 
 /** Descriptions only — the piano's name comes from the registry, untranslated. */
@@ -23,7 +25,7 @@ type PackState =
   | { kind: 'offline-ready'; totalBytes: number }
   | { kind: 'error'; message: string; totalBytes: number };
 
-// Standard preview note for the sound sliders: middle C, mezzo-forte, long
+// Standard preview note for instrument selection: middle C, mezzo-forte, long
 // enough for the reverb tail to be audible after it releases.
 const PREVIEW_MIDI = 60;
 const PREVIEW_VELOCITY = 0.7;
@@ -40,7 +42,8 @@ export function PianoSection() {
   const instrument = useTakeStore((state) => state.take.instrument);
 
   const [packs, setPacks] = useState<Partial<Record<PianoInstrumentId, PackState>>>({});
-  const [switching, setSwitching] = useState(false);
+  const switching = usePianoSwitching();
+  const transportState = useTransportState();
 
   const setPack = useCallback((id: PianoInstrumentId, state: PackState) => {
     setPacks((current) => ({ ...current, [id]: state }));
@@ -103,8 +106,7 @@ export function PianoSection() {
     [refreshPackState, m],
   );
 
-  // Play a standard mid-note so the volume/reverb sliders preview their effect
-  // (routes through the master + reverb graph, so it reflects the live value).
+  // Audition the selected piano through the current master and reverb settings.
   const previewNote = useCallback(() => {
     void audioEngine.unlockFromUserGesture();
     audioEngine.scheduleNote(
@@ -118,18 +120,12 @@ export function PianoSection() {
   // returns nothing and the note would be silent.
   const selectPiano = useCallback(
     (id: PianoInstrumentId) => {
-      if (id === settings.pianoInstrument) return;
-      setSwitching(true);
-      // Switching the engine and re-stamping the take are the persistence
-      // layer's job, on any route to a new piano; this only awaits the switch
-      // so the preview note lands on samples that have finished decoding.
-      settings.setPianoInstrument(id);
-      void audioEngine
-        .setInstrument(id)
-        .then(previewNote)
-        .finally(() => setSwitching(false));
+      const audition = transportController.getState() === 'idle';
+      void transportController.selectPiano(id).then((changed) => {
+        if (changed && audition && transportController.getState() === 'idle') previewNote();
+      });
     },
-    [settings, previewNote],
+    [previewNote],
   );
 
   return (
@@ -153,7 +149,12 @@ export function PianoSection() {
                   type="radio"
                   name="piano-instrument"
                   checked={active}
-                  disabled={switching}
+                  disabled={
+                    switching ||
+                    (transportState !== 'idle' &&
+                      transportState !== 'paused' &&
+                      transportState !== 'playing')
+                  }
                   onChange={() => selectPiano(piano.id)}
                 />
                 <span className="piano-card__text">
@@ -233,8 +234,6 @@ export function PianoSection() {
           step={0.05}
           value={instrument.masterVolume}
           onChange={(e) => settings.setMasterVolume(Number(e.target.value))}
-          onPointerDown={previewNote}
-          onPointerUp={previewNote}
         />
       </label>
       <label className="setting-row">
@@ -246,8 +245,6 @@ export function PianoSection() {
           step={0.05}
           value={instrument.reverbMix}
           onChange={(e) => settings.setReverbMix(Number(e.target.value))}
-          onPointerDown={previewNote}
-          onPointerUp={previewNote}
         />
       </label>
     </>

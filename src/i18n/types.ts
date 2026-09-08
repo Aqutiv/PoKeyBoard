@@ -126,6 +126,23 @@ export interface LearnPartMessages {
  * for completeness and signature match — a missing key fails `tsc`.
  */
 export interface Messages {
+  workflow: {
+    listen: string;
+    practiceLeft: string;
+    practiceRight: string;
+    practiceBoth: string;
+    practiceHint: string;
+    returnToPractice: string;
+    recording: string;
+    clickVolume: string;
+    tempoHint: string;
+    searchTakes: string;
+    noTakesMatch: string;
+    clearSearch: string;
+    upcoming: string;
+    updateAvailable: string;
+    availableLessons: (p: { count: number }) => string;
+  };
   nav: {
     play: string;
     learn: string;
@@ -165,6 +182,7 @@ export interface Messages {
     recordActive: string;
     recordInactive: string;
     pause: string;
+    resume: string;
     play: string;
     stop: string;
     undoLastPass: string;

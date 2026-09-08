@@ -1,6 +1,6 @@
-import { useEffect, useState, useSyncExternalStore } from 'react';
+import { useEffect, useState } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
-import { APP_VERSION } from '@/app/version';
+import { APP_BUILD_LABEL } from '@/app/version';
 import { audioEngine } from '@/audio/AudioEngine';
 import { detectCapabilities, type AppCapabilities } from '@/audio/audioCapabilities';
 import { LANGUAGE_OPTIONS } from '@/i18n';
@@ -9,6 +9,7 @@ import { pinLanguage, unpinLanguage } from '@/i18n/languagePreference';
 import type { SupportedLanguage } from '@/i18n/types';
 import { installService } from '@/pwa/install';
 import { updateManager } from '@/pwa/updateManager';
+import { useUpdateAvailable } from '@/pwa/useUpdateAvailable';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { formatMB } from './formatBytes';
@@ -32,13 +33,6 @@ const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
   'gamepad',
   'webMidi',
 ];
-
-function useUpdateAvailable(): boolean {
-  return useSyncExternalStore(
-    (onStoreChange) => updateManager.subscribe(onStoreChange),
-    () => updateManager.updateAvailable,
-  );
-}
 
 export function SettingsPage() {
   const m = useMessages();
@@ -246,6 +240,7 @@ export function SettingsPage() {
         {updateAvailable ? (
           <div className="setting-row setting-row--stack">
             <span>{m.settings.updateReady}</span>
+            <span className="settings__hint">{m.about.version({ version: APP_BUILD_LABEL })}</span>
             <button
               type="button"
               className="btn btn--primary"
@@ -256,7 +251,7 @@ export function SettingsPage() {
             </button>
           </div>
         ) : (
-          <p className="settings__hint">{m.settings.upToDate({ version: APP_VERSION })}</p>
+          <p className="settings__hint">{m.settings.upToDate({ version: APP_BUILD_LABEL })}</p>
         )}
 
         <h2 className="settings__section">{m.settings.storage}</h2>
