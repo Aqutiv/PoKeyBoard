@@ -8,6 +8,7 @@ export const es: Messages = {
     practiceRight: 'Practicar derecha',
     practiceBoth: 'Practicar ambas',
     practiceHint: 'La reproducción espera tus notas.',
+    returnToPractice: 'Volver a practicar',
     recording: 'Grabación',
     clickVolume: 'Volumen del clic',
     tempoHint:

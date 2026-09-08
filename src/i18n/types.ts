@@ -132,6 +132,7 @@ export interface Messages {
     practiceRight: string;
     practiceBoth: string;
     practiceHint: string;
+    returnToPractice: string;
     recording: string;
     clickVolume: string;
     tempoHint: string;

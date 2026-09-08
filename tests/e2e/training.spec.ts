@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { gotoAppReady, recordShortTake, transport, transportTime } from './helpers';
+import { gotoAppReady, nav, recordShortTake, transport, transportTime } from './helpers';
 
 /** Choose the visible desktop practice mode. */
 async function chooseMode(page: import('@playwright/test').Page, name: RegExp): Promise<void> {
@@ -12,6 +12,39 @@ async function chooseMode(page: import('@playwright/test').Page, name: RegExp): 
 }
 
 test.describe('training playback', () => {
+  test('returning to practice from another page does not resume an invisible training wait', async ({
+    page,
+  }) => {
+    await gotoAppReady(page);
+    await recordShortTake(page, 350);
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    await chooseMode(page, /both hands/);
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'C4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+    );
+    const pausedAt = await transportTime(page).innerText();
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    const bar = page.getByRole('complementary', { name: 'Now playing' });
+    await expect(bar.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+    await bar.getByRole('button', { name: 'Return to practice', exact: true }).click();
+    await expect(page).toHaveURL(/#\/play$/);
+    await expect(bar).toHaveCount(0);
+    await expect(transportTime(page)).toHaveText(pausedAt);
+    await expect(page.locator('.piano-key[data-target="true"]')).toHaveCount(0);
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'C4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+    );
+    await page.keyboard.press('KeyA');
+    await expect(page.getByRole('button', { name: 'E4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+    );
+  });
+
   test('holds for the user at every note, then carries on', async ({ page }) => {
     await gotoAppReady(page);
     // Long enough notes that the two onsets are clearly apart in the take.

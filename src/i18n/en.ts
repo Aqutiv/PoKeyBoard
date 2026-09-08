@@ -10,6 +10,7 @@ export const en: Messages = {
     practiceRight: 'Practice right',
     practiceBoth: 'Practice both',
     practiceHint: 'Playback waits for your notes.',
+    returnToPractice: 'Return to practice',
     recording: 'Recording',
     clickVolume: 'Click volume',
     tempoHint: 'Tempo changes the metronome and score grid, not recorded playback speed.',

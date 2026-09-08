@@ -5,12 +5,14 @@ import { transportController } from '@/features/transport/transportController';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 import { useMessages } from '@/i18n/i18nContext';
 import { useTakeStore } from '@/state/useTakeStore';
+import { useSettingsStore } from '@/state/useSettingsStore';
 
 export function NowPlaying() {
   const { route, navigate } = useRouter();
   const state = useTransportState();
   const pianoReady = usePianoReady();
   const take = useTakeStore((s) => s.take);
+  const practicing = useSettingsStore((s) => s.playbackMode !== 'simple');
   const m = useMessages();
   if (route === 'play' || (state !== 'playing' && state !== 'paused')) return null;
   // Natural completion also enters paused; only offer Resume while music remains.
@@ -29,12 +31,18 @@ export function NowPlaying() {
       <button
         type="button"
         className="btn btn--small"
-        disabled={state === 'paused' && !pianoReady}
-        onClick={() =>
-          state === 'playing' ? transportController.pause() : transportController.play()
-        }
+        disabled={state === 'paused' && !practicing && !pianoReady}
+        onClick={() => {
+          if (state === 'playing') transportController.pause();
+          else if (practicing) navigate('play');
+          else transportController.play();
+        }}
       >
-        {state === 'playing' ? m.transport.pause : m.transport.resume}
+        {state === 'playing'
+          ? m.transport.pause
+          : practicing
+            ? m.workflow.returnToPractice
+            : m.transport.resume}
       </button>
       <button type="button" className="btn btn--small" onClick={() => transportController.stop()}>
         {m.transport.stop}

@@ -9,6 +9,7 @@ export const mg: Messages = {
     practiceRight: 'Hanao fanazaran-tena ankavanana',
     practiceBoth: 'Hanao fanazaran-tena roa tanana',
     practiceHint: 'Miandry ny naoty lalaovinao ny famerenana.',
+    returnToPractice: 'Hiverina amin’ny fanazaran-tena',
     recording: 'Fandraisam-peo',
     clickVolume: 'Hamafin’ny kitika',
     tempoHint:
