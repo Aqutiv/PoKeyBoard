@@ -76,6 +76,8 @@ export interface ExportHashInput {
   bitrateKbps: number;
   includeMetronome: boolean;
   metronomeVolume: number;
+  /** Normalized or as played; see `LoudnessMode`. */
+  loudness: string;
 }
 
 /**
@@ -89,6 +91,7 @@ export async function computeExportHash(input: ExportHashInput): Promise<string>
       bitrateKbps: input.bitrateKbps,
       includeMetronome: input.includeMetronome,
       metronomeVolume: input.includeMetronome ? input.metronomeVolume : null,
+      loudness: input.loudness,
       content: canonicalAudioContent(input.take),
     }),
   );

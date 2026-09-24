@@ -1,4 +1,5 @@
 import { createMp3Encoder } from 'wasm-media-encoders';
+import { masterExport, type LoudnessMode } from './loudness';
 
 /** The only bitrates the app offers; matches the encoder's CBR union type. */
 export type ExportBitrateKbps = 128 | 192;
@@ -53,4 +54,30 @@ export async function encodePcmToMp3(
     cursor += part.length;
   }
   return out;
+}
+
+/** A rendered take as the encoder receives it; see `RenderedTake`. */
+export interface ExportPcm {
+  sampleRate: number;
+  left: Float32Array;
+  right: Float32Array;
+  /** Metronome clicks, mono, or null. */
+  clicks: Float32Array | null;
+  loudness: LoudnessMode;
+}
+
+/**
+ * Everything after the render: set the level and hold the peaks
+ * (`masterExport`, in place), then encode. The worker runs this, and the
+ * main-thread fallback runs it identically.
+ */
+export async function finishMp3(
+  pcm: ExportPcm,
+  bitrateKbps: ExportBitrateKbps,
+  onProgress?: (fraction: number) => void,
+  signal?: AbortSignal,
+): Promise<Uint8Array> {
+  signal?.throwIfAborted();
+  masterExport(pcm.left, pcm.right, pcm.clicks, pcm.loudness, pcm.sampleRate);
+  return encodePcmToMp3(pcm.sampleRate, bitrateKbps, pcm.left, pcm.right, onProgress, signal);
 }

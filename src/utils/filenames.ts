@@ -72,6 +72,15 @@ export function takeAudioFileName(title: string, parts: TakeAudioNameParts = {})
   return composeFileName(`PoKeyBoard - ${credit}`, sanitizeFileNamePart(title), `${piano}.mp3`);
 }
 
+/** Credited like the audio: `PoKeyBoard - Erik Satie - Gymnopedie No. 1.mid`. */
+export function takeMidiFileName(
+  title: string,
+  parts: Pick<TakeAudioNameParts, 'composer'> = {},
+): string {
+  const credit = parts.composer ? `${sanitizeFileNamePart(parts.composer)} - ` : '';
+  return composeFileName(`PoKeyBoard - ${credit}`, sanitizeFileNamePart(title), '.mid');
+}
+
 export function takeSheetFileName(title: string): string {
   return composeFileName('PoKeyBoard - ', sanitizeFileNamePart(title), '.pdf');
 }

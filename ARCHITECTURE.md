@@ -14,12 +14,14 @@ src/
   audio/        AudioEngine (facade singleton), instruments (the piano
                 registry), SampleBank, VoiceManager, PianoGraphFactory
                 (+ procedural reverb IR), MetronomeEngine, OfflineTakeRenderer,
-                AudioExportService, audioCapabilities, iosAudioSession
-  workers/      mp3Encoder.worker (LAME wasm, transferred PCM)
+                AudioExportService, loudness (BS.1770 loudness, true peak,
+                look-ahead limiter), id3, audioCapabilities, iosAudioSession
+  workers/      mp3Encoder.worker (mastering + LAME wasm, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
                 tempoMap (piecewise beats↔ms; shared by import, library, score),
-                hands (which hand plays a note), trainingGate (pure)
+                hands (which hand plays a note), midiExport (Standard MIDI
+                File writer), trainingGate (pure)
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
@@ -39,8 +41,8 @@ src/
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportTakeDialog, ImportUrlDialog,
                 remoteImportMessage
-    export/     AudioExportDialog, SheetExportDialog, sheetPdfService
-                (pdf-lib, dynamic import — see SHEET_EXPORT.md)
+    export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService
+                (pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
     settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
                 reset), PianoSection (piano choice with its own offline pack,
                 levels)
@@ -127,7 +129,7 @@ that field, a switch invalidates cached exports on its own.
 
 ## Live/offline engine reuse
 
-`PianoGraphFactory` builds `voices → bus → (dry + convolver send) → master → limiter → destination` for **any** `BaseAudioContext`. `OfflineTakeRenderer` constructs an `OfflineAudioContext`, replays sustain-applied notes through the same factory with the same attack/release constants and the same `SampleBank` buffers, optionally adds scheduled metronome clicks, and rescales only if the peak would clip.
+`PianoGraphFactory` builds `voices → bus → (dry + convolver send) → master → limiter → soft clip → destination` for **any** `BaseAudioContext`. `OfflineTakeRenderer` constructs an `OfflineAudioContext` and replays sustain-applied notes through the same factory with the same attack/release constants and the same `SampleBank` buffers. Two things differ, both about level: the piano plays at the default volume (the volume slider is for the room, not the file), and without the graph's live peak guard (`peakGuard: false`) — a compressor has to react to peaks it cannot see coming, while an export can look ahead. Metronome clicks render in a mono context of their own. The encoder worker then masters the render (`loudness.masterExport`: BS.1770 loudness to −16 LUFS, or the played level, then a true-peak look-ahead limiter at −1 dBTP) before encoding; see AUDIO_EXPORT.md.
 
 ## Scrubbing
 

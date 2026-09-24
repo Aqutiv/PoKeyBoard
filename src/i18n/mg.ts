@@ -54,6 +54,9 @@ export const mg: Messages = {
     menuLabel: 'Safidy fizarana',
     audio: 'Feo (MP3)',
     sheet: 'Partitiora (PDF)',
+    midi: 'MIDI (.mid)',
+    rightHandTrack: 'Tanana havanana',
+    leftHandTrack: 'Tanana havia',
   },
   transport: {
     groupLabel: 'Fitaterana',
@@ -374,6 +377,9 @@ export const mg: Messages = {
     quality: 'Kalitao',
     shareable: ({ kbps }) => `Azo zaraina — ${kbps} kbps`,
     high: ({ kbps }) => `Avo — ${kbps} kbps`,
+    loudness: 'Haavon’ny feo',
+    loudnessNormalized: 'Mitovy — mafy toy ny mozika hafa',
+    loudnessAsPlayed: 'Araka ny nitendrenao — mijanona ho malefaka ny malefaka',
     includeMetronome: 'Ampidiro ny metronoma',
     reverbNote: 'Reverb: mampiasa ny fandrindrana ankehitrin’ny rakitra.',
     longTakeWarning: ({ mb }) =>

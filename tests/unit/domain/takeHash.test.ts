@@ -17,6 +17,7 @@ const baseInput = {
   bitrateKbps: 128,
   includeMetronome: false,
   metronomeVolume: 0.6,
+  loudness: 'normalized',
 };
 
 describe('stableStringify', () => {
@@ -93,10 +94,11 @@ describe('computeExportHash', () => {
     );
   });
 
-  it('changes with bitrate, metronome inclusion, reverb, and exporter version', async () => {
+  it('changes with bitrate, metronome inclusion, reverb, loudness, and exporter version', async () => {
     const take = takeWithNotes();
     const base = await computeExportHash({ ...baseInput, take });
     expect(await computeExportHash({ ...baseInput, take, bitrateKbps: 192 })).not.toBe(base);
+    expect(await computeExportHash({ ...baseInput, take, loudness: 'asPlayed' })).not.toBe(base);
     expect(await computeExportHash({ ...baseInput, take, includeMetronome: true })).not.toBe(base);
     expect(await computeExportHash({ ...baseInput, take, exporterVersion: 2 })).not.toBe(base);
     const wetter: Take = { ...take, instrument: { ...take.instrument, reverbMix: 0.5 } };

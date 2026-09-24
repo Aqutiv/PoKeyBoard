@@ -4,11 +4,30 @@ Goal: a rendered take must be sendable through WhatsApp and similar apps and pla
 
 ## Pipeline (src/audio/AudioExportService.ts)
 
-1. **Hash** the audible content (`takeHash`): notes/pedals (id-independent), tempo, instrument gains, sample-pack version + exporter version, bitrate, metronome inclusion. A cache hit in the `audioCache` table returns the stored MP3 instantly. The sample-pack version is how choosing a different piano invalidates a cached export: the take is re-stamped when the selection changes, so the render always uses the piano the user just heard.
+1. **Hash** the audible content (`takeHash`): notes/pedals (id-independent), tempo, instrument gains, sample-pack version + exporter version, bitrate, metronome inclusion, loudness mode. A cache hit in the `audioCache` table returns the stored MP3 instantly. The sample-pack version is how choosing a different piano invalidates a cached export: the take is re-stamped when the selection changes, so the render always uses the piano the user just heard.
 2. **Save** the take (forced autosave flush).
-3. **Render** via `OfflineTakeRenderer`: `OfflineAudioContext` (2ch/48kHz, take + 3 s tail), the same `PianoGraphFactory` graph, `SampleBank` buffers, and envelope constants as live playback; sustain pedal pre-applied to durations; optional metronome clicks; rescale only if the peak would clip (dynamics are never flattened).
-4. **Encode** in `mp3Encoder.worker`: channel copies are **transferred** (no clones), LAME encodes in ~2 s chunks with progress messages, and the finished buffer transfers back.
-5. **Validate** (non-empty, plausible size for duration·bitrate), **cache** in `audioCache` keyed by take id + hash, and present the ready panel.
+3. **Render** via `OfflineTakeRenderer`: `OfflineAudioContext` (2ch/48kHz, take + 3 s tail), the same `PianoGraphFactory` graph, `SampleBank` buffers, and envelope constants as live playback; sustain pedal pre-applied to durations. The piano plays at the default volume and without the live peak guard (see Level below); optional metronome clicks render in a mono context of their own, so they never count toward the piano's loudness.
+4. **Master and encode** in `mp3Encoder.worker`: channel copies are **transferred** (no clones), `masterExport` sets the level and holds the peaks in place, LAME encodes in ~2 s chunks with progress messages, and the finished buffer transfers back.
+5. **Validate** (non-empty, plausible size for duration·bitrate), **cache** the bare MP3 in `audioCache` keyed by take id + hash, and present the ready panel with the file **tagged** (below).
+
+## Level (src/audio/loudness.ts)
+
+Loudness is measured the way broadcasters and streaming services measure it, ITU-R BS.1770-4: K-weighted, in 400 ms blocks every 100 ms, gated at −70 LUFS and at 10 LU below the rest, so pauses and the reverb tail do not pull the figure down. The export dialog offers two levels:
+
+- **Even** (the default) brings every take to **−16 LUFS**, the level Apple Music plays at. A take that would need more than 5 dB of limiting to get there — a pianissimo piece with one crashing chord — stops short instead, since a piano's attack is much of its sound. The library's own tracks need at most about 4 dB.
+- **As played** keeps the take's own level: as loud as the app sounds at the default volume. The live compressor's automatic makeup gain, 2.9 dB, is added back, since the export's graph leaves the compressor out.
+
+Either way a **look-ahead limiter** then holds the result under a **−1 dBTP** true-peak ceiling: 4× oversampled (a 12-tap-a-phase Kaiser-windowed sinc, like the interpolator BS.1770 suggests) so the peaks a decoder reconstructs between samples count too, with both channels turned down together. Gain comes down over a 5 ms ramp before a peak and recovers with a 150 ms time constant. The decoded MP3 measures a few tenths of a dB under the master (0.4 at 128 kbps, 0.3 at 192), because the encoder's low-pass removes air that K-weighting counts; its true peak stays under the ceiling, which is what the headroom is for.
+
+Metronome clicks join after the level is set, at half their live level, so an accented click at full volume never has the limiter ducking the piano on its own.
+
+## Tags
+
+An ID3v2.3 tag (the version every player reads, Windows' own among them) names the take (`TIT2`), a library track's composer (`TPE1`, `TCOM`), the album `PoKeyBoard` and the piano it was rendered on (`TSSE`). The cache holds the untagged MP3 and the tag is written each time the file is handed over, so a take renamed after its export never carries its old title.
+
+## MIDI (.mid)
+
+**Share → MIDI (.mid)** is the one export without a dialog: `midiExport.takeToMidi` writes a Standard MIDI File (format 1, 960 ticks a quarter) from the take's freshest copy as the Share menu opens, so choosing it can hand the file to the share sheet inside the click. Tempo, meter and key go on a track of their own — the key the notation writes, declared or read from the pitches, major or minor — then the right hand and the left on channels 1 and 2 (split as the grand staff splits them), each with the sustain pedal and the General MIDI program nearest the piano (Acoustic Grand, or Electric Piano 1 for the Wurlitzer). Times go through the take's tempo map, so a bar in the file is a bar on the page. A key a hand strikes again while it is still down becomes a re-strike held until both notes have let go — one MIDI note-off cannot end one of two notes on the same key.
 
 Cancel is available at every stage (the worker is terminated); failures surface actionable messages and return the transport to idle.
 

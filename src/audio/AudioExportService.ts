@@ -6,12 +6,19 @@ import { libraryTrackSummary } from '@/features/library/catalog';
 import { ExportError } from '@/utils/errors';
 import { takeAudioFileName } from '@/utils/filenames';
 import type { EncoderResponse } from '@/workers/mp3Encoder.worker';
+import { id3v2Tag } from './id3';
 import { instrumentForPackVersion } from './instruments';
-import { encodePcmToMp3, type ExportBitrateKbps } from './mp3Encode';
-import { renderTakeToBuffer } from './OfflineTakeRenderer';
+import type { LoudnessMode } from './loudness';
+import { finishMp3, type ExportBitrateKbps, type ExportPcm } from './mp3Encode';
+import { renderTakeForExport, type RenderedTake } from './OfflineTakeRenderer';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 
-export const AUDIO_EXPORTER_VERSION = 2;
+/**
+ * Bumped whenever the same take would render differently, so no cached export
+ * outlives the change. 4: level set by loudness and held by a true-peak
+ * limiter, not by the live graph's compressor.
+ */
+export const AUDIO_EXPORTER_VERSION = 4;
 
 export type ExportQuality = 'share' | 'high';
 
@@ -24,6 +31,7 @@ export interface ExportOptions {
   quality: ExportQuality;
   includeMetronome: boolean;
   metronomeVolume: number;
+  loudness: LoudnessMode;
 }
 
 export type ExportStage = 'saving' | 'rendering' | 'encoding';
@@ -59,9 +67,11 @@ interface ActiveExportJob {
 }
 
 /**
- * The full export pipeline: snapshot+save → offline render → worker MP3
- * encode → validate → cache under a deterministic hash. Cached results are
- * reused only while the hash still matches.
+ * The full export pipeline: snapshot+save → offline render → worker mastering
+ * and MP3 encode → validate → cache under a deterministic hash → tag. Cached
+ * results are reused only while the hash still matches. The cache holds the
+ * bare MP3 and the tag is written on the way out, so a renamed take never
+ * carries its old title.
  */
 class AudioExportService {
   private activeJob: ActiveExportJob | null = null;
@@ -90,23 +100,32 @@ class AudioExportService {
           bitrateKbps,
           includeMetronome: options.includeMetronome,
           metronomeVolume: options.metronomeVolume,
+          loudness: options.loudness,
         }),
       );
       // Every export names the piano it was rendered with; a library track is
       // credited to its composer as well.
-      const fileName = takeAudioFileName(take.title, {
-        composer: libraryTrackSummary(take.id)?.composer,
-        piano: instrumentForPackVersion(take.samplePackVersion).name,
+      const composer = libraryTrackSummary(take.id)?.composer;
+      const piano = instrumentForPackVersion(take.samplePackVersion).name;
+      const fileName = takeAudioFileName(take.title, { composer, piano });
+      const tag = id3v2Tag({
+        title: take.title,
+        artist: composer,
+        composer,
+        album: 'PoKeyBoard',
+        encodedWith: `PoKeyBoard (${piano})`,
       });
+      const tagged = (mp3: Blob) => new Blob([tag, mp3], { type: 'audio/mpeg' });
 
       const cached = await this.awaitJob(job, getCachedAudio(take.id));
       if (cached && cached.hash === hash) {
+        const blob = tagged(cached.blob);
         return {
-          blob: cached.blob,
+          blob,
           fileName,
           hash,
           durationMs: effectivePlaybackDurationMs(take),
-          sizeBytes: cached.blob.size,
+          sizeBytes: blob.size,
           fromCache: true,
         };
       }
@@ -115,9 +134,9 @@ class AudioExportService {
       await this.awaitJob(job, persistenceService.flushSaveOrThrow());
 
       onProgress({ stage: 'rendering', fraction: -1 });
-      const buffer = await this.awaitJob(
+      const rendered = await this.awaitJob(
         job,
-        renderTakeToBuffer(take, {
+        renderTakeForExport(take, {
           includeMetronome: options.includeMetronome,
           metronomeVolume: options.metronomeVolume,
         }),
@@ -126,16 +145,19 @@ class AudioExportService {
       onProgress({ stage: 'encoding', fraction: 0 });
       const mp3 = await this.awaitJob(
         job,
-        this.encode(job, buffer, bitrateKbps, (fraction) =>
+        this.encode(job, rendered, options.loudness, bitrateKbps, (fraction) =>
           onProgress({ stage: 'encoding', fraction }),
         ),
       );
 
-      const blob = new Blob([mp3], { type: 'audio/mpeg' });
-      const minimumPlausible = Math.max(2_000, (buffer.duration * bitrateKbps * 1000 * 0.3) / 8);
-      if (blob.size < minimumPlausible) {
+      const bare = new Blob([mp3], { type: 'audio/mpeg' });
+      const minimumPlausible = Math.max(
+        2_000,
+        (rendered.piano.duration * bitrateKbps * 1000 * 0.3) / 8,
+      );
+      if (bare.size < minimumPlausible) {
         throw new ExportError(
-          `Encoded MP3 implausibly small (${blob.size} bytes)`,
+          `Encoded MP3 implausibly small (${bare.size} bytes)`,
           'Encoding produced an invalid file. Please try again.',
           'exportEncodingInvalid',
         );
@@ -146,13 +168,14 @@ class AudioExportService {
         putCachedAudio({
           takeId: take.id,
           hash,
-          blob,
+          blob: bare,
           mimeType: 'audio/mpeg',
           fileName,
           createdAt: new Date().toISOString(),
         }),
       );
 
+      const blob = tagged(bare);
       return {
         blob,
         fileName,
@@ -211,7 +234,7 @@ class AudioExportService {
   }
 
   /**
-   * Encode the rendered buffer to MP3. The Web Worker is the fast path (keeps
+   * Master and encode the rendered take. The Web Worker is the fast path (keeps
    * the UI responsive); if it can't be constructed, crashes, or errors — which
    * happens when a background/suspended tab kills the worker mid-compile, or on
    * browsers with flaky module-worker support — we fall back to encoding on the
@@ -220,23 +243,21 @@ class AudioExportService {
    */
   private async encode(
     job: ActiveExportJob,
-    buffer: AudioBuffer,
+    rendered: RenderedTake,
+    loudness: LoudnessMode,
     bitrateKbps: ExportBitrateKbps,
     onFraction: (fraction: number) => void,
   ): Promise<ArrayBuffer> {
     try {
-      return await this.encodeViaWorker(job, buffer, bitrateKbps, onFraction);
+      return await this.encodeViaWorker(job, rendered, loudness, bitrateKbps, onFraction);
     } catch (workerError) {
       if (job.cancelled) throw new ExportCancelledError();
       console.error('[export] MP3 worker failed, falling back to main thread:', workerError);
       try {
-        // Worker transfers detach the PCM buffers; re-extract from the buffer.
-        const { left, right } = extractStereoPcm(buffer);
-        const out = await encodePcmToMp3(
-          buffer.sampleRate,
+        // Worker transfers detach the PCM buffers; re-extract from the render.
+        const out = await finishMp3(
+          extractPcm(rendered, loudness),
           bitrateKbps,
-          left,
-          right,
           onFraction,
           job.controller.signal,
         );
@@ -255,15 +276,18 @@ class AudioExportService {
     }
   }
 
-  /** Encode via the Web Worker; rejects on construction, crash, or error. */
+  /** Master and encode via the Web Worker; rejects on construction, crash, or error. */
   private encodeViaWorker(
     job: ActiveExportJob,
-    buffer: AudioBuffer,
+    rendered: RenderedTake,
+    loudness: LoudnessMode,
     bitrateKbps: ExportBitrateKbps,
     onFraction: (fraction: number) => void,
   ): Promise<ArrayBuffer> {
-    // Transfer channel copies; the AudioBuffer itself stays untouched.
-    const { left, right } = extractStereoPcm(buffer);
+    // Transfer channel copies; the render itself stays untouched.
+    const pcm = extractPcm(rendered, loudness);
+    const transfer = [pcm.left.buffer, pcm.right.buffer];
+    if (pcm.clicks) transfer.push(pcm.clicks.buffer);
 
     return new Promise<ArrayBuffer>((resolve, reject) => {
       let worker: Worker;
@@ -315,23 +339,32 @@ class AudioExportService {
       worker.postMessage(
         {
           type: 'encode',
-          sampleRate: buffer.sampleRate,
+          sampleRate: pcm.sampleRate,
           bitrateKbps,
-          left: left.buffer,
-          right: right.buffer,
+          left: pcm.left.buffer,
+          right: pcm.right.buffer,
+          clicks: pcm.clicks?.buffer ?? null,
+          loudness,
         },
-        [left.buffer, right.buffer],
+        transfer,
       );
     });
   }
 }
 
-function extractStereoPcm(buffer: AudioBuffer): { left: Float32Array; right: Float32Array } {
-  const left = new Float32Array(buffer.length);
-  const right = new Float32Array(buffer.length);
-  buffer.copyFromChannel(left, 0);
-  buffer.copyFromChannel(right, buffer.numberOfChannels > 1 ? 1 : 0);
-  return { left, right };
+/** Fresh copies of the render's channels, for the encoder to master in place. */
+function extractPcm(rendered: RenderedTake, loudness: LoudnessMode): ExportPcm {
+  const { piano, clicks } = rendered;
+  const left = new Float32Array(piano.length);
+  const right = new Float32Array(piano.length);
+  piano.copyFromChannel(left, 0);
+  piano.copyFromChannel(right, piano.numberOfChannels > 1 ? 1 : 0);
+  let clickPcm: Float32Array<ArrayBuffer> | null = null;
+  if (clicks) {
+    clickPcm = new Float32Array(clicks.length);
+    clicks.copyFromChannel(clickPcm, 0);
+  }
+  return { sampleRate: piano.sampleRate, left, right, clicks: clickPcm, loudness };
 }
 
 export const audioExportService = new AudioExportService();

@@ -1,5 +1,5 @@
 import { sortNotes } from '@/domain/noteEvents';
-import type { Take } from '@/domain/takeTypes';
+import { DEFAULT_MASTER_VOLUME, type Take } from '@/domain/takeTypes';
 import {
   applySustainToNotes,
   effectivePlaybackDurationMs,
@@ -23,6 +23,20 @@ export interface OfflineRenderOptions {
   metronomeVolume: number;
 }
 
+/**
+ * A take rendered for export, not yet at its final level: that is set from the
+ * whole of it once it exists (`masterExport`).
+ */
+export interface RenderedTake {
+  /** The piano and its reverb, stereo, at the app's default volume. */
+  piano: AudioBuffer;
+  /**
+   * The metronome, mono and as long as the piano, when asked for. Kept apart
+   * so its clicks never count toward how loud the piano is.
+   */
+  clicks: AudioBuffer | null;
+}
+
 export function estimateRenderSeconds(take: Take): number {
   return effectivePlaybackDurationMs(take) / 1000 + TAIL_S;
 }
@@ -35,13 +49,15 @@ export function estimateRenderMemoryMB(take: Take): number {
 
 /**
  * Render a take through the same sample bank, graph shape, and envelope
- * constants as live playback, into a stereo AudioBuffer. Normalizes only
- * when the peak would clip; musical dynamics are never flattened.
+ * constants as live playback. Two things differ, both about level: the piano
+ * plays at the default volume rather than wherever the volume slider was left
+ * — that slider is for the room, not the file — and without the graph's live
+ * peak guard, which a limiter that can look ahead replaces afterwards.
  */
-export async function renderTakeToBuffer(
+export async function renderTakeForExport(
   take: Take,
   options: OfflineRenderOptions,
-): Promise<AudioBuffer> {
+): Promise<RenderedTake> {
   const seconds = estimateRenderSeconds(take);
   if (seconds > MAX_RENDER_MINUTES * 60) {
     throw new ExportError(
@@ -75,8 +91,9 @@ export async function renderTakeToBuffer(
   });
 
   const graph = createPianoGraph(context, {
-    masterVolume: take.instrument.masterVolume,
+    masterVolume: DEFAULT_MASTER_VOLUME,
     reverbMix: take.instrument.reverbMix,
+    peakGuard: false,
   });
 
   const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
@@ -100,36 +117,27 @@ export async function renderTakeToBuffer(
     );
   }
 
-  if (options.includeMetronome) {
-    scheduleClicksForRange(
-      context,
-      graph.outputDestination,
-      take.tempo,
-      options.metronomeVolume,
-      0,
-      effectivePlaybackDurationMs(take),
-    );
-  }
+  const [piano, clicks] = await Promise.all([
+    context.startRendering(),
+    options.includeMetronome ? renderClicks(take, options.metronomeVolume, length) : null,
+  ]);
+  return { piano, clicks };
+}
 
-  const buffer = await context.startRendering();
-
-  // Peak check: rescale only to prevent clipping.
-  let peak = 0;
-  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-    const data = buffer.getChannelData(channel);
-    for (let i = 0; i < data.length; i += 1) {
-      const magnitude = Math.abs(data[i] as number);
-      if (magnitude > peak) peak = magnitude;
-    }
-  }
-  if (peak > 0.985) {
-    const scale = 0.97 / peak;
-    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-      const data = buffer.getChannelData(channel);
-      for (let i = 0; i < data.length; i += 1) {
-        data[i] = (data[i] as number) * scale;
-      }
-    }
-  }
-  return buffer;
+/** The metronome alone, in a context of its own; see `RenderedTake.clicks`. */
+function renderClicks(take: Take, volume: number, length: number): Promise<AudioBuffer> {
+  const context = new OfflineAudioContext({
+    numberOfChannels: 1,
+    length,
+    sampleRate: RENDER_SAMPLE_RATE,
+  });
+  scheduleClicksForRange(
+    context,
+    context.destination,
+    take.tempo,
+    volume,
+    0,
+    effectivePlaybackDurationMs(take),
+  );
+  return context.startRendering();
 }

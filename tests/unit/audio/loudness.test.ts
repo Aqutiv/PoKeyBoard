@@ -1,0 +1,226 @@
+import { describe, expect, it } from 'vitest';
+import {
+  CEILING_DBTP,
+  integratedLoudness,
+  kWeighting,
+  limitTruePeak,
+  masterExport,
+  MAX_LIMITING_DB,
+  TARGET_LUFS,
+  truePeak,
+} from '@/audio/loudness';
+
+const RATE = 48_000;
+
+function dbfs(db: number): number {
+  return 10 ** (db / 20);
+}
+
+/** A sine of `peakDb` for `seconds`, starting at `phase` radians. */
+function sine(frequency: number, peakDb: number, seconds: number, phase = 0): Float32Array {
+  const out = new Float32Array(Math.round(seconds * RATE));
+  const amplitude = dbfs(peakDb);
+  for (let i = 0; i < out.length; i += 1) {
+    out[i] = amplitude * Math.sin((2 * Math.PI * frequency * i) / RATE + phase);
+  }
+  return out;
+}
+
+/** Faded in and out over 10 ms: a tone that starts at full level has a crest of its own. */
+function faded(samples: Float32Array): Float32Array {
+  const ramp = Math.round(0.01 * RATE);
+  for (let i = 0; i < ramp; i += 1) {
+    const gain = i / ramp;
+    samples[i] = samples[i]! * gain;
+    samples[samples.length - 1 - i] = samples[samples.length - 1 - i]! * gain;
+  }
+  return samples;
+}
+
+function joined(...parts: Float32Array[]): Float32Array {
+  const out = new Float32Array(parts.reduce((sum, part) => sum + part.length, 0));
+  let at = 0;
+  for (const part of parts) {
+    out.set(part, at);
+    at += part.length;
+  }
+  return out;
+}
+
+function stereo(samples: Float32Array): Float32Array[] {
+  return [samples, samples.slice()];
+}
+
+describe('K-weighting', () => {
+  it('is the table BS.1770 gives at 48 kHz', () => {
+    const [shelf, highPass] = kWeighting(48_000);
+    expect(shelf.b0).toBeCloseTo(1.53512485958697, 10);
+    expect(shelf.b1).toBeCloseTo(-2.69169618940638, 10);
+    expect(shelf.b2).toBeCloseTo(1.19839281085285, 10);
+    expect(shelf.a1).toBeCloseTo(-1.69065929318241, 10);
+    expect(shelf.a2).toBeCloseTo(0.73248077421585, 10);
+    expect(highPass.a1).toBeCloseTo(-1.99004745483398, 10);
+    expect(highPass.a2).toBeCloseTo(0.99007225036621, 10);
+  });
+});
+
+describe('integrated loudness', () => {
+  // The EBU's own checks for a meter (Tech 3341): a stereo 1 kHz tone at
+  // −23 dBFS reads −23 LUFS.
+  it('reads a stereo tone at its level', () => {
+    expect(integratedLoudness(stereo(sine(1000, -23, 20)), RATE)).toBeCloseTo(-23, 1);
+    expect(integratedLoudness(stereo(sine(1000, -33, 20)), RATE)).toBeCloseTo(-33, 1);
+  });
+
+  it('leaves the quiet stretches out of the average', () => {
+    // −36 dBFS either side of a minute at −23 is more than 10 LU down: gated.
+    const quiet = sine(1000, -36, 10);
+    const programme = joined(quiet, sine(1000, -23, 60), quiet);
+    expect(integratedLoudness(stereo(programme), RATE)).toBeCloseTo(-23, 1);
+  });
+
+  it('weighs what a listener hears least, least', () => {
+    // K-weighting's high-pass: 20 Hz at the same level reads far quieter.
+    expect(integratedLoudness(stereo(sine(20, -23, 10)), RATE)).toBeLessThan(-35);
+  });
+
+  it('has nothing to say about silence or a sliver', () => {
+    expect(integratedLoudness(stereo(new Float32Array(RATE * 5)), RATE)).toBe(-Infinity);
+    expect(integratedLoudness(stereo(sine(1000, -80, 5)), RATE)).toBe(-Infinity);
+    expect(integratedLoudness(stereo(sine(1000, -23, 0.3)), RATE)).toBe(-Infinity);
+  });
+});
+
+describe('true peak', () => {
+  it('finds a peak that falls between the samples', () => {
+    // A quarter of the sample rate, 45° in: every sample lands 3 dB below the
+    // crest, which a decoder reconstructs all the same.
+    const between = faded(sine(RATE / 4, -1, 1, Math.PI / 4));
+    let samplePeak = 0;
+    for (const sample of between) samplePeak = Math.max(samplePeak, Math.abs(sample));
+    expect(20 * Math.log10(samplePeak)).toBeCloseTo(-4, 1);
+    expect(20 * Math.log10(truePeak([between]))).toBeCloseTo(-1, 1);
+  });
+
+  it('is the sample peak for anything low enough to have no hidden crest', () => {
+    const tone = faded(sine(100, -6, 1, 0.3));
+    expect(20 * Math.log10(truePeak(stereo(tone)))).toBeCloseTo(-6, 2);
+  });
+});
+
+describe('the limiter', () => {
+  const ceiling = dbfs(-1);
+
+  /** Quiet tone with a loud burst in the middle, as a chord's attack would be. */
+  function burst(): Float32Array {
+    return joined(sine(440, -20, 1), sine(440, 3, 0.2), sine(440, -20, 1));
+  }
+
+  it('holds the loudest moment under the ceiling, between samples too', () => {
+    const channels = stereo(burst());
+    const deepest = limitTruePeak(channels, ceiling, RATE);
+    expect(truePeak(channels)).toBeLessThanOrEqual(ceiling * 1.001);
+    expect(deepest).toBeCloseTo(-4, 0);
+  });
+
+  it('leaves everything well away from a peak exactly as it was', () => {
+    const original = burst();
+    const channels = stereo(original);
+    limitTruePeak(channels, ceiling, RATE);
+    // Before the 5 ms look-ahead, and after the release has long settled.
+    for (const i of [0, 1000, 40_000]) expect(channels[0]![i]).toBe(original[i]);
+    const settled = Math.round(2.1 * RATE);
+    expect(channels[0]![settled]).toBeCloseTo(original[settled]!, 4);
+  });
+
+  it('turns down without a click: the gain moves a little each sample', () => {
+    const original = burst();
+    const channels = stereo(original);
+    limitTruePeak(channels, ceiling, RATE);
+    // Gain read back where the tone is near its crest, sample by sample.
+    let previous = 1;
+    let steepest = 0;
+    for (let i = 0; i < original.length; i += 1) {
+      if (Math.abs(original[i]!) < 0.05) continue;
+      const gain = channels[0]![i]! / original[i]!;
+      steepest = Math.max(steepest, Math.abs(gain - previous));
+      previous = gain;
+    }
+    expect(steepest).toBeLessThan(0.01);
+  });
+
+  it('turns both channels down together', () => {
+    const left = burst();
+    const right = sine(440, -20, left.length / RATE);
+    const rightBefore = right.slice();
+    limitTruePeak([left, right], ceiling, RATE);
+    const middle = Math.round(1.1 * RATE);
+    expect(right[middle]! / rightBefore[middle]!).toBeCloseTo(ceiling / dbfs(3), 1);
+  });
+
+  it('does nothing to a signal already under the ceiling', () => {
+    const original = sine(440, -3, 1);
+    const channels = stereo(original);
+    expect(limitTruePeak(channels, ceiling, RATE)).toBe(0);
+    expect(channels[0]).toEqual(original);
+  });
+});
+
+describe('mastering an export', () => {
+  const ceiling = dbfs(CEILING_DBTP);
+
+  it('brings a quiet take up to the target, peaks and all under the ceiling', () => {
+    const [left, right] = stereo(faded(sine(1000, -30, 10)));
+    const result = masterExport(left!, right!, null, 'normalized', RATE);
+    expect(result.renderedLufs).toBeCloseTo(-30, 0);
+    expect(integratedLoudness([left!, right!], RATE)).toBeCloseTo(TARGET_LUFS, 1);
+    expect(truePeak([left!, right!])).toBeLessThanOrEqual(ceiling * 1.001);
+  });
+
+  it('brings a loud take down to it as well', () => {
+    const [left, right] = stereo(faded(sine(1000, -8, 10)));
+    masterExport(left!, right!, null, 'normalized', RATE);
+    expect(integratedLoudness([left!, right!], RATE)).toBeCloseTo(TARGET_LUFS, 1);
+  });
+
+  it('stops short of the target rather than flatten one crashing chord', () => {
+    // Quiet throughout but for 20 ms 24 dB louder — too brief to move the
+    // loudness, too tall to reach the target without far more limiting than a
+    // piano's attack is allowed.
+    const quiet = sine(1000, -30, 5);
+    const [left, right] = stereo(faded(joined(quiet, sine(1000, -6, 0.02), quiet)));
+    const result = masterExport(left!, right!, null, 'normalized', RATE);
+    expect(result.gainDb).toBeLessThan(TARGET_LUFS - result.renderedLufs - 1);
+    expect(result.limitedDb).toBeCloseTo(-MAX_LIMITING_DB, 1);
+    expect(integratedLoudness([left!, right!], RATE)).toBeLessThan(TARGET_LUFS - 1);
+    expect(truePeak([left!, right!])).toBeLessThanOrEqual(ceiling * 1.001);
+  });
+
+  it('keeps a take as played as loud as the app sounds live', () => {
+    const [left, right] = stereo(faded(sine(1000, -30, 10)));
+    const result = masterExport(left!, right!, null, 'asPlayed', RATE);
+    expect(result.gainDb).toBeCloseTo(2.9, 5);
+    expect(integratedLoudness([left!, right!], RATE)).toBeCloseTo(-27.1, 1);
+  });
+
+  it('mixes the metronome in without letting it count toward the level', () => {
+    const piano = stereo(faded(sine(1000, -30, 10)));
+    const clicks = new Float32Array(piano[0]!.length);
+    for (let i = 0; i < clicks.length; i += RATE / 2) clicks[i] = 1;
+    const without = masterExport(piano[0]!.slice(), piano[1]!.slice(), null, 'normalized', RATE);
+    const [left, right] = piano;
+    const withClicks = masterExport(left!, right!, clicks, 'normalized', RATE);
+    expect(withClicks.gainDb).toBeCloseTo(without.gainDb, 5);
+    // Clicks join at half their level, over the piano.
+    const at = RATE * 2;
+    expect(left![at]).toBeCloseTo(0.5, 1);
+  });
+
+  it('leaves a take too quiet to measure at its played level', () => {
+    const [left, right] = stereo(new Float32Array(RATE * 2));
+    const result = masterExport(left!, right!, null, 'normalized', RATE);
+    expect(result.renderedLufs).toBe(-Infinity);
+    expect(result.gainDb).toBeCloseTo(2.9, 5);
+    expect(left!.every((sample) => sample === 0)).toBe(true);
+  });
+});

@@ -7,6 +7,7 @@ import {
   type ExportQuality,
   type ExportResult,
 } from '@/audio/AudioExportService';
+import type { LoudnessMode } from '@/audio/loudness';
 import {
   estimateRenderMemoryMB,
   estimateRenderSeconds,
@@ -55,6 +56,7 @@ export function AudioExportDialog() {
   const [phase, setPhase] = useState<Phase | null>(null);
   const [lastRequestedId, setLastRequestedId] = useState<string | null>(null);
   const [quality, setQuality] = useState<ExportQuality>('share');
+  const [loudness, setLoudness] = useState<LoudnessMode>('normalized');
   const [includeMetronome, setIncludeMetronome] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -135,7 +137,7 @@ export function AudioExportDialog() {
       }
       setPhase({ kind: 'working', take, progress: { stage: 'saving', fraction: -1 } });
       audioExportService
-        .exportTake(take, { quality, includeMetronome, metronomeVolume }, (progress) => {
+        .exportTake(take, { quality, includeMetronome, metronomeVolume, loudness }, (progress) => {
           if (progress.stage === 'encoding') {
             transportController.sendExportEvent('RENDER_DONE');
           }
@@ -155,7 +157,7 @@ export function AudioExportDialog() {
           }
         });
     },
-    [quality, includeMetronome, metronomeVolume, m],
+    [quality, includeMetronome, metronomeVolume, loudness, m],
   );
 
   const cancelRender = useCallback(() => {
@@ -204,6 +206,27 @@ export function AudioExportDialog() {
                   onChange={() => setQuality('high')}
                 />
                 {m.exportDialog.high({ kbps: QUALITY_BITRATE.high })}
+              </label>
+            </fieldset>
+            <fieldset className="export-options">
+              <legend>{m.exportDialog.loudness}</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="loudness"
+                  checked={loudness === 'normalized'}
+                  onChange={() => setLoudness('normalized')}
+                />
+                {m.exportDialog.loudnessNormalized}
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="loudness"
+                  checked={loudness === 'asPlayed'}
+                  onChange={() => setLoudness('asPlayed')}
+                />
+                {m.exportDialog.loudnessAsPlayed}
               </label>
             </fieldset>
             <label className="export-metronome">

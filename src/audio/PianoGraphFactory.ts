@@ -14,6 +14,14 @@
 export interface PianoGraphOptions {
   masterVolume: number;
   reverbMix: number;
+  /**
+   * Whether the graph guards its own peaks, with the limiter and soft clipper
+   * above; on unless said otherwise. Live playback has to, since it cannot see
+   * a peak coming. An export turns it off: its level is set once the whole
+   * take is rendered, and its peaks are held by a limiter that looks ahead
+   * (`loudness.ts`), which a compressor already squeezing them would defeat.
+   */
+  peakGuard?: boolean;
 }
 
 export interface PianoGraph {
@@ -191,10 +199,14 @@ export function createPianoGraph(
   convolver.connect(reverbReturn);
   reverbReturn.connect(master);
   master.connect(outputStage);
-  outputStage.connect(limiter);
-  limiter.connect(softClipInput);
-  softClipInput.connect(softClip);
-  softClip.connect(context.destination);
+  if (options.peakGuard ?? true) {
+    outputStage.connect(limiter);
+    limiter.connect(softClipInput);
+    softClipInput.connect(softClip);
+    softClip.connect(context.destination);
+  } else {
+    outputStage.connect(context.destination);
+  }
 
   let masterVolume = clamp01(options.masterVolume);
   let reverbMix = clamp01(options.reverbMix);

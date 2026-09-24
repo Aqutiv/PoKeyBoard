@@ -3,6 +3,7 @@ import {
   backupFileName,
   sanitizeFileNamePart,
   takeAudioFileName,
+  takeMidiFileName,
   takeJsonFileName,
   takeSheetFileName,
 } from '@/utils/filenames';
@@ -50,6 +51,10 @@ describe('file name builders', () => {
       'PoKeyBoard - My Take (Salamander).mp3',
     );
     expect(takeSheetFileName('My<Take>')).toBe('PoKeyBoard - My Take.pdf');
+    expect(takeMidiFileName('My Take')).toBe('PoKeyBoard - My Take.mid');
+    expect(takeMidiFileName('Gymnopedie No. 1', { composer: 'Erik Satie' })).toBe(
+      'PoKeyBoard - Erik Satie - Gymnopedie No. 1.mid',
+    );
     expect(
       takeAudioFileName('Gymnopedie No. 1', { composer: 'Erik Satie', piano: 'Salamander' }),
     ).toBe('PoKeyBoard - Erik Satie - Gymnopedie No. 1 (Salamander).mp3');

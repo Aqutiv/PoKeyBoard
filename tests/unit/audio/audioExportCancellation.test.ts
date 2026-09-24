@@ -20,7 +20,7 @@ describe('audio export cancellation', () => {
       persistenceService: { flushSaveOrThrow: vi.fn(async () => undefined) },
     }));
     vi.doMock('@/audio/OfflineTakeRenderer', () => ({
-      renderTakeToBuffer: vi.fn(() => new Promise<AudioBuffer>(() => undefined)),
+      renderTakeForExport: vi.fn(() => new Promise<never>(() => undefined)),
     }));
 
     const { audioExportService, ExportCancelledError } = await import('@/audio/AudioExportService');
@@ -31,7 +31,7 @@ describe('audio export cancellation', () => {
     const stages: string[] = [];
     const pending = audioExportService.exportTake(
       take,
-      { quality: 'share', includeMetronome: false, metronomeVolume: 0.6 },
+      { quality: 'share', includeMetronome: false, metronomeVolume: 0.6, loudness: 'normalized' },
       (progress) => stages.push(progress.stage),
     );
     await vi.waitFor(() => expect(stages).toContain('rendering'));
