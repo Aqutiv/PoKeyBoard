@@ -10,7 +10,8 @@ import type { ClefKind } from './staffMapping';
  * downstream — staff position, accidental, key signature — is read from it.
  */
 
-export type AccidentalKind = '#' | 'b' | 'natural';
+/** Sharp, flat, natural, and the double sharp (`x`) and double flat (`bb`). */
+export type AccidentalKind = '#' | 'b' | 'natural' | 'x' | 'bb';
 
 /** Coerce anything (a corrupt setting, a wild `<fifths>`) into a real key. */
 export function normalizeFifths(value: unknown): number {
@@ -120,6 +121,8 @@ export function spellingsFor(fifths: number): Spelling[] {
 
 /** The sign an alteration is written with. */
 export function accidentalFor(alter: number): AccidentalKind {
+  if (alter >= 2) return 'x';
+  if (alter <= -2) return 'bb';
   return alter > 0 ? '#' : alter < 0 ? 'b' : 'natural';
 }
 

@@ -232,9 +232,8 @@ describe('library catalog', () => {
     expect(bpms.at(-1)).toBe(48);
 
     const notes = take?.notes ?? [];
-    // The notation reads a single key from the pitches and spells everything
-    // else towards its side, so the piece keeps every colour on the flat side:
-    // one flat, and no F sharp, which that key would print as G flat.
+    // The notation reads a single key from the pitches, so the piece keeps
+    // every colour on the flat side: one flat, and no F sharp at all.
     expect(detectFifths(notes)).toBe(-1);
     expect(notes.filter((note) => note.midi % 12 === 6)).toEqual([]);
     expect(notes.every((note) => note.staff !== undefined)).toBe(true);
@@ -249,6 +248,23 @@ describe('library catalog', () => {
     // The book closes on F with its ninth, spread up to a bell on A6.
     const finalChord = notes.filter((note) => note.startMs >= 118_000);
     expect(finalChord.map((note) => note.midi)).toEqual([29, 48, 57, 67, 72, 77, 81, 93]);
+  });
+
+  it('keeps the accidentals each track was written with', () => {
+    // A name written with an accidental is its author's spelling, and the
+    // notation keeps it: every A flat of the Silverwood Tale stays one.
+    const silverwood = getLibraryTake(libraryTakeId('silverwood-tale'))!;
+    const aFlats = silverwood.notes.filter((note) => note.midi % 12 === 8);
+    expect(aFlats.length).toBeGreaterThan(0);
+    expect(aFlats.every((note) => note.spelling?.step === 'A' && note.spelling.alter === -1)).toBe(
+      true,
+    );
+    // A bare letter names only a key: the Moonlight's C's carry no spelling,
+    // so the notation can write its leading tone as the B sharp it is.
+    const moonlight = getLibraryTake(libraryTakeId('moonlight-sonata'))!;
+    const cs = moonlight.notes.filter((note) => note.midi % 12 === 0);
+    expect(cs.length).toBeGreaterThan(0);
+    expect(cs.every((note) => note.spelling === undefined)).toBe(true);
   });
 
   it('summaries mirror the built takes', () => {

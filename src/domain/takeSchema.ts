@@ -50,6 +50,22 @@ export const noteTupletSchema = z.object({
   group: z.number().int().min(0).max(MAX_NOTE_COUNT).optional(),
 });
 
+/** A source's spelling of a note; see `NoteSpelling`. */
+export const noteSpellingSchema = z.object({
+  step: z.enum(['C', 'D', 'E', 'F', 'G', 'A', 'B']),
+  alter: z.number().int().min(-2).max(2),
+});
+
+const STEP_PITCH_CLASS: Record<string, number> = { C: 0, D: 2, E: 4, F: 5, G: 7, A: 9, B: 11 };
+
+/** Whether an untrusted spelling is well formed and spells this very pitch. */
+function spellingNamesPitch(spelling: unknown, midi: unknown): boolean {
+  const parsed = noteSpellingSchema.safeParse(spelling);
+  if (!parsed.success || !isFiniteNumber(midi)) return false;
+  const pitchClass = (STEP_PITCH_CLASS[parsed.data.step] as number) + parsed.data.alter;
+  return (((pitchClass - midi) % 12) + 12) % 12 === 0;
+}
+
 export const noteEventSchema = z.object({
   id: z.string().min(1).max(128),
   midi: z.number().int().min(0).max(127),
@@ -64,6 +80,7 @@ export const noteEventSchema = z.object({
   voice: z.number().int().min(0).max(MAX_NOTE_VOICE).optional(),
   clef: z.enum(['treble', 'bass']).optional(),
   tuplet: noteTupletSchema.optional(),
+  spelling: noteSpellingSchema.optional(),
 });
 
 export const pedalEventSchema = z.object({
@@ -296,6 +313,11 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
       if (typeof note.id !== 'string' || note.id.length === 0) {
         note.id = newId();
         assignedIds += 1;
+      }
+      // A spelling is only a hint about how to write the pitch; one that names
+      // some other pitch (or nothing) is dropped rather than failing the take.
+      if (note.spelling !== undefined && !spellingNamesPitch(note.spelling, note.midi)) {
+        delete note.spelling;
       }
       return note;
     });

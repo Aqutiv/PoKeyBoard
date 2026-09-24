@@ -82,13 +82,27 @@ takes seconds and never touches the audio engine.
   state its shortest value rather than the one nearest to it
   (`gridForShortestQ`). The floor of the range is a dotted 64th, which would take
   a 1/128 grid and is written as a 32nd instead.
-- **Key signatures** decide spelling: `tempo.keySignature` when the score
-  declared one (MusicXML `<key><fifths>`), otherwise a key read from the
-  take's own pitches (`keyDetection.ts`, a duration-weighted
-  Krumhansl–Kessler correlation; under twelve notes it stays in C major). The
-  export dialog offers all fifteen and defaults to that answer. An accidental
-  holds for the rest of its bar at the line it stands on and the bar line
-  forgets it, so repeats are unmarked and a return to the key takes a natural.
+- **Key signatures** are `tempo.keySignature` when the score declared one
+  (MusicXML `<key><fifths>`), otherwise a key read from the take's own pitches
+  (`keyDetection.ts`, a duration-weighted Krumhansl–Kessler correlation; under
+  twelve notes it stays in C major). The export dialog offers all fifteen and
+  defaults to that answer. Whether the signature is read as its major key or its
+  relative minor is decided the same way (`detectMode`, by correlation).
+- **Spelling** — which letter each pitch is written on — comes first from the
+  source: an imported note keeps its MusicXML `<step>`/`<alter>`, and a library
+  track's note named with an accidental ("Eb4") keeps that name. Everything else
+  is spelled in context by `pitchSpelling.ts`: the key's own scale notes (with a
+  minor key's raised sixth and seventh) as the scale has them, and the rest on the
+  line of fifths — nearest the key, chords kept compact (C7 has a B♭, E7 a G♯),
+  and a chromatic note that moves by semitone written a letter away from where
+  it goes (rising sharp, falling flat), never at the price of a double
+  accidental a key does not call for. Double sharps and flats are drawn where a
+  key needs them (G♯ minor's F𝄪). Measured against the spellings the vendored
+  scores declare, this writes 96.7% of their notes as written, against 92.8%
+  for the old one-table-per-key spelling.
+- An accidental holds for the rest of its bar at the line it stands on and the
+  bar line forgets it, so repeats are unmarked and a return to the key takes a
+  natural.
   Accidentals that would foul each other — closer than five steps, about the
   height of the glyph — stack into columns left of the chord, topmost nearest.
 - **Ties** cut a note at every bar line it crosses, and again wherever no

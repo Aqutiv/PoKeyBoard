@@ -59,6 +59,25 @@ describe('parseTakeJson', () => {
     expect(take.notes[1]).not.toHaveProperty('voice');
   });
 
+  it('keeps a spelling that names the note’s own pitch', () => {
+    const raw = specExampleTake();
+    const notes = raw.notes as Record<string, unknown>[];
+    notes[0]!.spelling = { step: 'B', alter: 1 }; // 60 written as B♯
+    const { take, repairs } = parseTakeJson(raw);
+    expect(repairs).toEqual([]);
+    expect(take.notes[0]!.spelling).toEqual({ step: 'B', alter: 1 });
+  });
+
+  it('drops a spelling that names some other pitch, without failing the take', () => {
+    const raw = specExampleTake();
+    const notes = raw.notes as Record<string, unknown>[];
+    notes[0]!.spelling = { step: 'D', alter: 0 }; // 60 is not a D
+    notes[1]!.spelling = { step: 'E', alter: 3 }; // no triple sharps
+    const { take } = parseTakeJson(raw);
+    expect(take.notes[0]).not.toHaveProperty('spelling');
+    expect(take.notes[1]).not.toHaveProperty('spelling');
+  });
+
   it('round-trips a declared tuplet, and rejects one that was never written', () => {
     const raw = specExampleTake();
     const notes = raw.notes as Record<string, unknown>[];

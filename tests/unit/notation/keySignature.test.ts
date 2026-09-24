@@ -116,11 +116,17 @@ describe('accidentals within a measure', () => {
     const layout = layoutScore(
       [
         note({ id: 'a', midi: 61, startMs: 0 }), // C sharp
-        note({ id: 'b', midi: 60, startMs: 500 }), // C natural, same line
+        // A step away first: falling straight to C would make it a D flat.
+        note({ id: 'b', midi: 64, startMs: 500 }),
+        note({ id: 'c', midi: 60, startMs: 1000 }), // C natural, same line
       ],
       OPTS,
     );
-    expect(layout.chords.map((chord) => chord.notes[0]!.accidental)).toEqual(['#', 'natural']);
+    expect(layout.chords.map((chord) => chord.notes[0]!.accidental)).toEqual([
+      '#',
+      null,
+      'natural',
+    ]);
   });
 
   it('keeps each line or space to its own memory', () => {
@@ -144,13 +150,15 @@ describe('accidentals within a measure', () => {
     const layout = layoutScore(
       [
         note({ id: 'aSharp', midi: 58, startMs: 0, staff: 'bass', clef: 'treble' }),
+        // Rising to B is what makes 58 an A sharp; on its own it is a B flat.
+        note({ id: 'b', midi: 59, startMs: 250, staff: 'bass', clef: 'treble' }),
         note({ id: 'cSharp', midi: 37, startMs: 500, staff: 'bass', clef: 'bass' }),
       ],
       OPTS,
     );
     // They really do land on the same line — that is what made them collide.
-    const steps = layout.chords.map((chord) => chord.notes[0]!.step);
-    expect(steps[0]).toBe(steps[1]);
+    const steps = new Map(layout.chords.map((chord) => [chord.notes[0]!.id, chord.notes[0]!.step]));
+    expect(steps.get('aSharp')).toBe(steps.get('cSharp'));
 
     const marks = new Map(
       layout.chords.map((chord) => [chord.notes[0]!.id, chord.notes[0]!.accidental]),
