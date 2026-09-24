@@ -67,8 +67,12 @@ export interface ClickTimeline {
   readonly loop: PlaybackLoop | null;
 }
 
-/** Beats this close to a loop's edge are on it. */
-const LOOP_BEAT_TOLERANCE = 1e-6;
+/**
+ * A beat this close to a loop's edge, in milliseconds, is on it. Marks are
+ * stored as whole milliseconds, so at 104 bpm a beat at 576.923 ms is marked
+ * 577 — which must still count as that beat, not the next.
+ */
+const LOOP_EDGE_TOLERANCE_MS = 0.5;
 
 /**
  * The take's beat grid played round a loop. Click indices run on through the
@@ -84,8 +88,8 @@ export function loopClickGrid(
 ): ClickGrid {
   const length = loop.endMs - loop.startMs;
   /** The first beat inside the loop, and the first at or past its end. */
-  const first = Math.ceil(map.beatAtMs(loop.startMs) - LOOP_BEAT_TOLERANCE);
-  const end = Math.ceil(map.beatAtMs(loop.endMs) - LOOP_BEAT_TOLERANCE);
+  const first = Math.ceil(map.beatAtMs(loop.startMs - LOOP_EDGE_TOLERANCE_MS));
+  const end = Math.ceil(map.beatAtMs(loop.endMs - LOOP_EDGE_TOLERANCE_MS));
   const perPass = end - first;
   const beatOf = (index: number): { beat: number; pass: number } | null => {
     if (index < end) return { beat: index, pass: 0 };

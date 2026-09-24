@@ -16,7 +16,6 @@ import {
   type NoteEvent,
   type PedalEvent,
   type PlaybackLoop,
-  type Take,
 } from '@/domain/takeTypes';
 import { countInMsAt, createTakeTempoMap } from '@/domain/tempoMap';
 import { CHORD_WINDOW_MS, nextTrainingGate, type TrainingGate } from '@/domain/trainingGate';
@@ -26,13 +25,8 @@ import { newId } from '@/utils/ids';
 import { beatDurationMs, clamp } from '@/utils/timing';
 import { trainingHandFor, type RecordMode } from './modes';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
-import {
-  foldIntoLoop,
-  loopPassAt,
-  MIN_LOOP_MS,
-  TransportClock,
-  type ClockRun,
-} from './transportClock';
+import { playableLoop } from './practiceLoop';
+import { foldIntoLoop, loopPassAt, TransportClock, type ClockRun } from './transportClock';
 import {
   canTransition,
   transition,
@@ -555,7 +549,7 @@ export class TransportController {
     const notes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
     this.playDurationMs = effectivePlaybackDurationMs(take);
 
-    const loop = this.loopFor(take);
+    const loop = playableLoop(take);
     // Playing from before the loop runs into it; from past its end, it starts
     // at the top.
     const fromMs =
@@ -807,9 +801,9 @@ export class TransportController {
     for (const listener of this.stateListeners) listener();
   }
 
-  /** The passage playback repeats, or null. */
+  /** The passage playback repeats, or null; see `playableLoop`. */
   getLoop(): PlaybackLoop | null {
-    return useTakeStore.getState().take.display.loop ?? null;
+    return playableLoop(useTakeStore.getState().take);
   }
 
   /**
@@ -820,21 +814,13 @@ export class TransportController {
     useTakeStore.getState().setPlaybackLoop(loop);
     if (this.state === 'playing') {
       this.pauseInternal(Math.round(this.clock.currentTakeMs()));
-      const next = this.loopFor(useTakeStore.getState().take);
+      const next = playableLoop(useTakeStore.getState().take);
       if (next && (this.pausedPlayheadMs < next.startMs || this.pausedPlayheadMs >= next.endMs)) {
         this.pausedPlayheadMs = next.startMs;
       }
       this.startPlayback(null);
     }
     for (const listener of this.stateListeners) listener();
-  }
-
-  /** A take's loop as a run can play it: inside the take, and long enough to repeat. */
-  private loopFor(take: Take): PlaybackLoop | null {
-    const loop = take.display.loop;
-    if (!loop) return null;
-    const endMs = Math.min(loop.endMs, effectivePlaybackDurationMs(take));
-    return endMs - loop.startMs >= MIN_LOOP_MS ? { startMs: loop.startMs, endMs } : null;
   }
 
   /** Carry a running playback on from here under a new rate. */

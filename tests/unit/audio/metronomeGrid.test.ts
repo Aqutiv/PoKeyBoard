@@ -148,6 +148,20 @@ describe('loopClickGrid', () => {
     expect(grid.indexAt(106.25)).toBeCloseTo(12.5, 6);
   });
 
+  it('counts a mark rounded to the millisecond as the beat it was put on', () => {
+    // 104 bpm: beat 1 falls at 576.923 ms and a mark there is stored as 577.
+    // The loop is four beats from it, and must click beats 1 to 4 each time.
+    const slow = createTakeTempoMap({ bpm: 104, timeSignature: FOUR_FOUR });
+    const rounded = { startMs: 577, endMs: Math.round(slow.msAtBeat(5)) };
+    const at = { ...timeline, loop: rounded };
+    const looped = loopClickGrid(slow, 4, at, rounded);
+    const length = rounded.endMs - rounded.startMs;
+    // Click 5 is the first after the seam: beat 1 again, one loop later.
+    expect(looped.audioTimeAt(5)).toBeCloseTo(100 + (slow.msAtBeat(1) + length) / 1000, 6);
+    // Beat 4 is bar two's downbeat, inside the loop: accented every time round.
+    expect(looped.isAccent(8)).toBe(true);
+  });
+
   it('is what gridForTake builds for a clock that loops', () => {
     const built = gridForTake({ bpm: 120, timeSignature: FOUR_FOUR }, timeline);
     expect(built.audioTimeAt(12)).toBeCloseTo(106, 6);

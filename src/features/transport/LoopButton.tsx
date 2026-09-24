@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useMessages } from '@/i18n/i18nContext';
 import { useTakeStore } from '@/state/useTakeStore';
 import { TooltipButton } from '@/ui/TooltipButton';
 import { formatDurationMs } from '@/utils/timing';
-import { loopBetween, nearestBeatMs } from './practiceLoop';
+import { loopBetween, nearestBeatMs, playableLoop } from './practiceLoop';
 import { transportController } from './transportController';
 
 /**
@@ -14,7 +14,9 @@ import { transportController } from './transportController';
 export function LoopButton({ disabled }: { disabled: boolean }) {
   const m = useMessages();
   const takeId = useTakeStore((s) => s.take.id);
-  const loop = useTakeStore((s) => s.take.display.loop ?? null);
+  // The loop as playback will play it, so the button never shows one it won't.
+  const take = useTakeStore((s) => s.take);
+  const loop = useMemo(() => playableLoop(take), [take]);
   const [marked, setMarked] = useState<{ takeId: string; startMs: number } | null>(null);
   // A mark belongs to the take it was made on, and is spent once there is a loop.
   const startMs = marked && marked.takeId === takeId && !loop ? marked.startMs : null;
@@ -25,14 +27,14 @@ export function LoopButton({ disabled }: { disabled: boolean }) {
       transportController.setLoop(null);
       return;
     }
-    const take = useTakeStore.getState().take;
-    const here = nearestBeatMs(take.tempo, transportController.getPlayheadMs());
+    const current = useTakeStore.getState().take;
+    const here = nearestBeatMs(current.tempo, transportController.getPlayheadMs());
     if (startMs === null) {
       setMarked({ takeId, startMs: here });
       return;
     }
     setMarked(null);
-    transportController.setLoop(loopBetween(take, startMs, here));
+    transportController.setLoop(loopBetween(current, startMs, here));
   };
 
   const label = loop

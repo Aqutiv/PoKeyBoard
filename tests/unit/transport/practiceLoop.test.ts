@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTake } from '@/domain/noteEvents';
-import { loopBetween, nearestBeatMs } from '@/features/transport/practiceLoop';
+import { loopBetween, nearestBeatMs, playableLoop } from '@/features/transport/practiceLoop';
 import { useTakeStore } from '@/state/useTakeStore';
 
 /** 120 bpm in 4/4, four seconds of notes: a beat every 500 ms. */
@@ -30,6 +30,28 @@ describe('marking a loop', () => {
   it('keeps a loop inside the take', () => {
     expect(loopBetween(take(), 3000, 9000)).toEqual({ startMs: 3000, endMs: 4000 });
     expect(loopBetween(take(), 4000, 4000)).toBeNull();
+  });
+});
+
+describe('a loop playback can play', () => {
+  it('is the loop as it was set, while it lies inside the take', () => {
+    const inside = take();
+    inside.display = { ...inside.display, loop: { startMs: 1000, endMs: 3000 } };
+    expect(playableLoop(inside)).toEqual({ startMs: 1000, endMs: 3000 });
+  });
+
+  it('ends where the take does', () => {
+    const over = take();
+    over.display = { ...over.display, loop: { startMs: 3000, endMs: 9000 } };
+    expect(playableLoop(over)).toEqual({ startMs: 3000, endMs: 4000 });
+  });
+
+  it('is none at all past the end, so nothing shows one as set', () => {
+    // Imported that way, or stranded when notes were cleared from under it.
+    const past = take();
+    past.display = { ...past.display, loop: { startMs: 5000, endMs: 6000 } };
+    expect(playableLoop(past)).toBeNull();
+    expect(playableLoop(take())).toBeNull();
   });
 });
 

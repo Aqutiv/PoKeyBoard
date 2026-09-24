@@ -3,6 +3,7 @@ import { useTransportState } from '@/app/hooks/useTransport';
 import { themeController } from '@/app/theme';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
+import { playableLoop } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import type { QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -76,7 +77,9 @@ export function MusicScore() {
   const pedalEvents = useTakeStore((s) => s.take.pedalEvents);
   const tempo = useTakeStore((s) => s.take.tempo);
   const zoom = useTakeStore((s) => s.take.display.zoom);
-  const loop = useTakeStore((s) => s.take.display.loop ?? null);
+  // Only a loop playback will play gets shaded; see `playableLoop`.
+  const take = useTakeStore((s) => s.take);
+  const loop = useMemo(() => playableLoop(take), [take]);
   const quantization = useTakeStore((s) => s.take.display.quantization);
   const setDisplayQuantization = useTakeStore((s) => s.setDisplayQuantization);
   const [lastNoteName, setLastNoteName] = useState<string | null>(null);

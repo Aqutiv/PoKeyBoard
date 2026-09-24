@@ -4,6 +4,20 @@ import { effectivePlaybackDurationMs } from './sustainPedal';
 import { MIN_LOOP_MS } from './transportClock';
 
 /**
+ * A take's loop as playback can play it: inside the take, and long enough to
+ * repeat; or null. The one answer for everything that shows or plays a loop,
+ * so a loop left past the end of a take — imported that way, or stranded by
+ * notes cleared from under it — never shows as set while playback runs
+ * straight through it.
+ */
+export function playableLoop(take: Take): PlaybackLoop | null {
+  const loop = take.display.loop;
+  if (!loop) return null;
+  const endMs = Math.min(loop.endMs, effectivePlaybackDurationMs(take));
+  return endMs - loop.startMs >= MIN_LOOP_MS ? { startMs: loop.startMs, endMs } : null;
+}
+
+/**
  * The beat nearest `ms`. A loop is marked by ear — a tap as the passage
  * starts, another as it ends — and lands on the music's own pulse, so it
  * repeats in time rather than a few milliseconds off every pass.
