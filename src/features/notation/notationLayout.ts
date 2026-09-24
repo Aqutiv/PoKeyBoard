@@ -185,8 +185,10 @@ const CHORD_ONSET_WINDOW_MS = 40;
 
 /**
  * The onset each note is written from: its own, unless it is one of a chord
- * struck a little unevenly, in which case the chord's middle onset — so the
- * chord snaps to one column. Snapped note by note, a chord that straddles the
+ * struck a little unevenly, in which case the chord's median onset — so the
+ * chord snaps to one column, and to the column its notes are nearest together.
+ * An even number of notes has two middle onsets and the median is halfway
+ * between them; either one alone would lean the chord early or late. Snapped note by note, a chord that straddles the
  * middle of a grid step splits into two, a column apart.
  *
  * Across both staves, because the unevenness is as often one hand behind the
@@ -215,8 +217,10 @@ function chordOnsets(
       j += 1;
     }
     if (j - i > 1) {
-      const middle = (notes[order[i + Math.floor((j - i) / 2)] as number] as NoteEvent).startMs;
-      for (let k = i; k < j; k += 1) onsets[order[k] as number] = middle;
+      const startAt = (k: number) => (notes[order[k] as number] as NoteEvent).startMs;
+      const upper = i + Math.floor((j - i) / 2);
+      const median = (j - i) % 2 === 1 ? startAt(upper) : (startAt(upper - 1) + startAt(upper)) / 2;
+      for (let k = i; k < j; k += 1) onsets[order[k] as number] = median;
     }
     i = j;
   }

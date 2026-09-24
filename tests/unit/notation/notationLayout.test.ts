@@ -482,6 +482,19 @@ describe('chords struck a little unevenly', () => {
     expect(starts.size).toBe(1);
   });
 
+  it('writes a two-note chord from halfway between its notes, not from the later one', () => {
+    // 40 ms and 80 ms: halfway is 60, which rounds to the beat (0 ms); the
+    // later note alone would round the chord to the next sixteenth.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 40, durationMs: 460 }),
+        note({ id: 'lh', midi: 48, startMs: 80, durationMs: 420 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
+  });
+
   it('keeps every onset exactly as played when there is no grid', () => {
     // An ornament 25 ms apart: with the grid off there is nothing to straddle,
     // and the exact timing is what was asked for.
