@@ -74,6 +74,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 
 - On desktop, **Play** includes piano selection and **Piano volume** beside the metronome. **Click volume** controls the metronome independently.
 - Changing piano pauses playback and waits for the selected instrument to load before Play, Resume, or Record become available. Resume when ready; the playback position is preserved.
+- Zoom the score with **−** and **+** above it, or Ctrl/⌘ + scroll (a trackpad pinch works too); the zoom is kept with the take. Fast passages are spread out so their noteheads never touch.
 - Choose **Listen**, **Practice left**, **Practice right**, or **Practice both** next to the transport. Practice waits for you to play the highlighted notes. **Recording** holds Overdub/Replace; compact screens keep the combined **Modes** menu.
 - Library remembers your filter and scroll position while you move between pages during the current session. **Clear filter** restores the full list; reloading starts a fresh search.
 - While a take plays on another page, the **Now playing** bar stays visible below scrolling content and offers Pause and Stop. Pausing keeps the bar visible with Resume; stopping or reaching the end dismisses it. Select its title to return to Play.

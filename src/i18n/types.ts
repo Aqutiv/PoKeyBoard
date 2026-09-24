@@ -239,6 +239,9 @@ export interface Messages {
     grid32: string;
     grid64: string;
     emptyHint: string;
+    zoom: string;
+    zoomIn: string;
+    zoomOut: string;
   };
   takes: {
     title: string;

@@ -116,6 +116,9 @@ export const es: Messages = {
     grid32: 'Cuadrícula 1/32',
     grid64: 'Cuadrícula 1/64',
     emptyHint: 'Toca las teclas o pulsa grabar para capturar una toma.',
+    zoom: 'Zoom',
+    zoomIn: 'Acercar',
+    zoomOut: 'Alejar',
   },
   takes: {
     title: 'Tomas',
