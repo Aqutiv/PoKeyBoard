@@ -1,11 +1,7 @@
 import { create } from 'zustand';
 import { audioEngine } from '@/audio/AudioEngine';
 import { DEFAULT_PIANO_INSTRUMENT_ID, type PianoInstrumentId } from '@/audio/instruments';
-import {
-  DEFAULT_MASTER_VOLUME,
-  DEFAULT_REVERB_MIX,
-  type QuantizationSetting,
-} from '@/domain/takeTypes';
+import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX } from '@/domain/takeTypes';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
 import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
@@ -37,7 +33,6 @@ export interface SettingsState {
    *  on is what raises the browser's MIDI permission prompt. */
   midiInput: boolean;
   metronomeVolume: number;
-  displayQuantization: QuantizationSetting;
   keyboardAnchorMidi: number;
   sheetPaperSize: PaperSize;
   /** The library folder last opened, restored on the next visit. */
@@ -62,7 +57,6 @@ export interface SettingsState {
   setGamepadInput(enabled: boolean): void;
   setMidiInput(enabled: boolean): void;
   setMetronomeVolume(value: number): void;
-  setDisplayQuantization(value: QuantizationSetting): void;
   setKeyboardAnchorMidi(midi: number): void;
   setSheetPaperSize(size: PaperSize): void;
   setLibraryFolder(folder: LibraryFolderId): void;
@@ -86,7 +80,6 @@ export const SETTINGS_DEFAULTS = {
   gamepadInput: true,
   midiInput: false,
   metronomeVolume: 0.6,
-  displayQuantization: '1/16' as QuantizationSetting,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
   sheetPaperSize: 'a4' as PaperSize,
   libraryFolder: DEFAULT_LIBRARY_FOLDER,
@@ -121,7 +114,6 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),
   setMidiInput: (midiInput) => set({ midiInput }),
   setMetronomeVolume: (metronomeVolume) => set({ metronomeVolume }),
-  setDisplayQuantization: (displayQuantization) => set({ displayQuantization }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),
   setLibraryFolder: (libraryFolder) => set({ libraryFolder }),

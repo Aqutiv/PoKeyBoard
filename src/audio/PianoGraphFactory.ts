@@ -107,9 +107,10 @@ export const SOFT_CLIP_CEILING = 0.98;
 export const SOFT_CLIP_INPUT_RANGE = 4;
 
 /**
- * Final saturation stage. The compressor ahead of it has no lookahead, so the
- * first millisecond of a dense onset passes ungoverned; this bends those peaks
- * back instead of letting them hard-clip at the device.
+ * Final saturation stage. The compressor ahead of it reacts within a
+ * millisecond, but not instantly, and how far it looks ahead is up to the
+ * browser — so the first moments of a dense onset can pass ungoverned; this
+ * bends those peaks back instead of letting them hard-clip at the device.
  *
  * Identity below the knee — normal-level material is bit-for-bit untouched —
  * then a tanh bend approaching SOFT_CLIP_CEILING. Slope is continuous across
@@ -152,7 +153,10 @@ export function createPianoGraph(
   const outputStage = context.createGain();
   outputStage.gain.value = 1;
 
-  // Safety limiter: inaudible headroom guard, not a loudness effect.
+  // Safety limiter for dense chords, not a loudness effect. It is not
+  // transparent: one forte note on many Headroom roots, and an accented
+  // click, already reach -6 dBFS, and the Web Audio compressor adds its own
+  // makeup gain (about +3 dB at these settings).
   const limiter = context.createDynamicsCompressor();
   limiter.threshold.value = -6;
   limiter.knee.value = 3;
