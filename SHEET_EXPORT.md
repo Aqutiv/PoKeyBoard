@@ -113,9 +113,10 @@ takes seconds and never touches the audio engine.
   a tuplet a change of value still breaks the run, because its numeral counts
   its notes.
 - **Chords struck a little unevenly** — rolled, or one hand behind the other —
-  are written from their middle onset, so they snap to one column instead of
-  splitting across a grid line. The window is 40 ms, and never more than half a
-  grid step, so a fast run is never read as a chord.
+  are written from their middle onset, across both staves, so they snap to one
+  column instead of splitting across a grid line. The window is 40 ms, never
+  more than half a grid step, and nothing with the live score's grid off, so a
+  fast run is never read as a chord.
 - **Dynamics** are read out of velocity (`dynamics.ts`) and set between the
   staves, which is where a pianist looks for them — a system carrying them
   opens its inter-staff gap, and one without is laid out exactly as before.

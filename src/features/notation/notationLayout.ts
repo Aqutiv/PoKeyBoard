@@ -187,41 +187,36 @@ const CHORD_ONSET_WINDOW_MS = 40;
  * chord snaps to one column. Snapped note by note, a chord that straddles the
  * middle of a grid step splits into two, a column apart.
  *
- * Grouped per staff, and never over more than `windowFor` allows — half a
- * grid step, at most — so a fast run is never mistaken for a chord, and a
- * score, whose chords share one onset exactly, is left as it was.
+ * Across both staves, because the unevenness is as often one hand behind the
+ * other as a roll within one. Never over more than `windowFor` allows — half a
+ * grid step, at most, and nothing at all with no grid, where there is no grid
+ * line to straddle and exact onsets are what was asked for — so a fast run is
+ * never mistaken for a chord, and a score, whose chords share one onset
+ * exactly, is left as it was.
  */
 function chordOnsets(
   notes: readonly NoteEvent[],
   windowFor: (note: NoteEvent) => number,
 ): number[] {
   const onsets = notes.map((note) => note.startMs);
-  const byStaff = new Map<string, number[]>();
-  notes.forEach((note, index) => {
-    const staff = note.staff ?? (note.midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
-    const list = byStaff.get(staff);
-    if (list) list.push(index);
-    else byStaff.set(staff, [index]);
-  });
-  for (const indices of byStaff.values()) {
-    indices.sort((a, b) => (notes[a] as NoteEvent).startMs - (notes[b] as NoteEvent).startMs);
-    let i = 0;
-    while (i < indices.length) {
-      const first = notes[indices[i] as number] as NoteEvent;
-      const window = windowFor(first);
-      let j = i + 1;
-      while (
-        j < indices.length &&
-        (notes[indices[j] as number] as NoteEvent).startMs - first.startMs <= window
-      ) {
-        j += 1;
-      }
-      if (j - i > 1) {
-        const middle = (notes[indices[i + Math.floor((j - i) / 2)] as number] as NoteEvent).startMs;
-        for (let k = i; k < j; k += 1) onsets[indices[k] as number] = middle;
-      }
-      i = j;
+  const order = notes.map((_, index) => index);
+  order.sort((a, b) => (notes[a] as NoteEvent).startMs - (notes[b] as NoteEvent).startMs);
+  let i = 0;
+  while (i < order.length) {
+    const first = notes[order[i] as number] as NoteEvent;
+    const window = windowFor(first);
+    let j = i + 1;
+    while (
+      j < order.length &&
+      (notes[order[j] as number] as NoteEvent).startMs - first.startMs <= window
+    ) {
+      j += 1;
     }
+    if (j - i > 1) {
+      const middle = (notes[order[i + Math.floor((j - i) / 2)] as number] as NoteEvent).startMs;
+      for (let k = i; k < j; k += 1) onsets[order[k] as number] = middle;
+    }
+    i = j;
   }
   return onsets;
 }
@@ -1331,11 +1326,11 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     return symbolForBeats(Math.max(1, Math.round(held / gridBeats)) * gridBeats, denominator);
   };
 
-  /** Half a grid step at the note, capped; see `chordOnsets`. */
+  /** Half a grid step at the note, capped, and none without a grid; see `chordOnsets`. */
   const chordWindowMs = (note: NoteEvent): number => {
     const division = divisionFor(note);
     const stepBeats = division !== null ? 1 / division : gridBeats;
-    if (stepBeats === null) return CHORD_ONSET_WINDOW_MS;
+    if (stepBeats === null) return 0;
     const stepMs = tempoMap.msAtBeat(tempoMap.beatAtMs(note.startMs) + stepBeats) - note.startMs;
     return Math.min(CHORD_ONSET_WINDOW_MS, stepMs / 2);
   };

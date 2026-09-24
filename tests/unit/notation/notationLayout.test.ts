@@ -468,6 +468,33 @@ describe('chords struck a little unevenly', () => {
     expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
   });
 
+  it('keeps a chord together when one hand is a shade behind the other', () => {
+    // Right hand at 55 ms, left hand at 75 ms: either side of the 62.5 ms edge.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 55, durationMs: 440 }),
+        note({ id: 'lh', midi: 48, startMs: 75, durationMs: 420 }),
+      ],
+      OPTS,
+    );
+    const starts = new Set(layout.chords.map((chord) => chord.displayStartMs));
+    expect(layout.chords.map((chord) => chord.staff).sort()).toEqual(['bass', 'treble']);
+    expect(starts.size).toBe(1);
+  });
+
+  it('keeps every onset exactly as played when there is no grid', () => {
+    // An ornament 25 ms apart: with the grid off there is nothing to straddle,
+    // and the exact timing is what was asked for.
+    const layout = layoutScore(
+      [
+        note({ id: 'grace', midi: 74, startMs: 1000, durationMs: 25 }),
+        note({ id: 'main', midi: 72, startMs: 1025, durationMs: 400 }),
+      ],
+      { ...OPTS, quantization: 'off' },
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([1000, 1025]);
+  });
+
   it('never mistakes a fast run for a chord', () => {
     // Thirty-seconds at 120 bpm are 62.5 ms apart: well inside the chord
     // window, but a whole grid step apart on a 1/32 grid.
