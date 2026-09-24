@@ -57,7 +57,17 @@ export class VoiceManager {
     when: number = this.context.currentTime,
     uiActive = true,
   ): Voice {
-    this.restrike(midi, when);
+    return this.strike(sample, midi, sourceId, when, uiActive).voice;
+  }
+
+  private strike(
+    sample: SampleSelection,
+    midi: number,
+    sourceId: NoteSourceId,
+    when: number,
+    uiActive: boolean,
+  ): { voice: Voice; heldUntil: number } {
+    const heldUntil = this.restrike(midi, when);
     this.stealIfNeeded();
 
     const playback = startSampleVoice(this.context, this.destination, sample, when);
@@ -78,7 +88,7 @@ export class VoiceManager {
       this.disconnectVoice(voice);
     };
     if (uiActive) this.emitActive();
-    return voice;
+    return { voice, heldUntil };
   }
 
   noteOff(midi: number, sourceId: NoteSourceId, when: number = this.context.currentTime): void {
@@ -102,6 +112,10 @@ export class VoiceManager {
    * Schedule a complete note (playback/offline path): starts at `when`,
    * releases after `durationS`. Not part of the live active-note set — the
    * transport clock drives playback animation.
+   *
+   * A key another scheduled note is still holding stays down until both have
+   * let go: a half note with an eighth struck on the same key inside it, the
+   * way two voices share a key, is struck twice and held for the half note.
    */
   scheduleNote(
     sample: SampleSelection,
@@ -110,8 +124,8 @@ export class VoiceManager {
     when: number,
     durationS: number,
   ): void {
-    const voice = this.noteOn(sample, midi, sourceId, when, false);
-    this.releaseVoice(voice, when + durationS, false);
+    const { voice, heldUntil } = this.strike(sample, midi, sourceId, when, false);
+    this.releaseVoice(voice, Math.max(when + durationS, heldUntil), false);
   }
 
   setSustain(down: boolean, sourceId: NoteSourceId): void {
@@ -137,7 +151,14 @@ export class VoiceManager {
     for (const listener of this.sustainListeners) listener(this.sustainDown);
   }
 
-  /** Fast-fade everything; the guarantee behind "never a stuck note". */
+  /**
+   * Fast-fade everything; the guarantee behind "never a stuck note".
+   *
+   * Voices already let go are faded too. Most would be gone in a moment
+   * anyway, but not all: a key with no damper rings for as long as its sample
+   * lasts, and one struck again is only damped from the new strike, which
+   * playback may have scheduled for later.
+   */
   allNotesOff(): void {
     const now = this.context.currentTime;
     // A panic reset drops the pedal too, so anything showing it has to hear.
@@ -150,12 +171,11 @@ export class VoiceManager {
         voice.uiActive = false;
         changed = true;
       }
-      if (!voice.releasing) {
-        voice.releasing = true;
-        holdSampleVoice(voice, now);
-        voice.gain.gain.setTargetAtTime(0, now, ALL_OFF_FADE_TC);
-        this.safeStop(voice, now + 0.25);
-      }
+      voice.releasing = true;
+      voice.heldByPedal = false;
+      holdSampleVoice(voice, now);
+      voice.gain.gain.setTargetAtTime(0, now, ALL_OFF_FADE_TC);
+      this.safeStop(voice, now + 0.25);
     }
     if (changed) this.emitActive();
   }
@@ -199,15 +219,22 @@ export class VoiceManager {
    * A key struck while its string still sounds: the old sound gives way to the
    * new one from the moment the new one starts (see `dampSampleVoice`). Every
    * source counts — a MIDI key and a finger on the same note play one string.
-   * Only voices under way by then and not already let go before it, the same
-   * test `scheduleTakeVoices` makes, so an export sounds as playback does; a
-   * note scheduled later is its own.
+   * Only voices started by then and not already let go before it, the same
+   * test `scheduleTakeVoices` makes, so an export sounds as playback does. That
+   * includes one starting at the very same moment: a note two voices share is
+   * one key struck once, not two strings sounding together. A note scheduled
+   * later is its own.
+   *
+   * Returns the latest key-up still to come among the voices it damped, which
+   * playback scheduled with their notes; see `scheduleNote`.
    */
-  private restrike(midi: number, when: number): void {
+  private restrike(midi: number, when: number): number {
+    let heldUntil = Number.NEGATIVE_INFINITY;
     let changed = false;
     for (const voice of this.voices) {
-      if (voice.midi !== midi || voice.startTime >= when || voice.restruck) continue;
+      if (voice.midi !== midi || voice.startTime > when || voice.restruck) continue;
       if (voice.releaseTime !== undefined && voice.releaseTime <= when) continue;
+      if (voice.releaseTime !== undefined) heldUntil = Math.max(heldUntil, voice.releaseTime);
       dampSampleVoice(voice, when);
       voice.restruck = true;
       voice.releasing = true;
@@ -218,6 +245,7 @@ export class VoiceManager {
       }
     }
     if (changed) this.emitActive();
+    return heldUntil;
   }
 
   /**

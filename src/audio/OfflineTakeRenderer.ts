@@ -33,7 +33,8 @@ export interface OfflineRenderOptions {
  * Schedule a whole take's notes (sorted, sustain already applied) as voices,
  * the way the live engine sounds them: a key struck while its string still
  * rings damps the old sound from the new note's start (`VoiceManager`'s
- * `restrike`), so a pedalled repeated note is one string, not a pile of them.
+ * `restrike`), so a pedalled repeated note is one string, not a pile of them,
+ * and the key stays down until both notes have let go (`scheduleNote`).
  * Returns how many notes had no decoded sample.
  */
 export function scheduleTakeVoices(
@@ -43,7 +44,7 @@ export function scheduleTakeVoices(
   sampleFor: (midi: number, velocity: number) => SampleSelection | null,
 ): number {
   let missing = 0;
-  const sounding = new Map<number, SampleVoice>();
+  const sounding = new Map<number, { voice: SampleVoice; keyUp: number }>();
   for (const note of notes) {
     const sample = sampleFor(note.midi, note.velocity);
     if (!sample) {
@@ -51,15 +52,20 @@ export function scheduleTakeVoices(
       continue;
     }
     const when = note.startMs / 1000;
+    let keyUp = when + note.durationMs / 1000;
     const previous = sounding.get(note.midi);
     // Still held (or never damped, up where there are no dampers) when the key
     // comes down again: that sound gives way to this one.
-    if (previous && (previous.releaseTime === undefined || previous.releaseTime > when)) {
-      dampSampleVoice(previous, when);
+    if (
+      previous &&
+      (previous.voice.releaseTime === undefined || previous.voice.releaseTime > when)
+    ) {
+      dampSampleVoice(previous.voice, when);
+      keyUp = Math.max(keyUp, previous.keyUp);
     }
     const voice = startSampleVoice(context, destination, sample, when);
-    releaseSampleVoice(voice, when + note.durationMs / 1000);
-    sounding.set(note.midi, voice);
+    releaseSampleVoice(voice, keyUp);
+    sounding.set(note.midi, { voice, keyUp });
   }
   return missing;
 }

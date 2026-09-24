@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import type { SampleSelection } from '@/audio/audioTypes';
 import { scheduleTakeVoices } from '@/audio/OfflineTakeRenderer';
 import {
+  RELEASE_TC,
   releaseSampleVoice,
   releaseTcFor,
   RESTRIKE_TC,
@@ -204,6 +205,27 @@ describe('shared sample voice', () => {
       expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1.5, RESTRIKE_TC);
     });
 
+    it('keeps the key down for the longer of the two notes', () => {
+      // A half note with an eighth struck inside it on the same key, the way
+      // two voices share one: the new strike rings on to the half note's end.
+      const { audio, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 0, 4);
+      voices.scheduleNote(plain, 67, 'playback', 1.5, 1);
+      expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 4, RELEASE_TC);
+    });
+
+    it('strikes a note two voices share once', () => {
+      const { audio, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 1, 2);
+      voices.scheduleNote(plain, 67, 'playback', 1, 0.5);
+      // The first never sounds: it is damped from its own start...
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, RESTRIKE_TC);
+      // ...and the one that does is held for the longer value.
+      expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 3, RELEASE_TC);
+    });
+
     it('sounds the same in an export', () => {
       const { audio, destination, params } = setup();
       const missing = scheduleTakeVoices(
@@ -215,12 +237,45 @@ describe('shared sample voice', () => {
           // Released at 1 s, long before it comes back: its tail is left alone.
           { midi: 72, velocity: 0.7, startMs: 0, durationMs: 1000 },
           { midi: 72, velocity: 0.7, startMs: 3000, durationMs: 500 },
+          // Shared by two voices.
+          { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 2000 },
+          { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 500 },
         ],
         () => plain,
       );
       expect(missing).toBe(0);
       expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1.5, RESTRIKE_TC);
+      expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 4, RELEASE_TC);
       expect(params[2]!.setTargetAtTime).not.toHaveBeenCalledWith(0, 3, RESTRIKE_TC);
+      expect(params[3]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 3.5, RELEASE_TC);
+      expect(params[4]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, RESTRIKE_TC);
+      expect(params[5]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 3, RELEASE_TC);
+    });
+  });
+
+  describe('a panic stop', () => {
+    const plain: SampleSelection = { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1 };
+
+    it('silences a key with no damper that was already let go', () => {
+      const { audio, context, destination, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn({ ...plain, undamped: true }, 96, 'key');
+      context.currentTime = 1;
+      voices.noteOff(96, 'key'); // rings on: nothing to damp it
+      expect(sources[0]!.stop).not.toHaveBeenCalled();
+      context.currentTime = 2;
+      voices.allNotesOff();
+      expect(sources[0]!.stop).toHaveBeenLastCalledWith(2.25);
+    });
+
+    it('silences a string only due to be damped later', () => {
+      const { audio, context, destination, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 0, 4);
+      voices.scheduleNote(plain, 67, 'playback', 1.5, 1); // damps the first at 1.5
+      context.currentTime = 1;
+      voices.allNotesOff();
+      for (const source of sources) expect(source.stop).toHaveBeenLastCalledWith(1.25);
     });
   });
 
