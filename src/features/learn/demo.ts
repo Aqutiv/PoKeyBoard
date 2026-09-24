@@ -37,7 +37,9 @@ export async function playPhrase(phrase: LearnPhrase, startAtAudioTime?: number)
   const midis = notes.map((note) => note.midi);
   // A demo can name notes well outside the visible window, and scheduleNote is
   // silent for any pitch with no decoded sample.
-  await audioEngine.ensurePlayableRange(Math.min(...midis), Math.max(...midis));
+  await audioEngine.ensurePlayableRange(Math.min(...midis), Math.max(...midis), {
+    remember: false,
+  });
 
   // Never earlier than the slack allows, however stale the requested time is
   // by the time the range above finished loading.

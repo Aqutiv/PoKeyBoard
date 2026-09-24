@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
-import { QUANTIZATION_SETTINGS } from '@/domain/takeTypes';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { PLAYBACK_MODES, RECORD_MODES } from '@/features/transport/modes';
@@ -23,7 +22,6 @@ const SETTING_SCHEMAS = {
   gamepadInput: z.boolean(),
   midiInput: z.boolean(),
   metronomeVolume: z.number().min(0).max(1),
-  displayQuantization: z.enum(QUANTIZATION_SETTINGS),
   keyboardAnchorMidi: z.number().int().min(21).max(108),
   sheetPaperSize: z.enum(['a4', 'letter']),
   libraryFolder: z.enum(LIBRARY_FOLDER_IDS),

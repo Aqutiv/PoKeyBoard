@@ -79,6 +79,13 @@ export interface SampleLoadProgress {
   totalFiles: number;
   loadedBytes: number;
   totalBytes: number;
+  /**
+   * The core pack alone — what readiness waits for. The totals above count
+   * the whole pack, which is never decoded all at once, so a loading readout
+   * built on them stalls partway and vanishes.
+   */
+  coreLoadedBytes: number;
+  coreTotalBytes: number;
   error?: string;
 }
 

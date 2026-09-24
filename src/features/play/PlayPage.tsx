@@ -35,7 +35,9 @@ export function PlayPage() {
   const status = useEngineStatus();
   const progress = useSampleLoadProgress();
   const percent =
-    progress.totalFiles > 0 ? Math.round((progress.loadedFiles / progress.totalFiles) * 100) : 0;
+    progress.coreTotalBytes > 0
+      ? Math.round((progress.coreLoadedBytes / progress.coreTotalBytes) * 100)
+      : 0;
 
   const takeId = useTakeStore((s) => s.take.id);
   const isLibrary = isLibraryTakeId(takeId);

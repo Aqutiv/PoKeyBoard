@@ -234,9 +234,22 @@ export class AudioEngine {
     }
   }
 
-  /** Decode extra roots when the keyboard range shifts beyond the core. */
-  async ensurePlayableRange(lowMidi: number, highMidi: number): Promise<void> {
-    this.lastRange = { low: lowMidi, high: highMidi };
+  /**
+   * Decode extra roots when the keyboard range shifts beyond the core.
+   *
+   * The range is remembered and replayed after an instrument switch, because
+   * it is the standing request of whatever is on screen (merged across the
+   * key bed and MIDI by playableRange.ts). A one-off caller — an export, a
+   * lesson demo — passes `remember: false`: its range says nothing about what
+   * the player will reach for next, and remembering it would leave the next
+   * piano decoding only the notes that caller happened to need.
+   */
+  async ensurePlayableRange(
+    lowMidi: number,
+    highMidi: number,
+    { remember = true }: { remember?: boolean } = {},
+  ): Promise<void> {
+    if (remember) this.lastRange = { low: lowMidi, high: highMidi };
     if (!this.context) return;
     await this.bank.ensureRangeLoaded(this.context, lowMidi, highMidi);
   }

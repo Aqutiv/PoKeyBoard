@@ -187,8 +187,20 @@ export async function getTakeForExport(id: string): Promise<Take | null> {
   return resolveTake(id);
 }
 
+/**
+ * The freshest form of a take, read without disturbing anything: the
+ * in-memory copy when it is active. Serializing needs no settled transport
+ * or flushed save, and the Takes row prepares its share file the moment it
+ * opens — settling there stopped the very take the user was listening to.
+ */
+async function snapshotTake(id: string): Promise<Take | null> {
+  const active = useTakeStore.getState().take;
+  if (active.id === id) return active;
+  return getTake(id);
+}
+
 export async function takeJsonFile(id: string): Promise<File | null> {
-  const take = await resolveTake(id);
+  const take = await snapshotTake(id);
   if (!take) return null;
   const json = JSON.stringify(take, null, 2);
   return new File([json], takeJsonFileName(take.title), { type: 'application/json' });
