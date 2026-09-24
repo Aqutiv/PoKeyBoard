@@ -17,6 +17,9 @@ import { MidiSection } from './MidiSection';
 import { PianoSection } from './PianoSection';
 import './settings.css';
 
+/** Opening Settings is asking "is there an update?", so it checks sooner. */
+const SETTINGS_UPDATE_CHECK_INTERVAL_MS = 60_000;
+
 const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
   'standaloneDisplayMode',
   'beforeInstallPrompt',
@@ -76,6 +79,8 @@ export function SettingsPage() {
 
   useEffect(() => installService.subscribe(() => setInstallTick((n) => n + 1)), []);
   void installTick;
+
+  useEffect(() => updateManager.checkForUpdate(SETTINGS_UPDATE_CHECK_INTERVAL_MS), []);
 
   return (
     <section className="page settings" aria-label={m.settings.title}>
