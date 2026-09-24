@@ -244,6 +244,19 @@ describe('context', () => {
   });
 });
 
+describe('cost', () => {
+  it('stays linear under a pedal that is never let up', () => {
+    // Twenty thousand notes, every one of them still sounding at the end:
+    // spelling each chord against all of them would be quadratic.
+    const notes = Array.from({ length: 20_000 }, (_, i) =>
+      note(`p${i}`, 48 + ((i * 7) % 36), i * 50, 40),
+    );
+    const started = performance.now();
+    spellNotes(notes, C_MAJOR, [{ fromMs: 0, toMs: Number.POSITIVE_INFINITY }]);
+    expect(performance.now() - started).toBeLessThan(2000);
+  });
+});
+
 describe('detectMode', () => {
   function repeated(midis: readonly number[]): NoteEvent[] {
     return [...midis, ...midis].map((midi, i) => note(`m${i}`, midi, i * 250));
