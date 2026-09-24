@@ -481,8 +481,10 @@ export function PianoKeyboard({
           const next = anchorToReveal(midi, layout.lowMidi, visibleWhites);
           if (next === layout.lowMidi) return;
           // The keys are about to move out from under any held pointer,
-          // exactly as they do when the shift buttons are used.
+          // exactly as they do when the shift buttons are used. It is the
+          // player's own move, too: following waits, as it does after those.
           tracker.releaseAll();
+          manualShiftAtRef.current = performance.now();
           setAnchorMidi(next);
         },
         shiftOctave: (direction) => shiftRange(direction, 'octave'),
