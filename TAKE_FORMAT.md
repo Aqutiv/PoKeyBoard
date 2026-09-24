@@ -20,7 +20,15 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   "instrument": { "id": "grand-piano", "masterVolume": 0.85, "reverbMix": 0.18 },
   "notes": [
     { "id": "uuid", "midi": 60, "startMs": 0, "durationMs": 420, "velocity": 0.78 },
-    { "id": "uuid", "midi": 48, "startMs": 0, "durationMs": 420, "velocity": 0.7, "staff": "bass" }
+    { "id": "uuid", "midi": 48, "startMs": 0, "durationMs": 420, "velocity": 0.7, "staff": "bass" },
+    {
+      "id": "uuid",
+      "midi": 70,
+      "startMs": 420,
+      "durationMs": 420,
+      "velocity": 0.7,
+      "spelling": { "step": "B", "alter": -1 }
+    }
   ],
   "pedalEvents": [
     { "atMs": 1000, "down": true },
@@ -52,6 +60,12 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   notation would otherwise have to infer from where the onsets landed — and inferring it wrong
   writes a sextuplet sixteenth as a dotted 32nd. Never audible: exports hash the same with it and
   without it. Recorded takes omit it and inference takes over.
+- A note's `spelling` is a fifth hint: how the source wrote the pitch, as `{ step, alter }` —
+  MusicXML's `<step>` letter (`C`…`B`) and `<alter>` (−2 double flat … 2 double sharp). `midi` 70
+  is B♭ or A♯ only on paper, and a composer's choice beats any guess, so a note that carries one
+  is written exactly that way. A spelling that names some other pitch is dropped on import rather
+  than failing the take. Recorded takes omit it and are spelled from their key and context
+  (`pitchSpelling.ts`). Never audible.
 - `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v2`, `headroom-grand-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 

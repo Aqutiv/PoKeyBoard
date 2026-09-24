@@ -374,6 +374,54 @@ describe('ties', () => {
   });
 });
 
+describe('spellings', () => {
+  it('keeps the letter each note was written on', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            alteredNote('B', 4, -1, 1) +
+            alteredNote('A', 4, 1, 1) +
+            note('C', 5, 1) +
+            alteredNote('F', 4, 2, 1),
+        ),
+      ),
+    );
+    // B♭ and A♯ are the same key, and only the spelling tells them apart.
+    expect(take.notes.map((n) => n.midi)).toEqual([70, 70, 72, 67]);
+    expect(take.notes.map((n) => n.spelling)).toEqual([
+      { step: 'B', alter: -1 },
+      { step: 'A', alter: 1 },
+      { step: 'C', alter: 0 },
+      { step: 'F', alter: 2 },
+    ]);
+  });
+
+  it('keeps the spelling a tie chain started with', () => {
+    const tied = (tie: string) =>
+      `<note><pitch><step>C</step><alter>1</alter><octave>4</octave></pitch>` +
+      `<duration>4</duration><tie type="${tie}"/></note>`;
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + tied('start')) + measure(2, tied('stop'))),
+    );
+    expect(take.notes).toHaveLength(1);
+    expect(take.notes[0]!.spelling).toEqual({ step: 'C', alter: 1 });
+  });
+
+  it('keeps no spelling for a microtonal note, which sounds on the nearest key', () => {
+    const take = musicXmlToTake(scoreWith(measure(1, DIV1 + alteredNote('C', 4, 0.5, 1))));
+    expect(take.notes[0]!.spelling).toBeUndefined();
+  });
+
+  it('survives a round trip through the take schema', () => {
+    const take = musicXmlToTake(scoreWith(measure(1, DIV1 + alteredNote('E', 4, -1, 1))));
+    const { take: parsed, repairs } = parseTakeJson(JSON.parse(JSON.stringify(take)));
+    expect(repairs).toEqual([]);
+    expect(parsed.notes[0]!.spelling).toEqual({ step: 'E', alter: -1 });
+  });
+});
+
 describe('tempo and dynamics', () => {
   it('integrates a mid-piece tempo change into note onsets', () => {
     const take = musicXmlToTake(

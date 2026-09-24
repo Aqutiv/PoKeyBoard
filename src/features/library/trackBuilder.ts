@@ -4,7 +4,9 @@ import { createBeatTempoMap, tempoChangesFrom, type TempoMap } from '@/domain/te
 import type {
   CountInBars,
   NoteEvent,
+  NoteSpelling,
   NoteStaff,
+  NoteStep,
   PedalEvent,
   QuantizationSetting,
   Take,
@@ -57,6 +59,20 @@ export interface LibraryTrackDef {
 
 /** Frozen so a rebuilt library take is byte-identical to the last one. */
 export const LIBRARY_TIMESTAMP = '2026-07-18T00:00:00.000Z';
+
+const NAME_WITH_ACCIDENTAL = /^([A-G])([#b])-?\d{1,2}$/;
+
+/**
+ * The spelling a note name states, if it states one. A name written with an
+ * accidental is the author's choice — "Eb4" is an E flat, not just the key 63
+ * — and the notation keeps it. A bare letter names only a key: "C4" may yet
+ * be written B♯3, and the notation spells it from its context.
+ */
+function spellingOf(name: string): NoteSpelling | undefined {
+  const match = NAME_WITH_ACCIDENTAL.exec(name.trim());
+  if (!match) return undefined;
+  return { step: match[1] as NoteStep, alter: match[2] === '#' ? 1 : -1 };
+}
 const DEFAULT_VELOCITY = 0.7;
 /** Pedal lifts this long before the next bar line so harmonies stay clean. */
 const PEDAL_LIFT_MS = 40;
@@ -98,6 +114,7 @@ export function buildLibraryTake(def: LibraryTrackDef): Take {
       if (midi === null) {
         throw new Error(`Library track "${def.trackId}": invalid note "${name}" in event ${index}`);
       }
+      const spelling = spellingOf(name);
       notes.push({
         id: `${def.trackId}-n${index}-${chordIndex}`,
         midi,
@@ -107,6 +124,7 @@ export function buildLibraryTake(def: LibraryTrackDef): Take {
         // Omitted entirely when unsaid, so tracks that never mention a staff
         // serialize exactly as they did before.
         ...(staff !== undefined ? { staff } : {}),
+        ...(spelling !== undefined ? { spelling } : {}),
       });
     });
   });
