@@ -139,6 +139,11 @@ export function holdSampleVoice(voice: SampleVoice, when: number): number {
  */
 export function releaseSampleVoice(voice: SampleVoice, when: number): void {
   if (voice.sample.undamped) return;
+  // Let go before a strike still to come: the damper falls as it always does,
+  // and the fade that strike scheduled never happens.
+  if (voice.fadeTc !== undefined && voice.releaseTime !== undefined && when < voice.releaseTime) {
+    voice.fadeTc = undefined;
+  }
   const level = holdSampleVoice(voice, when);
   voice.releaseTime = when;
   voice.releaseLevel = level;

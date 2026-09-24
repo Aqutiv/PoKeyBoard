@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SampleSelection } from '@/audio/audioTypes';
-import { scheduleTakeVoices } from '@/audio/OfflineTakeRenderer';
+import { scheduleTakeVoices, undampedRingOutSeconds } from '@/audio/OfflineTakeRenderer';
 import {
   RELEASE_TC,
   releaseSampleVoice,
@@ -226,6 +226,32 @@ describe('shared sample voice', () => {
       expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 3, RELEASE_TC);
     });
 
+    it('leaves a held key its own until playback strikes it again', () => {
+      // Playback schedules ahead: its strike is still 150 ms off.
+      const { audio, context, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(plain, 60, 'key');
+      voices.scheduleNote(plain, 60, 'playback', 0.15, 1);
+      // Still held, so still lit...
+      expect(voices.activeMidis().has(60)).toBe(true);
+      // ...and let go before that strike, it is damped as any key is.
+      context.currentTime = 0.1;
+      voices.noteOff(60, 'key');
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.1, RELEASE_TC);
+      expect(voices.activeMidis().has(60)).toBe(false);
+    });
+
+    it('stops lighting a held key once its sound has ended', () => {
+      const { audio, destination, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      const listener = vi.fn();
+      voices.subscribeActiveNotes(listener);
+      voices.noteOn(plain, 60, 'key');
+      expect(listener).toHaveBeenLastCalledWith(new Set([60]));
+      (sources[0]!.onended as () => void)();
+      expect(listener).toHaveBeenLastCalledWith(new Set());
+    });
+
     it('sounds the same in an export', () => {
       const { audio, destination, params } = setup();
       const missing = scheduleTakeVoices(
@@ -251,6 +277,24 @@ describe('shared sample voice', () => {
       expect(params[4]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, RESTRIKE_TC);
       expect(params[5]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 3, RELEASE_TC);
     });
+  });
+
+  it('makes room in an export for the top strings to ring out', () => {
+    // No damper above F♯6: a short last note still rings its whole recording.
+    const ringing: SampleSelection = {
+      buffer: { duration: 5.8 } as AudioBuffer,
+      playbackRate: 1,
+      gain: 1,
+      offset: 0.01,
+      undamped: true,
+    };
+    const notes = [
+      { midi: 60, velocity: 0.7, startMs: 0, durationMs: 9000 },
+      { midi: UNDAMPED_FROM_MIDI + 2, velocity: 0.7, startMs: 10_000, durationMs: 200 },
+    ];
+    const sampleFor = (midi: number) => (midi >= UNDAMPED_FROM_MIDI ? ringing : null);
+    expect(undampedRingOutSeconds(notes, sampleFor)).toBeCloseTo(15.79, 5);
+    expect(undampedRingOutSeconds(notes.slice(0, 1), sampleFor)).toBe(0);
   });
 
   describe('a panic stop', () => {

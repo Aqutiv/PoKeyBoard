@@ -13,6 +13,7 @@ import {
   dampSampleVoice,
   releaseSampleVoice,
   startSampleVoice,
+  UNDAMPED_FROM_MIDI,
   type SampleVoice,
 } from './sampleVoice';
 
@@ -70,6 +71,26 @@ export function scheduleTakeVoices(
   return missing;
 }
 
+/**
+ * When the last string with no damper falls quiet on its own, in seconds. Up
+ * there a key rings until its recording ends, however soon it was let go, so a
+ * take ending on one sounds for longer than its last key-up says.
+ */
+export function undampedRingOutSeconds(
+  notes: readonly { midi: number; velocity: number; startMs: number }[],
+  sampleFor: (midi: number, velocity: number) => SampleSelection | null,
+): number {
+  let end = 0;
+  for (const note of notes) {
+    if (note.midi < UNDAMPED_FROM_MIDI) continue;
+    const sample = sampleFor(note.midi, note.velocity);
+    if (!sample?.undamped) continue;
+    const ring = (sample.buffer.duration - (sample.offset ?? 0)) / sample.playbackRate;
+    end = Math.max(end, note.startMs / 1000 + ring);
+  }
+  return end;
+}
+
 export function estimateRenderSeconds(take: Take): number {
   return effectivePlaybackDurationMs(take) / 1000 + TAIL_S;
 }
@@ -114,7 +135,10 @@ export async function renderTakeToBuffer(
   }
   await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
 
-  const length = Math.ceil(seconds * RENDER_SAMPLE_RATE);
+  const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
+  const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
+  const ringOut = undampedRingOutSeconds(effectiveNotes, sampleFor);
+  const length = Math.ceil(Math.max(seconds, ringOut + TAIL_S) * RENDER_SAMPLE_RATE);
   const context = new OfflineAudioContext({
     numberOfChannels: 2,
     length,
@@ -126,12 +150,11 @@ export async function renderTakeToBuffer(
     reverbMix: take.instrument.reverbMix,
   });
 
-  const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
   const missingSamples = scheduleTakeVoices(
     context,
     graph.voiceDestination,
     effectiveNotes,
-    (midi, velocity) => audioEngine.bank.getSample(midi, velocity),
+    sampleFor,
   );
   if (missingSamples > 0) {
     throw new ExportError(

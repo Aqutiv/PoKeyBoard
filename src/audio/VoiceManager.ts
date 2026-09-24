@@ -86,6 +86,9 @@ export class VoiceManager {
     voice.source.onended = () => {
       this.voices.delete(voice);
       this.disconnectVoice(voice);
+      // A key still held when its sound ends — its recording run out, or
+      // playback striking it again — has nothing left to light.
+      if (voice.uiActive) this.emitActive();
     };
     if (uiActive) this.emitActive();
     return { voice, heldUntil };
@@ -227,6 +230,10 @@ export class VoiceManager {
    *
    * Returns the latest key-up still to come among the voices it damped, which
    * playback scheduled with their notes; see `scheduleNote`.
+   *
+   * Playback schedules ahead, so the new strike can still be to come. Then only
+   * the fade is scheduled: until the strike, the key is its source's as before
+   * — lit while held, and let go normally if it is let go first.
    */
   private restrike(midi: number, when: number): number {
     let heldUntil = Number.NEGATIVE_INFINITY;
@@ -237,6 +244,7 @@ export class VoiceManager {
       if (voice.releaseTime !== undefined) heldUntil = Math.max(heldUntil, voice.releaseTime);
       dampSampleVoice(voice, when);
       voice.restruck = true;
+      if (when > this.context.currentTime) continue;
       voice.releasing = true;
       voice.heldByPedal = false;
       if (voice.uiActive) {
