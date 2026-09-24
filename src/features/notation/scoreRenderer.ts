@@ -1,12 +1,14 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import { drawAccidentalGlyph } from './accidentalGlyph';
 import {
+  beamPieceXs,
   beamSpanFor,
   beamYAt,
   extraStemG,
   BEAM_SPACING_G,
   BEAM_THICKNESS_G,
   STEM_LENGTH_G,
+  type BeamPiece,
 } from './beamGeometry';
 import { normalizeFifths, signatureAccidental, signatureSteps } from './keySignature';
 import {
@@ -83,6 +85,9 @@ interface BeamLine {
   stemDown: boolean;
   beamCount: BeamCount;
   tupletCount: number | null;
+  /** Each member's stem x, which the beams after the first are measured from. */
+  xs: number[];
+  secondary: BeamPiece[][];
 }
 type BeamLines = Map<number, BeamLine>;
 
@@ -896,6 +901,8 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
       stemDown: beam.stemDown,
       beamCount: beam.beamCount,
       tupletCount: beam.tupletCount,
+      xs,
+      secondary: beam.secondary,
     });
   }
   return lines;
@@ -915,17 +922,26 @@ function drawBeams(ctx: CanvasRenderingContext2D, lines: BeamLines, palette: Sco
       ctx.textAlign = 'left';
     }
     const toward = line.stemDown ? -1 : 1; // further beams stack toward the heads
-    for (let i = 0; i < line.beamCount; i += 1) {
-      const dy = i * toward * BEAM_SPACING_PX;
-      const half = BEAM_THICKNESS_PX / 2;
+    const half = BEAM_THICKNESS_PX / 2;
+    const segment = (fromX: number, toX: number, level: number): void => {
+      const dy = level * toward * BEAM_SPACING_PX;
+      const fromY = beamYAt(line, line.x1, line.x2, fromX) + dy;
+      const toY = beamYAt(line, line.x1, line.x2, toX) + dy;
       ctx.beginPath();
-      ctx.moveTo(line.x1, line.y1 + dy - half);
-      ctx.lineTo(line.x2, line.y2 + dy - half);
-      ctx.lineTo(line.x2, line.y2 + dy + half);
-      ctx.lineTo(line.x1, line.y1 + dy + half);
+      ctx.moveTo(fromX, fromY - half);
+      ctx.lineTo(toX, toY - half);
+      ctx.lineTo(toX, toY + half);
+      ctx.lineTo(fromX, fromY + half);
       ctx.closePath();
       ctx.fill();
-    }
+    };
+    segment(line.x1, line.x2, 0);
+    line.secondary.forEach((pieces, index) => {
+      for (const piece of pieces) {
+        const [fromX, toX] = beamPieceXs(line.xs, piece, GAP);
+        segment(fromX, toX, index + 1);
+      }
+    });
   }
 }
 

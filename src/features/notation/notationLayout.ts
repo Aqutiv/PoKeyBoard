@@ -7,6 +7,7 @@ import type {
   TimeSignature,
 } from '@/domain/takeTypes';
 import { barDurationMs, beatDurationMs } from '@/utils/timing';
+import type { BeamPiece } from './beamGeometry';
 import {
   beamCountFor,
   beatsForSymbol,
@@ -128,11 +129,20 @@ export interface ChordGroup {
 export interface BeamGroup {
   staff: StaffKind;
   stemDown: boolean;
-  /** 1 for eighths, 2 for sixteenths, 3 for 32nds, 4 for 64ths. */
+  /**
+   * The most beams any member carries: 1 for eighths, 2 for sixteenths, 3 for
+   * 32nds, 4 for 64ths. The first beam runs the whole length; the stems reach
+   * far enough out for this many.
+   */
   beamCount: BeamCount;
   members: ChordGroup[];
   /** How many notes the run squeezes in, where it is a tuplet — the numeral. */
   tupletCount: number | null;
+  /**
+   * The beams after the first, level by level: `secondary[0]` is the second
+   * beam, and so on up to `beamCount`. See `BeamPiece`.
+   */
+  secondary: BeamPiece[][];
 }
 
 /**
@@ -163,6 +173,58 @@ export interface MeasureInfo {
 
 /** Beats within this of a whole one are on it; see the note in `layoutScore`. */
 const BEAT_EPSILON = 1e-3;
+
+/**
+ * How far apart a player's "together" can be. A rolled chord, or one hand a
+ * shade behind the other, spreads a chord over tens of milliseconds; see
+ * `chordOnsets`.
+ */
+const CHORD_ONSET_WINDOW_MS = 40;
+
+/**
+ * The onset each note is written from: its own, unless it is one of a chord
+ * struck a little unevenly, in which case the chord's middle onset — so the
+ * chord snaps to one column. Snapped note by note, a chord that straddles the
+ * middle of a grid step splits into two, a column apart.
+ *
+ * Grouped per staff, and never over more than `windowFor` allows — half a
+ * grid step, at most — so a fast run is never mistaken for a chord, and a
+ * score, whose chords share one onset exactly, is left as it was.
+ */
+function chordOnsets(
+  notes: readonly NoteEvent[],
+  windowFor: (note: NoteEvent) => number,
+): number[] {
+  const onsets = notes.map((note) => note.startMs);
+  const byStaff = new Map<string, number[]>();
+  notes.forEach((note, index) => {
+    const staff = note.staff ?? (note.midi >= TREBLE_SPLIT_MIDI ? 'treble' : 'bass');
+    const list = byStaff.get(staff);
+    if (list) list.push(index);
+    else byStaff.set(staff, [index]);
+  });
+  for (const indices of byStaff.values()) {
+    indices.sort((a, b) => (notes[a] as NoteEvent).startMs - (notes[b] as NoteEvent).startMs);
+    let i = 0;
+    while (i < indices.length) {
+      const first = notes[indices[i] as number] as NoteEvent;
+      const window = windowFor(first);
+      let j = i + 1;
+      while (
+        j < indices.length &&
+        (notes[indices[j] as number] as NoteEvent).startMs - first.startMs <= window
+      ) {
+        j += 1;
+      }
+      if (j - i > 1) {
+        const middle = (notes[indices[i + Math.floor((j - i) / 2)] as number] as NoteEvent).startMs;
+        for (let k = i; k < j; k += 1) onsets[indices[k] as number] = middle;
+      }
+      i = j;
+    }
+  }
+  return onsets;
+}
 
 /**
  * A stretch drawn an octave in, under an `8va` or `8vb` line.
@@ -223,6 +285,12 @@ export interface LayoutOptions {
   tempoChanges?: readonly TempoChange[];
   /** Never lay out fewer measures than this (empty-score scaffold). */
   minMeasures?: number;
+  /**
+   * Beam four plain eighths in common time as one half-bar group, as engraved
+   * music does. On by default; a lesson teaching the beat turns it off, so its
+   * eighths come in the pairs its prose describes.
+   */
+  eighthsByHalfBar?: boolean;
 }
 
 /**
@@ -514,8 +582,9 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
   return out;
 }
 
+/** Eighths and shorter, dotted or not. */
 function beamable(chord: ChordGroup): boolean {
-  return !chord.symbol.dotted && beamCountFor(chord.symbol.base) > 0;
+  return beamCountFor(chord.symbol.base) > 0;
 }
 
 /**
@@ -532,9 +601,72 @@ function beamable(chord: ChordGroup): boolean {
  * Asked here and nowhere else: the page does not group beams of its own, it
  * receives `beamId` from this layout and only gives the run its geometry, so
  * both views follow from this one answer.
+ *
+ * Different values join: an eighth and two sixteenths, or a dotted eighth and
+ * its sixteenth, are one figure and are beamed as one, the shorter notes
+ * carrying their extra beams between themselves. Not inside a tuplet, though,
+ * where the numeral over the run counts its notes and a change of value would
+ * make it lie.
  */
 function beamsJoin(previous: ChordGroup, next: ChordGroup): boolean {
-  return previous.tupletGroup === next.tupletGroup;
+  if (previous.tupletGroup !== next.tupletGroup) return false;
+  const a = previous.symbol;
+  const b = next.symbol;
+  if (a.tuplet === undefined && b.tuplet === undefined) return true;
+  return (
+    a.base === b.base &&
+    a.dotted === b.dotted &&
+    a.tuplet?.actual === b.tuplet?.actual &&
+    a.tuplet?.normal === b.tuplet?.normal
+  );
+}
+
+/**
+ * The beams after the first, for a run whose members carry `counts` beams and
+ * start `positions` whole notes into their bar.
+ *
+ * Neighbours that both carry a level are joined at it. A member that carries it
+ * alone gets a stub, which points to the member it forms a pair with at the
+ * level above: the second sixteenth of an eighth's worth points back, the
+ * first points on. At the ends of the run there is only one way to point.
+ */
+function secondaryBeams(counts: readonly number[], positions: readonly number[]): BeamPiece[][] {
+  const deepest = Math.max(...counts);
+  const levels: BeamPiece[][] = [];
+  for (let level = 2; level <= deepest; level += 1) {
+    const pieces: BeamPiece[] = [];
+    // The value a pair of this level's notes adds up to: an eighth for the
+    // sixteenths' beam, a sixteenth for the 32nds'.
+    const pair = 1 / 2 ** (level + 1);
+    let i = 0;
+    while (i < counts.length) {
+      if ((counts[i] as number) < level) {
+        i += 1;
+        continue;
+      }
+      let j = i;
+      while (j + 1 < counts.length && (counts[j + 1] as number) >= level) j += 1;
+      if (j > i) {
+        pieces.push({ from: i, to: j });
+      } else {
+        const offset = (positions[i] as number) / pair;
+        const startsPair = Math.abs(offset - Math.round(offset)) < BEAT_EPSILON;
+        const stub = i === 0 ? 1 : i === counts.length - 1 ? -1 : startsPair ? 1 : -1;
+        pieces.push({ from: i, to: i, stub });
+      }
+      i = j + 1;
+    }
+    levels.push(pieces);
+  }
+  return levels;
+}
+
+/** Every member a plain eighth: not dotted, not in a tuplet. */
+function plainEighths(run: readonly ChordGroup[]): boolean {
+  return run.every(
+    (chord) =>
+      chord.symbol.base === 'eighth' && !chord.symbol.dotted && chord.symbol.tuplet === undefined,
+  );
 }
 
 /**
@@ -553,8 +685,11 @@ function buildBeamGroups(
   measures: readonly MeasureInfo[],
   rests: readonly LaidOutRest[],
   timeSignature: TimeSignature,
+  eighthsByHalfBar: boolean,
 ): BeamGroup[] {
   const compound = timeSignature.numerator % 3 === 0 && timeSignature.denominator >= 8;
+  const halfBarEighths =
+    eighthsByHalfBar && timeSignature.numerator === 4 && timeSignature.denominator === 4;
   /** Where each staff falls silent — a beam stops at any of these. */
   const silentAt = new Set<string>();
   for (const rest of rests) silentAt.add(`${rest.staff}|${rest.displayStartMs}`);
@@ -589,38 +724,45 @@ function buildBeamGroups(
       const byTime = new Map<string, ChordGroup>();
       for (const chord of onStaff) byTime.set(`${chord.voice}|${chord.displayStartMs}`, chord);
 
+      /** Whole notes from the bar line to a chord — how beam levels are counted. */
+      const wholesIn = (chord: ChordGroup): number =>
+        (chord.displayStartMs - measure.startMs) / beatMs / timeSignature.denominator;
+
+      const emit = (run: ChordGroup[]): void => {
+        const polyphonic = run.find((chord) => (voicesAt.get(chord.displayStartMs) ?? 1) > 1);
+        const downVotes = run.filter((chord) => chord.stemDown).length;
+        const stemDown = polyphonic ? polyphonic.stemDown : downVotes * 2 >= run.length;
+        const id = beams.length;
+        // A run of tuplet values carries its numeral — but only where the run
+        // is whole tuplets. A figure split between the hands leaves a fragment
+        // on each staff, and "2" over two thirds of a triplet does not mean a
+        // shorter triplet, it means a duplet: a different rhythm altogether.
+        // Better to say nothing and let the beam speak.
+        const ratio = (run[0] as ChordGroup).symbol.tuplet;
+        const tupletCount = ratio && run.length % ratio.actual === 0 ? run.length : null;
+        const counts = run.map((chord) => beamCountFor(chord.symbol.base) || 1);
+        beams.push({
+          staff,
+          stemDown,
+          beamCount: Math.max(...counts) as BeamCount,
+          members: run,
+          tupletCount,
+          secondary: secondaryBeams(counts, run.map(wholesIn)),
+        });
+        for (const chord of run) {
+          chord.stemDown = stemDown;
+          chord.beamId = id;
+        }
+      };
+
       for (const voice of new Set(onStaff.map((chord) => chord.voice))) {
+        const runs: { chords: ChordGroup[]; group: number }[] = [];
         let run: ChordGroup[] = [];
-        let runBase: DurationSymbol['base'] | null = null;
         let runGroup = -1;
 
         const flush = (): void => {
-          if (run.length >= 2) {
-            const polyphonic = run.find((chord) => (voicesAt.get(chord.displayStartMs) ?? 1) > 1);
-            const downVotes = run.filter((chord) => chord.stemDown).length;
-            const stemDown = polyphonic ? polyphonic.stemDown : downVotes * 2 >= run.length;
-            const id = beams.length;
-            // A run of tuplet values carries its numeral — but only where the
-            // run is whole tuplets. A figure split between the hands leaves a
-            // fragment on each staff, and "2" over two thirds of a triplet does
-            // not mean a shorter triplet, it means a duplet: a different rhythm
-            // altogether. Better to say nothing and let the beam speak.
-            const ratio = (run[0] as ChordGroup).symbol.tuplet;
-            const tupletCount = ratio && run.length % ratio.actual === 0 ? run.length : null;
-            beams.push({
-              staff,
-              stemDown,
-              beamCount: beamCountFor((run[0] as ChordGroup).symbol.base) || 1,
-              members: run,
-              tupletCount,
-            });
-            for (const chord of run) {
-              chord.stemDown = stemDown;
-              chord.beamId = id;
-            }
-          }
+          if (run.length >= 2) runs.push({ chords: run, group: runGroup });
           run = [];
-          runBase = null;
         };
 
         for (const timeMs of times) {
@@ -641,17 +783,36 @@ function buildBeamGroups(
           const previous = run[run.length - 1];
           if (
             run.length > 0 &&
-            (chord.symbol.base !== runBase ||
-              group !== runGroup ||
-              (previous !== undefined && !beamsJoin(previous, chord)))
+            (group !== runGroup || (previous !== undefined && !beamsJoin(previous, chord)))
           ) {
             flush();
           }
           run.push(chord);
-          runBase = chord.symbol.base;
           runGroup = group;
         }
         flush();
+
+        // Common time beams plain eighths by the half bar: four of them across
+        // beats one and two (or three and four) are one group, never a pair of
+        // pairs — but never across the middle of the bar, where the half-bar
+        // accent has to stay visible.
+        if (halfBarEighths) {
+          for (let k = 0; k + 1 < runs.length; k += 1) {
+            const a = runs[k] as { chords: ChordGroup[]; group: number };
+            const b = runs[k + 1] as { chords: ChordGroup[]; group: number };
+            if (
+              a.group % 2 === 0 &&
+              b.group === a.group + 1 &&
+              a.chords.length === 2 &&
+              b.chords.length === 2 &&
+              plainEighths(a.chords) &&
+              plainEighths(b.chords)
+            ) {
+              runs.splice(k, 2, { chords: [...a.chords, ...b.chords], group: a.group });
+            }
+          }
+        }
+        for (const { chords } of runs) emit(chords);
       }
     }
   }
@@ -1170,16 +1331,42 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     return symbolForBeats(Math.max(1, Math.round(held / gridBeats)) * gridBeats, denominator);
   };
 
-  const fifths = normalizeFifths(options.keySignature ?? 0);
-  const laidOut: LaidOutNote[] = notes.map((note) => {
-    const position = midiToStaffPosition(note.midi, note.staff, note.clef, fifths);
+  /** Half a grid step at the note, capped; see `chordOnsets`. */
+  const chordWindowMs = (note: NoteEvent): number => {
     const division = divisionFor(note);
-    return {
+    const stepBeats = division !== null ? 1 / division : gridBeats;
+    if (stepBeats === null) return CHORD_ONSET_WINDOW_MS;
+    const stepMs = tempoMap.msAtBeat(tempoMap.beatAtMs(note.startMs) + stepBeats) - note.startMs;
+    return Math.min(CHORD_ONSET_WINDOW_MS, stepMs / 2);
+  };
+  const onsets = chordOnsets(notes, chordWindowMs);
+  /**
+   * A note written from its chord's onset rather than its own is written as
+   * lasting from there to its own release, or the notes of one chord would
+   * round to different values and come apart into voices. Its performance
+   * timing is untouched: it still lights when it actually sounds.
+   */
+  const writtenBeats = new Map<LaidOutNote, number>();
+
+  const fifths = normalizeFifths(options.keySignature ?? 0);
+  const laidOut: LaidOutNote[] = notes.map((note, index) => {
+    const onset = onsets[index] as number;
+    const written =
+      onset === note.startMs
+        ? note
+        : {
+            ...note,
+            startMs: onset,
+            durationMs: Math.max(1, note.startMs + note.durationMs - onset),
+          };
+    const position = midiToStaffPosition(note.midi, note.staff, note.clef, fifths);
+    const division = divisionFor(written);
+    const out: LaidOutNote = {
       id: note.id,
       midi: note.midi,
       startMs: note.startMs,
       durationMs: note.durationMs,
-      displayStartMs: snapToGrid(note.startMs, division),
+      displayStartMs: snapToGrid(onset, division),
       staff: position.staff,
       clef: position.clef,
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
@@ -1187,20 +1374,22 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
       step: position.step,
       accidental: position.accidental,
       alter: position.alter,
-      symbol: symbolFor(note, division),
+      symbol: symbolFor(written, division),
       ledger: ledgerLineSteps(position.step),
       headShift: 0,
       accidentalColumn: 0,
       tiedFromPrev: false,
       tiedToNext: false,
     };
+    if (written !== note) writtenBeats.set(out, beatsHeld(written));
+    return out;
   });
 
   const tied = tieAcrossBarLines(laidOut, {
     tempoMap,
     timeSignature: options.timeSignature,
     gridBeats,
-    beatsHeld,
+    beatsHeld: (note) => writtenBeats.get(note as LaidOutNote) ?? beatsHeld(note),
   });
 
   // Notes on one staff that start together form a stack, which engraves as one
@@ -1285,7 +1474,13 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   // Beaming has the last word on stem direction, so it runs before anything
   // that reads one: the heads a stem displaces, and the columns their
   // accidentals stand in.
-  const beams = buildBeamGroups(chordsByMeasure, measures, rests, options.timeSignature);
+  const beams = buildBeamGroups(
+    chordsByMeasure,
+    measures,
+    rests,
+    options.timeSignature,
+    options.eighthsByHalfBar ?? true,
+  );
   // The bar decides which accidentals survive, so it has to speak before the
   // ones that are left are given columns to stand in.
   applyMeasureAccidentals(chordsByMeasure);

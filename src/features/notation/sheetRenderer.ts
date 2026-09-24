@@ -23,7 +23,14 @@ import {
   type SheetTie,
 } from './sheetLayout';
 import { drawAccidentalGlyph } from './accidentalGlyph';
-import { extraStemG, BEAM_SPACING_G, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
+import {
+  beamPieceXs,
+  beamYAt,
+  extraStemG,
+  BEAM_SPACING_G,
+  BEAM_THICKNESS_G,
+  STEM_LENGTH_G,
+} from './beamGeometry';
 import {
   normalizeFifths,
   signatureAccidental,
@@ -553,19 +560,33 @@ function drawTupletNumeral(ctx: CanvasRenderingContext2D, beam: SheetBeam): void
   ctx.textAlign = 'left';
 }
 
+/**
+ * The first beam runs the whole group; the ones after it join only the notes
+ * that carry them, or stand as short stubs off a note that carries one alone.
+ */
 function drawBeam(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {
   const t = BEAM_THICKNESS_G * G;
   const towardHeads = beam.stemDown ? -1 : 1;
-  for (let i = 0; i < beam.beamCount; i += 1) {
-    const dy = i * towardHeads * BEAM_SPACING_G * G;
+  const span = { y1: beam.y1Pt, y2: beam.y2Pt };
+  const segment = (fromX: number, toX: number, level: number): void => {
+    const dy = level * towardHeads * BEAM_SPACING_G * G;
+    const fromY = beamYAt(span, beam.x1Pt, beam.x2Pt, fromX) + dy;
+    const toY = beamYAt(span, beam.x1Pt, beam.x2Pt, toX) + dy;
     ctx.beginPath();
-    ctx.moveTo(beam.x1Pt, beam.y1Pt + dy - t / 2);
-    ctx.lineTo(beam.x2Pt, beam.y2Pt + dy - t / 2);
-    ctx.lineTo(beam.x2Pt, beam.y2Pt + dy + t / 2);
-    ctx.lineTo(beam.x1Pt, beam.y1Pt + dy + t / 2);
+    ctx.moveTo(fromX, fromY - t / 2);
+    ctx.lineTo(toX, toY - t / 2);
+    ctx.lineTo(toX, toY + t / 2);
+    ctx.lineTo(fromX, fromY + t / 2);
     ctx.closePath();
     ctx.fill();
-  }
+  };
+  segment(beam.x1Pt, beam.x2Pt, 0);
+  beam.secondary.forEach((pieces, index) => {
+    for (const piece of pieces) {
+      const [fromX, toX] = beamPieceXs(beam.stemXsPt, piece, G);
+      segment(fromX, toX, index + 1);
+    }
+  });
 }
 
 /**

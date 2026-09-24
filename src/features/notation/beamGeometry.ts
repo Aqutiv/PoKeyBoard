@@ -84,3 +84,40 @@ export function beamYAt(span: BeamSpan, x1: number, x2: number, x: number): numb
   if (x2 === x1) return span.y1;
   return span.y1 + ((x - x1) / (x2 - x1)) * (span.y2 - span.y1);
 }
+
+/**
+ * One stretch of a beam beyond the first, by member index within its run.
+ * Members `from` through `to`, which all carry it, are joined by it; a member
+ * that carries it alone gets a short stub (`from === to`) pointing `stub` — -1
+ * left, 1 right — toward the note it pairs with, as the sixteenth after a
+ * dotted eighth does.
+ */
+export interface BeamPiece {
+  from: number;
+  to: number;
+  stub?: -1 | 1;
+}
+
+/** Longest a stub runs, in staff spaces — about a notehead's width. */
+export const BEAM_STUB_G = 1.1;
+/** A stub never takes more than this share of the way to its neighbour's stem. */
+const STUB_SHARE = 0.55;
+
+/**
+ * Where a piece of a secondary beam starts and ends along x, in the caller's
+ * units: stem to stem, or for a stub, a short way off its own stem toward the
+ * member it pairs with — never so far that it reads as reaching that stem.
+ */
+export function beamPieceXs(
+  xs: readonly number[],
+  piece: BeamPiece,
+  gap: number,
+): [number, number] {
+  const fromX = xs[piece.from] as number;
+  if (piece.stub === undefined) return [fromX, xs[piece.to] as number];
+  const neighbour = xs[piece.from + piece.stub];
+  const longest = BEAM_STUB_G * gap;
+  const length =
+    neighbour === undefined ? longest : Math.min(longest, Math.abs(neighbour - fromX) * STUB_SHARE);
+  return piece.stub > 0 ? [fromX, fromX + length] : [fromX - length, fromX];
+}

@@ -696,9 +696,10 @@ describe('chapter six', () => {
   });
 
   it('beams its eighth notes per beat, as the prose describes them', () => {
-    // `buildBeamGroups` groups by the beat in simple meter, so a bar of eight
-    // eighths engraves as four clean pairs rather than one long smear. The
-    // prose says exactly that, and this is what stops the two drifting apart.
+    // A lesson stave groups eighths by the beat (StaffSnippet turns off the
+    // half-bar grouping printed music uses), so a bar of eight eighths engraves
+    // as four clean pairs rather than one long smear. The prose says exactly
+    // that, and this is what stops the two drifting apart.
     const step = RHYTHM_AND_BEAT.steps.find((s) => s.id === 'quarterAndEighth');
     if (step?.visual?.kind !== 'staff') throw new Error('expected a stave');
     const score = layoutScore(phraseToNotes(step.visual.phrase), {
@@ -706,6 +707,7 @@ describe('chapter six', () => {
       timeSignature: { numerator: 4, denominator: 4 },
       quantization: '1/16',
       minMeasures: 1,
+      eighthsByHalfBar: false,
     });
     expect(score.beams).toHaveLength(4);
     expect(score.beams.map((beam) => beam.members.length)).toEqual([2, 2, 2, 2]);

@@ -210,7 +210,7 @@ describe('layoutSheet', () => {
   });
 
   describe('beaming', () => {
-    it('beams eighths per beat in 4/4', () => {
+    it('beams four eighths in 4/4 as one half-bar group', () => {
       const result = sheet([
         note({ id: 'a', midi: 76, startMs: 0, durationMs: 250 }),
         note({ id: 'b', midi: 76, startMs: 250, durationMs: 250 }),
@@ -218,10 +218,11 @@ describe('layoutSheet', () => {
         note({ id: 'd', midi: 76, startMs: 750, durationMs: 250 }),
       ]);
       const measure = allMeasures(result)[0]!;
-      expect(measure.beams).toHaveLength(2);
-      expect(measure.beams.every((beam) => beam.beamCount === 1)).toBe(true);
+      expect(measure.beams).toHaveLength(1);
+      expect(measure.beams[0]!.beamCount).toBe(1);
+      expect(measure.beams[0]!.stemXsPt).toHaveLength(4);
       const chords = staffChords(measure, 'treble');
-      expect(chords.map(({ chord }) => chord.beamId)).toEqual([0, 0, 1, 1]);
+      expect(chords.map(({ chord }) => chord.beamId)).toEqual([0, 0, 0, 0]);
     });
 
     it('double-beams a sixteenth run inside one beat', () => {
@@ -236,18 +237,28 @@ describe('layoutSheet', () => {
       expect(staffChords(measure, 'treble').every(({ chord }) => chord.beamId === 0)).toBe(true);
     });
 
-    it('falls back to flags for mixed or dotted values', () => {
-      const mixed = sheet([
-        note({ id: 'a', midi: 76, startMs: 0, durationMs: 250 }),
-        note({ id: 'b', midi: 76, startMs: 250, durationMs: 125 }),
-      ]);
-      expect(allMeasures(mixed)[0]!.beams).toHaveLength(0);
+    it('beams mixed and dotted values, the extra beam a stub on the note that has it', () => {
+      // An eighth and a sixteenth: one beam over both, and the sixteenth's
+      // second beam a stub pointing back into the pair.
+      const mixed = allMeasures(
+        sheet([
+          note({ id: 'a', midi: 76, startMs: 0, durationMs: 250 }),
+          note({ id: 'b', midi: 76, startMs: 250, durationMs: 125 }),
+        ]),
+      )[0]!;
+      expect(mixed.beams).toHaveLength(1);
+      expect(mixed.beams[0]!.beamCount).toBe(2);
+      expect(mixed.beams[0]!.secondary).toEqual([[{ from: 1, to: 1, stub: -1 }]]);
 
-      const dotted = sheet([
-        note({ id: 'a', midi: 76, startMs: 0, durationMs: 375 }),
-        note({ id: 'b', midi: 76, startMs: 375, durationMs: 375 }),
-      ]);
-      expect(allMeasures(dotted)[0]!.beams).toHaveLength(0);
+      // A dotted eighth and its sixteenth, the commonest dotted figure there is.
+      const dotted = allMeasures(
+        sheet([
+          note({ id: 'a', midi: 76, startMs: 0, durationMs: 375 }),
+          note({ id: 'b', midi: 76, startMs: 375, durationMs: 125 }),
+        ]),
+      )[0]!;
+      expect(dotted.beams).toHaveLength(1);
+      expect(dotted.beams[0]!.secondary).toEqual([[{ from: 1, to: 1, stub: -1 }]]);
     });
 
     it('splits runs at beat boundaries', () => {
@@ -288,7 +299,7 @@ describe('layoutSheet', () => {
 
     it('beams each voice of a staff on its own', () => {
       // A half note held over four eighths in the same hand: the eighths beam
-      // per beat as usual and the held note takes no part in it.
+      // as one half-bar group and the held note takes no part in it.
       const result = sheet([
         note({ id: 'held', midi: 79, startMs: 0, durationMs: 1000, voice: 0 }),
         ...[0, 250, 500, 750].map((startMs, i) =>
@@ -296,15 +307,15 @@ describe('layoutSheet', () => {
         ),
       ]);
       const measure = allMeasures(result)[0]!;
-      expect(measure.beams).toHaveLength(2);
+      expect(measure.beams).toHaveLength(1);
       const chords = staffChords(measure, 'treble');
       // The first column carries both voices; the rest carry only the eighths.
       expect(chords.map(({ chord }) => [chord.voice, chord.beamId])).toEqual([
         [0, null],
         [1, 0],
         [1, 0],
-        [1, 1],
-        [1, 1],
+        [1, 0],
+        [1, 0],
       ]);
       // The held note keeps its own value rather than absorbing the eighths.
       expect(chords[0]!.chord.symbol).toEqual({ base: 'half', dotted: false });
@@ -448,13 +459,15 @@ describe('layoutSheet', () => {
     });
 
     it('beams by the local beat, not the opening one', () => {
-      // Eight eighths filling the 240 bpm bar: 125 ms each, four beats of two.
+      // Eight eighths filling the 240 bpm bar: 125 ms each, two half bars of
+      // four. Read at the opening 120 bpm they would be sixteenths.
       const notes: NoteEvent[] = [];
       for (let i = 0; i < 8; i += 1) {
         notes.push(note({ id: `e${i}`, startMs: 2000 + i * 125, durationMs: 125 }));
       }
       const measure = allMeasures(sheet(notes, {}, CHANGES))[1]!;
-      expect(measure.beams).toHaveLength(4);
+      expect(measure.beams).toHaveLength(2);
+      expect(measure.beams.every((beam) => beam.beamCount === 1)).toBe(true);
       expect(staffChords(measure, 'treble')).toHaveLength(8);
     });
   });

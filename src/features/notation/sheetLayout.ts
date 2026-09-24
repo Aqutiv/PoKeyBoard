@@ -2,6 +2,7 @@ import type { QuantizationSetting, TimeSignature } from '@/domain/takeTypes';
 import { clamp, wholeNoteDurationMs } from '@/utils/timing';
 import {
   measureIndexAt,
+  type BeamGroup,
   type ChordGroup,
   type HeadShift,
   type LaidOutRest,
@@ -10,7 +11,13 @@ import {
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
-import { beamSpanFor, extraStemG, BEAM_THICKNESS_G, STEM_LENGTH_G } from './beamGeometry';
+import {
+  beamSpanFor,
+  extraStemG,
+  BEAM_THICKNESS_G,
+  STEM_LENGTH_G,
+  type BeamPiece,
+} from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
 import { normalizeFifths, type AccidentalKind } from './keySignature';
 import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
@@ -197,7 +204,7 @@ export interface SheetColumn {
 export interface SheetBeam {
   staff: StaffKind;
   stemDown: boolean;
-  /** 1 for eighths, 2 for sixteenths, 3 for 32nds, 4 for 64ths. */
+  /** The most beams any member carries: 1 for eighths … 4 for 64ths. */
   beamCount: BeamCount;
   /** The tuplet numeral over the beam, where the run is one. */
   tupletCount: number | null;
@@ -205,6 +212,10 @@ export interface SheetBeam {
   y1Pt: number;
   x2Pt: number;
   y2Pt: number;
+  /** Each member's stem x, which the beams after the first are measured from. */
+  stemXsPt: number[];
+  /** The beams after the first; see `BeamGroup.secondary`. */
+  secondary: BeamPiece[][];
 }
 
 export interface SheetMeasure {
@@ -632,7 +643,7 @@ function packSystems(
     });
 
     for (let i = 0; i < measures.length; i += 1) {
-      buildBeams(measures[i]!);
+      buildBeams(measures[i]!, score.beams);
     }
     const ties = buildTies(measures, metrics.marginLeftPt, x);
     const pedals = buildPedals(measures, score.pedals);
@@ -924,7 +935,7 @@ interface BeamMember {
  *
  * Beam y values are staff-relative here; `paginate` shifts them to page space.
  */
-function buildBeams(measure: SheetMeasure): void {
+function buildBeams(measure: SheetMeasure, groups: readonly BeamGroup[]): void {
   const runs = new Map<number, BeamMember[]>();
   for (const column of measure.columns) {
     for (const chord of [...column.treble, ...column.bass]) {
@@ -934,14 +945,45 @@ function buildBeams(measure: SheetMeasure): void {
       else runs.set(chord.beamId, [{ column, chord }]);
     }
   }
-  for (const run of runs.values()) {
+  for (const [layoutId, run] of runs) {
     // A run the sheet only received part of has nothing to span; it flags.
     if (run.length < 2) {
       for (const member of run) member.chord.beamId = null;
       continue;
     }
-    emitBeam(measure, run);
+    // The layout decided which beams join which notes; the sheet only has the
+    // same run when it received all of it, and otherwise joins what it has.
+    const group = groups[layoutId];
+    emitBeam(
+      measure,
+      run,
+      group !== undefined && group.members.length === run.length
+        ? group.secondary
+        : fallbackSecondary(run),
+    );
   }
+}
+
+/** Secondary beams for a run the layout's answer no longer fits: stubs point in. */
+function fallbackSecondary(run: readonly BeamMember[]): BeamPiece[][] {
+  const counts = run.map((member) => beamCountFor(member.chord.symbol.base) || 1);
+  const levels: BeamPiece[][] = [];
+  for (let level = 2; level <= Math.max(...counts); level += 1) {
+    const pieces: BeamPiece[] = [];
+    counts.forEach((count, i) => {
+      if (count < level) return;
+      if ((counts[i - 1] ?? 0) >= level) {
+        (pieces[pieces.length - 1] as BeamPiece).to = i;
+        return;
+      }
+      pieces.push({ from: i, to: i });
+    });
+    for (const piece of pieces) {
+      if (piece.from === piece.to) piece.stub = piece.from === 0 ? 1 : -1;
+    }
+    levels.push(pieces);
+  }
+  return levels;
 }
 
 /** The numeral a beamed run carries, or null where it is not a whole tuplet. */
@@ -950,7 +992,7 @@ function tupletCountFor(symbol: DurationSymbol, runLength: number): number | nul
   return ratio && runLength % ratio.actual === 0 ? runLength : null;
 }
 
-function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
+function emitBeam(measure: SheetMeasure, run: BeamMember[], secondary: BeamPiece[][]): void {
   const first = run[0] as BeamMember;
   const staff = first.chord.staff;
   const stemDown = first.chord.stemDown;
@@ -962,7 +1004,9 @@ function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
       : member.chord.notes[member.chord.notes.length - 1]!;
     return staffYRel(note.step);
   });
-  const beamCount = beamCountFor(run[0]!.chord.symbol.base) || 1;
+  const beamCount = Math.max(
+    ...run.map((member) => beamCountFor(member.chord.symbol.base) || 1),
+  ) as BeamCount;
   const span = beamSpanFor(xs, anchors, stemDown, G, beamCount);
 
   const beamId = measure.beams.length;
@@ -978,6 +1022,8 @@ function emitBeam(measure: SheetMeasure, run: BeamMember[]): void {
     y1Pt: span.y1,
     x2Pt: xs[xs.length - 1]!,
     y2Pt: span.y2,
+    stemXsPt: xs,
+    secondary,
   });
   for (const member of run) member.chord.beamId = beamId;
 }

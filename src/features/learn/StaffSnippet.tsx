@@ -81,6 +81,9 @@ export function StaffSnippet({
       timeSignature: phrase.timeSignature,
       quantization: '1/16',
       minMeasures: 1,
+      // A lesson about the beat shows eighths in pairs, one pair per beat, as
+      // its prose says; printed music groups four to the half bar.
+      eighthsByHalfBar: false,
     });
     // `layoutScore` reads dynamics off how hard the keys were struck, which is
     // right for a performance and wrong for a worked example — a lesson about

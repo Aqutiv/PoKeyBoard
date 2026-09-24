@@ -436,6 +436,51 @@ describe('layoutScore', () => {
   });
 });
 
+describe('chords struck a little unevenly', () => {
+  it('keeps a chord that straddles the middle of a grid step in one column', () => {
+    // At 120 bpm a sixteenth is 125 ms, so 62.5 ms is the rounding edge: the
+    // lower note lands just before it and the upper just after.
+    const layout = layoutScore(
+      [
+        note({ id: 'low', midi: 60, startMs: 55, durationMs: 440 }),
+        note({ id: 'high', midi: 64, startMs: 70, durationMs: 425 }),
+      ],
+      OPTS,
+    );
+    const starts = layout.chords.flatMap((chord) => chord.notes.map((n) => n.displayStartMs));
+    expect(new Set(starts).size).toBe(1);
+    expect(layout.chords).toHaveLength(1);
+    // Performance timing is untouched: each note still sounds when it did.
+    const notes = layout.chords[0]!.notes;
+    expect(notes.map((n) => n.startMs).sort((a, b) => a - b)).toEqual([55, 70]);
+  });
+
+  it('writes a rolled chord as one chord, not a stack of voices', () => {
+    // Rolled bottom to top over 60 ms, all released together.
+    const layout = layoutScore(
+      [0, 20, 40].map((startMs, i) =>
+        note({ id: `r${i}`, midi: 60 + i * 4, startMs, durationMs: 1000 - startMs }),
+      ),
+      OPTS,
+    );
+    expect(layout.chords).toHaveLength(1);
+    expect(layout.chords[0]!.notes).toHaveLength(3);
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
+  });
+
+  it('never mistakes a fast run for a chord', () => {
+    // Thirty-seconds at 120 bpm are 62.5 ms apart: well inside the chord
+    // window, but a whole grid step apart on a 1/32 grid.
+    const layout = layoutScore(
+      [0, 63, 125, 188].map((startMs, i) =>
+        note({ id: `f${i}`, midi: 72 + i, startMs, durationMs: 60 }),
+      ),
+      { ...OPTS, quantization: '1/32' },
+    );
+    expect(layout.chords).toHaveLength(4);
+  });
+});
+
 describe('beam grouping', () => {
   /** Eighths at 120bpm 4/4: a beat is 500ms, so an eighth is 250ms. */
   function eighths(starts: number[], partial: Partial<NoteEvent> = {}): NoteEvent[] {
@@ -444,13 +489,92 @@ describe('beam grouping', () => {
     );
   }
 
-  it('beams each beat of a run on its own', () => {
+  it('beams four eighths in common time as one half-bar group', () => {
     const layout = layoutScore(eighths([0, 250, 500, 750]), OPTS);
-    expect(layout.beams).toHaveLength(2);
-    expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
-    expect(layout.beams.every((beam) => beam.beamCount === 1)).toBe(true);
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.members).toHaveLength(4);
+    expect(layout.beams[0]!.beamCount).toBe(1);
+    expect(layout.beams[0]!.secondary).toEqual([]);
     // Every chord points back at the run it belongs to.
+    expect(layout.chords.map((chord) => chord.beamId)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('never beams across the middle of a common-time bar', () => {
+    // Beats two and three: the half-bar accent has to stay visible.
+    const layout = layoutScore(eighths([500, 750, 1000, 1250]), OPTS);
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
+  });
+
+  it('beams by the beat where a lesson asks it to', () => {
+    const layout = layoutScore(eighths([0, 250, 500, 750]), { ...OPTS, eighthsByHalfBar: false });
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
     expect(layout.chords.map((chord) => chord.beamId)).toEqual([0, 0, 1, 1]);
+  });
+
+  it('beams an eighth with the two sixteenths after it', () => {
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 250 }),
+        note({ id: 'b', midi: 74, startMs: 250, durationMs: 125 }),
+        note({ id: 'c', midi: 76, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams).toHaveLength(1);
+    const beam = layout.beams[0]!;
+    expect(beam.members).toHaveLength(3);
+    expect(beam.beamCount).toBe(2);
+    // The second beam joins the two sixteenths only.
+    expect(beam.secondary).toEqual([[{ from: 1, to: 2 }]]);
+  });
+
+  it('beams a dotted eighth with its sixteenth, the second beam a stub pointing back', () => {
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 375 }),
+        note({ id: 'b', midi: 74, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.members.map((chord) => chord.symbol)).toEqual([
+      { base: 'eighth', dotted: true },
+      { base: 'sixteenth', dotted: false },
+    ]);
+    expect(layout.beams[0]!.secondary).toEqual([[{ from: 1, to: 1, stub: -1 }]]);
+  });
+
+  it('points a sixteenth’s stub toward the note it pairs with', () => {
+    // Sixteenth, eighth, sixteenth: the first pairs forward, the last back.
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 125 }),
+        note({ id: 'b', midi: 74, startMs: 125, durationMs: 250 }),
+        note({ id: 'c', midi: 76, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams[0]!.secondary).toEqual([
+      [
+        { from: 0, to: 0, stub: 1 },
+        { from: 2, to: 2, stub: -1 },
+      ],
+    ]);
+  });
+
+  it('keeps a triplet run whole, numbered, and with no beams of its own to mix', () => {
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 167, tuplet: triplet }),
+        note({ id: 'b', midi: 74, startMs: 167, durationMs: 167, tuplet: triplet }),
+        note({ id: 'c', midi: 76, startMs: 333, durationMs: 167, tuplet: triplet }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.tupletCount).toBe(3);
+    expect(layout.beams[0]!.secondary).toEqual([]);
   });
 
   it('leaves a lone eighth to its flag', () => {

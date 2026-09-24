@@ -103,8 +103,19 @@ takes seconds and never touches the audio engine.
 - **Beaming** is decided once, in `layoutScore`, so the printed page and the
   live score group runs the same way and commit a run to the same stem
   direction; `beamGeometry.ts` holds the line arithmetic in staff spaces, read
-  as points here and as pixels on screen. Runs break at a rest, a change of
-  note value, a beat group, or a voice; compound meters group per dotted beat.
+  as points here and as pixels on screen. Runs break at a rest, a beat group, or
+  a voice; compound meters group per dotted beat, and in 4/4 four plain eighths
+  beam as one half-bar group (never across the middle of the bar — lesson
+  staves keep them in pairs, per beat, as their prose teaches). Different values
+  beam together: the first beam spans the run, each further beam joins only the
+  notes that carry it, and a note carrying one alone gets a short stub pointing
+  toward the note it pairs with (a dotted eighth's sixteenth points back). Inside
+  a tuplet a change of value still breaks the run, because its numeral counts
+  its notes.
+- **Chords struck a little unevenly** — rolled, or one hand behind the other —
+  are written from their middle onset, so they snap to one column instead of
+  splitting across a grid line. The window is 40 ms, and never more than half a
+  grid step, so a fast run is never read as a chord.
 - **Dynamics** are read out of velocity (`dynamics.ts`) and set between the
   staves, which is where a pianist looks for them — a system carrying them
   opens its inter-staff gap, and one without is laid out exactly as before.

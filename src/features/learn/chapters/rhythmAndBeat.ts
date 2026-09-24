@@ -112,8 +112,9 @@ export const RHYTHM_AND_BEAT: LearnChapter = {
       kind: 'theory',
       anchorMidi: MIDDLE_C,
       // Eight eighths engrave as four two-note beams, not one long one:
-      // `buildBeamGroups` groups by the beat in simple meter. That is correct
-      // engraving, and it is the picture the prose describes.
+      // `StaffSnippet` asks for eighths by the beat (`eighthsByHalfBar: false`)
+      // rather than printed music's half-bar fours, because the beat is what
+      // this chapter teaches — and it is the picture the prose describes.
       visual: {
         kind: 'staff',
         staves: 'treble',
