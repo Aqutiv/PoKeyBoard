@@ -1,6 +1,14 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SampleSelection } from '@/audio/audioTypes';
-import { startSampleVoice, releaseSampleVoice, sampleVoiceLevel } from '@/audio/sampleVoice';
+import { scheduleTakeVoices } from '@/audio/OfflineTakeRenderer';
+import {
+  releaseSampleVoice,
+  releaseTcFor,
+  RESTRIKE_TC,
+  sampleVoiceLevel,
+  startSampleVoice,
+  UNDAMPED_FROM_MIDI,
+} from '@/audio/sampleVoice';
 import { VoiceManager } from '@/audio/VoiceManager';
 
 function setup() {
@@ -104,6 +112,116 @@ describe('shared sample voice', () => {
     voices.setSustain(false, 'pedal');
     expect(source.stop).toHaveBeenLastCalledWith(5.1);
     expect(voices.activeMidis().size).toBe(0);
+  });
+
+  it('starts a voice at its sample’s onset, not at the top of the buffer', () => {
+    const { audio, destination } = setup();
+    const voice = startSampleVoice(
+      audio,
+      destination,
+      { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1, offset: 0.011 },
+      2,
+    );
+    expect(voice.source.start).toHaveBeenCalledWith(2, 0.011);
+  });
+
+  it('damps a bass string more slowly than a treble one', () => {
+    expect(releaseTcFor(21)).toBeGreaterThan(releaseTcFor(60));
+    expect(releaseTcFor(60)).toBeGreaterThan(releaseTcFor(84));
+    const { audio, destination } = setup();
+    const bass = startSampleVoice(
+      audio,
+      destination,
+      { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1, releaseTc: releaseTcFor(21) },
+      0,
+    );
+    releaseSampleVoice(bass, 1);
+    expect(bass.gain.gain.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, releaseTcFor(21));
+    // Left long enough to fall away under its slower damper.
+    expect(vi.mocked(bass.source.stop).mock.calls.at(-1)?.[0]).toBeCloseTo(
+      1 + releaseTcFor(21) * 8,
+      10,
+    );
+  });
+
+  it('lets a string with no damper ring on when its key comes up', () => {
+    const { audio, destination } = setup();
+    const top = startSampleVoice(
+      audio,
+      destination,
+      { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1, undamped: true },
+      0,
+    );
+    releaseSampleVoice(top, 1);
+    expect(top.gain.gain.setTargetAtTime).not.toHaveBeenCalled();
+    expect(top.source.stop).not.toHaveBeenCalled();
+    expect(sampleVoiceLevel(top, 2)).toBe(1);
+    expect(UNDAMPED_FROM_MIDI).toBeGreaterThan(84);
+  });
+
+  describe('striking a key that still sounds', () => {
+    const plain: SampleSelection = { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1 };
+
+    it('fades the old sound from the moment the new one starts', () => {
+      const { audio, context, destination, sources, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(plain, 64, 'key');
+      voices.setSustain(true, 'pedal');
+      voices.noteOff(64, 'key'); // held by the pedal
+      context.currentTime = 1;
+      voices.noteOn(plain, 64, 'key');
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, RESTRIKE_TC);
+      expect(sources[0]!.stop).toHaveBeenLastCalledWith(1 + RESTRIKE_TC * 8);
+      // The new strike is untouched, and so is any other key.
+      expect(params[1]!.setTargetAtTime).not.toHaveBeenCalled();
+    });
+
+    it('damps across sources: one key is one string', () => {
+      const { audio, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(plain, 60, 'midi');
+      voices.noteOn(plain, 62, 'midi');
+      voices.noteOn(plain, 60, 'pointer:1', 0.5);
+      expect(params[0]!.setTargetAtTime).toHaveBeenCalledWith(0, 0.5, RESTRIKE_TC);
+      expect(params[1]!.setTargetAtTime).not.toHaveBeenCalled();
+      // The finger's note is the one lit now.
+      expect([...voices.activeMidis()]).toEqual(expect.arrayContaining([60, 62]));
+    });
+
+    it('leaves a playback note scheduled for later alone', () => {
+      const { audio, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 2, 1);
+      voices.noteOn(plain, 67, 'key', 0.5); // struck before that note is due
+      expect(params[0]!.setTargetAtTime).not.toHaveBeenCalledWith(0, 0.5, RESTRIKE_TC);
+    });
+
+    it('damps a playback note at its own scheduled start, not early', () => {
+      const { audio, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 0, 4);
+      voices.scheduleNote(plain, 67, 'playback', 1.5, 1);
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1.5, RESTRIKE_TC);
+    });
+
+    it('sounds the same in an export', () => {
+      const { audio, destination, params } = setup();
+      const missing = scheduleTakeVoices(
+        audio,
+        destination,
+        [
+          { midi: 67, velocity: 0.7, startMs: 0, durationMs: 4000 },
+          { midi: 67, velocity: 0.7, startMs: 1500, durationMs: 1000 },
+          // Released at 1 s, long before it comes back: its tail is left alone.
+          { midi: 72, velocity: 0.7, startMs: 0, durationMs: 1000 },
+          { midi: 72, velocity: 0.7, startMs: 3000, durationMs: 500 },
+        ],
+        () => plain,
+      );
+      expect(missing).toBe(0);
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1.5, RESTRIKE_TC);
+      expect(params[2]!.setTargetAtTime).not.toHaveBeenCalledWith(0, 3, RESTRIKE_TC);
+    });
   });
 
   it('interrupts scheduled playback and pedal holds when switching instruments', () => {

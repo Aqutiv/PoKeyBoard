@@ -1,5 +1,6 @@
 import type { NoteSourceId, SampleSelection } from './audioTypes';
 import {
+  dampSampleVoice,
   holdSampleVoice,
   releaseSampleVoice,
   startSampleVoice,
@@ -8,7 +9,7 @@ import {
 
 export const MAX_VOICES = 48;
 /** Envelope constants shared with the offline renderer so exports match. */
-export { ATTACK_S, RELEASE_TC, RELEASE_STOP_AFTER_S } from './sampleVoice';
+export { ATTACK_S, RELEASE_TC, RELEASE_STOP_AFTER_S, RESTRIKE_TC } from './sampleVoice';
 const STEAL_FADE_TC = 0.012;
 const ALL_OFF_FADE_TC = 0.02;
 
@@ -20,6 +21,8 @@ interface Voice extends SampleVoice {
   heldByPedal: boolean;
   /** Counts toward the shared active-note model (live input only). */
   uiActive: boolean;
+  /** Already fading out under a new strike of the same key. */
+  restruck?: boolean;
 }
 
 /**
@@ -54,6 +57,7 @@ export class VoiceManager {
     when: number = this.context.currentTime,
     uiActive = true,
   ): Voice {
+    this.restrike(midi, when);
     this.stealIfNeeded();
 
     const playback = startSampleVoice(this.context, this.destination, sample, when);
@@ -189,6 +193,31 @@ export class VoiceManager {
     voice.heldByPedal = false;
     const start = Math.max(when, this.context.currentTime);
     releaseSampleVoice(voice, start);
+  }
+
+  /**
+   * A key struck while its string still sounds: the old sound gives way to the
+   * new one from the moment the new one starts (see `dampSampleVoice`). Every
+   * source counts — a MIDI key and a finger on the same note play one string.
+   * Only voices under way by then and not already let go before it, the same
+   * test `scheduleTakeVoices` makes, so an export sounds as playback does; a
+   * note scheduled later is its own.
+   */
+  private restrike(midi: number, when: number): void {
+    let changed = false;
+    for (const voice of this.voices) {
+      if (voice.midi !== midi || voice.startTime >= when || voice.restruck) continue;
+      if (voice.releaseTime !== undefined && voice.releaseTime <= when) continue;
+      dampSampleVoice(voice, when);
+      voice.restruck = true;
+      voice.releasing = true;
+      voice.heldByPedal = false;
+      if (voice.uiActive) {
+        voice.uiActive = false;
+        changed = true;
+      }
+    }
+    if (changed) this.emitActive();
   }
 
   /**

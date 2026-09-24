@@ -5,6 +5,7 @@ import type {
   SamplePackManifest,
   SampleSelection,
 } from './audioTypes';
+import { releaseTcFor, UNDAMPED_FROM_MIDI } from './sampleVoice';
 
 /** Velocity below the first threshold → soft layer, below the second → medium. */
 export const VELOCITY_LAYER_THRESHOLDS: readonly [number, number] = [0.45, 0.78];
@@ -21,6 +22,50 @@ const LOAD_CENTER_MIDI = 66;
 const MAX_ROOT_DISTANCE_SEMITONES = 9;
 const FETCH_CONCURRENCY = 4;
 const FETCH_RETRIES = 2;
+
+/** How far into a recording the attack is looked for. */
+const ONSET_SEARCH_S = 0.25;
+/** A sample counts as sounding once it reaches this far below its attack's peak. */
+const ONSET_THRESHOLD_DB = -40;
+/** Kept ahead of the onset, so the fade-in never lands on the hammer itself. */
+const ONSET_PREROLL_S = 0.001;
+/** No recording should need more trimmed than this; anything past it is left. */
+const MAX_ONSET_TRIM_S = 0.05;
+
+/**
+ * Where a recording's sound actually begins, in buffer seconds.
+ *
+ * Sample libraries leave a little room before each note — the Salamander pack
+ * a median of about 12 ms, and up to 30 — and a voice started at the top of
+ * the buffer plays that silence before every note, a delay a player feels and
+ * an uneven one. The first moment the recording rises to within 40 dB of its
+ * attack's peak is the onset; the voice starts a millisecond before it.
+ */
+export function onsetOffsetOf(buffer: AudioBuffer): number {
+  const rate = buffer.sampleRate;
+  const searchEnd = Math.min(buffer.length, Math.round(rate * ONSET_SEARCH_S));
+  const channels: Float32Array[] = [];
+  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+    channels.push(buffer.getChannelData(channel));
+  }
+  let peak = 0;
+  for (const data of channels) {
+    for (let i = 0; i < searchEnd; i += 1) peak = Math.max(peak, Math.abs(data[i] as number));
+  }
+  if (peak === 0) return 0;
+  const threshold = peak * 10 ** (ONSET_THRESHOLD_DB / 20);
+  let first = searchEnd;
+  for (const data of channels) {
+    for (let i = 0; i < first; i += 1) {
+      if (Math.abs(data[i] as number) >= threshold) {
+        first = i;
+        break;
+      }
+    }
+  }
+  const trimmed = Math.max(0, first - Math.round(rate * ONSET_PREROLL_S)) / rate;
+  return Math.min(trimmed, MAX_ONSET_TRIM_S);
+}
 
 export function velocityToLayer(velocity: number): number {
   if (velocity < VELOCITY_LAYER_THRESHOLDS[0]) return 0;
@@ -55,6 +100,8 @@ interface LayerRoots {
 export class SampleBank {
   private manifest: SamplePackManifest | null = null;
   private readonly buffers = new Map<string, AudioBuffer>();
+  /** Each decoded file's onset; see `onsetOffsetOf`. */
+  private readonly onsets = new Map<string, number>();
   private readonly layers = new Map<number, LayerRoots>();
   private readonly listeners = new Set<(progress: SampleLoadProgress) => void>();
   private readonly inFlight = new Map<string, Promise<void>>();
@@ -182,6 +229,7 @@ export class SampleBank {
   releaseBuffers(): void {
     this.generation += 1;
     this.buffers.clear();
+    this.onsets.clear();
     for (const layer of this.layers.values()) layer.loadedRoots.length = 0;
     this.loadedFiles = 0;
     this.loadedBytes = 0;
@@ -243,6 +291,9 @@ export class SampleBank {
         // resolved, not the requested one, because it describes how loudly that
         // file was recorded — during a partial load those differ.
         gain: velocityGain(velocity, preferredLayer) * this.levelMatchFor(layerIndex),
+        offset: this.onsets.get(entry.file) ?? 0,
+        releaseTc: releaseTcFor(midi),
+        ...(midi >= UNDAMPED_FROM_MIDI ? { undamped: true } : {}),
       };
     }
     return null;
@@ -264,10 +315,13 @@ export class SampleBank {
       const buffer = this.buffers.get(region.file);
       if (!buffer) continue;
       const loop = manifest.files.find((entry) => entry.file === region.file)?.loop;
+      // An electric piano's tines are damped all the way up, by its own
+      // envelope; only the recording's lead-in is trimmed here.
       return {
         buffer,
         playbackRate: Math.pow(2, (midi - region.root + region.tune / 100) / 12),
         gain: clamped * clamped * region.gain * (manifest.levelMatch ?? 1),
+        offset: this.onsets.get(region.file) ?? 0,
         ...(loop ? { loop } : {}),
         ...(manifest.envelope ? { envelope: manifest.envelope } : {}),
       };
@@ -365,6 +419,7 @@ export class SampleBank {
         // Released mid-flight: discard rather than resurrect a freed buffer.
         if (generation !== this.generation) return;
         this.buffers.set(entry.file, buffer);
+        this.onsets.set(entry.file, onsetOffsetOf(buffer));
         const layer = this.layers.get(entry.layer);
         if (layer && !layer.loadedRoots.includes(entry.midi)) {
           layer.loadedRoots.push(entry.midi);

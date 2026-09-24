@@ -7,8 +7,14 @@ import {
 import { ExportError } from '@/utils/errors';
 import { audioEngine } from './AudioEngine';
 import { scheduleClicksForRange } from './MetronomeEngine';
+import type { SampleSelection } from './audioTypes';
 import { createPianoGraph } from './PianoGraphFactory';
-import { releaseSampleVoice, startSampleVoice } from './sampleVoice';
+import {
+  dampSampleVoice,
+  releaseSampleVoice,
+  startSampleVoice,
+  type SampleVoice,
+} from './sampleVoice';
 
 const RENDER_SAMPLE_RATE = 48_000;
 /** Ring-out after the last note: release plus the reverb tail. */
@@ -21,6 +27,41 @@ export const RENDER_WARN_MINUTES = 8;
 export interface OfflineRenderOptions {
   includeMetronome: boolean;
   metronomeVolume: number;
+}
+
+/**
+ * Schedule a whole take's notes (sorted, sustain already applied) as voices,
+ * the way the live engine sounds them: a key struck while its string still
+ * rings damps the old sound from the new note's start (`VoiceManager`'s
+ * `restrike`), so a pedalled repeated note is one string, not a pile of them.
+ * Returns how many notes had no decoded sample.
+ */
+export function scheduleTakeVoices(
+  context: BaseAudioContext,
+  destination: AudioNode,
+  notes: readonly { midi: number; velocity: number; startMs: number; durationMs: number }[],
+  sampleFor: (midi: number, velocity: number) => SampleSelection | null,
+): number {
+  let missing = 0;
+  const sounding = new Map<number, SampleVoice>();
+  for (const note of notes) {
+    const sample = sampleFor(note.midi, note.velocity);
+    if (!sample) {
+      missing += 1;
+      continue;
+    }
+    const when = note.startMs / 1000;
+    const previous = sounding.get(note.midi);
+    // Still held (or never damped, up where there are no dampers) when the key
+    // comes down again: that sound gives way to this one.
+    if (previous && (previous.releaseTime === undefined || previous.releaseTime > when)) {
+      dampSampleVoice(previous, when);
+    }
+    const voice = startSampleVoice(context, destination, sample, when);
+    releaseSampleVoice(voice, when + note.durationMs / 1000);
+    sounding.set(note.midi, voice);
+  }
+  return missing;
 }
 
 export function estimateRenderSeconds(take: Take): number {
@@ -80,18 +121,12 @@ export async function renderTakeToBuffer(
   });
 
   const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
-  let missingSamples = 0;
-  for (const note of effectiveNotes) {
-    const sample = audioEngine.bank.getSample(note.midi, note.velocity);
-    if (!sample) {
-      missingSamples += 1;
-      continue;
-    }
-    const when = note.startMs / 1000;
-    const releaseAt = when + note.durationMs / 1000;
-    const voice = startSampleVoice(context, graph.voiceDestination, sample, when);
-    releaseSampleVoice(voice, releaseAt);
-  }
+  const missingSamples = scheduleTakeVoices(
+    context,
+    graph.voiceDestination,
+    effectiveNotes,
+    (midi, velocity) => audioEngine.bank.getSample(midi, velocity),
+  );
   if (missingSamples > 0) {
     throw new ExportError(
       `${missingSamples} notes had no decoded sample`,
