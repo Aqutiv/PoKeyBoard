@@ -124,6 +124,12 @@ describe('chords', () => {
     expect(spell(notes)).toEqual(['E', 'G#', 'B']);
   });
 
+  it('counts a key held down however long ago it was struck', () => {
+    // A C held for ten seconds, and a note 3.1 s in: still C–A♭, not a lone G♯.
+    const notes = [note('c', 60, 0, 10_000), note('a', 68, 3100, 400)];
+    expect(spell(notes)).toEqual(['C', 'Ab']);
+  });
+
   it('spells a doubled note the same in every octave', () => {
     expect(spell(chord([56, 64, 68, 71]))).toEqual(['G#', 'E', 'G#', 'B']);
   });

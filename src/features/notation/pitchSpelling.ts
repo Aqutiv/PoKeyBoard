@@ -287,8 +287,9 @@ function findResolutions(
 }
 
 /**
- * How far back a note still sounding under the pedal counts as the harmony a
- * chord is spelled against.
+ * How far back a note the pedal alone keeps sounding counts as the harmony a
+ * chord is spelled against. A key still held down counts however long ago it
+ * was struck.
  */
 const HELD_CONTEXT_MS = 3_000;
 
@@ -383,15 +384,18 @@ export function spellNotes(
     clock = onset;
     const centre = (tuning.keyWeight * prior + pull) / (tuning.keyWeight + weight);
 
-    // Still sounding, and recent: a pedal held down for a whole piece keeps
-    // every note sounding, but harmony a few seconds back has nothing to say
-    // about this chord — and keeping all of it would make every chord rescan
-    // the whole take.
-    held = held.filter(
-      (index) =>
-        (ends[index] as number) > onset + CHORD_WINDOW_MS &&
-        (notes[index] as NoteEvent).startMs > onset - HELD_CONTEXT_MS,
-    );
+    // Still sounding. A key held down is harmony however long it has been
+    // held; one the pedal alone keeps sounding only while it is recent. A pedal
+    // held for a whole piece keeps every note sounding, but harmony a few
+    // seconds back has nothing to say about this chord — and keeping all of it
+    // would make every chord rescan the whole take. Held keys are few, however
+    // long the piece.
+    const threshold = onset + CHORD_WINDOW_MS;
+    held = held.filter((index) => {
+      const note = notes[index] as NoteEvent;
+      if ((ends[index] as number) <= threshold) return false;
+      return note.startMs + note.durationMs > threshold || note.startMs > onset - HELD_CONTEXT_MS;
+    });
     let anchors: AnchorSpan | null = null;
     for (const index of held) {
       const position = positions[index] as number;
