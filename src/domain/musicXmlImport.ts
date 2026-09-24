@@ -20,7 +20,9 @@ import {
   MAX_TUPLET_NOTES,
   type NoteClef,
   type NoteEvent,
+  type NoteSpelling,
   type NoteStaff,
+  type NoteStep,
   type NoteTuplet,
   type PedalEvent,
   type QuantizationSetting,
@@ -77,6 +79,7 @@ interface QNote {
   voice: number | undefined;
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
+  spelling: NoteSpelling | undefined;
 }
 
 interface QPedal {
@@ -99,6 +102,7 @@ interface PendingTie {
   voice: number | undefined;
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
+  spelling: NoteSpelling | undefined;
 }
 
 interface CollectedScore {
@@ -164,6 +168,7 @@ function pendingToNote(pending: PendingTie): QNote {
     voice: pending.voice,
     clef: pending.clef,
     tuplet: pending.tuplet,
+    spelling: pending.spelling,
   };
 }
 
@@ -544,6 +549,12 @@ function collectPart(
           if (pitchClass === undefined || octave === null) break;
           const midi = 12 * (Math.round(octave) + 1) + pitchClass + Math.round(alter);
           if (!isValidMidi(midi)) break;
+          // The letter the composer wrote, kept for the notation. A microtonal
+          // alter sounds rounded to the nearest key and has no spelling to keep.
+          const spelling: NoteSpelling | undefined =
+            Number.isInteger(alter) && Math.abs(alter) <= 2
+              ? { step: step as NoteStep, alter }
+              : undefined;
 
           const percent = attrNumber(el, 'dynamics') ?? dynamicsPercent ?? DEFAULT_DYNAMICS_PERCENT;
           const velocity = clamp((percent / 100) * (FORTE_MIDI_VELOCITY / 127), 0, 1);
@@ -573,17 +584,47 @@ function collectPart(
                 pendingTies.set(key, pending); // middle of a chain
               else out.notes.push(pendingToNote(pending));
             } else if (hasStart) {
-              pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef, tuplet });
+              pendingTies.set(key, {
+                midi,
+                onsetQ,
+                endQ,
+                velocity,
+                staff,
+                voice,
+                clef,
+                tuplet,
+                spelling,
+              });
             } else {
               // orphan stop
-              out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet });
+              out.notes.push({
+                midi,
+                onsetQ,
+                durQ,
+                velocity,
+                staff,
+                voice,
+                clef,
+                tuplet,
+                spelling,
+              });
             }
           } else if (hasStart) {
             const stale = pendingTies.get(key);
             if (stale) out.notes.push(pendingToNote(stale));
-            pendingTies.set(key, { midi, onsetQ, endQ, velocity, staff, voice, clef, tuplet });
+            pendingTies.set(key, {
+              midi,
+              onsetQ,
+              endQ,
+              velocity,
+              staff,
+              voice,
+              clef,
+              tuplet,
+              spelling,
+            });
           } else {
-            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet });
+            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet, spelling });
           }
           break;
         }
@@ -818,6 +859,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
       ...(note.clef !== undefined ? { clef: note.clef } : {}),
       ...(note.tuplet !== undefined ? { tuplet: note.tuplet } : {}),
+      ...(note.spelling !== undefined ? { spelling: note.spelling } : {}),
     };
   });
   let maxEndMs = 0;

@@ -1,7 +1,7 @@
 import type { AccidentalKind } from './keySignature';
 
 /**
- * Sharp, flat and natural, drawn from paths so that no music font is needed
+ * Sharp, flat, natural and their doubles, drawn from paths so that no music font is needed
  * and the live score and the printed page show the same shapes. Everything
  * scales from `gap`, a staff space, and each glyph is centred on the line or
  * space its note sits on; the caller has set `fillStyle`/`strokeStyle`.
@@ -82,6 +82,36 @@ function drawNatural(ctx: CanvasRenderingContext2D, x: number, y: number, gap: n
   }
 }
 
+/**
+ * Double sharp: a small saltire with square ends, a space tall — much smaller
+ * than a sharp, which is how it is told from one at a glance.
+ */
+function drawDoubleSharp(ctx: CanvasRenderingContext2D, x: number, y: number, gap: number): void {
+  const arm = 0.36 * gap;
+  ctx.lineWidth = gap * 0.15;
+  ctx.beginPath();
+  ctx.moveTo(x - arm, y - arm);
+  ctx.lineTo(x + arm, y + arm);
+  ctx.moveTo(x + arm, y - arm);
+  ctx.lineTo(x - arm, y + arm);
+  ctx.stroke();
+  const corner = 0.16 * gap;
+  for (const [dx, dy] of [
+    [-1, -1],
+    [1, -1],
+    [-1, 1],
+    [1, 1],
+  ] as const) {
+    ctx.fillRect(x + dx * arm - corner, y + dy * arm - corner, 2 * corner, 2 * corner);
+  }
+}
+
+/** Double flat: two flats side by side, drawn a little closer than two would sit. */
+function drawDoubleFlat(ctx: CanvasRenderingContext2D, x: number, y: number, gap: number): void {
+  drawFlat(ctx, x - 0.27 * gap, y, gap);
+  drawFlat(ctx, x + 0.27 * gap, y, gap);
+}
+
 export function drawAccidentalGlyph(
   ctx: CanvasRenderingContext2D,
   kind: AccidentalKind,
@@ -91,5 +121,7 @@ export function drawAccidentalGlyph(
 ): void {
   if (kind === '#') drawSharp(ctx, x, y, gap);
   else if (kind === 'b') drawFlat(ctx, x, y, gap);
+  else if (kind === 'x') drawDoubleSharp(ctx, x, y, gap);
+  else if (kind === 'bb') drawDoubleFlat(ctx, x, y, gap);
   else drawNatural(ctx, x, y, gap);
 }

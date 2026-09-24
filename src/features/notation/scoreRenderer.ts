@@ -19,6 +19,7 @@ import {
   type LaidOutNote,
   type ScoreLayout,
 } from './notationLayout';
+import { spellInKey } from './pitchSpelling';
 import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
 import { drawRestGlyph } from './restGlyph';
 import { restStep } from './rests';
@@ -28,6 +29,7 @@ import {
   midiToStaffPosition,
   type ClefKind,
   type StaffKind,
+  type StaffPosition,
 } from './staffMapping';
 
 /** Staff geometry (CSS pixels; the canvas is DPR-scaled by the component). */
@@ -486,7 +488,7 @@ export function drawScore(
   const beamLines = computeBeamLines(view, input.layout);
   drawBeams(ctx, beamLines, palette);
   drawChords(ctx, view, input, palette, beamLines);
-  drawOpenNotes(ctx, view, input.openNotes, input.recording, palette);
+  drawOpenNotes(ctx, view, input, palette);
   drawGhosts(ctx, view, input, palette);
   // Clefs go on last: this view is time-proportional, so nothing can reserve
   // room for one, and a clef that gets painted over is worse than one that
@@ -1112,16 +1114,27 @@ function drawFlags(
   }
 }
 
+/**
+ * Where a note not laid out yet is drawn — a key held while recording, or the
+ * ghost of one just played — on the line the key spells it on, so it does not
+ * jump to another when the layout takes it over.
+ */
+function previewPosition(midi: number, input: ScoreRenderInput): StaffPosition {
+  const fifths = normalizeFifths(input.keySignature);
+  const spelled = spellInKey(midi, { fifths, mode: input.layout.keyMode });
+  return midiToStaffPosition(midi, undefined, undefined, fifths, spelled);
+}
+
 function drawOpenNotes(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
-  openNotes: readonly OpenRecordingNote[],
-  recording: boolean,
+  input: ScoreRenderInput,
   palette: ScorePalette,
 ): void {
+  const { openNotes, recording } = input;
   if (!recording || openNotes.length === 0) return;
   for (const open of openNotes) {
-    const position = midiToStaffPosition(open.midi);
+    const position = previewPosition(open.midi, input);
     const y = yForStep(view, position.staff, position.step);
     const x = xForMs(view, open.startMs);
     const width = Math.max(6, open.durationMs * view.pxPerMs);
@@ -1148,7 +1161,7 @@ function drawGhosts(
   if (input.ghosts.length === 0) return;
   const x = Math.max(view.gutterPx + 14, xForMs(view, input.playheadMs));
   for (const ghost of input.ghosts) {
-    const position = midiToStaffPosition(ghost.midi);
+    const position = previewPosition(ghost.midi, input);
     const y = yForStep(view, position.staff, position.step);
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, ghost.life));

@@ -125,6 +125,21 @@ export interface NoteTuplet {
   group?: number;
 }
 
+/** A note's letter, as MusicXML's `<step>` writes it. */
+export type NoteStep = 'C' | 'D' | 'E' | 'F' | 'G' | 'A' | 'B';
+
+/**
+ * How the source score wrote a pitch: its letter and how far that letter is
+ * altered, −2 (double flat) to 2 (double sharp) — MusicXML's `<step>` and
+ * `<alter>`. Engraving-only, like the other hints: a take stores the key that
+ * sounds, and 70 is B♭ or A♯ only on paper. A composer's spelling beats any
+ * guess, so a note that carries one is written exactly that way.
+ */
+export interface NoteSpelling {
+  step: NoteStep;
+  alter: number;
+}
+
 export interface NoteEvent {
   id: string;
   midi: number;
@@ -155,6 +170,11 @@ export interface NoteEvent {
    * tuplets from the playing instead.
    */
   tuplet?: NoteTuplet;
+  /**
+   * How the source spelled this note; see `NoteSpelling`. Absent for recorded
+   * takes, which are spelled from their key and context instead.
+   */
+  spelling?: NoteSpelling;
 }
 
 export interface PedalEvent {

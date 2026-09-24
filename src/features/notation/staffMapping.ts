@@ -5,6 +5,7 @@ import {
   letterPitchClass,
   spellingsFor,
   type AccidentalKind,
+  type Spelling,
 } from './keySignature';
 
 /**
@@ -69,15 +70,20 @@ export interface StaffPosition {
  * independent, so a bass staff under a G clef puts a high left hand on the
  * staff instead of a ladder of ledger lines. It defaults to the staff's own
  * clef, which is what every recorded take uses.
+ *
+ * `spelled` is the letter the note is written on, where something has read it
+ * in context (see pitchSpelling.ts); without it the key's own table decides,
+ * which is right for a lone note and all a live preview has to go on.
  */
 export function midiToStaffPosition(
   midi: number,
   staffHint?: StaffKind,
   clefHint?: ClefKind,
   fifths = 0,
+  spelled?: Spelling,
 ): StaffPosition {
   const pitchClass = ((midi % 12) + 12) % 12;
-  const spelling = spellingsFor(fifths)[pitchClass] as { letter: number; alter: number };
+  const spelling = spelled ?? (spellingsFor(fifths)[pitchClass] as Spelling);
 
   // A letter can belong to the octave next door: B sharp sounds as the C above
   // it but is written on B's line, and C flat the other way about.
