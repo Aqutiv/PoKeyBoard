@@ -11,6 +11,7 @@ import {
 } from '@/features/library/catalog';
 import { DEFAULT_LIBRARY_FOLDER, LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { buildLibraryTake } from '@/features/library/trackBuilder';
+import { detectFifths } from '@/features/notation/keyDetection';
 import { MIDI_MAX, MIDI_MIN } from '@/utils/midi';
 
 describe('library catalog', () => {
@@ -26,6 +27,7 @@ describe('library catalog', () => {
       'good-night',
       'moonlight-sonata',
       'where-starlight-lingers',
+      'silverwood-tale',
     ]);
   });
 
@@ -38,6 +40,7 @@ describe('library catalog', () => {
       'blues-in-c',
       'good-night',
       'where-starlight-lingers',
+      'silverwood-tale',
     ]);
     // Classics leads with the authored transcriptions, then the vendored pack.
     expect(
@@ -215,6 +218,37 @@ describe('library catalog', () => {
     // The last bar is A minor add 9 over an open bass, struck once and left ringing.
     const finalChord = notes.filter((note) => note.startMs >= 75_804);
     expect(finalChord.map((note) => note.midi)).toEqual([33, 40, 45, 69, 72, 76, 83]);
+  });
+
+  it('tells the Silverwood Tale in one flat, and lets no note ring into the next bar', () => {
+    const take = getLibraryTake(libraryTakeId('silverwood-tale'));
+    expect(take?.tempo.bpm).toBe(72);
+    expect(take?.tempo.timeSignature).toEqual({ numerator: 6, denominator: 8 });
+    // The ballad at 96, the dragon's roar at 116, the last bell at 48.
+    const bpms = take?.tempo.changes?.map((change) => change.bpm) ?? [];
+    expect(bpms).toHaveLength(20);
+    expect(bpms[1]).toBe(96);
+    expect(Math.max(...bpms)).toBe(116);
+    expect(bpms.at(-1)).toBe(48);
+
+    const notes = take?.notes ?? [];
+    // The notation reads a single key from the pitches and spells everything
+    // else towards its side, so the piece keeps every colour on the flat side:
+    // one flat, and no F sharp, which that key would print as G flat.
+    expect(detectFifths(notes)).toBe(-1);
+    expect(notes.filter((note) => note.midi % 12 === 6)).toEqual([]);
+    expect(notes.every((note) => note.staff !== undefined)).toBe(true);
+
+    // The pedal goes down on every bar line, and a note released right on one
+    // is caught by it and rings through the whole next bar.
+    const pedalDowns = new Set(
+      take?.pedalEvents.filter((event) => event.down).map((event) => event.atMs),
+    );
+    expect(notes.filter((note) => pedalDowns.has(note.startMs + note.durationMs))).toEqual([]);
+
+    // The book closes on F with its ninth, spread up to a bell on A6.
+    const finalChord = notes.filter((note) => note.startMs >= 118_000);
+    expect(finalChord.map((note) => note.midi)).toEqual([29, 48, 57, 67, 72, 77, 81, 93]);
   });
 
   it('summaries mirror the built takes', () => {
