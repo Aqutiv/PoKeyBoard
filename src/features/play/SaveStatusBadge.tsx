@@ -24,9 +24,10 @@ export function SaveStatusBadge() {
       </span>
     );
   }
+  // Deliberately not a live region: autosave runs after every edit, playhead
+  // moves included, so announcing it would talk over the music. Failures above
+  // are the only save news worth interrupting for.
   return (
-    <span className="save-status" role="status">
-      {status === 'saving' ? m.save.saving : m.save.savedLocally}
-    </span>
+    <span className="save-status">{status === 'saving' ? m.save.saving : m.save.savedLocally}</span>
   );
 }
