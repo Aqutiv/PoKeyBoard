@@ -91,6 +91,23 @@ test('Now playing disappears when playback finishes naturally', async ({ page })
   await expect(bar).toHaveCount(0);
 });
 
+test('opening the actions of the take that is playing keeps it playing', async ({ page }) => {
+  await gotoAppReady(page);
+  // Long enough to still be sounding after the trip to Takes.
+  await recordShortTake(page, 2000);
+  await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+  await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+  await nav(page).getByRole('button', { name: 'Takes' }).click();
+  const bar = page.getByRole('complementary', { name: 'Now playing' });
+  await expect(bar.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+
+  // Opening the row prepares its share file; that used to stop the transport.
+  await page.getByRole('button', { name: 'More actions for Untitled take' }).click();
+  await expect(page.getByRole('button', { name: 'Share JSON' })).toBeEnabled();
+  await expect(bar.getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await expect(bar.getByRole('button', { name: 'Resume', exact: true })).toHaveCount(0);
+});
+
 test('scrubbing before playback does not show Now playing, but scrubbing a pause keeps Resume', async ({
   page,
 }) => {
