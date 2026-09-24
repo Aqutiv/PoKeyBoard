@@ -201,6 +201,8 @@ export const fr: Messages = {
         'L’Adagio sostenuto de Beethoven, complet : de lents triolets au clair de lune sous une mélodie qui chante à mi-voix.',
       whereStarlightLingers:
         'Un nocturne enchanteur de deux minutes pour piano : une tendre mélodie se déploie entre harmonies lumineuses, voix entrelacées et élan passionné, avant de revenir à un adieu intime qui se prolonge.',
+      silverwoodTale:
+        'Un conte fantastique original en 6/8 : une boîte à musique ouvre le livre de contes, une ballade vagabonde s’enfonce dans une forêt enchantée, et la vieille chanson rompt le sortilège d’un dragon endormi pour un envol à l’aube.',
     },
   },
   learn: {

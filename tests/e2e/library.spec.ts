@@ -59,7 +59,7 @@ test.describe('library folders', () => {
       'aria-pressed',
       'true',
     );
-    await expect(trackButtons(page)).toHaveCount(7);
+    await expect(trackButtons(page)).toHaveCount(8);
     await expect(page.getByRole('button', { name: 'Open A Beautiful Day' })).toBeVisible();
 
     await folders(page).getByRole('button', { name: 'Classics' }).click();

@@ -309,6 +309,7 @@ export interface Messages {
       goodNight: string;
       moonlightSonata: string;
       whereStarlightLingers: string;
+      silverwoodTale: string;
     };
   };
   learn: {

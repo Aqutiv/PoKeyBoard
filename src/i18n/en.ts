@@ -201,6 +201,8 @@ export const en: Messages = {
         'Beethoven’s Adagio sostenuto, complete — slow moonlit triplets beneath a quiet singing melody.',
       whereStarlightLingers:
         'An enchanting two-minute piano nocturne: a tender melody unfolds through luminous harmonies, interwoven voices, and a passionate ascent before returning to a lingering, intimate farewell.',
+      silverwoodTale:
+        'An original fantasy tale in 6/8: a music box opens the storybook, a wanderer’s ballad winds through an enchanted wood, and the old song breaks the spell on a sleeping dragon for a flight at dawn.',
     },
   },
   learn: {
