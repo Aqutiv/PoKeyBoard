@@ -3,12 +3,7 @@ import { TakeTitle } from './TakeTitle';
 import { useState, useSyncExternalStore } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useTransportState } from '@/app/hooks/useTransport';
-import {
-  usePlaybackActiveHands,
-  usePlaybackPedalDown,
-  useTrainingTargets,
-  useTrainingWrongMidis,
-} from '@/app/hooks/useActiveMidis';
+import { useTrainingTargets, useTrainingWrongMidis } from '@/app/hooks/useActiveMidis';
 import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { lifecycleService } from '@/app/lifecycle';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -20,6 +15,7 @@ import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useMessages } from '@/i18n/i18nContext';
+import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { SaveStatusBadge } from './SaveStatusBadge';
 
@@ -42,8 +38,7 @@ export function PlayPage() {
   const takeId = useTakeStore((s) => s.take.id);
   const isLibrary = isLibraryTakeId(takeId);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
-  const playbackActiveHands = usePlaybackActiveHands();
-  const playbackPedalDown = usePlaybackPedalDown();
+  const followPlayback = useSettingsStore((s) => s.keyboardFollowsPlayback);
   const trainingTargets = useTrainingTargets();
   const trainingWrong = useTrainingWrongMidis();
   // In short landscape the metronome row does not fit; a compact subset is
@@ -135,8 +130,8 @@ export function PlayPage() {
         )}
         <div className="play-layout__keyboard">
           <PianoKeyboard
-            extraActiveHands={playbackActiveHands}
-            playbackPedalDown={playbackPedalDown}
+            playbackCues
+            followPlayback={followPlayback}
             targetMidis={trainingTargets}
             wrongMidis={trainingWrong}
             revealTargets

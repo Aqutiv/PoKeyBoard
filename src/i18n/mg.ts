@@ -459,6 +459,7 @@ export const mg: Messages = {
     velocityFixed: 'Raikitra',
     fixedVelocity: 'Hafainganam-pandeha raikitra',
     noteLabels: 'Anaran’ny naoty eo amin’ny kitendry',
+    followPlayback: 'Manaraka ny famerenana ny klavie',
     scrubAudition: 'Feo rehefa mandalo ny sori-kira',
     backgroundPlayback: 'Tohizo any ambadika ny fandefasana',
     backgroundPlaybackHint:

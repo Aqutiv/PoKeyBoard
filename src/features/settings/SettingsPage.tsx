@@ -142,6 +142,14 @@ export function SettingsPage() {
           />
         </label>
         <label className="setting-row">
+          <span>{m.settings.followPlayback}</span>
+          <input
+            type="checkbox"
+            checked={settings.keyboardFollowsPlayback}
+            onChange={(e) => settings.setKeyboardFollowsPlayback(e.target.checked)}
+          />
+        </label>
+        <label className="setting-row">
           <span>{m.settings.scrubAudition}</span>
           <input
             type="checkbox"

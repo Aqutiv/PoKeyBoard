@@ -456,6 +456,7 @@ export const en: Messages = {
     velocityFixed: 'Fixed',
     fixedVelocity: 'Fixed velocity',
     noteLabels: 'Note labels on keys',
+    followPlayback: 'Keyboard follows playback',
     scrubAudition: 'Sound while scrubbing the score',
     backgroundPlayback: 'Continue playback in the background',
     backgroundPlaybackHint:
