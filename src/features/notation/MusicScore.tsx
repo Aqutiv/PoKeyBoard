@@ -115,6 +115,12 @@ export function MusicScore() {
   const baseRef = useRef(basePxPerMs);
   /** Schedule a frame if none is coming; see the render loop below. */
   const wakeRef = useRef<() => void>(() => {});
+  /**
+   * Where the playhead was when the player put the score somewhere of their
+   * own — a wheel zoom around the pointer — or null. Until the playhead moves,
+   * the score stays where they put it, even with the playhead out of view.
+   */
+  const heldScrollAtRef = useRef<number | null>(null);
   const ghostsRef = useRef<LiveGhost[]>([]);
   const scrollMsRef = useRef(0);
   /** Design pixels → screen pixels; written by the render loop. */
@@ -247,9 +253,14 @@ export function MusicScore() {
       const musicLeft = gutterPx + SCORE_LEAD_IN;
       const anchorOffsetMs = ((viewWidth - musicLeft) * PLAYHEAD_ANCHOR) / pxPerMs;
       const moving = currentState === 'playing' || currentState === 'recording';
+      if (heldScrollAtRef.current !== null && (moving || heldScrollAtRef.current !== playheadMs)) {
+        heldScrollAtRef.current = null;
+      }
       if (moving) {
         scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
-      } else {
+      } else if (heldScrollAtRef.current === null) {
+        // Keep the playhead in view — a seek, a take opened — unless the
+        // player has just put the score somewhere else themselves.
         const x = musicLeft + (playheadMs - scrollMsRef.current) * pxPerMs;
         if (x < gutterPx - 1 || x > viewWidth - 20) {
           scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
@@ -335,6 +346,7 @@ export function MusicScore() {
         const after = baseRef.current * next;
         const atMs = scrollMsRef.current + (anchorX - musicLeft) / before;
         scrollMsRef.current = Math.max(0, atMs - (anchorX - musicLeft) / after);
+        heldScrollAtRef.current = transportController.getPlayheadMs();
       }
       zoomRef.current = next;
       setDisplayZoom(next);
