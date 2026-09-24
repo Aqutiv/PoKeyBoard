@@ -18,7 +18,9 @@ import {
   type DurationSymbol,
 } from './quantization';
 import { readDynamics, type DynamicEvent, type HairpinEvent } from './dynamics';
+import { detectMode } from './keyDetection';
 import { accidentalFor, normalizeFifths, type AccidentalKind } from './keySignature';
+import { spellNotes, type KeyMode } from './pitchSpelling';
 import {
   barUnits,
   exactValueForUnits,
@@ -205,6 +207,8 @@ export interface ScoreLayout {
   barMs: number;
   /** Layout extent in ms — always whole measures. */
   totalMs: number;
+  /** Whether the key signature was read as major or minor when spelling. */
+  keyMode: KeyMode;
 }
 
 export interface LayoutOptions {
@@ -212,11 +216,17 @@ export interface LayoutOptions {
   timeSignature: TimeSignature;
   quantization: QuantizationSetting;
   /**
-   * Sharps (positive) or flats (negative) the score is written with. Decides
-   * how black keys are spelled and what the prefix prints; C major by default,
-   * which spells every one of them as a sharp.
+   * Sharps (positive) or flats (negative) the score is written with. What the
+   * prefix prints, and the key every note is spelled against; C major by
+   * default.
    */
   keySignature?: number;
+  /**
+   * Whether that signature is read as its major key or its relative minor,
+   * which decides how accidentals lean (see pitchSpelling.ts). Read from the
+   * notes when not given.
+   */
+  keyMode?: KeyMode;
   /** The take's pedal events; engraved as brackets under the bass staff. */
   pedals?: readonly PedalEvent[];
   /** Tempo marks after the first, from the take (`tempo.changes`). */
@@ -1171,8 +1181,22 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   };
 
   const fifths = normalizeFifths(options.keySignature ?? 0);
-  const laidOut: LaidOutNote[] = notes.map((note) => {
-    const position = midiToStaffPosition(note.midi, note.staff, note.clef, fifths);
+  // Spelled all at once: a note's letter depends on the chord it sounds in and
+  // the note it moves to, not on its pitch alone.
+  const keyMode = options.keyMode ?? detectMode(notes, fifths);
+  const spellings = spellNotes(
+    notes,
+    { fifths, mode: keyMode },
+    pedalSpans(options.pedals ?? [], Number.POSITIVE_INFINITY),
+  );
+  const laidOut: LaidOutNote[] = notes.map((note, index) => {
+    const position = midiToStaffPosition(
+      note.midi,
+      note.staff,
+      note.clef,
+      fifths,
+      spellings[index],
+    );
     const division = divisionFor(note);
     return {
       id: note.id,
@@ -1318,6 +1342,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     measures,
     barMs,
     totalMs,
+    keyMode,
   };
 }
 

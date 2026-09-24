@@ -130,7 +130,9 @@ describe('ties', () => {
     const layout = layoutScore(
       [
         note({ id: 'held', midi: 73, startMs: 1500, durationMs: 1000 }), // C#5 over the bar
-        note({ id: 'after', midi: 72, startMs: 2500, durationMs: 500 }), // C natural, same line
+        // A step away first: falling straight to C would make the held note D flat.
+        note({ id: 'step', midi: 76, startMs: 2500, durationMs: 250 }),
+        note({ id: 'after', midi: 72, startMs: 2750, durationMs: 500 }), // C natural, same line
       ],
       OPTS,
     );

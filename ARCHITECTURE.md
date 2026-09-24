@@ -29,7 +29,8 @@ src/
     learn/      chapter catalog, pure exercise spec + matcher, useExercise,
                 LearnPage (outline), ChapterRunner, KeyboardDiagram,
                 StaffSnippet, per-locale lesson content
-    notation/   staffMapping, quantization, notationLayout, scoreRenderer
+    notation/   staffMapping, pitchSpelling (letters in context), keyDetection
+                (key and mode), quantization, notationLayout, scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
                 scrubController, sheetLayout (pure paginated engraving),
                 sheetRenderer (print-style page canvas)

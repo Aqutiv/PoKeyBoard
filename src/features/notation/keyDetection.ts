@@ -1,4 +1,5 @@
 import { MAX_FIFTHS, type NoteEvent } from '@/domain/takeTypes';
+import type { KeyMode } from './pitchSpelling';
 
 /**
  * Guessing the key a take is in, for scores that never said.
@@ -24,6 +25,58 @@ const MIN_NOTES_TO_DETECT = 12;
 const MAJOR_FIFTHS = [0, -5, 2, -3, 4, -1, 6, 1, -4, 3, -2, 5];
 /** And of each minor tonic — the relative major, three semitones up. */
 const MINOR_FIFTHS = [-3, 4, -1, -6, 1, -4, 3, -2, 5, 0, -5, 2];
+
+/** How long each pitch class sounds, C first. */
+function pitchClassWeights(notes: readonly NoteEvent[]): number[] {
+  const weights = new Array<number>(12).fill(0);
+  for (const note of notes) {
+    const pitchClass = ((note.midi % 12) + 12) % 12;
+    weights[pitchClass] = (weights[pitchClass] as number) + Math.max(1, note.durationMs);
+  }
+  return weights;
+}
+
+/** Pearson correlation of the weights, read from `tonic`, against a profile. */
+function pearson(weights: readonly number[], profile: readonly number[], tonic: number): number {
+  let meanW = 0;
+  let meanP = 0;
+  for (let i = 0; i < 12; i += 1) {
+    meanW += weights[(i + tonic) % 12] as number;
+    meanP += profile[i] as number;
+  }
+  meanW /= 12;
+  meanP /= 12;
+  let covariance = 0;
+  let varianceW = 0;
+  let varianceP = 0;
+  for (let i = 0; i < 12; i += 1) {
+    const w = (weights[(i + tonic) % 12] as number) - meanW;
+    const p = (profile[i] as number) - meanP;
+    covariance += w * p;
+    varianceW += w * w;
+    varianceP += p * p;
+  }
+  return varianceW === 0 ? 0 : covariance / Math.sqrt(varianceW * varianceP);
+}
+
+/**
+ * Whether a take in this key signature is in its major key or its relative
+ * minor — four sharps being E major or C sharp minor alike.
+ *
+ * Only the two readings of the one signature are compared, by correlation
+ * rather than the raw products `detectFifths` ranks with: the minor profile
+ * weighs more in total, so a product would lean minor on a coin toss. Too
+ * little to go on is major, which spells the way the key table always did.
+ */
+export function detectMode(notes: readonly NoteEvent[], fifths: number): KeyMode {
+  if (notes.length < MIN_NOTES_TO_DETECT) return 'major';
+  const weights = pitchClassWeights(notes);
+  const majorTonic = (((fifths * 7) % 12) + 12) % 12;
+  const minorTonic = (majorTonic + 9) % 12;
+  return pearson(weights, MINOR_PROFILE, minorTonic) > pearson(weights, MAJOR_PROFILE, majorTonic)
+    ? 'minor'
+    : 'major';
+}
 
 function correlate(weights: readonly number[], profile: readonly number[], tonic: number): number {
   let total = 0;
