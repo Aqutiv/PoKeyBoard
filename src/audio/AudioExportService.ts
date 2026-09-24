@@ -286,8 +286,6 @@ class AudioExportService {
   ): Promise<ArrayBuffer> {
     // Transfer channel copies; the render itself stays untouched.
     const pcm = extractPcm(rendered, loudness);
-    const transfer = [pcm.left.buffer, pcm.right.buffer];
-    if (pcm.clicks) transfer.push(pcm.clicks.buffer);
 
     return new Promise<ArrayBuffer>((resolve, reject) => {
       let worker: Worker;
@@ -343,10 +341,10 @@ class AudioExportService {
           bitrateKbps,
           left: pcm.left.buffer,
           right: pcm.right.buffer,
-          clicks: pcm.clicks?.buffer ?? null,
+          clicks: pcm.clicks,
           loudness,
         },
-        transfer,
+        [pcm.left.buffer, pcm.right.buffer],
       );
     });
   }
@@ -359,12 +357,7 @@ function extractPcm(rendered: RenderedTake, loudness: LoudnessMode): ExportPcm {
   const right = new Float32Array(piano.length);
   piano.copyFromChannel(left, 0);
   piano.copyFromChannel(right, piano.numberOfChannels > 1 ? 1 : 0);
-  let clickPcm: Float32Array<ArrayBuffer> | null = null;
-  if (clicks) {
-    clickPcm = new Float32Array(clicks.length);
-    clicks.copyFromChannel(clickPcm, 0);
-  }
-  return { sampleRate: piano.sampleRate, left, right, clicks: clickPcm, loudness };
+  return { sampleRate: piano.sampleRate, left, right, clicks, loudness };
 }
 
 export const audioExportService = new AudioExportService();

@@ -6,7 +6,8 @@ import {
 } from '@/features/transport/sustainPedal';
 import { ExportError } from '@/utils/errors';
 import { audioEngine } from './AudioEngine';
-import { scheduleClicksForRange } from './MetronomeEngine';
+import type { ClickTrack } from './loudness';
+import { CLICK_LENGTH_S, clickBeatsForRange, scheduleClick } from './MetronomeEngine';
 import { createPianoGraph } from './PianoGraphFactory';
 import { releaseSampleVoice, startSampleVoice } from './sampleVoice';
 
@@ -31,10 +32,10 @@ export interface RenderedTake {
   /** The piano and its reverb, stereo, at the app's default volume. */
   piano: AudioBuffer;
   /**
-   * The metronome, mono and as long as the piano, when asked for. Kept apart
-   * so its clicks never count toward how loud the piano is.
+   * The metronome, when asked for. Kept apart so its clicks never count
+   * toward how loud the piano is; see `ClickTrack`.
    */
-  clicks: AudioBuffer | null;
+  clicks: ClickTrack | null;
 }
 
 export function estimateRenderSeconds(take: Take): number {
@@ -119,25 +120,31 @@ export async function renderTakeForExport(
 
   const [piano, clicks] = await Promise.all([
     context.startRendering(),
-    options.includeMetronome ? renderClicks(take, options.metronomeVolume, length) : null,
+    options.includeMetronome ? renderClickTrack(take, options.metronomeVolume) : null,
   ]);
   return { piano, clicks };
 }
 
-/** The metronome alone, in a context of its own; see `RenderedTake.clicks`. */
-function renderClicks(take: Take, volume: number, length: number): Promise<AudioBuffer> {
-  const context = new OfflineAudioContext({
-    numberOfChannels: 1,
-    length,
-    sampleRate: RENDER_SAMPLE_RATE,
-  });
-  scheduleClicksForRange(
-    context,
-    context.destination,
-    take.tempo,
-    volume,
-    0,
-    effectivePlaybackDurationMs(take),
-  );
-  return context.startRendering();
+/** The take's clicks, and the two sounds they are made of; see `ClickTrack`. */
+async function renderClickTrack(take: Take, volume: number): Promise<ClickTrack> {
+  const render = async (accent: boolean): Promise<Float32Array> => {
+    const context = new OfflineAudioContext({
+      numberOfChannels: 1,
+      length: Math.ceil(CLICK_LENGTH_S * RENDER_SAMPLE_RATE),
+      sampleRate: RENDER_SAMPLE_RATE,
+    });
+    const gain = context.createGain();
+    gain.gain.value = volume;
+    gain.connect(context.destination);
+    scheduleClick(context, gain, 0, accent);
+    return (await context.startRendering()).getChannelData(0);
+  };
+  const beats = clickBeatsForRange(take.tempo, 0, effectivePlaybackDurationMs(take));
+  const [accentSound, beatSound] = await Promise.all([render(true), render(false)]);
+  return {
+    atS: Float64Array.from(beats, (beat) => beat.atS),
+    accent: Uint8Array.from(beats, (beat) => (beat.accent ? 1 : 0)),
+    accentSound,
+    beatSound,
+  };
 }

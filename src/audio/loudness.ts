@@ -283,12 +283,16 @@ export function limitTruePeak(
     minValue[(head + size) % window] = wanted;
     size += 1;
 
+    // The minimum for the window starting at `frame`. Windows that start before
+    // the first frame are still counted, over the frames they do reach: a loud
+    // attack in the take's first few milliseconds has to be brought down in time
+    // as much as any other.
     const frame = n - window + 1;
-    if (frame < 0) continue;
     const minimum = minValue[head] as number;
-    const slot = frame % window;
+    const slot = ((frame % window) + window) % window;
     minimaSum += minimum - (minima[slot] as number);
     minima[slot] = minimum;
+    if (frame < 0) continue;
     gain = Math.min(minimaSum / window, gain + (1 - gain) * recover);
     if (gain < deepest) deepest = gain;
     if (gain < 1) {
@@ -336,6 +340,40 @@ const LIVE_MAKEUP_DB = 2.9;
  */
 const CLICK_LEVEL = 0.5;
 
+/**
+ * The metronome as an export mixes it: one accented click and one plain one,
+ * each rendered the way the live metronome sounds, and where each click of the
+ * take falls. A few kilobytes, where a rendered click track would be another
+ * full-length channel.
+ */
+export interface ClickTrack {
+  /** Seconds from the start of the take. */
+  atS: Float64Array;
+  /** 1 where the click is a bar's accent. */
+  accent: Uint8Array;
+  accentSound: Float32Array;
+  beatSound: Float32Array;
+}
+
+/** Add every click of `track` to both channels, at `CLICK_LEVEL`. */
+function mixClicks(
+  left: Float32Array,
+  right: Float32Array,
+  track: ClickTrack,
+  sampleRate: number,
+): void {
+  for (let c = 0; c < track.atS.length; c += 1) {
+    const sound = track.accent[c] ? track.accentSound : track.beatSound;
+    const at = Math.round((track.atS[c] as number) * sampleRate);
+    const end = Math.min(sound.length, left.length - at);
+    for (let j = Math.max(0, -at); j < end; j += 1) {
+      const click = (sound[j] as number) * CLICK_LEVEL;
+      left[at + j] = (left[at + j] as number) + click;
+      right[at + j] = (right[at + j] as number) + click;
+    }
+  }
+}
+
 export interface MasteringResult {
   /** The piano's loudness as rendered, before anything here touched it. */
   renderedLufs: number;
@@ -354,7 +392,7 @@ export interface MasteringResult {
 export function masterExport(
   left: Float32Array,
   right: Float32Array,
-  clicks: Float32Array | null,
+  clicks: ClickTrack | null,
   mode: LoudnessMode,
   sampleRate: number,
 ): MasteringResult {
@@ -369,10 +407,10 @@ export function masterExport(
     if (peak * gain > most) gain = most / peak;
   }
   for (let i = 0; i < left.length; i += 1) {
-    const click = clicks ? (clicks[i] ?? 0) * CLICK_LEVEL : 0;
-    left[i] = (left[i] as number) * gain + click;
-    right[i] = (right[i] as number) * gain + click;
+    left[i] = (left[i] as number) * gain;
+    right[i] = (right[i] as number) * gain;
   }
+  if (clicks) mixClicks(left, right, clicks, sampleRate);
   return {
     renderedLufs,
     gainDb: 20 * Math.log10(gain),

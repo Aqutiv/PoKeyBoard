@@ -1,5 +1,5 @@
 import { createMp3Encoder } from 'wasm-media-encoders';
-import { masterExport, type LoudnessMode } from './loudness';
+import { masterExport, type ClickTrack, type LoudnessMode } from './loudness';
 
 /** The only bitrates the app offers; matches the encoder's CBR union type. */
 export type ExportBitrateKbps = 128 | 192;
@@ -61,8 +61,8 @@ export interface ExportPcm {
   sampleRate: number;
   left: Float32Array;
   right: Float32Array;
-  /** Metronome clicks, mono, or null. */
-  clicks: Float32Array | null;
+  /** The metronome, or null; see `ClickTrack`. */
+  clicks: ClickTrack | null;
   loudness: LoudnessMode;
 }
 

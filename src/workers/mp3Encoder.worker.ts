@@ -1,4 +1,4 @@
-import type { LoudnessMode } from '@/audio/loudness';
+import type { ClickTrack, LoudnessMode } from '@/audio/loudness';
 import { finishMp3, type ExportBitrateKbps } from '@/audio/mp3Encode';
 
 /**
@@ -13,7 +13,8 @@ export interface EncodeRequest {
   bitrateKbps: ExportBitrateKbps;
   left: ArrayBuffer;
   right: ArrayBuffer;
-  clicks: ArrayBuffer | null;
+  /** Small enough to copy; only the PCM is transferred. */
+  clicks: ClickTrack | null;
   loudness: LoudnessMode;
 }
 
@@ -44,7 +45,7 @@ async function run(request: EncodeRequest): Promise<void> {
       sampleRate: request.sampleRate,
       left: new Float32Array(request.left),
       right: new Float32Array(request.right),
-      clicks: request.clicks ? new Float32Array(request.clicks) : null,
+      clicks: request.clicks,
       loudness: request.loudness,
     },
     request.bitrateKbps,

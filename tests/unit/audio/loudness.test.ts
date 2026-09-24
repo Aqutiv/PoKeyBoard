@@ -158,6 +158,13 @@ describe('the limiter', () => {
     expect(right[middle]! / rightBefore[middle]!).toBeCloseTo(ceiling / dbfs(3), 1);
   });
 
+  it('holds an attack in the take’s first milliseconds under the ceiling too', () => {
+    // Loud from the very first sample: the look-ahead has no past to ramp in.
+    const channels = stereo(sine(440, 3, 0.5));
+    limitTruePeak(channels, ceiling, RATE);
+    expect(truePeak(channels)).toBeLessThanOrEqual(ceiling * 1.001);
+  });
+
   it('does nothing to a signal already under the ceiling', () => {
     const original = sine(440, -3, 1);
     const channels = stereo(original);
@@ -205,15 +212,22 @@ describe('mastering an export', () => {
 
   it('mixes the metronome in without letting it count toward the level', () => {
     const piano = stereo(faded(sine(1000, -30, 10)));
-    const clicks = new Float32Array(piano[0]!.length);
-    for (let i = 0; i < clicks.length; i += RATE / 2) clicks[i] = 1;
+    // A click every half second, the bar's first one accented.
+    const clicks = {
+      atS: Float64Array.from({ length: 20 }, (_, i) => i / 2),
+      accent: Uint8Array.from({ length: 20 }, (_, i) => (i % 4 === 0 ? 1 : 0)),
+      accentSound: Float32Array.of(1, 0.5),
+      beatSound: Float32Array.of(0.6, 0.3),
+    };
     const without = masterExport(piano[0]!.slice(), piano[1]!.slice(), null, 'normalized', RATE);
     const [left, right] = piano;
     const withClicks = masterExport(left!, right!, clicks, 'normalized', RATE);
     expect(withClicks.gainDb).toBeCloseTo(without.gainDb, 5);
-    // Clicks join at half their level, over the piano.
-    const at = RATE * 2;
-    expect(left![at]).toBeCloseTo(0.5, 1);
+    // Each click joins at half its level, over the piano: an accent at 2 s,
+    // a plain click at 2.5 s, both channels alike.
+    expect(left![RATE * 2]).toBeCloseTo(0.5, 1);
+    expect(right![RATE * 2 + 1]).toBeCloseTo(0.25, 1);
+    expect(left![RATE * 2.5]).toBeCloseTo(0.3, 1);
   });
 
   it('leaves a take too quiet to measure at its played level', () => {

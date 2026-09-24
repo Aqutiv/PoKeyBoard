@@ -74,6 +74,8 @@ const SCHEDULE_AHEAD_S = 0.12;
 const ACCENT_FREQ = 1660;
 const BEAT_FREQ = 1108;
 const CLICK_DECAY_S = 0.045;
+/** How long one click sounds, from its start to the end of its tail. */
+export const CLICK_LENGTH_S = CLICK_DECAY_S + 0.02;
 
 /**
  * Scheduled-ahead metronome on the audio-context clock (never a raw
@@ -200,14 +202,32 @@ export function scheduleClick(
   osc.connect(env);
   env.connect(destination);
   osc.start(when);
-  osc.stop(when + CLICK_DECAY_S + 0.02);
+  osc.stop(when + CLICK_LENGTH_S);
 }
 
 /**
- * Schedule the clicks of a time range into an offline render. Beats come from
- * the take's tempo map, so an exported click track follows its tempo changes
- * exactly as the live one does.
+ * Where each click of a time range falls, in seconds from `fromMs`, and which
+ * are accents. Beats come from the take's tempo map, so a click track follows
+ * its tempo changes exactly as the live one does.
  */
+export function clickBeatsForRange(
+  tempo: TempoMapInput & { timeSignature: TimeSignature },
+  fromMs: number,
+  toMs: number,
+): Array<{ atS: number; accent: boolean }> {
+  const map = createTakeTempoMap(tempo);
+  const { numerator } = tempo.timeSignature;
+  const beats: Array<{ atS: number; accent: boolean }> = [];
+  const firstBeat = Math.max(0, Math.ceil(map.beatAtMs(fromMs)));
+  for (let beat = firstBeat; ; beat += 1) {
+    const atMs = map.msAtBeat(beat);
+    if (atMs > toMs) break;
+    beats.push({ atS: (atMs - fromMs) / 1000, accent: beat % numerator === 0 });
+  }
+  return beats;
+}
+
+/** Schedule the clicks of a time range into an offline render; see `clickBeatsForRange`. */
 export function scheduleClicksForRange(
   context: BaseAudioContext,
   destination: AudioNode,
@@ -219,12 +239,7 @@ export function scheduleClicksForRange(
   const gain = context.createGain();
   gain.gain.value = volume;
   gain.connect(destination);
-  const map = createTakeTempoMap(tempo);
-  const { numerator } = tempo.timeSignature;
-  const firstBeat = Math.max(0, Math.ceil(map.beatAtMs(fromMs)));
-  for (let beat = firstBeat; ; beat += 1) {
-    const atMs = map.msAtBeat(beat);
-    if (atMs > toMs) break;
-    scheduleClick(context, gain, (atMs - fromMs) / 1000, beat % numerator === 0);
+  for (const { atS, accent } of clickBeatsForRange(tempo, fromMs, toMs)) {
+    scheduleClick(context, gain, atS, accent);
   }
 }
