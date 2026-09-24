@@ -320,6 +320,9 @@ export interface ScorePalette {
   recordWash: string;
   ghost: string;
   playhead: string;
+  /** The passage playback repeats: a wash over it, and a line at each end. */
+  loopWash: string;
+  loopEdge: string;
   gutterBg: string;
   measureNumber: string;
   rest: string;
@@ -336,6 +339,8 @@ export const SCORE_PALETTES: Record<'dark' | 'light', ScorePalette> = {
     recordWash: 'rgba(229, 72, 77, 0.28)',
     ghost: 'rgba(242, 236, 223, 0.4)',
     playhead: '#f0b954',
+    loopWash: 'rgba(240, 185, 84, 0.1)',
+    loopEdge: 'rgba(240, 185, 84, 0.55)',
     gutterBg: 'rgba(29, 25, 22, 0.96)',
     measureNumber: '#b3a996',
     rest: '#9c9280',
@@ -350,6 +355,8 @@ export const SCORE_PALETTES: Record<'dark' | 'light', ScorePalette> = {
     recordWash: 'rgba(199, 62, 62, 0.22)',
     ghost: 'rgba(33, 29, 21, 0.35)',
     playhead: '#8a6410',
+    loopWash: 'rgba(138, 100, 16, 0.08)',
+    loopEdge: 'rgba(138, 100, 16, 0.5)',
     gutterBg: 'rgba(255, 253, 248, 0.96)',
     measureNumber: '#6b6353',
     rest: '#857c68',
@@ -418,6 +425,8 @@ export interface ScoreRenderInput {
    * Learn uses it so a lesson's stave and the keyboard under it agree.
    */
   litMidis?: ReadonlySet<number>;
+  /** The passage playback repeats, shaded behind the music. */
+  loop?: { startMs: number; endMs: number } | null;
 }
 
 function staffTopFor(view: ScoreView, staff: StaffKind): number {
@@ -471,6 +480,7 @@ export function drawScore(
   palette: ScorePalette,
 ): void {
   ctx.clearRect(0, 0, view.widthPx, view.heightPx);
+  if (input.loop) drawLoop(ctx, view, input.loop, palette);
   drawStaffLines(ctx, view, palette);
   drawMeasures(ctx, view, input.layout, palette);
   drawRests(ctx, view, input.layout, palette);
@@ -1165,6 +1175,32 @@ function drawGhosts(
     ctx.fill();
     ctx.restore();
   }
+}
+
+/** A wash behind the passage a loop repeats, with a line at each end. */
+function drawLoop(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  loop: { startMs: number; endMs: number },
+  palette: ScorePalette,
+): void {
+  const left = Math.max(view.gutterPx, xForMs(view, loop.startMs));
+  const right = Math.min(view.widthPx, xForMs(view, loop.endMs));
+  if (right <= left) return;
+  const top = view.trebleTop - 22;
+  const bottom = systemBottom(view) + 12;
+  ctx.fillStyle = palette.loopWash;
+  ctx.fillRect(left, top, right - left, bottom - top);
+  ctx.strokeStyle = palette.loopEdge;
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (const ms of [loop.startMs, loop.endMs]) {
+    const x = xForMs(view, ms);
+    if (x < view.gutterPx || x > view.widthPx) continue;
+    ctx.moveTo(x, top);
+    ctx.lineTo(x, bottom);
+  }
+  ctx.stroke();
 }
 
 function drawPlayhead(

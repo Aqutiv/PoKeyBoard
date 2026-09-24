@@ -203,6 +203,13 @@ export interface Messages {
     recording: string;
     emptyHint: string;
     seekPosition: string;
+    speed: string;
+    /** The speed menu's accessible name, with the speed in use. */
+    speedLabel: (p: { percent: number }) => string;
+    speedChoice: (p: { percent: number }) => string;
+    loopStart: string;
+    loopEnd: (p: { from: string }) => string;
+    loopClear: (p: { from: string; to: string }) => string;
   };
   metronome: {
     groupLabel: string;

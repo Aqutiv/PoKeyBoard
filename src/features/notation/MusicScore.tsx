@@ -76,6 +76,7 @@ export function MusicScore() {
   const pedalEvents = useTakeStore((s) => s.take.pedalEvents);
   const tempo = useTakeStore((s) => s.take.tempo);
   const zoom = useTakeStore((s) => s.take.display.zoom);
+  const loop = useTakeStore((s) => s.take.display.loop ?? null);
   const quantization = useTakeStore((s) => s.take.display.quantization);
   const setDisplayQuantization = useTakeStore((s) => s.setDisplayQuantization);
   const [lastNoteName, setLastNoteName] = useState<string | null>(null);
@@ -110,6 +111,7 @@ export function MusicScore() {
   const tempoRef = useRef<TempoSettings>(tempo);
   const keyRef = useRef(keySignature);
   const zoomRef = useRef(zoom);
+  const loopRef = useRef(loop);
   const ghostsRef = useRef<LiveGhost[]>([]);
   const scrollMsRef = useRef(0);
   /** Design pixels → screen pixels; written by the render loop. */
@@ -122,6 +124,9 @@ export function MusicScore() {
   useEffect(() => {
     durationRef.current = durationMs;
   }, [durationMs]);
+  useEffect(() => {
+    loopRef.current = loop;
+  }, [loop]);
 
   useEffect(() => {
     layoutBoxRef.current = { layout, geometry, version: layoutBoxRef.current.version + 1 };
@@ -274,6 +279,7 @@ export function MusicScore() {
             midi: g.midi,
             life: 1 - (now - g.bornAt) / GHOST_LIFE_MS,
           })),
+          loop: loopRef.current,
         },
         SCORE_PALETTES[theme],
       );

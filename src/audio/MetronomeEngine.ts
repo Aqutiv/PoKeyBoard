@@ -1,5 +1,5 @@
 import { createTakeTempoMap, type TempoMap, type TempoMapInput } from '@/domain/tempoMap';
-import type { TimeSignature } from '@/domain/takeTypes';
+import type { PlaybackLoop, TimeSignature } from '@/domain/takeTypes';
 
 export interface MetronomeConfig {
   volume: number;
@@ -56,16 +56,76 @@ export function takeClickGrid(
   };
 }
 
+/**
+ * What a click grid needs of a running transport: the timeline it plays, which
+ * keeps growing through a loop's passes (`TransportClock`'s virtual time), and
+ * the loop folding take time back, if there is one.
+ */
+export interface ClickTimeline {
+  audioTimeForVirtualMs(virtualMs: number): number;
+  virtualMsForAudioTime(audioTime: number): number;
+  readonly loop: PlaybackLoop | null;
+}
+
+/** Beats this close to a loop's edge are on it. */
+const LOOP_BEAT_TOLERANCE = 1e-6;
+
+/**
+ * The take's beat grid played round a loop. Click indices run on through the
+ * passes, as the clicks themselves do: the take's own beats up to the loop's
+ * end, then the beats inside the loop again and again. Each click keeps the
+ * accent of the beat it stands for, so a loop from a bar line clicks its bars.
+ */
+export function loopClickGrid(
+  map: TempoMap,
+  numerator: number,
+  timeline: ClickTimeline,
+  loop: PlaybackLoop,
+): ClickGrid {
+  const length = loop.endMs - loop.startMs;
+  /** The first beat inside the loop, and the first at or past its end. */
+  const first = Math.ceil(map.beatAtMs(loop.startMs) - LOOP_BEAT_TOLERANCE);
+  const end = Math.ceil(map.beatAtMs(loop.endMs) - LOOP_BEAT_TOLERANCE);
+  const perPass = end - first;
+  const beatOf = (index: number): { beat: number; pass: number } | null => {
+    if (index < end) return { beat: index, pass: 0 };
+    if (perPass <= 0) return null;
+    return {
+      beat: first + ((index - end) % perPass),
+      pass: 1 + Math.floor((index - end) / perPass),
+    };
+  };
+  return {
+    audioTimeAt: (index) => {
+      const at = beatOf(index);
+      if (!at) return Number.POSITIVE_INFINITY;
+      return timeline.audioTimeForVirtualMs(map.msAtBeat(at.beat) + at.pass * length);
+    },
+    isAccent: (index) => (beatOf(index)?.beat ?? 1) % numerator === 0,
+    indexAt: (audioTime) => {
+      const virtualMs = timeline.virtualMsForAudioTime(audioTime);
+      if (virtualMs < loop.endMs) return map.beatAtMs(virtualMs);
+      const pass = 1 + Math.floor((virtualMs - loop.endMs) / length);
+      const takeMs = loop.startMs + ((virtualMs - loop.endMs) % length);
+      return end + (pass - 1) * perPass + (map.beatAtMs(takeMs) - first);
+    },
+    numerator,
+  };
+}
+
 /** The grid a take implies, given a running transport clock. */
 export function gridForTake(
   tempo: TempoMapInput & { timeSignature: TimeSignature },
-  clock: { audioTimeForTakeMs: (ms: number) => number; takeMsForAudioTime: (t: number) => number },
+  clock: ClickTimeline,
 ): ClickGrid {
+  const map = createTakeTempoMap(tempo);
+  const { numerator } = tempo.timeSignature;
+  if (clock.loop) return loopClickGrid(map, numerator, clock, clock.loop);
   return takeClickGrid(
-    createTakeTempoMap(tempo),
-    tempo.timeSignature.numerator,
-    (ms) => clock.audioTimeForTakeMs(ms),
-    (audioTime) => clock.takeMsForAudioTime(audioTime),
+    map,
+    numerator,
+    (ms) => clock.audioTimeForVirtualMs(ms),
+    (audioTime) => clock.virtualMsForAudioTime(audioTime),
   );
 }
 
@@ -88,6 +148,8 @@ export class MetronomeEngine {
   private timer: ReturnType<typeof setInterval> | null = null;
   private grid: ClickGrid | null = null;
   private nextBeatIndex = 0;
+  /** The latest click already handed to the audio clock. */
+  private scheduledUntil = Number.NEGATIVE_INFINITY;
   private running = false;
 
   attach(context: AudioContext, destination: AudioNode = context.destination): void {
@@ -122,15 +184,17 @@ export class MetronomeEngine {
     this.stop();
     this.grid = grid;
     this.running = true;
+    this.scheduledUntil = Number.NEGATIVE_INFINITY;
     this.seekToNow();
     this.scheduleWindow();
     this.timer = setInterval(() => this.scheduleWindow(), LOOKAHEAD_INTERVAL_MS);
   }
 
   /**
-   * Swap the grid without interrupting the click — used when the tempo is
-   * edited mid-flight. Clicks already inside the scheduling horizon still
-   * sound at their old times.
+   * Swap the grid without interrupting the click — used when the tempo, the
+   * speed or the loop changes mid-flight. Clicks already inside the scheduling
+   * horizon still sound at their old times, and the new grid picks up after
+   * the last of them, so none sounds twice.
    */
   setGrid(grid: ClickGrid): void {
     this.grid = grid;
@@ -163,7 +227,8 @@ export class MetronomeEngine {
   private seekToNow(): void {
     const context = this.context;
     if (!context || !this.grid) return;
-    this.nextBeatIndex = Math.max(0, Math.ceil(this.grid.indexAt(context.currentTime)));
+    const from = Math.max(context.currentTime, this.scheduledUntil + 0.001);
+    this.nextBeatIndex = Math.max(0, Math.ceil(this.grid.indexAt(from)));
   }
 
   private scheduleWindow(): void {
@@ -177,6 +242,7 @@ export class MetronomeEngine {
       if (!Number.isFinite(beatTime) || beatTime > horizon) break;
       if (beatTime >= context.currentTime - 0.01) {
         scheduleClick(context, gain, beatTime, grid.isAccent(this.nextBeatIndex));
+        this.scheduledUntil = Math.max(this.scheduledUntil, beatTime);
       }
       this.nextBeatIndex += 1;
     }

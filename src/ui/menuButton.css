@@ -16,6 +16,11 @@
   border-radius: var(--radius-m);
   box-shadow: var(--shadow-2);
   z-index: 30;
+  /* A long list (the playback speeds) scrolls rather than running off a short
+     screen; the panel opens from near the top of the page, so this fits. */
+  max-height: min(420px, 70vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 .menu-button__panel--right {

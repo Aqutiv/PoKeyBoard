@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   constantClickGrid,
   gridForTake,
+  loopClickGrid,
   MetronomeEngine,
   scheduleClicksForRange,
   takeClickGrid,
@@ -104,10 +105,52 @@ describe('takeClickGrid', () => {
   });
 
   it('is built from a take and a clock by gridForTake', () => {
-    const clock = { audioTimeForTakeMs, takeMsForAudioTime };
+    const clock = {
+      audioTimeForVirtualMs: audioTimeForTakeMs,
+      virtualMsForAudioTime: takeMsForAudioTime,
+      loop: null,
+    };
     const built = gridForTake(MAPPED_TEMPO, clock);
     expect(built.audioTimeAt(96)).toBeCloseTo(grid.audioTimeAt(96), 6);
     expect(built.numerator).toBe(4);
+  });
+});
+
+describe('loopClickGrid', () => {
+  // 120 bpm in 4/4: a beat is 500 ms. The loop is bar 2 (2000–4000 ms), and
+  // the run is anchored so virtual time 0 is audio time 100.
+  const map = createTakeTempoMap({ bpm: 120, timeSignature: FOUR_FOUR });
+  const loop = { startMs: 2000, endMs: 4000 };
+  const timeline = {
+    audioTimeForVirtualMs: (ms: number) => 100 + ms / 1000,
+    virtualMsForAudioTime: (t: number) => (t - 100) * 1000,
+    loop,
+  };
+  const grid = loopClickGrid(map, 4, timeline, loop);
+
+  it('clicks up to the loop’s end, then round the loop again and again', () => {
+    // Beats 0–7 (to 4000 ms), then bar 2's four beats, pass after pass.
+    expect([6, 7, 8, 9, 12].map((i) => grid.audioTimeAt(i))).toEqual([103, 103.5, 104, 104.5, 106]);
+  });
+
+  it('accents the bar line each time round', () => {
+    expect([4, 8, 9, 12, 13].map((i) => grid.isAccent(i))).toEqual([
+      true,
+      true,
+      false,
+      true,
+      false,
+    ]);
+  });
+
+  it('inverts audio time back to a click, in whichever pass it falls', () => {
+    expect(grid.indexAt(104.5)).toBeCloseTo(9, 6);
+    expect(grid.indexAt(106.25)).toBeCloseTo(12.5, 6);
+  });
+
+  it('is what gridForTake builds for a clock that loops', () => {
+    const built = gridForTake({ bpm: 120, timeSignature: FOUR_FOUR }, timeline);
+    expect(built.audioTimeAt(12)).toBeCloseTo(106, 6);
   });
 });
 
@@ -147,6 +190,18 @@ describe('MetronomeEngine', () => {
     expect(engine.beatInBarAt(0)).toBe(0);
     expect(engine.beatInBarAt(1.2)).toBe(2);
     expect(engine.beatInBarAt(2.0)).toBe(0);
+    engine.stop();
+  });
+
+  it('never sounds a click twice when the grid is swapped', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 30, 4)); // clicks to 120 ms already scheduled
+    engine.setGrid(constantClickGrid(0, 30, 4));
+    engine.topUpSchedule();
+    const times = clicks.map((click) => click.when);
+    expect(new Set(times).size).toBe(times.length);
     engine.stop();
   });
 

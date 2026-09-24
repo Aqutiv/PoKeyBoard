@@ -6,7 +6,7 @@ test.describe('app shell and piano', () => {
     await gotoAppReady(page);
     await expect(nav(page)).toBeVisible();
     await expect(transport(page).getByRole('button', { name: 'Record, inactive' })).toBeVisible();
-    await expect(transport(page).getByRole('button', { name: 'Play' })).toBeVisible();
+    await expect(transport(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible();
     await expect(page.getByRole('img', { name: /Grand staff score/ })).toBeVisible();
     // A full default keyboard range is present.
     await expect(page.getByRole('button', { name: 'C3 key' })).toBeVisible();

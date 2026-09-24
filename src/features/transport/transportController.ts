@@ -7,12 +7,16 @@ import {
   type ClickGrid,
 } from '@/audio/MetronomeEngine';
 import { forkLibraryTake, isLibraryTakeId } from '@/domain/libraryTakes';
-import { computeTakeDurationMs, sortNotes } from '@/domain/noteEvents';
+import { computeTakeDurationMs, lowerBoundByStart, sortNotes } from '@/domain/noteEvents';
 import {
   MAX_NOTE_DURATION_MS,
+  MAX_PLAYBACK_SPEED,
   MAX_TAKE_MS,
+  MIN_PLAYBACK_SPEED,
   type NoteEvent,
   type PedalEvent,
+  type PlaybackLoop,
+  type Take,
 } from '@/domain/takeTypes';
 import { countInMsAt, createTakeTempoMap } from '@/domain/tempoMap';
 import { CHORD_WINDOW_MS, nextTrainingGate, type TrainingGate } from '@/domain/trainingGate';
@@ -22,7 +26,13 @@ import { newId } from '@/utils/ids';
 import { beatDurationMs, clamp } from '@/utils/timing';
 import { trainingHandFor, type RecordMode } from './modes';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
-import { TransportClock } from './transportClock';
+import {
+  foldIntoLoop,
+  loopPassAt,
+  MIN_LOOP_MS,
+  TransportClock,
+  type ClockRun,
+} from './transportClock';
 import {
   canTransition,
   transition,
@@ -37,6 +47,12 @@ const START_SLACK_S = 0.06;
 const PRACTICE_CLICK_LEAD_S = 0.05;
 /** How long a key the user got wrong stays lit; matches the scrub flash. */
 const WRONG_FLASH_MS = 260;
+/** A playback speed the transport will run at. */
+export function clampPlaybackSpeed(speed: number): number {
+  return Number.isFinite(speed)
+    ? Math.min(MAX_PLAYBACK_SPEED, Math.max(MIN_PLAYBACK_SPEED, speed))
+    : 1;
+}
 
 const EMPTY_MIDIS: ReadonlySet<number> = new Set();
 
@@ -82,9 +98,15 @@ export class TransportController {
   private playNotes: NoteEvent[] = [];
   private playCursor = 0;
   private playDurationMs = 0;
+  /** The passage this run repeats; none while recording. */
+  private playLoop: PlaybackLoop | null = null;
+  /** Which pass of the loop the scheduler's cursor is in; see `TransportClock`. */
+  private schedulePass = 0;
 
   // Training playback
   private trainingGate: TrainingGate | null = null;
+  /** Where the gate falls on the run's unwrapped timeline; see `TransportClock`. */
+  private trainingGateVirtualMs = 0;
   private trainingWaiting = false;
   private readonly trainingSatisfied = new Set<number>();
   private trainingInputUnsub: (() => void) | null = null;
@@ -307,9 +329,10 @@ export class TransportController {
     const map = createTakeTempoMap(tempo);
     const bpm = map.bpmAt(this.getPlayheadMs());
     const startAudioTime = audioEngine.currentTime + PRACTICE_CLICK_LEAD_S;
+    // At the speed playback will run, so the click is the one to practise to.
     return constantClickGrid(
       startAudioTime,
-      beatDurationMs(bpm, tempo.timeSignature),
+      beatDurationMs(bpm, tempo.timeSignature) / this.getSpeed(),
       tempo.timeSignature.numerator,
     );
   }
@@ -385,6 +408,8 @@ export class TransportController {
     const beat0 = audioEngine.currentTime + START_SLACK_S;
     this.recordStartMs = startPlayheadMs;
     this.recordAnchorAudioTime = beat0 + countMs / 1000;
+    // Recording always runs at the take's own speed, straight through.
+    this.playLoop = null;
     this.clock.start(startPlayheadMs, this.recordAnchorAudioTime);
 
     if (countMs > 0 || this.metronomeOn) {
@@ -530,8 +555,16 @@ export class TransportController {
     const notes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
     this.playDurationMs = effectivePlaybackDurationMs(take);
 
-    const fromMs = this.pausedPlayheadMs;
-    this.clock.start(fromMs, audioEngine.currentTime + START_SLACK_S);
+    const loop = this.loopFor(take);
+    // Playing from before the loop runs into it; from past its end, it starts
+    // at the top.
+    const fromMs =
+      loop && this.pausedPlayheadMs >= loop.endMs ? loop.startMs : this.pausedPlayheadMs;
+    this.playLoop = loop;
+    this.clock.start(fromMs, audioEngine.currentTime + START_SLACK_S, {
+      rate: this.getSpeed(),
+      loop,
+    });
     if (this.metronomeOn) {
       this.configureMetronome();
       this.metronome.start(this.takeGrid());
@@ -549,8 +582,8 @@ export class TransportController {
   private beginPlaybackScheduler(notes: NoteEvent[], fromMs: number, gateFromMs?: number): void {
     this.clearScheduler();
     this.playNotes = notes;
-    this.playCursor = notes.findIndex((note) => note.startMs >= fromMs);
-    if (this.playCursor === -1) this.playCursor = notes.length;
+    this.playCursor = lowerBoundByStart(notes, fromMs);
+    this.schedulePass = 0;
     // The gate must exist before the first tick. A note at the playhead sits
     // inside the lookahead, so an unarmed tick would queue the very note the
     // hold is about to ask for — the prompt would arrive after the answer.
@@ -572,34 +605,53 @@ export class TransportController {
       this.stop();
       return;
     }
+    // Everything here is on the run's unwrapped timeline (virtual time), where
+    // a loop's next pass is simply further on; see `TransportClock`.
+    const nowMs = this.clock.currentVirtualMs();
     // Training: stop dead on the gate rather than wherever this 25ms tick
     // landed, so the playhead parks exactly on the note being asked for.
-    const gateMs = this.trainingGate?.atMs ?? null;
-    if (gateMs !== null && this.clock.currentTakeMs() >= gateMs) {
+    const gateMs = this.trainingGate ? this.trainingGateVirtualMs : null;
+    if (gateMs !== null && nowMs >= gateMs) {
       this.beginTrainingWait();
       return;
     }
+    // The look-ahead is audio time; at half speed it covers half as much take.
     const horizonMs = Math.min(
-      this.clock.currentTakeMs() + SCHEDULE_AHEAD_MS,
+      nowMs + SCHEDULE_AHEAD_MS * this.clock.rate,
       gateMs === null ? Infinity : gateMs - 1,
     );
-    while (this.playCursor < this.playNotes.length) {
-      const note = this.playNotes[this.playCursor] as NoteEvent;
-      if (note.startMs > horizonMs) break;
-      if (this.trainingSkipNoteIds?.has(note.id)) {
+    const loop = this.playLoop;
+    const passMs = loop ? loop.endMs - loop.startMs : 0;
+    for (;;) {
+      const note = this.playNotes[this.playCursor];
+      if (note && (!loop || note.startMs < loop.endMs)) {
+        const atMs = note.startMs + this.schedulePass * passMs;
+        if (atMs > horizonMs) break;
         this.playCursor += 1;
+        if (this.trainingSkipNoteIds?.has(note.id)) continue;
+        // A loop lets every key go at its end, as hands leave the keys to
+        // start the passage again, rather than ringing on over its top.
+        const durationMs = loop
+          ? Math.min(note.durationMs, loop.endMs - note.startMs)
+          : note.durationMs;
+        audioEngine.scheduleNote(
+          { midi: note.midi, velocity: note.velocity, durationMs: durationMs / this.clock.rate },
+          this.clock.audioTimeForVirtualMs(atMs),
+          'playback',
+        );
         continue;
       }
-      audioEngine.scheduleNote(
-        { midi: note.midi, velocity: note.velocity, durationMs: note.durationMs },
-        this.clock.audioTimeForTakeMs(note.startMs),
-        'playback',
-      );
-      this.playCursor += 1;
+      // This pass is scheduled; the next starts at the loop's end, once that
+      // comes inside the look-ahead.
+      if (!loop || loop.endMs + this.schedulePass * passMs > horizonMs) break;
+      this.schedulePass += 1;
+      this.playCursor = lowerBoundByStart(this.playNotes, loop.startMs);
+      // The notes a training hold let through were played once, not forever.
+      this.trainingSkipNoteIds = null;
     }
     // Auto-pause at the end applies to normal playback only; an overdub pass
-    // keeps recording past the end of the existing take.
-    if (this.state === 'playing') {
+    // keeps recording past the end of the existing take, and a loop never ends.
+    if (this.state === 'playing' && !loop) {
       const durationMs = this.playDurationMs;
       if (this.playCursor >= this.playNotes.length && this.clock.currentTakeMs() >= durationMs) {
         this.pauseInternal(durationMs);
@@ -648,10 +700,11 @@ export class TransportController {
     if (this.state !== 'playing') return;
     // Notes inside the lookahead are already scheduled and will sound; a gate
     // on one of them would stop after it had been heard.
-    this.armTrainingGate(this.clock.currentTakeMs() + SCHEDULE_AHEAD_MS);
+    this.armTrainingGate(this.clock.currentVirtualMs() + SCHEDULE_AHEAD_MS * this.clock.rate);
     for (const listener of this.stateListeners) listener();
   }
 
+  /** Arm the next hold at or after `fromMs` on the run's unwrapped timeline. */
   private armTrainingGate(fromMs: number): void {
     this.trainingGate = null;
     // Only ever gates plain playback: an overdub pass sounds its backing
@@ -659,7 +712,26 @@ export class TransportController {
     if (this.state !== 'playing') return;
     const hand = trainingHandFor(useSettingsStore.getState().playbackMode);
     if (hand === null) return;
-    this.trainingGate = nextTrainingGate(this.playNotes, Math.max(0, fromMs), hand);
+    const loop = this.playLoop;
+    if (!loop) {
+      this.trainingGate = nextTrainingGate(this.playNotes, Math.max(0, fromMs), hand);
+      this.trainingGateVirtualMs = this.trainingGate?.atMs ?? 0;
+      return;
+    }
+    // Round a loop: the next hold this time round, or else the first of the
+    // next, where the passage starts again.
+    let pass = loopPassAt(loop, fromMs);
+    let takeMs = foldIntoLoop(loop, fromMs);
+    for (let tries = 0; tries < 2; tries += 1) {
+      const gate = nextTrainingGate(this.playNotes, Math.max(0, takeMs), hand);
+      if (gate && gate.atMs < loop.endMs) {
+        this.trainingGate = gate;
+        this.trainingGateVirtualMs = gate.atMs + pass * (loop.endMs - loop.startMs);
+        return;
+      }
+      pass += 1;
+      takeMs = loop.startMs;
+    }
   }
 
   private beginTrainingWait(): void {
@@ -710,6 +782,79 @@ export class TransportController {
     this.endTrainingWait();
     this.trainingGate = null;
     this.trainingSkipNoteIds = null;
+  }
+
+  // ------------------------------------------------- speed and loop --
+
+  /** How fast playback runs, 1 being the take's own speed. */
+  getSpeed(): number {
+    return clampPlaybackSpeed(useTakeStore.getState().take.display.speed ?? 1);
+  }
+
+  /**
+   * Play slower or faster, from this moment if playback is running: the note
+   * under way carries on and the rest follow at the new speed. Recording is
+   * unaffected — a pass always runs at the take's own speed.
+   */
+  setSpeed(speed: number): void {
+    const next = clampPlaybackSpeed(speed);
+    useTakeStore.getState().setPlaybackSpeed(next);
+    if (this.state === 'playing') {
+      this.retimeRun({ rate: next });
+    } else if (this.metronome.isRunning && (this.state === 'idle' || this.state === 'paused')) {
+      this.metronome.setGrid(this.practiceGrid());
+    }
+    for (const listener of this.stateListeners) listener();
+  }
+
+  /** The passage playback repeats, or null. */
+  getLoop(): PlaybackLoop | null {
+    return useTakeStore.getState().take.display.loop ?? null;
+  }
+
+  /**
+   * Repeat a passage, or stop repeating one. Mid-playback the run starts again
+   * from where it is — or from the top of the new loop, when that is outside it.
+   */
+  setLoop(loop: PlaybackLoop | null): void {
+    useTakeStore.getState().setPlaybackLoop(loop);
+    if (this.state === 'playing') {
+      this.pauseInternal(Math.round(this.clock.currentTakeMs()));
+      const next = this.loopFor(useTakeStore.getState().take);
+      if (next && (this.pausedPlayheadMs < next.startMs || this.pausedPlayheadMs >= next.endMs)) {
+        this.pausedPlayheadMs = next.startMs;
+      }
+      this.startPlayback(null);
+    }
+    for (const listener of this.stateListeners) listener();
+  }
+
+  /** A take's loop as a run can play it: inside the take, and long enough to repeat. */
+  private loopFor(take: Take): PlaybackLoop | null {
+    const loop = take.display.loop;
+    if (!loop) return null;
+    const endMs = Math.min(loop.endMs, effectivePlaybackDurationMs(take));
+    return endMs - loop.startMs >= MIN_LOOP_MS ? { startMs: loop.startMs, endMs } : null;
+  }
+
+  /** Carry a running playback on from here under a new rate. */
+  private retimeRun(run: ClockRun): void {
+    // The clock's unwrapped timeline starts again from here, so everything
+    // already placed on it by pass keeps its place relative to the playhead:
+    // the scheduler may be into the loop's next pass, and so may the next hold.
+    const loop = this.playLoop;
+    const passMs = loop ? loop.endMs - loop.startMs : 0;
+    const playheadPass = loop ? loopPassAt(loop, this.clock.currentVirtualMs()) : 0;
+    const gatePass =
+      loop && this.trainingGate
+        ? Math.round((this.trainingGateVirtualMs - this.trainingGate.atMs) / passMs)
+        : 0;
+    this.clock.retime(run);
+    this.schedulePass = Math.max(0, this.schedulePass - playheadPass);
+    if (loop && this.trainingGate) {
+      this.trainingGateVirtualMs = this.trainingGate.atMs + (gatePass - playheadPass) * passMs;
+    }
+    if (this.metronome.isRunning) this.metronome.setGrid(this.takeGrid());
   }
 
   pause(): void {

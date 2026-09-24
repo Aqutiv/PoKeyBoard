@@ -19,9 +19,11 @@ import {
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
   MAX_NOTE_VOICE,
+  MAX_PLAYBACK_SPEED,
   MAX_TAKE_MS,
   MAX_TEMPO_BPM,
   MAX_TEMPO_CHANGES,
+  MIN_PLAYBACK_SPEED,
   MIN_TEMPO_BPM,
   MAX_TUPLET_NOTES,
   MAX_TUPLET_UNIT,
@@ -115,10 +117,16 @@ export const instrumentSchema = z.object({
   reverbMix: z.number().min(0).max(1),
 });
 
+export const playbackLoopSchema = z
+  .object({ startMs: timelineMs, endMs: timelineMs })
+  .refine((loop) => loop.endMs > loop.startMs, { message: 'A loop must end after it starts' });
+
 export const displaySchema = z.object({
   quantization: z.enum(QUANTIZATION_SETTINGS),
   zoom: z.number().min(0.25).max(4),
   playheadMs: timelineMs,
+  speed: z.number().min(MIN_PLAYBACK_SPEED).max(MAX_PLAYBACK_SPEED).optional(),
+  loop: playbackLoopSchema.optional(),
 });
 
 /**
@@ -337,6 +345,29 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
     else display.zoom = Math.min(4, Math.max(0.25, display.zoom));
     const playhead = roundMs(display.playheadMs);
     display.playheadMs = playhead !== undefined && playhead >= 0 ? playhead : 0;
+    // Practice state: a speed out of range is clamped, and a loop that cannot
+    // be played is dropped rather than failing the take.
+    if (display.speed !== undefined) {
+      if (!isFiniteNumber(display.speed)) delete display.speed;
+      else
+        display.speed = Math.min(MAX_PLAYBACK_SPEED, Math.max(MIN_PLAYBACK_SPEED, display.speed));
+    }
+    if (display.loop !== undefined) {
+      const loop = display.loop as RawTakeData | null;
+      const startMs = roundMs(loop?.startMs);
+      const endMs = roundMs(loop?.endMs);
+      if (
+        startMs === undefined ||
+        endMs === undefined ||
+        startMs < 0 ||
+        endMs > MAX_TAKE_MS ||
+        endMs <= startMs
+      ) {
+        delete display.loop;
+      } else {
+        display.loop = { startMs, endMs };
+      }
+    }
     data.display = display;
   }
 

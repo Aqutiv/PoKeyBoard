@@ -13,7 +13,7 @@ export const mg: Messages = {
     recording: 'Fandraisam-peo',
     clickVolume: 'Hamafin’ny kitika',
     tempoHint:
-      'Manova ny metronome sy ny tsipika ao amin’ny solfa ny tempo, fa tsy ny hafainganam-pamerenana ny voarakitra.',
+      'Manova ny metronome sy ny tsipika ao amin’ny solfa ny tempo. Mba hamerenana moramora na haingana kokoa ny rakitra, ampiasao ny fifehezana ny hafainganana.',
     searchTakes: 'Hitady rakipeo',
     noTakesMatch: 'Tsy misy rakipeo mifanaraka amin’ny fikarohanao.',
     clearSearch: 'Hamafa fikarohana',
@@ -83,6 +83,12 @@ export const mg: Messages = {
     recording: '● Mandrakitra',
     emptyHint: 'Tsindrio ny fandraketana ary mitendria mba hahazoana rakitra.',
     seekPosition: 'Toerana fikarohana',
+    speed: 'Hafainganana',
+    speedLabel: ({ percent }) => `Hafainganam-pamerenana: ${percent}%`,
+    speedChoice: ({ percent }) => `${percent}%`,
+    loopStart: 'Averimbereno andalana iray: mariho ny fiandohany',
+    loopEnd: ({ from }) => `Averimbereno manomboka amin’ny ${from}: mariho ny fiafarany`,
+    loopClear: ({ from, to }) => `Atsaharo ny famerimberenana ${from}–${to}`,
   },
   metronome: {
     groupLabel: 'Metronoma',

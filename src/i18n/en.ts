@@ -13,7 +13,8 @@ export const en: Messages = {
     returnToPractice: 'Return to practice',
     recording: 'Recording',
     clickVolume: 'Click volume',
-    tempoHint: 'Tempo changes the metronome and score grid, not recorded playback speed.',
+    tempoHint:
+      'Tempo changes the metronome and score grid. To play a take slower or faster, use the speed control.',
     searchTakes: 'Search takes',
     noTakesMatch: 'No takes match your search.',
     clearSearch: 'Clear search',
@@ -82,6 +83,12 @@ export const en: Messages = {
     recording: '● Recording',
     emptyHint: 'Press record and play something to capture a take.',
     seekPosition: 'Seek position',
+    speed: 'Speed',
+    speedLabel: ({ percent }) => `Playback speed: ${percent}%`,
+    speedChoice: ({ percent }) => `${percent}%`,
+    loopStart: 'Loop a passage: mark where it starts',
+    loopEnd: ({ from }) => `Loop from ${from}: mark where it ends`,
+    loopClear: ({ from, to }) => `Stop looping ${from}–${to}`,
   },
   metronome: {
     groupLabel: 'Metronome',

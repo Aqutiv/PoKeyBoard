@@ -102,6 +102,35 @@ describe('parseTakeJson', () => {
     }
   });
 
+  it('round-trips a practice speed and loop, which are display state', () => {
+    const raw = specExampleTake();
+    raw.display = {
+      quantization: '1/16',
+      zoom: 1,
+      playheadMs: 0,
+      speed: 0.75,
+      loop: { startMs: 500, endMs: 4500 },
+    };
+    const { take, repairs } = parseTakeJson(raw);
+    expect(take.display.speed).toBe(0.75);
+    expect(take.display.loop).toEqual({ startMs: 500, endMs: 4500 });
+    expect(repairs).toEqual([]);
+  });
+
+  it('clamps a speed out of range and drops a loop that cannot play, keeping the take', () => {
+    const raw = specExampleTake();
+    raw.display = {
+      quantization: '1/16',
+      zoom: 1,
+      playheadMs: 0,
+      speed: 4,
+      loop: { startMs: 3000, endMs: 1000 },
+    };
+    const { take } = parseTakeJson(raw);
+    expect(take.display.speed).toBe(1.5);
+    expect(take.display.loop).toBeUndefined();
+  });
+
   it('rejects an unknown staff name', () => {
     const raw = specExampleTake();
     (raw.notes as Record<string, unknown>[])[0]!.staff = 'middle';

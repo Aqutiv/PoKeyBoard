@@ -31,3 +31,6 @@ export function trainingHandFor(mode: PlaybackMode): TrainingHand | null {
       return null;
   }
 }
+
+/** The speeds offered: slow enough to learn a passage, and a little past the take's own. */
+export const PLAYBACK_SPEEDS = [0.25, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9, 1, 1.25, 1.5] as const;

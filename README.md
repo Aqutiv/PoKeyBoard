@@ -82,7 +82,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 - Learn shows the available lesson count for the selected level. Expand **Upcoming lessons** to see the remaining curriculum.
 - A badge on Settings indicates a waiting update. Settings shows the running build's commit and date; updates still apply only when you choose at a safe time.
 
-The BPM field changes the metronome and score grid, including tempo changes from a chosen bar. It does **not** change the playback speed of recorded notes. Independent playback speed and A–B passage looping are separate future transport features.
+The BPM field changes the metronome and score grid, including tempo changes from a chosen bar. It does **not** change how fast recorded notes play back: the **speed** control beside the seek bar does, from 25% to 150%, without changing pitch (recording always runs at 100%). **A–B** repeats a passage: tap it as the passage starts and again as it ends — while playing or with the playhead parked at each end — and playback goes round it, the metronome and practice holds included, until a third tap. Both are kept with the take and never change its exported audio.
 
 ## Sharing audio
 
