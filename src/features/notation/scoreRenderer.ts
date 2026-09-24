@@ -38,7 +38,7 @@ export const STAFF_SPACING = 48;
 export const BASS_TOP = TREBLE_TOP + STAFF_H + STAFF_SPACING;
 export const SCORE_MIN_HEIGHT = BASS_TOP + STAFF_H + 38;
 /**
- * Gutter: brace, clefs, key signature and time signature; notes scroll beneath
+ * Gutter: system line, clefs, key signature and time signature; notes scroll beneath
  * it. `GUTTER` is what it takes in C major, and a key signature widens it —
  * seven accidentals need somewhere to go, and the alternative is drawing them
  * over the music.

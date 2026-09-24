@@ -161,10 +161,11 @@ takes seconds and never touches the audio engine.
 - A tuplet with no beam — a quarter-note triplet — carries no numeral, because
   the numeral is drawn on the beam and there is nowhere else to hang it.
   `<tuplet show-number="none">` is not honoured either.
-- Octave lines are derived from pitch alone. A run of chords sitting three
-  ledger lines or more beyond a staff is drawn an octave in under an `8va` or
-  `8vb`; a single stray note is left where it is, since a line and a label cost
-  a reader more than the ledger lines they save.
+- Octave lines are derived from pitch alone. A run of four or more chords
+  reaching the second ledger line beyond a staff (C6 over the treble, C2 under
+  the bass) is drawn an octave in under an `8va` or `8vb`; a single stray note
+  is left where it is, since a line and a label cost a reader more than the
+  ledger lines they save.
 - Articulations, slurs, ornaments and repeats are still not drawn.
 - A tuplet split between the hands — an arpeggio crossing the middle of the
   keyboard — is written with the right values on both staves and no numeral on

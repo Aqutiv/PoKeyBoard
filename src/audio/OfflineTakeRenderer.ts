@@ -65,7 +65,7 @@ export async function renderTakeToBuffer(
     if (note.midi < minMidi) minMidi = note.midi;
     if (note.midi > maxMidi) maxMidi = note.midi;
   }
-  await audioEngine.ensurePlayableRange(minMidi, maxMidi);
+  await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
 
   const length = Math.ceil(seconds * RENDER_SAMPLE_RATE);
   const context = new OfflineAudioContext({

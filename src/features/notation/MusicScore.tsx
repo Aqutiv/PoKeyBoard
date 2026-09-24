@@ -356,11 +356,9 @@ export function MusicScore() {
         onPointerUp={onScorePointerUp}
         onPointerCancel={onScorePointerCancel}
       />
-      {lastNoteName ? (
-        <div className="score__notename" aria-live="polite">
-          {lastNoteName}
-        </div>
-      ) : null}
+      {/* A visual echo only: as a live region it announced every note played,
+          over the very notes it was naming. */}
+      {lastNoteName ? <div className="score__notename">{lastNoteName}</div> : null}
       <label className="score__quant">
         <span className="visually-hidden">{m.score.displayQuantization}</span>
         <select

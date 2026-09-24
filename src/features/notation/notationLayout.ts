@@ -924,8 +924,8 @@ function deriveRests(
 }
 
 /** Steps beyond a staff at which its ledger lines stop being countable. */
-const OCTAVE_LINE_STEP_ABOVE = 12; // C6, three ledger lines over the treble
-const OCTAVE_LINE_STEP_BELOW = -4; // C2, three under the bass
+const OCTAVE_LINE_STEP_ABOVE = 12; // C6, on the second ledger line over the treble
+const OCTAVE_LINE_STEP_BELOW = -4; // C2, on the second ledger line under the bass
 /** One octave, in diatonic steps. */
 const OCTAVE_STEPS = 7;
 /** Chords in a row that must all be out there before a line is worth drawing. */

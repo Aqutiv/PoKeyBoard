@@ -7,7 +7,8 @@ import { audioEngine } from './AudioEngine';
  * keeps playing on every tab, long after the key bed has unmounted — so the
  * engine is told the union rather than whichever one moved last.
  * `ensurePlayableRange` also remembers its argument to reload after an
- * instrument switch, so a narrow caller must never be the last to speak.
+ * instrument switch, so a narrow caller must never be the last to speak —
+ * which is why one-off callers (export, lesson demos) pass `remember: false`.
  */
 export type RangeContributor = 'keyboard' | 'midi';
 

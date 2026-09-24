@@ -167,6 +167,50 @@ describe('SampleBank.releaseBuffers', () => {
   });
 });
 
+describe('SampleBank progress', () => {
+  it('counts the core pack apart from the extras loaded on demand', async () => {
+    const manifest = {
+      ...stubManifest(),
+      coreBytes: 100,
+      totalBytes: 400,
+      files: [
+        { file: 'c4.sample', midi: 60, layer: 0, pack: 'core' as const, bytes: 100 },
+        { file: 'c2.sample', midi: 36, layer: 0, pack: 'full' as const, bytes: 300 },
+      ],
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => manifest })
+        .mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(16) }),
+    );
+    const bank = new SampleBank('/samples/');
+    const context = stubContext();
+
+    await bank.loadCorePack(context);
+    // Readiness waits on the core alone, so a loading readout has to count the
+    // core alone — counted against the whole pack it stalled at a fraction.
+    expect(bank.getProgress()).toMatchObject({
+      phase: 'core-ready',
+      coreLoadedBytes: 100,
+      coreTotalBytes: 100,
+      loadedBytes: 100,
+      totalBytes: 400,
+    });
+
+    await bank.ensureRangeLoaded(context, 36, 36);
+    expect(bank.getProgress()).toMatchObject({
+      coreLoadedBytes: 100,
+      coreTotalBytes: 100,
+      loadedBytes: 400,
+    });
+
+    bank.releaseBuffers();
+    expect(bank.getProgress()).toMatchObject({ coreLoadedBytes: 0, coreTotalBytes: 100 });
+  });
+});
+
 describe('SampleBank retries', () => {
   it('rejects an incomplete core load and can retry while retaining progress', async () => {
     vi.useFakeTimers();

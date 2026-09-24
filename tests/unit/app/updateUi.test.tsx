@@ -12,6 +12,7 @@ const mock = vi.hoisted(() => ({
   state: 'idle' as TransportState,
   listeners: new Set<() => void>(),
   apply: vi.fn(),
+  check: vi.fn(),
   navigate: vi.fn(),
 }));
 vi.mock('@/pwa/updateManager', () => ({
@@ -24,6 +25,7 @@ vi.mock('@/pwa/updateManager', () => ({
       return () => mock.listeners.delete(listener);
     },
     applyUpdate: () => mock.apply(),
+    checkForUpdate: () => mock.check(),
   },
 }));
 vi.mock('@/app/hooks/useTransport', () => ({ useTransportState: () => mock.state }));
@@ -47,12 +49,15 @@ describe('update discovery and safe application', () => {
     mock.waiting = false;
     mock.state = 'idle';
     mock.apply.mockClear();
+    mock.check.mockClear();
   });
   afterEach(cleanup);
 
   it('shows the running build and reacts to a waiting update without applying it', () => {
     renderUi();
     expect(screen.getByText(en.settings.upToDate({ version: APP_BUILD_LABEL }))).toBeTruthy();
+    // "Up to date" is only worth saying after asking; opening Settings asks.
+    expect(mock.check).toHaveBeenCalledTimes(1);
     act(() => {
       mock.waiting = true;
       mock.listeners.forEach((listener) => listener());

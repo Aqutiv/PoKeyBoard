@@ -62,6 +62,8 @@ export class SampleBank {
   private phase: SampleLoadPhase = 'idle';
   private loadedFiles = 0;
   private loadedBytes = 0;
+  private coreLoadedBytes = 0;
+  private coreTotalBytes = 0;
   private lastError: string | undefined;
   private progressSnapshot: SampleLoadProgress | null = null;
   /** Bumped by releaseBuffers so in-flight decodes cannot repopulate. */
@@ -98,6 +100,7 @@ export class SampleBank {
         this.layers.set(entry.layer, layer);
       }
       layer.entries.set(entry.midi, entry);
+      if (entry.pack === 'core') this.coreTotalBytes += entry.bytes;
     }
     return manifest;
   }
@@ -182,6 +185,7 @@ export class SampleBank {
     for (const layer of this.layers.values()) layer.loadedRoots.length = 0;
     this.loadedFiles = 0;
     this.loadedBytes = 0;
+    this.coreLoadedBytes = 0;
     this.lastError = undefined;
     this.setPhase('idle');
   }
@@ -290,6 +294,8 @@ export class SampleBank {
         totalFiles: this.manifest?.files.length ?? 0,
         loadedBytes: this.loadedBytes,
         totalBytes: this.manifest?.totalBytes ?? 0,
+        coreLoadedBytes: this.coreLoadedBytes,
+        coreTotalBytes: this.coreTotalBytes,
       };
       if (this.lastError !== undefined) progress.error = this.lastError;
       this.progressSnapshot = progress;
@@ -366,6 +372,7 @@ export class SampleBank {
         }
         this.loadedFiles += 1;
         this.loadedBytes += entry.bytes;
+        if (entry.pack === 'core') this.coreLoadedBytes += entry.bytes;
         this.emit();
         return;
       } catch (error) {
