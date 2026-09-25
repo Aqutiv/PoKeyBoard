@@ -8,6 +8,7 @@ import {
   gutterWidthFor,
   SCORE_LEAD_IN,
   SCORE_PALETTES,
+  scoreEndMs,
   type ScoreRenderInput,
   type ScoreChrome,
   type ScoreView,
@@ -206,7 +207,7 @@ function render(
   staves: StaffMode = 'treble',
   /** `null` omits the property entirely, which is what the Play page does. */
   chrome: ScoreChrome | null = 'bare',
-  size: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs'>> = {},
+  overrides: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'continues'>> = {},
 ): Recorder {
   const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
@@ -222,7 +223,7 @@ function render(
     gutterPx: gutterWidthFor(0),
     staves,
     ...(chrome === null ? {} : { chrome }),
-    ...size,
+    ...overrides,
   };
   drawScore(
     recorder.ctx,
@@ -391,16 +392,19 @@ describe('drawScore lesson chrome', () => {
   it('suppresses the empty spill bar, as bare does', () => {
     // A bar that is exactly filled spills a second, empty measure into the
     // layout, and that measure brings a bar line and a whole rest with it. A
-    // lesson draws the music, not the silence after it.
-    //
-    // Counted through the bar line rather than the rest: a whole rest is a
-    // `fillRect`, and the recording context only sees `fill()`.
+    // lesson draws the music, not the silence after it. (Its closing line
+    // stands where the spill bar's opening one would, thick: see below.)
     const filled = bar([0, 1, 2, 3]);
-    const barLines = (drawn: Recorder) =>
-      drawn.strokes.filter((stroke) => stroke === SCORE_PALETTES.dark.barLine).length;
-    expect(barLines(render(filled, {}, 'treble', 'full'))).toBeGreaterThan(
-      barLines(render(filled, {}, 'treble', 'lesson')),
-    );
+    const spill = (drawn: Recorder) => ({
+      lines: drawn.paths.filter(
+        (path) => path.style === SCORE_PALETTES.dark.barLine && path.width === 1,
+      ).length,
+      // A whole rest is a block, drawn with `fillRect`.
+      rests: drawn.rects.filter((rect) => rect.style === rest).length,
+    });
+    const wide = { widthPx: 600 };
+    expect(spill(render(filled, {}, 'treble', 'full', wide))).toEqual({ lines: 1, rests: 1 });
+    expect(spill(render(filled, {}, 'treble', 'lesson', wide))).toEqual({ lines: 0, rests: 0 });
   });
 
   it('treats an unset chrome as full, which is what the Play page passes', () => {
@@ -661,5 +665,55 @@ describe('drawScore bar lines', () => {
     const wash = drawn.rects.find((rect) => rect.style === gutterBg && rect.x > gutterWidthFor(0));
     expect(wash).toBeDefined();
     expect((wash?.x ?? 0) + (wash?.width ?? 0)).toBeLessThanOrEqual(line);
+  });
+
+  describe('the closing line', () => {
+    /** Every final bar line's x: the thick ones. */
+    const finalLines = (drawn: Recorder): number[] =>
+      drawn.paths
+        .filter((path) => path.style === barLine && path.width === 2)
+        .map((path) => (path.points[0] as Point).x);
+
+    it.each(['lesson', 'bare'] as const)(
+      'ends a %s view at its last written bar, not after the empty bar it spills',
+      (chrome) => {
+        // A bar of quarters fills its bar, so the layout spills a second one.
+        const filled = quarters(1);
+        expect(filled.totalMs).toBe(8000);
+        const drawn = render(filled, {}, 'treble', chrome, WIDE);
+        expect(finalLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+        expect(barLines(drawn)).toEqual([]);
+      },
+    );
+
+    it('keeps the empty bar on the Play page, where a recording carries on into it', () => {
+      const drawn = render(quarters(1), {}, 'treble', null, WIDE);
+      expect(finalLines(drawn)).toEqual([Math.round(onsetX(8000)) + 0.5]);
+      expect(barLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+    });
+
+    it('closes a system the music runs on from with a plain bar line', () => {
+      const drawn = render(quarters(1), {}, 'treble', 'bare', { ...WIDE, continues: true });
+      expect(finalLines(drawn)).toEqual([]);
+      expect(barLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+    });
+
+    it('ends a bar left partly silent at the bar, not at its last note', () => {
+      const drawn = render({ ...bar([0, 1]), rests: [] }, {}, 'treble', 'lesson', WIDE);
+      expect(finalLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+    });
+
+    it('gives a snippet the span its closing line stands at', () => {
+      // `StaffSnippet` fits its width to this, so the line lands at its edge.
+      const filled = quarters(2);
+      expect(scoreEndMs(filled)).toBe(filled.totalMs);
+      expect(scoreEndMs(filled, 'full')).toBe(12000);
+      expect(scoreEndMs(filled, 'lesson')).toBe(8000);
+      expect(scoreEndMs(filled, 'bare')).toBe(8000);
+      // An empty stave still keeps its one bar.
+      const empty = layoutScore([], LAYOUT_OPTS);
+      expect(scoreEndMs(empty, 'lesson')).toBe(empty.totalMs);
+      expect(empty.totalMs).toBeGreaterThan(0);
+    });
   });
 });

@@ -436,6 +436,12 @@ export interface ScoreView {
    * bar. Defaults to 'full' — see `chromeOf`.
    */
   chrome?: ScoreChrome;
+  /**
+   * The music carries on in another view after this one — the next system of
+   * a lesson's line — so the view closes on a plain bar line. Without it the
+   * closing line is the final one, where the music ends.
+   */
+  continues?: boolean;
 }
 
 export interface GhostNote {
@@ -570,6 +576,24 @@ function beamIndexFor(layout: ScoreLayout): BeamIndex {
 
 function xForMs(view: ScoreView, ms: number): number {
   return view.gutterPx + SCORE_LEAD_IN + (ms - view.scrollMs) * view.pxPerMs;
+}
+
+/**
+ * Where the music drawn under `chrome` ends — where its closing bar line
+ * stands, and the span a view fitting the whole of it has to hold.
+ *
+ * A note that exactly fills its bar spills an empty bar into the layout. The
+ * Play page draws it: it is the room a recording carries on into. A lesson view
+ * draws the music and not the silence after it, so it ends with the last bar
+ * anything is written in.
+ */
+export function scoreEndMs(layout: ScoreLayout, chrome: ScoreChrome = 'full'): number {
+  if (chrome === 'full') return layout.totalMs;
+  for (let i = layout.measures.length - 1; i >= 0; i -= 1) {
+    const measure = layout.measures[i] as MeasureInfo;
+    if (!measure.empty) return measure.endMs;
+  }
+  return layout.totalMs;
 }
 
 /** Half the width of a chord's heads, a hollow head's stroke included. */
@@ -811,10 +835,11 @@ function drawMeasures(
       }
     }
   }
-  // Final bar line at the layout end.
-  const endX = Math.round(xForMs(view, layout.totalMs)) + 0.5;
+  // The closing bar line: the final one where the music ends, a plain one where
+  // it only breaks onto the next system.
+  const endX = Math.round(dividerX(view, layout, scoreEndMs(layout, chromeOf(view)))) + 0.5;
   if (endX > view.gutterPx && endX < view.widthPx + 4) {
-    ctx.lineWidth = 2;
+    ctx.lineWidth = view.continues ? 1 : 2;
     ctx.beginPath();
     for (const top of staffTops(view)) {
       ctx.moveTo(endX, top);

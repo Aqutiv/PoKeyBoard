@@ -8,6 +8,7 @@ import {
   gutterWidthFor,
   SCORE_LEAD_IN,
   SCORE_PALETTES,
+  scoreEndMs,
   type ScoreChrome,
   type ScoreGeometry,
   type StaffMode,
@@ -167,8 +168,11 @@ export function StaffSnippet({
         {
           layout,
           geometry: computeScoreGeometry(layout, { staves }),
-          // Fit the whole phrase, exactly as a single snippet always has.
-          spanMs: layout.totalMs,
+          // Fit the phrase's own bars. A note that fills its bar spills an
+          // empty one into the layout, which a lesson does not draw; fitted to
+          // the layout's whole length, the music took two thirds of the card
+          // and blank staff the rest.
+          spanMs: scoreEndMs(layout, chrome),
           noteIds: new Set(notes.map((note) => note.id)),
         },
       ];
@@ -191,7 +195,7 @@ export function StaffSnippet({
       });
     }
     return out;
-  }, [notes, phrase, showRests, staves, barsPerSystem, barCount, barMs]);
+  }, [notes, phrase, showRests, staves, chrome, barsPerSystem, barCount, barMs]);
 
   // Keep the system holding the due note in view as the attempt moves on. Not
   // on first paint: the card opens at its heading, and a lesson that scrolled
@@ -218,6 +222,9 @@ export function StaffSnippet({
           phrase={phrase}
           staves={staves}
           chrome={index === 0 ? chrome : 'bare'}
+          // Only the last system ends the line; the others close on a plain
+          // bar line, as a printed system does when the music runs on.
+          continues={index < systems.length - 1}
           litMidis={litMidis}
           litNoteIds={litNoteIds}
           // One picture, however many systems it takes: the first carries the
@@ -235,6 +242,7 @@ interface StaffSystemCanvasProps {
   phrase: LearnPhrase;
   staves: StaffMode;
   chrome: ScoreChrome;
+  continues: boolean;
   litMidis?: ReadonlySet<number>;
   litNoteIds?: ReadonlySet<string>;
   ariaLabel?: string;
@@ -246,6 +254,7 @@ function StaffSystemCanvas({
   phrase,
   staves,
   chrome,
+  continues,
   litMidis,
   litNoteIds,
   ariaLabel,
@@ -297,6 +306,7 @@ function StaffSystemCanvas({
           gutterPx,
           staves,
           chrome,
+          continues,
         },
         {
           layout,
@@ -318,7 +328,18 @@ function StaffSystemCanvas({
     // `litMidis` is safe to depend on by identity: the engine replaces its
     // active-note set only when the set actually changes, so an equal-but-new
     // object never reaches here. `litNoteIds` is memoized on the attempt.
-  }, [layout, geometry, spanMs, phrase.timeSignature, theme, litMidis, litNoteIds, staves, chrome]);
+  }, [
+    layout,
+    geometry,
+    spanMs,
+    phrase.timeSignature,
+    theme,
+    litMidis,
+    litNoteIds,
+    staves,
+    chrome,
+    continues,
+  ]);
 
   // A static canvas has no redraw loop of its own to catch a resize. Created
   // once and left alone; it calls whichever draw closure is current.
