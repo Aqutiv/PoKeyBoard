@@ -241,6 +241,39 @@ describe('shared sample voice', () => {
       expect(voices.activeMidis().has(60)).toBe(false);
     });
 
+    it('gives way to a strike playback queued before the key was played', () => {
+      // Playback's strike of the key is already queued, 150 ms off, when the
+      // player strikes it by hand: both must not sound together.
+      const { audio, destination, params, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 0.15, 1);
+      voices.noteOn(plain, 67, 'key');
+      expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.15, RESTRIKE_TC);
+      expect(sources[1]!.stop).toHaveBeenLastCalledWith(0.15 + RESTRIKE_TC * 8);
+      // Until then the key is the player's, lit while held.
+      expect(voices.activeMidis().has(67)).toBe(true);
+    });
+
+    it('still gives way to a strike that comes before the queued one', () => {
+      const { audio, context, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 0.15, 1);
+      voices.noteOn(plain, 67, 'midi'); // due to give way at 0.15
+      context.currentTime = 0.05;
+      voices.noteOn(plain, 67, 'pointer:1');
+      expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.05, RESTRIKE_TC);
+      expect(params[2]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.15, RESTRIKE_TC);
+    });
+
+    it('ignores a queued strike that a panic stop called off', () => {
+      const { audio, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 0.15, 1);
+      voices.allNotesOff(); // paused before it was due
+      voices.noteOn(plain, 67, 'key');
+      expect(params[1]!.setTargetAtTime).not.toHaveBeenCalled();
+    });
+
     it('stops lighting a held key once its sound has ended', () => {
       const { audio, destination, sources } = setup();
       const voices = new VoiceManager(audio, destination);

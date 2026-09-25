@@ -82,6 +82,14 @@ export class VoiceManager {
       heldByPedal: false,
       uiActive,
     };
+    // Playback schedules ahead, so a key struck by hand can land before a
+    // strike of it that playback has already queued: this sound gives way to
+    // that one when it comes, as the queued one would have to this.
+    const struckAgainAt = this.nextStrikeAfter(midi, when);
+    if (struckAgainAt !== undefined) {
+      dampSampleVoice(voice, struckAgainAt);
+      voice.restruck = true;
+    }
     this.voices.add(voice);
     voice.source.onended = () => {
       this.voices.delete(voice);
@@ -226,22 +234,27 @@ export class VoiceManager {
    * test `scheduleTakeVoices` makes, so an export sounds as playback does. That
    * includes one starting at the very same moment: a note two voices share is
    * one key struck once, not two strings sounding together. A note scheduled
-   * later is its own.
+   * later is its own, and this one gives way to it in turn; see `strike`.
    *
    * Returns the latest key-up still to come among the voices it damped, which
    * playback scheduled with their notes; see `scheduleNote`.
    *
    * Playback schedules ahead, so the new strike can still be to come. Then only
    * the fade is scheduled: until the strike, the key is its source's as before
-   * — lit while held, and let go normally if it is let go first.
+   * — lit while held, and let go normally if it is let go first. A sound due
+   * to give way to such a strike gives way sooner to one that comes first.
    */
   private restrike(midi: number, when: number): number {
     let heldUntil = Number.NEGATIVE_INFINITY;
     let changed = false;
     for (const voice of this.voices) {
-      if (voice.midi !== midi || voice.startTime > when || voice.restruck) continue;
+      if (voice.midi !== midi || voice.startTime > when) continue;
+      // Let go, or given way to another strike, before this one.
       if (voice.releaseTime !== undefined && voice.releaseTime <= when) continue;
-      if (voice.releaseTime !== undefined) heldUntil = Math.max(heldUntil, voice.releaseTime);
+      // A strike's fade is not a key-up: nothing is holding that key down.
+      if (voice.releaseTime !== undefined && !voice.restruck) {
+        heldUntil = Math.max(heldUntil, voice.releaseTime);
+      }
       dampSampleVoice(voice, when);
       voice.restruck = true;
       if (when > this.context.currentTime) continue;
@@ -254,6 +267,19 @@ export class VoiceManager {
     }
     if (changed) this.emitActive();
     return heldUntil;
+  }
+
+  /**
+   * The next strike of `midi` after `when` that playback has already queued,
+   * if any. One a panic stop cut off before it started never comes.
+   */
+  private nextStrikeAfter(midi: number, when: number): number | undefined {
+    let next: number | undefined;
+    for (const voice of this.voices) {
+      if (voice.midi !== midi || voice.startTime <= when || voice.releasing) continue;
+      if (next === undefined || voice.startTime < next) next = voice.startTime;
+    }
+    return next;
   }
 
   /**
