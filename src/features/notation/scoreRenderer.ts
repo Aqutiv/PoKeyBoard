@@ -677,10 +677,12 @@ function widestReachPx(layout: ScoreLayout): number {
  */
 function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
   const nominal = xForMs(view, ms);
-  // The line can stand a reach plus its lead off its time, and ink a further
-  // reach off that can still touch it; nothing further out can.
+  // A clef the bar changes to stands just before its line, and needs room.
+  const room = clefChangesAt(view, layout, ms) ? INLINE_CLEF_ROOM : 0;
+  // The line can stand a reach plus its lead and room off its time, and ink a
+  // further reach off that can still touch it; nothing further out can.
   const widest = widestReachPx(layout);
-  const searchMs = (widest * 2 + BAR_LINE_LEAD_PX + BAR_LINE_TRAIL_PX) / view.pxPerMs;
+  const searchMs = (widest * 2 + BAR_LINE_LEAD_PX + BAR_LINE_TRAIL_PX + room) / view.pxPerMs;
   const opens = ms - ON_THE_BAR_MS;
   /**
    * The rightmost ink of what starts before `ms` and the leftmost of the rest:
@@ -721,6 +723,16 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     reach(rest.displayStartMs, REST_HALF_WIDTH_PX, REST_HALF_WIDTH_PX);
   }
 
+  // Room for the clef first, where the music leaves it: clear of all the ink,
+  // or of the heads at least. Where it does not, the line is placed as any
+  // other, and the clef's wash lies under the notes it reaches.
+  if (room > 0) {
+    for (const { before, after } of [ink, heads]) {
+      const lowest = before + BAR_LINE_TRAIL_PX + room;
+      const highest = after - BAR_LINE_LEAD_PX;
+      if (lowest <= highest) return Math.min(Math.max(nominal, lowest), highest);
+    }
+  }
   for (const { before, after } of [ink, heads]) {
     const lowest = before + BAR_LINE_TRAIL_PX;
     const highest = after - BAR_LINE_LEAD_PX;
@@ -728,6 +740,18 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     if (before < after) return (before + after) / 2;
   }
   return (heads.before + heads.after) / 2;
+}
+
+/** Whether a staff this view draws changes clef on a bar starting at `ms`. */
+function clefChangesAt(view: ScoreView, layout: ScoreLayout, ms: number): boolean {
+  // Looked up a hair late, so a bar whose start is not a whole millisecond is
+  // still found from its rounded time.
+  const index = measureIndexAt(layout.measures, ms + ON_THE_BAR_MS);
+  if (index === null || index === 0) return false;
+  const measure = layout.measures[index] as MeasureInfo;
+  const previous = layout.measures[index - 1] as MeasureInfo;
+  if (Math.abs(measure.startMs - ms) > ON_THE_BAR_MS) return false;
+  return stavesOf(view).some((staff) => previous.clefs[staff] !== measure.clefs[staff]);
 }
 
 export function drawScore(
@@ -740,6 +764,9 @@ export function drawScore(
   if (input.loop) drawLoop(ctx, view, input.layout, input.loop, palette);
   drawStaffLines(ctx, view, palette);
   drawMeasures(ctx, view, input.layout, palette);
+  // A clef change's wash goes under the music: it clears the staff lines
+  // behind the clef, and a note it reaches is drawn over it, not erased.
+  drawClefChanges(ctx, view, input.layout, palette, 'wash');
   drawRests(ctx, view, input.layout, palette);
   drawPedals(ctx, view, input.layout, palette);
   drawOctaves(ctx, view, input.layout, palette);
@@ -752,10 +779,10 @@ export function drawScore(
   drawChords(ctx, view, input, palette, beamLines);
   drawOpenNotes(ctx, view, input, palette);
   drawGhosts(ctx, view, input, palette);
-  // Clefs go on last: this view is time-proportional, so nothing can reserve
-  // room for one, and a clef that gets painted over is worse than one that
-  // covers a note head for a moment.
-  drawClefChanges(ctx, view, input.layout, palette);
+  // Clefs go on last: this view is time-proportional, so there is not always
+  // room for one, and a clef that gets painted over is worse than one drawn
+  // across a note head for a moment.
+  drawClefChanges(ctx, view, input.layout, palette, 'clef');
   drawPlayhead(ctx, view, input.playheadMs, palette);
   drawGutter(ctx, view, input, palette);
 }
@@ -805,31 +832,32 @@ function drawMeasures(
     // bare view draws the music, not the silence around it.
     if (chromeOf(view) !== 'full' && measure.empty) continue;
     const x = Math.round(dividerX(view, layout, measure.startMs)) + 0.5;
-    if (x >= view.gutterPx - 8) {
-      // The first bar opens on the clef and time signature, as a printed
-      // system does. A line there as well would only stand between them and
-      // the first note.
-      if (measure.index > 0) {
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        for (const top of staffTops(view)) {
-          ctx.moveTo(x, top);
-          ctx.lineTo(x, top + STAFF_H);
-        }
-        ctx.stroke();
+    const onset = Math.round(xForMs(view, measure.startMs)) + 0.5;
+    // The first bar opens on the clef and time signature, as a printed system
+    // does. A line there as well would only stand between them and the first
+    // note.
+    if (measure.index > 0 && x >= view.gutterPx - 8) {
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      for (const top of staffTops(view)) {
+        ctx.moveTo(x, top);
+        ctx.lineTo(x, top + STAFF_H);
       }
-      // A measure number describes the bar, not the notes — noise when the
-      // whole picture is one note being read.
-      if (chromeOf(view) === 'full') {
-        ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
-      }
+      ctx.stroke();
+    }
+    // A measure number describes the bar, not the notes — noise when the whole
+    // picture is one note being read. It stands at the bar's line, and the
+    // first bar, which has none, keeps it over its downbeat: its line's place
+    // can fall back into the gutter behind an opening chord's accidentals.
+    const numberX = measure.index > 0 ? x : onset;
+    if (chromeOf(view) === 'full' && numberX >= view.gutterPx - 8) {
+      ctx.fillText(String(measure.index + 1), numberX + 3, view.trebleTop - 8);
     }
     // A new tempo is announced where it takes over, as on paper: from the
     // downbeat, clear of its head — not from the line, which stands off it.
     // So it shows for as long as the downbeat does, even once the line has
     // gone under the gutter.
     const previous = layout.measures[measure.index - 1];
-    const onset = Math.round(xForMs(view, measure.startMs)) + 0.5;
     if (previous && previous.bpm !== measure.bpm && onset >= view.gutterPx - 8) {
       drawTempoMark(ctx, onset + 16, view.trebleTop - 20, measure.bpm, palette);
       ctx.strokeStyle = palette.barLine;
@@ -1554,6 +1582,8 @@ const INLINE_CLEF_SCALE = 0.72;
 /** Room an inline clef takes, and the gap it keeps off the bar line. */
 const INLINE_CLEF_W = 22;
 const INLINE_CLEF_PAD = 3;
+/** How far back from its bar line an inline clef's wash reaches. */
+const INLINE_CLEF_ROOM = INLINE_CLEF_W + INLINE_CLEF_PAD + 2;
 
 /**
  * A clef announced mid-score, drawn smaller than the gutter's and seated on
@@ -1561,7 +1591,10 @@ const INLINE_CLEF_PAD = 3;
  *
  * It sits in the tail of the measure, just before the bar line, which is where
  * printed music puts a clef that changes on a bar line. Paper widens the bar
- * to make room for it; a time-proportional bar cannot.
+ * to make room for it; a time-proportional bar cannot, so the line makes what
+ * room the music leaves (see `dividerX`), and the rest is drawn in two parts.
+ * The wash, which clears the staff lines behind the clef, goes down under the
+ * music, so it never hides a note. The clef itself goes on top of everything.
  */
 function drawInlineClef(
   ctx: CanvasRenderingContext2D,
@@ -1569,11 +1602,14 @@ function drawInlineClef(
   barX: number,
   staffTop: number,
   palette: ScorePalette,
+  part: ClefPart,
 ): void {
   const x = barX - INLINE_CLEF_W - INLINE_CLEF_PAD;
-  // A wash keeps it legible over whatever the tail of the bar happens to hold.
-  ctx.fillStyle = palette.gutterBg;
-  ctx.fillRect(x - 2, staffTop - 3, INLINE_CLEF_W + 4, STAFF_H + 6);
+  if (part === 'wash') {
+    ctx.fillStyle = palette.gutterBg;
+    ctx.fillRect(barX - INLINE_CLEF_ROOM, staffTop - 3, INLINE_CLEF_W + 4, STAFF_H + 6);
+    return;
+  }
   ctx.save();
   const centreY = staffTop + STAFF_H / 2;
   ctx.translate(x, centreY);
@@ -1584,12 +1620,16 @@ function drawInlineClef(
   ctx.restore();
 }
 
+/** An inline clef is drawn in two passes: its wash, then the clef. */
+type ClefPart = 'wash' | 'clef';
+
 /** Announce every clef that turns over inside the visible span. */
 function drawClefChanges(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
   layout: ScoreLayout,
   palette: ScorePalette,
+  part: ClefPart,
 ): void {
   const fromMs = view.scrollMs - 200;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 200;
@@ -1608,7 +1648,7 @@ function drawClefChanges(
     if (x < view.gutterPx + INLINE_CLEF_W || x > view.widthPx) continue;
     for (const staff of stavesOf(view)) {
       if (previous.clefs[staff] === measure.clefs[staff]) continue;
-      drawInlineClef(ctx, measure.clefs[staff], x, staffTopFor(view, staff), palette);
+      drawInlineClef(ctx, measure.clefs[staff], x, staffTopFor(view, staff), palette, part);
     }
   }
 }
