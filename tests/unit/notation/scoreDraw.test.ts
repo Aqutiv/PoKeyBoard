@@ -562,6 +562,43 @@ describe('drawScore bar lines', () => {
     expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
   });
 
+  it('crosses a rest rather than a head when a rest overlaps the downbeat', () => {
+    // A sixteenth rest 10 px before the downbeat overlaps its head, and a
+    // flagged, dotted eighth leaves no gap before the rest either. The note
+    // heads decide, and a rest is not one.
+    const pxPerMs = 10 / 250;
+    const packed = written([
+      [0, 3],
+      [3, 0.75],
+      [4, 1],
+    ]);
+    expect(packed.rests.some((rest) => rest.displayStartMs === 3750)).toBe(true);
+    const drawn = render(packed, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const line = lineNear(drawn, 4000, pxPerMs);
+    expect(line).toBeGreaterThan(onsetX(3000, pxPerMs) + HEAD_RX);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+  });
+
+  it('looks as far as a chord stacks its accidentals', () => {
+    // Four sharps a beat after a blank downbeat stack four columns deep, and
+    // the outermost reaches back past the bar's own time.
+    const stacked = written([
+      [0, 4],
+      [5, 1, 73],
+      [5, 1, 75],
+      [5, 1, 78],
+      [5, 1, 80],
+    ]);
+    const columns = stacked.chords.flatMap((chord) =>
+      chord.notes.map((note) => note.accidentalColumn),
+    );
+    expect(Math.max(...columns)).toBeGreaterThanOrEqual(3);
+    const drawn = render({ ...stacked, rests: [] }, {}, 'treble', 'lesson', WIDE);
+    // The outermost sharp's left edge, before any head displacement.
+    const sharp = onsetX(5000) - (HEAD_RX + GAP * 0.7 + 3 * GAP * 1.4 + GAP * 0.6);
+    expect(lineNear(drawn, 4000)).toBeLessThan(sharp);
+  });
+
   it('stays on its time when nothing starts on the downbeat', () => {
     const late = written([
       [0, 4],

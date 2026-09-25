@@ -78,12 +78,6 @@ const BAR_LINE_LEAD_PX = GAP * 0.6;
 /** The least clear space it keeps after the last ink of the bar it closes. */
 const BAR_LINE_TRAIL_PX = GAP * 0.3;
 /**
- * How far either side of a bar line to look for ink that could reach it: two
- * columns of accidentals, or a dot and a flag. Only bounds the search — each
- * chord's own reach is measured.
- */
-const BAR_LINE_SEARCH_PX = GAP * 5;
-/**
  * A chord drawn this close to a bar's time belongs to the bar it opens. The
  * layout rounds a chord's display time to the millisecond; a bar's start,
  * under a tempo map, need not be a whole one.
@@ -614,6 +608,25 @@ function chordReachRight(chord: ChordGroup): number {
 }
 
 /**
+ * The furthest any ink in `layout` reaches from its onset, either way — how far
+ * `dividerX` has to look. Accidentals stack into as many columns as a chord
+ * needs, so no fixed bound covers them all. Built once per layout, which is
+ * immutable.
+ */
+const widestReaches = new WeakMap<ScoreLayout, number>();
+
+function widestReachPx(layout: ScoreLayout): number {
+  const cached = widestReaches.get(layout);
+  if (cached !== undefined) return cached;
+  let widest = REST_HALF_WIDTH_PX;
+  for (const chord of layout.chords) {
+    widest = Math.max(widest, chordReachLeft(chord), chordReachRight(chord));
+  }
+  widestReaches.set(layout, widest);
+  return widest;
+}
+
+/**
  * Where a line standing before the music at `ms` is drawn: a bar line, or the
  * edge of a loop.
  *
@@ -627,33 +640,30 @@ function chordReachRight(chord: ChordGroup): number {
  *
  * Music packed too tightly to leave any clear point gets the middle of what gap
  * there is. Where there is none — a flag swinging out over the downbeat's head
- * — the heads alone decide: a line through a flag, a dot or an accidental
- * still reads, and one through a head does not.
+ * — the note heads alone decide: a line through a flag, a dot, an accidental
+ * or a rest still reads, and one through a head does not.
  */
 function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
   const nominal = xForMs(view, ms);
-  const searchMs = BAR_LINE_SEARCH_PX / view.pxPerMs;
+  // The line can stand a reach plus its lead off its time, and ink a further
+  // reach off that can still touch it; nothing further out can.
+  const widest = widestReachPx(layout);
+  const searchMs = (widest * 2 + BAR_LINE_LEAD_PX + BAR_LINE_TRAIL_PX) / view.pxPerMs;
   const opens = ms - ON_THE_BAR_MS;
   /**
    * The rightmost ink of what starts before `ms` and the leftmost of the rest:
-   * all of it, and the heads alone.
+   * all of it, and the note heads alone.
    */
   const ink = { before: Number.NEGATIVE_INFINITY, after: Number.POSITIVE_INFINITY };
   const heads = { ...ink };
-  const reach = (
-    startMs: number,
-    left: number,
-    right: number,
-    headLeft = left,
-    headRight = right,
-  ) => {
+  const reach = (startMs: number, left: number, right: number, head?: [number, number]) => {
     const x = xForMs(view, startMs);
     if (startMs < opens) {
       ink.before = Math.max(ink.before, x + right);
-      heads.before = Math.max(heads.before, x + headRight);
+      if (head) heads.before = Math.max(heads.before, x + head[1]);
     } else {
       ink.after = Math.min(ink.after, x - left);
-      heads.after = Math.min(heads.after, x - headLeft);
+      if (head) heads.after = Math.min(heads.after, x - head[0]);
     }
   };
 
@@ -662,13 +672,10 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     const chord = chords[i] as ChordGroup;
     if (chord.displayStartMs > ms + searchMs) break;
     if (!drawsStaff(view, chord.staff)) continue;
-    reach(
-      chord.displayStartMs,
-      chordReachLeft(chord),
-      chordReachRight(chord),
+    reach(chord.displayStartMs, chordReachLeft(chord), chordReachRight(chord), [
       headsReachLeft(chord),
       headsReachRight(chord),
-    );
+    ]);
   }
   for (
     let i = firstAtOrAfter(rests, ms - searchMs, (rest) => rest.displayStartMs);
@@ -678,6 +685,7 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     const rest = rests[i] as LaidOutRest;
     if (rest.displayStartMs > ms + searchMs) break;
     if (!drawsStaff(view, rest.staff)) continue;
+    // Ink, but not a head: packed tight, a line through a rest still reads.
     reach(rest.displayStartMs, REST_HALF_WIDTH_PX, REST_HALF_WIDTH_PX);
   }
 
