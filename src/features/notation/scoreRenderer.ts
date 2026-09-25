@@ -576,10 +576,24 @@ function accidentalOffsetPx(note: LaidOutNote): number {
   return HEAD_RX + GAP * 0.7 + note.accidentalColumn * ACCIDENTAL_COLUMN_PX;
 }
 
+/** How far a chord's heads reach left of its onset, a displaced one included. */
+function headsReachLeft(chord: ChordGroup): number {
+  return (
+    headHalfWidth(chord) - Math.min(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX
+  );
+}
+
+/** How far a chord's heads reach right of its onset, a displaced one included. */
+function headsReachRight(chord: ChordGroup): number {
+  return (
+    Math.max(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX + headHalfWidth(chord)
+  );
+}
+
 /** How far a chord's ink reaches left of its onset: heads, then accidentals. */
 function chordReachLeft(chord: ChordGroup): number {
   const leftEdge = Math.min(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX;
-  let reach = headHalfWidth(chord) - leftEdge;
+  let reach = headsReachLeft(chord);
   for (const note of chord.notes) {
     if (!note.accidental) continue;
     reach = Math.max(reach, accidentalOffsetPx(note) + ACCIDENTAL_HALF_WIDTH_PX - leftEdge);
@@ -590,7 +604,7 @@ function chordReachLeft(chord: ChordGroup): number {
 /** How far a chord's ink reaches right of its onset: heads, dots, a flag. */
 function chordReachRight(chord: ChordGroup): number {
   const rightEdge = Math.max(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX;
-  let reach = rightEdge + headHalfWidth(chord);
+  let reach = headsReachRight(chord);
   if (chord.symbol.dotted) reach = Math.max(reach, rightEdge + DOT_OFFSET_PX + DOT_RADIUS_PX);
   if (chord.beamId === null && beamCountFor(chord.symbol.base) > 0) {
     const stemX = chord.stemDown ? -HEAD_RX + 0.8 : HEAD_RX - 0.8;
@@ -609,20 +623,38 @@ function chordReachRight(chord: ChordGroup): number {
  * line drawn there runs through it. The notes keep their onsets, because the
  * playhead, beams, ties, scrubbing and zoom all read x as time; the line moves
  * instead, to the point nearest its time that is clear of the ink on both
- * sides. Nothing on the downbeat, and that is the time itself. Music packed too
- * tightly to leave any clear point gets the middle of what gap there is.
+ * sides. Nothing on the downbeat, and that is the time itself.
+ *
+ * Music packed too tightly to leave any clear point gets the middle of what gap
+ * there is. Where there is none — a flag swinging out over the downbeat's head
+ * — the heads alone decide: a line through a flag, a dot or an accidental
+ * still reads, and one through a head does not.
  */
 function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
   const nominal = xForMs(view, ms);
   const searchMs = BAR_LINE_SEARCH_PX / view.pxPerMs;
   const opens = ms - ON_THE_BAR_MS;
-  /** The rightmost ink of what starts before `ms`, and the leftmost of the rest. */
-  let before = Number.NEGATIVE_INFINITY;
-  let after = Number.POSITIVE_INFINITY;
-  const reach = (startMs: number, left: number, right: number): void => {
+  /**
+   * The rightmost ink of what starts before `ms` and the leftmost of the rest:
+   * all of it, and the heads alone.
+   */
+  const ink = { before: Number.NEGATIVE_INFINITY, after: Number.POSITIVE_INFINITY };
+  const heads = { ...ink };
+  const reach = (
+    startMs: number,
+    left: number,
+    right: number,
+    headLeft = left,
+    headRight = right,
+  ) => {
     const x = xForMs(view, startMs);
-    if (startMs < opens) before = Math.max(before, x + right);
-    else after = Math.min(after, x - left);
+    if (startMs < opens) {
+      ink.before = Math.max(ink.before, x + right);
+      heads.before = Math.max(heads.before, x + headRight);
+    } else {
+      ink.after = Math.min(ink.after, x - left);
+      heads.after = Math.min(heads.after, x - headLeft);
+    }
   };
 
   const { chords, rests } = layout;
@@ -630,7 +662,13 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     const chord = chords[i] as ChordGroup;
     if (chord.displayStartMs > ms + searchMs) break;
     if (!drawsStaff(view, chord.staff)) continue;
-    reach(chord.displayStartMs, chordReachLeft(chord), chordReachRight(chord));
+    reach(
+      chord.displayStartMs,
+      chordReachLeft(chord),
+      chordReachRight(chord),
+      headsReachLeft(chord),
+      headsReachRight(chord),
+    );
   }
   for (
     let i = firstAtOrAfter(rests, ms - searchMs, (rest) => rest.displayStartMs);
@@ -643,10 +681,13 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     reach(rest.displayStartMs, REST_HALF_WIDTH_PX, REST_HALF_WIDTH_PX);
   }
 
-  const lowest = before + BAR_LINE_TRAIL_PX;
-  const highest = after - BAR_LINE_LEAD_PX;
-  if (lowest <= highest) return Math.min(Math.max(nominal, lowest), highest);
-  return (before + after) / 2;
+  for (const { before, after } of [ink, heads]) {
+    const lowest = before + BAR_LINE_TRAIL_PX;
+    const highest = after - BAR_LINE_LEAD_PX;
+    if (lowest <= highest) return Math.min(Math.max(nominal, lowest), highest);
+    if (before < after) return (before + after) / 2;
+  }
+  return (heads.before + heads.after) / 2;
 }
 
 export function drawScore(

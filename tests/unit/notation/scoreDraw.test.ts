@@ -541,6 +541,27 @@ describe('drawScore bar lines', () => {
     expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
   });
 
+  it('keeps clear of the downbeat head when a flag swings out over it', () => {
+    // The same sixteenth alone in its beat, so it flags instead of beaming —
+    // and its flag reaches past where the downbeat's head begins. Splitting the
+    // ink's overlap would put the line inside that head; the heads decide.
+    const pxPerMs = 16 / 250;
+    const flagged = written([
+      [0, 1],
+      [1, 1],
+      [2, 1],
+      [3.75, 0.25],
+      [4, 1],
+    ]);
+    const sixteenth = flagged.chords.find((chord) => chord.displayStartMs === 3750);
+    expect(sixteenth?.beamId).toBeNull();
+    expect(sixteenth?.stemDown).toBe(false);
+    const drawn = render(flagged, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const line = lineNear(drawn, 4000, pxPerMs);
+    expect(line).toBeGreaterThan(onsetX(3750, pxPerMs) + HEAD_RX);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+  });
+
   it('stays on its time when nothing starts on the downbeat', () => {
     const late = written([
       [0, 4],
