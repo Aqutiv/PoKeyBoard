@@ -171,6 +171,22 @@ describe('MIDI velocity settings', () => {
     expect(screen.getByRole('status')).toHaveTextContent(en.settings.midiRangeNone);
   });
 
+  it('keeps keyboard focus on the calibrate button as a calibration starts and ends', async () => {
+    await connectKeyboard();
+    renderSection();
+    const button = calibrateButton();
+    button.focus();
+
+    fireEvent.click(button);
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', { name: en.settings.midiCalibrateCancel }),
+    );
+
+    strike(20);
+    strike(110, 64);
+    expect(document.activeElement).toBe(calibrateButton());
+  });
+
   it('offers calibration only while a keyboard is connected', async () => {
     ports.clear();
     await connectKeyboard();

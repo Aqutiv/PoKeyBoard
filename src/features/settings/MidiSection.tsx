@@ -191,38 +191,28 @@ function MidiVelocity({ connected }: { connected: boolean }) {
       <div className="setting-row">
         <span>{m.settings.midiVelocityRange}</span>
         <span className="setting-row__actions">
-          {listening ? (
+          {/* One button, relabelled, so focus stays on it as a calibration
+              starts and ends. */}
+          <button
+            type="button"
+            className="btn btn--small"
+            disabled={!listening && !connected}
+            onClick={() => dispatch({ type: listening ? 'cancel' : 'start' })}
+          >
+            {listening ? m.settings.midiCalibrateCancel : m.settings.midiCalibrate}
+          </button>
+          {range && !listening ? (
             <button
               type="button"
               className="btn btn--small"
-              onClick={() => dispatch({ type: 'cancel' })}
+              onClick={() => {
+                setRange(null);
+                dispatch({ type: 'cancel' });
+              }}
             >
-              {m.settings.midiCalibrateCancel}
+              {m.settings.midiCalibrateReset}
             </button>
-          ) : (
-            <>
-              <button
-                type="button"
-                className="btn btn--small"
-                disabled={!connected}
-                onClick={() => dispatch({ type: 'start' })}
-              >
-                {m.settings.midiCalibrate}
-              </button>
-              {range ? (
-                <button
-                  type="button"
-                  className="btn btn--small"
-                  onClick={() => {
-                    setRange(null);
-                    dispatch({ type: 'cancel' });
-                  }}
-                >
-                  {m.settings.midiCalibrateReset}
-                </button>
-              ) : null}
-            </>
-          )}
+          ) : null}
         </span>
       </div>
       <p className={`settings__hint${listening ? ' settings__prompt' : ''}`} role="status">
