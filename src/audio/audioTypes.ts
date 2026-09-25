@@ -68,6 +68,16 @@ export interface SampleSelection {
   gain: number;
   loop?: { start: number; end: number };
   envelope?: SampleEnvelope;
+  /**
+   * Where the sound starts in the buffer, in buffer seconds: past the silence
+   * a recording leaves before the hammer lands, which would otherwise delay
+   * every note. 0 when absent.
+   */
+  offset?: number;
+  /** This note's damper time constant, in seconds; see `releaseTcFor`. */
+  releaseTc?: number;
+  /** A string with no damper: releasing its key lets it ring on. */
+  undamped?: boolean;
 }
 
 export type SampleLoadPhase =
