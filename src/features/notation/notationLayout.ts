@@ -765,12 +765,16 @@ function buildBeamGroups(
       };
 
       for (const voice of new Set(onStaff.map((chord) => chord.voice))) {
-        const runs: { chords: ChordGroup[]; group: number }[] = [];
+        /**
+         * Each run, with the chord that took over from it where nothing but a
+         * beat line ended it — the one kind of break the half bar may undo.
+         */
+        const runs: { chords: ChordGroup[]; group: number; next: ChordGroup | null }[] = [];
         let run: ChordGroup[] = [];
         let runGroup = -1;
 
-        const flush = (): void => {
-          if (run.length >= 2) runs.push({ chords: run, group: runGroup });
+        const flush = (next: ChordGroup | null = null): void => {
+          if (run.length >= 2) runs.push({ chords: run, group: runGroup, next });
           run = [];
         };
 
@@ -790,12 +794,8 @@ function buildBeamGroups(
           // lands just before it and would otherwise beam with the group before.
           const group = Math.floor((timeMs - measure.startMs) / groupMs + BEAT_EPSILON);
           const previous = run[run.length - 1];
-          if (
-            run.length > 0 &&
-            (group !== runGroup || (previous !== undefined && !beamsJoin(previous, chord)))
-          ) {
-            flush();
-          }
+          if (previous !== undefined && !beamsJoin(previous, chord)) flush();
+          else if (previous !== undefined && group !== runGroup) flush(chord);
           run.push(chord);
           runGroup = group;
         }
@@ -804,20 +804,27 @@ function buildBeamGroups(
         // Common time beams plain eighths by the half bar: four of them across
         // beats one and two (or three and four) are one group, never a pair of
         // pairs — but never across the middle of the bar, where the half-bar
-        // accent has to stay visible.
+        // accent has to stay visible. Only where the beat line is all that
+        // parts the pairs, though: a rest between them breaks the beam in any
+        // beat, and joining them again would draw it straight across.
         if (halfBarEighths) {
           for (let k = 0; k + 1 < runs.length; k += 1) {
-            const a = runs[k] as { chords: ChordGroup[]; group: number };
-            const b = runs[k + 1] as { chords: ChordGroup[]; group: number };
+            const a = runs[k] as (typeof runs)[number];
+            const b = runs[k + 1] as (typeof runs)[number];
             if (
               a.group % 2 === 0 &&
               b.group === a.group + 1 &&
+              a.next === b.chords[0] &&
               a.chords.length === 2 &&
               b.chords.length === 2 &&
               plainEighths(a.chords) &&
               plainEighths(b.chords)
             ) {
-              runs.splice(k, 2, { chords: [...a.chords, ...b.chords], group: a.group });
+              runs.splice(k, 2, {
+                chords: [...a.chords, ...b.chords],
+                group: a.group,
+                next: b.next,
+              });
             }
           }
         }

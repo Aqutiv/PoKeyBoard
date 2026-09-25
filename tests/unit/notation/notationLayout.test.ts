@@ -545,6 +545,19 @@ describe('beam grouping', () => {
     expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
   });
 
+  it('keeps the half bar’s pairs apart where a rest falls between them', () => {
+    // A pair in each of beats one and two, with a sixteenth of silence at
+    // 500 ms between them: one beam over all four would run across the rest.
+    const layout = layoutScore(eighths([0, 250, 625, 875]), OPTS);
+    expect(
+      layout.rests.some((rest) => rest.staff === 'treble' && rest.displayStartMs === 500),
+    ).toBe(true);
+    expect(layout.beams.map((beam) => beam.members.map((chord) => chord.displayStartMs))).toEqual([
+      [0, 250],
+      [625, 875],
+    ]);
+  });
+
   it('beams by the beat where a lesson asks it to', () => {
     const layout = layoutScore(eighths([0, 250, 500, 750]), { ...OPTS, eighthsByHalfBar: false });
     expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
