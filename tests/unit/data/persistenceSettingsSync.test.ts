@@ -12,9 +12,10 @@ import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX } from '@/domain/takeTypes';
  * vi.resetModules() leaves the mock registry alone, so each boot below still
  * gets fresh module state over these same stubs.
  */
-const { setMasterVolume, setReverbMix } = vi.hoisted(() => ({
+const { setMasterVolume, setReverbMix, invalidateCachedAudio } = vi.hoisted(() => ({
   setMasterVolume: vi.fn(),
   setReverbMix: vi.fn(),
+  invalidateCachedAudio: vi.fn<(takeId: string) => Promise<void>>(async () => undefined),
 }));
 
 vi.mock('@/data/takeRepository', () => ({
@@ -27,9 +28,7 @@ vi.mock('@/data/metadataRepository', () => ({
   getMetadata: vi.fn(async () => undefined),
   setMetadata: vi.fn(async () => undefined),
 }));
-vi.mock('@/data/audioCacheRepository', () => ({
-  invalidateCachedAudio: vi.fn(async () => undefined),
-}));
+vi.mock('@/data/audioCacheRepository', () => ({ invalidateCachedAudio }));
 vi.mock('@/data/settingsRepository', () => ({
   loadSettings: vi.fn(async () => ({})),
   saveSettings: vi.fn(async () => undefined),
@@ -77,7 +76,7 @@ async function bootPersistence() {
   // levels once by hand, before the subscription exists.
   setMasterVolume.mockClear();
   setReverbMix.mockClear();
-  return { useSettingsStore, useTakeStore };
+  return { persistenceService, useSettingsStore, useTakeStore };
 }
 
 describe('settings-driven audio levels', () => {
@@ -96,8 +95,9 @@ describe('settings-driven audio levels', () => {
 
     expect(setMasterVolume).toHaveBeenCalledWith(0.2);
     expect(setReverbMix).toHaveBeenCalledWith(0.1);
-    // The export renderer reads the levels off the take and the export cache
-    // key hashes them, so a restore that moved the sliders has to move these.
+    // The take keeps its own copy of the levels — opening it restores them,
+    // and the export renders its reverb — so a restore that moved the sliders
+    // has to move these.
     expect(useTakeStore.getState().take.instrument).toMatchObject({
       masterVolume: 0.2,
       reverbMix: 0.1,
@@ -195,6 +195,24 @@ describe('settings-driven audio levels', () => {
 
       expect(setMasterVolume).toHaveBeenLastCalledWith(0.3);
       expect(useTakeStore.getState().take.instrument.masterVolume).toBe(0.3);
+    });
+
+    it('keeps the cached export through a volume change, which the export never hears', async () => {
+      const { persistenceService, useSettingsStore, useTakeStore } = stores;
+      // Saved as it stands, so each save below is measured against that.
+      await persistenceService.flushSave();
+      invalidateCachedAudio.mockClear();
+
+      useSettingsStore.getState().setMasterVolume(0.35);
+      await persistenceService.flushSave();
+      // Saved with the take, so opening it again restores the level...
+      expect(useTakeStore.getState().dirty).toBe(false);
+      // ...but the audio it would render has not changed.
+      expect(invalidateCachedAudio).not.toHaveBeenCalled();
+
+      useSettingsStore.getState().setReverbMix(0.4);
+      await persistenceService.flushSave();
+      expect(invalidateCachedAudio).toHaveBeenCalledWith(useTakeStore.getState().take.id);
     });
   });
 });

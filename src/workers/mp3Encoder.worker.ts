@@ -1,10 +1,11 @@
-import { encodePcmToMp3, type ExportBitrateKbps } from '@/audio/mp3Encode';
+import type { ClickTrack, LoudnessMode } from '@/audio/loudness';
+import { finishMp3, type ExportBitrateKbps } from '@/audio/mp3Encode';
 
 /**
- * MP3 encoding off the main thread. PCM arrives as transferred ArrayBuffers
- * (never cloned); the finished MP3 transfers back the same way. The actual
- * encode lives in the shared, isomorphic encodePcmToMp3 so the main-thread
- * fallback in AudioExportService runs identical code.
+ * Mastering and MP3 encoding off the main thread. PCM arrives as transferred
+ * ArrayBuffers (never cloned); the finished MP3 transfers back the same way.
+ * The work lives in mp3Encode, shared with the main-thread fallback in
+ * AudioExportService, which runs the same code a slice at a time.
  */
 export interface EncodeRequest {
   type: 'encode';
@@ -12,6 +13,9 @@ export interface EncodeRequest {
   bitrateKbps: ExportBitrateKbps;
   left: ArrayBuffer;
   right: ArrayBuffer;
+  /** Small enough to copy; only the PCM is transferred. */
+  clicks: ClickTrack | null;
+  loudness: LoudnessMode;
 }
 
 export type EncoderResponse =
@@ -36,11 +40,15 @@ scope.onmessage = (event: MessageEvent<EncodeRequest>) => {
 };
 
 async function run(request: EncodeRequest): Promise<void> {
-  const out = await encodePcmToMp3(
-    request.sampleRate,
+  const out = await finishMp3(
+    {
+      sampleRate: request.sampleRate,
+      left: new Float32Array(request.left),
+      right: new Float32Array(request.right),
+      clicks: request.clicks,
+      loudness: request.loudness,
+    },
     request.bitrateKbps,
-    new Float32Array(request.left),
-    new Float32Array(request.right),
     (fraction) => scope.postMessage({ type: 'progress', fraction }),
   );
   const mp3 = out.buffer as ArrayBuffer;

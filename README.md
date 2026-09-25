@@ -2,7 +2,7 @@
 
 **▶ Live app: https://aqutiv.github.io/PoKeyBoard/**
 
-Play, record, and share piano performances — entirely in your browser. PoKeyBoard is an installable, offline-capable Progressive Web App: sampled acoustic and electric pianos with a multi-touch keyboard, computer-keyboard, game-controller and USB MIDI input, live grand-staff notation, a metronome, structured note-event recording, audible score scrubbing, and one-tap MP3 sharing through the OS share sheet (WhatsApp, Messages, email, …).
+Play, record, and share piano performances — entirely in your browser. PoKeyBoard is an installable, offline-capable Progressive Web App: sampled acoustic and electric pianos with a multi-touch keyboard, computer-keyboard, game-controller and USB MIDI input, live grand-staff notation, a metronome, structured note-event recording, audible score scrubbing, and one-tap sharing through the OS share sheet (WhatsApp, Messages, email, …) as an MP3, printable sheet music or a MIDI file.
 
 No account. No backend. No microphone — "recording" captures the notes you play, and "audio export" re-renders them through the same piano engine into a real MP3.
 
@@ -89,6 +89,10 @@ The BPM field changes the metronome and score grid, including tempo changes from
 ## Sharing audio
 
 Open a take → **Share audio** → _Render audio_. The take renders offline through the same piano engine (never the microphone) and encodes to MP3 (128 or 192 kbps) in a Web Worker. Where the browser supports sharing files (iOS/Android), the OS share sheet opens with compatible apps — WhatsApp appears if it's installed; PoKeyBoard never assumes it is. Elsewhere the MP3 downloads. Unchanged takes reuse their cached MP3 instantly.
+
+Every MP3 leaves at the same loudness — −16 LUFS, the level music apps play at — with its loudest moments held just under full scale, so a quiet take is easy to hear on a phone and a loud one never clips. Choose _As played_ to keep a pianissimo quiet instead. Files are tagged with the take's title (and a library track's composer), so a music player shows more than a file name.
+
+**Share → MIDI (.mid)** hands over the notes themselves, for a notation editor, a DAW or another piano app: tempo changes, meter and key, each hand on a track of its own, and the pedal.
 
 ## Browser support
 

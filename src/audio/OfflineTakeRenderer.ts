@@ -1,12 +1,13 @@
 import { sortNotes } from '@/domain/noteEvents';
-import type { Take } from '@/domain/takeTypes';
+import { DEFAULT_MASTER_VOLUME, type Take } from '@/domain/takeTypes';
 import {
   applySustainToNotes,
   effectivePlaybackDurationMs,
 } from '@/features/transport/sustainPedal';
 import { ExportError } from '@/utils/errors';
 import { audioEngine } from './AudioEngine';
-import { scheduleClicksForRange } from './MetronomeEngine';
+import type { ClickTrack } from './loudness';
+import { CLICK_LENGTH_S, clickBeatsForRange, scheduleClick } from './MetronomeEngine';
 import type { SampleSelection } from './audioTypes';
 import { createPianoGraph } from './PianoGraphFactory';
 import {
@@ -29,6 +30,20 @@ export const RENDER_WARN_MINUTES = 8;
 export interface OfflineRenderOptions {
   includeMetronome: boolean;
   metronomeVolume: number;
+}
+
+/**
+ * A take rendered for export, not yet at its final level: that is set from the
+ * whole of it once it exists (`masterExport`).
+ */
+export interface RenderedTake {
+  /** The piano and its reverb, stereo, at the app's default volume. */
+  piano: AudioBuffer;
+  /**
+   * The metronome, when asked for. Kept apart so its clicks never count
+   * toward how loud the piano is; see `ClickTrack`.
+   */
+  clicks: ClickTrack | null;
 }
 
 /**
@@ -121,13 +136,15 @@ export function estimateRenderMemoryMB(take: Take): number {
 
 /**
  * Render a take through the same sample bank, graph shape, and envelope
- * constants as live playback, into a stereo AudioBuffer. Normalizes only
- * when the peak would clip; musical dynamics are never flattened.
+ * constants as live playback. Two things differ, both about level: the piano
+ * plays at the default volume rather than wherever the volume slider was left
+ * — that slider is for the room, not the file — and without the graph's live
+ * peak guard, which a limiter that can look ahead replaces afterwards.
  */
-export async function renderTakeToBuffer(
+export async function renderTakeForExport(
   take: Take,
   options: OfflineRenderOptions,
-): Promise<AudioBuffer> {
+): Promise<RenderedTake> {
   // The take itself has to fit; how long its top strings ring is capped below.
   const seconds = renderSeconds(take, 0);
   if (seconds > MAX_RENDER_MINUTES * 60) {
@@ -165,8 +182,9 @@ export async function renderTakeToBuffer(
   });
 
   const graph = createPianoGraph(context, {
-    masterVolume: take.instrument.masterVolume,
+    masterVolume: DEFAULT_MASTER_VOLUME,
     reverbMix: take.instrument.reverbMix,
+    peakGuard: false,
   });
 
   const missingSamples = scheduleTakeVoices(
@@ -183,36 +201,33 @@ export async function renderTakeToBuffer(
     );
   }
 
-  if (options.includeMetronome) {
-    scheduleClicksForRange(
-      context,
-      graph.outputDestination,
-      take.tempo,
-      options.metronomeVolume,
-      0,
-      effectivePlaybackDurationMs(take),
-    );
-  }
+  const [piano, clicks] = await Promise.all([
+    context.startRendering(),
+    options.includeMetronome ? renderClickTrack(take, options.metronomeVolume) : null,
+  ]);
+  return { piano, clicks };
+}
 
-  const buffer = await context.startRendering();
-
-  // Peak check: rescale only to prevent clipping.
-  let peak = 0;
-  for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-    const data = buffer.getChannelData(channel);
-    for (let i = 0; i < data.length; i += 1) {
-      const magnitude = Math.abs(data[i] as number);
-      if (magnitude > peak) peak = magnitude;
-    }
-  }
-  if (peak > 0.985) {
-    const scale = 0.97 / peak;
-    for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
-      const data = buffer.getChannelData(channel);
-      for (let i = 0; i < data.length; i += 1) {
-        data[i] = (data[i] as number) * scale;
-      }
-    }
-  }
-  return buffer;
+/** The take's clicks, and the two sounds they are made of; see `ClickTrack`. */
+async function renderClickTrack(take: Take, volume: number): Promise<ClickTrack> {
+  const render = async (accent: boolean): Promise<Float32Array> => {
+    const context = new OfflineAudioContext({
+      numberOfChannels: 1,
+      length: Math.ceil(CLICK_LENGTH_S * RENDER_SAMPLE_RATE),
+      sampleRate: RENDER_SAMPLE_RATE,
+    });
+    const gain = context.createGain();
+    gain.gain.value = volume;
+    gain.connect(context.destination);
+    scheduleClick(context, gain, 0, accent);
+    return (await context.startRendering()).getChannelData(0);
+  };
+  const beats = clickBeatsForRange(take.tempo, 0, effectivePlaybackDurationMs(take));
+  const [accentSound, beatSound] = await Promise.all([render(true), render(false)]);
+  return {
+    atS: Float64Array.from(beats, (beat) => beat.atS),
+    accent: Uint8Array.from(beats, (beat) => (beat.accent ? 1 : 0)),
+    accentSound,
+    beatSound,
+  };
 }
