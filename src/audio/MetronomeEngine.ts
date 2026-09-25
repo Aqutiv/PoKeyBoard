@@ -1,5 +1,5 @@
 import { createTakeTempoMap, type TempoMap, type TempoMapInput } from '@/domain/tempoMap';
-import type { TimeSignature } from '@/domain/takeTypes';
+import type { PlaybackLoop, TimeSignature } from '@/domain/takeTypes';
 
 export interface MetronomeConfig {
   volume: number;
@@ -15,9 +15,11 @@ export interface ClickGrid {
   audioTimeAt(index: number): number;
   /** Bar starts are accented. */
   isAccent(index: number): boolean;
+  /** Where click `index` falls in its bar, 0 on the bar line: the beat dot it lights. */
+  beatInBar(index: number): number;
   /** Fractional click index at an audio time; negative before the first. */
   indexAt(audioTime: number): number;
-  /** Beats per bar, for the beat dots. */
+  /** Beats per bar. */
   readonly numerator: number;
 }
 
@@ -31,6 +33,7 @@ export function constantClickGrid(
   return {
     audioTimeAt: (index) => startAudioTime + index * beatS,
     isAccent: (index) => index % numerator === 0,
+    beatInBar: (index) => index % numerator,
     indexAt: (audioTime) => (audioTime - startAudioTime) / beatS,
     numerator,
   };
@@ -51,7 +54,73 @@ export function takeClickGrid(
   return {
     audioTimeAt: (index) => audioTimeForTakeMs(map.msAtBeat(index)),
     isAccent: (index) => index % numerator === 0,
+    beatInBar: (index) => index % numerator,
     indexAt: (audioTime) => map.beatAtMs(takeMsForAudioTime(audioTime)),
+    numerator,
+  };
+}
+
+/**
+ * What a click grid needs of a running transport: the timeline it plays, which
+ * keeps growing through a loop's passes (`TransportClock`'s virtual time), and
+ * the loop folding take time back, if there is one.
+ */
+export interface ClickTimeline {
+  audioTimeForVirtualMs(virtualMs: number): number;
+  virtualMsForAudioTime(audioTime: number): number;
+  readonly loop: PlaybackLoop | null;
+}
+
+/**
+ * A beat this close to a loop's edge, in milliseconds, is on it. Marks are
+ * stored as whole milliseconds, so at 104 bpm a beat at 576.923 ms is marked
+ * 577 — which must still count as that beat, not the next.
+ */
+const LOOP_EDGE_TOLERANCE_MS = 0.5;
+
+/**
+ * The take's beat grid played round a loop. Click indices run on through the
+ * passes, as the clicks themselves do: the take's own beats up to the loop's
+ * end, then the beats inside the loop again and again. Each click keeps the
+ * accent of the beat it stands for, so a loop from a bar line clicks its bars.
+ */
+export function loopClickGrid(
+  map: TempoMap,
+  numerator: number,
+  timeline: ClickTimeline,
+  loop: PlaybackLoop,
+): ClickGrid {
+  const length = loop.endMs - loop.startMs;
+  /** The first beat inside the loop, and the first at or past its end. */
+  const first = Math.ceil(map.beatAtMs(loop.startMs - LOOP_EDGE_TOLERANCE_MS));
+  const end = Math.ceil(map.beatAtMs(loop.endMs - LOOP_EDGE_TOLERANCE_MS));
+  const perPass = end - first;
+  const beatOf = (index: number): { beat: number; pass: number } | null => {
+    if (index < end) return { beat: index, pass: 0 };
+    if (perPass <= 0) return null;
+    return {
+      beat: first + ((index - end) % perPass),
+      pass: 1 + Math.floor((index - end) / perPass),
+    };
+  };
+  // A pass need not be whole bars (three beats of a 4/4 bar, say), so a
+  // click's place in its bar comes from the beat it stands for, not its index.
+  const beatInBar = (index: number): number => (beatOf(index)?.beat ?? index) % numerator;
+  return {
+    audioTimeAt: (index) => {
+      const at = beatOf(index);
+      if (!at) return Number.POSITIVE_INFINITY;
+      return timeline.audioTimeForVirtualMs(map.msAtBeat(at.beat) + at.pass * length);
+    },
+    isAccent: (index) => beatInBar(index) === 0,
+    beatInBar,
+    indexAt: (audioTime) => {
+      const virtualMs = timeline.virtualMsForAudioTime(audioTime);
+      if (virtualMs < loop.endMs) return map.beatAtMs(virtualMs);
+      const pass = 1 + Math.floor((virtualMs - loop.endMs) / length);
+      const takeMs = loop.startMs + ((virtualMs - loop.endMs) % length);
+      return end + (pass - 1) * perPass + (map.beatAtMs(takeMs) - first);
+    },
     numerator,
   };
 }
@@ -59,13 +128,16 @@ export function takeClickGrid(
 /** The grid a take implies, given a running transport clock. */
 export function gridForTake(
   tempo: TempoMapInput & { timeSignature: TimeSignature },
-  clock: { audioTimeForTakeMs: (ms: number) => number; takeMsForAudioTime: (t: number) => number },
+  clock: ClickTimeline,
 ): ClickGrid {
+  const map = createTakeTempoMap(tempo);
+  const { numerator } = tempo.timeSignature;
+  if (clock.loop) return loopClickGrid(map, numerator, clock, clock.loop);
   return takeClickGrid(
-    createTakeTempoMap(tempo),
-    tempo.timeSignature.numerator,
-    (ms) => clock.audioTimeForTakeMs(ms),
-    (audioTime) => clock.takeMsForAudioTime(audioTime),
+    map,
+    numerator,
+    (ms) => clock.audioTimeForVirtualMs(ms),
+    (audioTime) => clock.virtualMsForAudioTime(audioTime),
   );
 }
 
@@ -90,6 +162,10 @@ export class MetronomeEngine {
   private timer: ReturnType<typeof setInterval> | null = null;
   private grid: ClickGrid | null = null;
   private nextBeatIndex = 0;
+  /** The latest click already handed to the audio clock. */
+  private scheduledUntil = Number.NEGATIVE_INFINITY;
+  /** Clicks handed to the audio clock that have not sounded yet. */
+  private queued: Array<{ when: number; osc: OscillatorNode }> = [];
   private running = false;
 
   attach(context: AudioContext, destination: AudioNode = context.destination): void {
@@ -124,6 +200,7 @@ export class MetronomeEngine {
     this.stop();
     this.grid = grid;
     this.running = true;
+    this.scheduledUntil = Number.NEGATIVE_INFINITY;
     this.seekToNow();
     this.scheduleWindow();
     this.timer = setInterval(() => this.scheduleWindow(), LOOKAHEAD_INTERVAL_MS);
@@ -131,15 +208,44 @@ export class MetronomeEngine {
 
   /**
    * Swap the grid without interrupting the click — used when the tempo is
-   * edited mid-flight. Clicks already inside the scheduling horizon still
-   * sound at their old times.
+   * edited mid-flight, and as a count-in hands over to the take. Clicks already
+   * inside the scheduling horizon still sound at their old times, and the new
+   * grid picks up after the last of them. A change of playback speed goes
+   * through `retime` instead.
    */
   setGrid(grid: ClickGrid): void {
     this.grid = grid;
     if (this.running) this.seekToNow();
   }
 
+  /**
+   * Swap the grid for one whose clock has changed speed. The clicks already
+   * handed to the audio clock were placed at the old speed, so those not yet
+   * sounded are called off and the new grid places them again.
+   */
+  retime(grid: ClickGrid): void {
+    const context = this.context;
+    if (context) {
+      const now = context.currentTime;
+      this.callOffQueued(now);
+      this.scheduledUntil = Math.min(this.scheduledUntil, now);
+    }
+    this.setGrid(grid);
+  }
+
+  /** Stop clicking. Clicks queued but not yet sounded are called off too. */
   stop(): void {
+    this.finish();
+    if (this.context) this.callOffQueued(this.context.currentTime);
+    this.queued = [];
+  }
+
+  /**
+   * Stop clicking, but let the clicks already queued sound. A count-in that
+   * hands over to a recording without the metronome ends this way: its last
+   * click, on the record anchor itself, is still to come when it does.
+   */
+  finish(): void {
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
@@ -153,7 +259,7 @@ export class MetronomeEngine {
     if (!this.running || !grid) return -1;
     const index = grid.indexAt(audioTime);
     if (index < 0) return -1;
-    return Math.floor(index) % grid.numerator;
+    return grid.beatInBar(Math.floor(index));
   }
 
   /** Top up from an external audio-render clock while page timers are throttled. */
@@ -161,11 +267,20 @@ export class MetronomeEngine {
     this.scheduleWindow();
   }
 
+  /** Call off the queued clicks that have not sounded by `now`. */
+  private callOffQueued(now: number): void {
+    for (const click of this.queued) {
+      if (click.when > now) click.osc.stop(now);
+    }
+    this.queued = this.queued.filter((click) => click.when <= now);
+  }
+
   /** Resume scheduling at the first beat at or after the current audio time. */
   private seekToNow(): void {
     const context = this.context;
     if (!context || !this.grid) return;
-    this.nextBeatIndex = Math.max(0, Math.ceil(this.grid.indexAt(context.currentTime)));
+    const from = Math.max(context.currentTime, this.scheduledUntil + 0.001);
+    this.nextBeatIndex = Math.max(0, Math.ceil(this.grid.indexAt(from)));
   }
 
   private scheduleWindow(): void {
@@ -174,24 +289,30 @@ export class MetronomeEngine {
     const grid = this.grid;
     if (!context || !gain || !grid || !this.running) return;
     const horizon = context.currentTime + SCHEDULE_AHEAD_S;
+    this.queued = this.queued.filter((click) => click.when > context.currentTime);
     for (;;) {
       const beatTime = grid.audioTimeAt(this.nextBeatIndex);
       if (!Number.isFinite(beatTime) || beatTime > horizon) break;
       if (beatTime >= context.currentTime - 0.01) {
-        scheduleClick(context, gain, beatTime, grid.isAccent(this.nextBeatIndex));
+        const accent = grid.isAccent(this.nextBeatIndex);
+        this.queued.push({ when: beatTime, osc: scheduleClick(context, gain, beatTime, accent) });
+        this.scheduledUntil = Math.max(this.scheduledUntil, beatTime);
       }
       this.nextBeatIndex += 1;
     }
   }
 }
 
-/** One click voice: short sine burst, higher and louder on the accent. */
+/**
+ * One click voice: short sine burst, higher and louder on the accent. Returns
+ * its oscillator, which can still be stopped before the click sounds.
+ */
 export function scheduleClick(
   context: BaseAudioContext,
   destination: AudioNode,
   when: number,
   accent: boolean,
-): void {
+): OscillatorNode {
   const osc = context.createOscillator();
   const env = context.createGain();
   osc.frequency.value = accent ? ACCENT_FREQ : BEAT_FREQ;
@@ -203,6 +324,7 @@ export function scheduleClick(
   env.connect(destination);
   osc.start(when);
   osc.stop(when + CLICK_LENGTH_S);
+  return osc;
 }
 
 /**

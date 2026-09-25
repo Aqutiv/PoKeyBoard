@@ -190,10 +190,32 @@ export interface PedalEvent {
   down: boolean;
 }
 
+/** Slowest and fastest a take may be played back, as a fraction of its own speed. */
+export const MIN_PLAYBACK_SPEED = 0.25;
+export const MAX_PLAYBACK_SPEED = 1.5;
+
+/**
+ * A passage played round and round: from `startMs` up to `endMs`, then back.
+ * Practice state, like the playhead: it never changes what a take sounds like
+ * when exported, only which part of it playback repeats.
+ */
+export interface PlaybackLoop {
+  startMs: number;
+  endMs: number;
+}
+
 export interface DisplaySettings {
   quantization: QuantizationSetting;
   zoom: number;
   playheadMs: number;
+  /**
+   * How fast playback runs, 1 being the take's own speed; absent means 1.
+   * Notes are events, so a slower take is the same notes further apart — the
+   * pitch never moves. Recording always runs at the take's own speed.
+   */
+  speed?: number;
+  /** The passage playback repeats; absent means none. See `PlaybackLoop`. */
+  loop?: PlaybackLoop;
 }
 
 /**

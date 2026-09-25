@@ -99,6 +99,19 @@ describe('MenuButton', () => {
     expect(document.activeElement).toBe(elsewhere);
   });
 
+  it('can name its trigger more fully than its text', () => {
+    render(
+      <MenuButton
+        label="75%"
+        ariaLabel="Playback speed: 75%"
+        menuLabel="Speed"
+        triggerClassName="btn"
+        items={[{ label: '100%', onSelect: () => {} }]}
+      />,
+    );
+    expect(screen.getByRole('button', { name: 'Playback speed: 75%' })).toBeTruthy();
+  });
+
   it('says when it opens, so an item can be ready before it is chosen', () => {
     const onOpen = vi.fn();
     render(

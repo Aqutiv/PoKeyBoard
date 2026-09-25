@@ -3,6 +3,8 @@ import {
   dampSampleVoice,
   fadeSampleVoice,
   holdSampleVoice,
+  liftSampleVoiceFade,
+  moveSampleVoiceRelease,
   releaseSampleVoice,
   startSampleVoice,
   stillSoundingAt,
@@ -134,6 +136,47 @@ export class VoiceManager {
   ): void {
     const { voice, heldUntil } = this.strike(sample, midi, sourceId, when, false);
     this.releaseVoice(voice, Math.max(when + durationS, heldUntil), false);
+  }
+
+  /**
+   * Call off `sourceId`'s notes that start after `after`, before any of them
+   * sounds: each is stopped short of its start and dropped at once, so the
+   * caller can schedule it again. Playback does this when its speed changes.
+   *
+   * A strike called off no longer silences the string it was to strike again,
+   * whoever is playing that: the sound goes on as its own key leaves it, and a
+   * strike put back in its place fades it afresh — holding the key for it too,
+   * as a strike of a key still down does; see `restrike`.
+   */
+  cancelPending(sourceId: NoteSourceId, after: number): void {
+    const calledOff: Voice[] = [];
+    for (const voice of this.voices) {
+      if (voice.sourceId !== sourceId || voice.startTime <= after) continue;
+      this.safeStop(voice, this.context.currentTime);
+      this.voices.delete(voice);
+      this.disconnectVoice(voice);
+      calledOff.push(voice);
+    }
+    for (const voice of this.voices) {
+      if (voice.fadeTc === undefined) continue;
+      const fadeAt = voice.releaseTime;
+      if (calledOff.some((strike) => strike.midi === voice.midi && strike.startTime === fadeAt)) {
+        liftSampleVoiceFade(voice, after);
+      }
+    }
+  }
+
+  /**
+   * Move the key-ups still to come of `sourceId`'s notes sounding at `from`,
+   * each to the time `at` gives for it, so a note whose playback speed changes
+   * under it lets go where the new speed puts its end.
+   */
+  retimeReleases(sourceId: NoteSourceId, from: number, at: (releaseTime: number) => number): void {
+    for (const voice of this.voices) {
+      if (voice.sourceId !== sourceId || voice.releasing || voice.startTime > from) continue;
+      if (voice.releaseTime === undefined || voice.releaseTime <= from) continue;
+      moveSampleVoiceRelease(voice, Math.max(at(voice.releaseTime), this.context.currentTime));
+    }
   }
 
   setSustain(down: boolean, sourceId: NoteSourceId): void {

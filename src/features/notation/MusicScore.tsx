@@ -3,6 +3,7 @@ import { useTransportState } from '@/app/hooks/useTransport';
 import { themeController } from '@/app/theme';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
+import { playableLoop } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import type { QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -99,6 +100,9 @@ export function MusicScore() {
   const pedalEvents = useTakeStore((s) => s.take.pedalEvents);
   const tempo = useTakeStore((s) => s.take.tempo);
   const zoom = useTakeStore((s) => s.take.display.zoom);
+  // Only a loop playback will play gets shaded; see `playableLoop`.
+  const take = useTakeStore((s) => s.take);
+  const loop = useMemo(() => playableLoop(take), [take]);
   const quantization = useTakeStore((s) => s.take.display.quantization);
   const setDisplayQuantization = useTakeStore((s) => s.setDisplayQuantization);
   const setDisplayZoom = useTakeStore((s) => s.setDisplayZoom);
@@ -135,6 +139,7 @@ export function MusicScore() {
   const tempoRef = useRef<TempoSettings>(tempo);
   const keyRef = useRef(keySignature);
   const zoomRef = useRef(zoom);
+  const loopRef = useRef(loop);
   const baseRef = useRef(basePxPerMs);
   /** Schedule a frame if none is coming; see the render loop below. */
   const wakeRef = useRef<() => void>(() => {});
@@ -161,6 +166,10 @@ export function MusicScore() {
   useEffect(() => {
     durationRef.current = durationMs;
   }, [durationMs]);
+  useEffect(() => {
+    loopRef.current = loop;
+    wakeRef.current();
+  }, [loop]);
 
   useEffect(() => {
     layoutBoxRef.current = { layout, geometry, version: layoutBoxRef.current.version + 1 };
@@ -308,6 +317,8 @@ export function MusicScore() {
         ghosts.length,
         openNotes.length,
         theme,
+        loopRef.current?.startMs,
+        loopRef.current?.endMs,
       ].join('|');
       const animating = ghosts.length > 0 || openNotes.length > 0;
       const more =
@@ -341,6 +352,7 @@ export function MusicScore() {
             midi: g.midi,
             life: 1 - (now - g.bornAt) / GHOST_LIFE_MS,
           })),
+          loop: loopRef.current,
         },
         SCORE_PALETTES[theme],
       );

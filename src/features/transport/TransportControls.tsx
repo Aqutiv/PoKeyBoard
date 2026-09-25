@@ -7,7 +7,9 @@ import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
+import { LoopButton } from './LoopButton';
 import { ModeMenu } from './ModeMenu';
+import { SpeedMenu } from './SpeedMenu';
 import { canTransition } from './transportMachine';
 import { transportController } from './transportController';
 import { effectivePlaybackDurationMs } from './sustainPedal';
@@ -155,18 +157,23 @@ export function TransportControls() {
         <ModeMenu disabled={recording} desktop={desktop} />
       </div>
 
-      <input
-        type="range"
-        className="transport__seek"
-        min={0}
-        max={Math.max(durationMs, 1)}
-        step={10}
-        value={Math.min(playheadMs, durationMs)}
-        onChange={onSeek}
-        disabled={seekDisabled}
-        aria-label={m.transport.seekPosition}
-        aria-valuetext={formatDurationMs(playheadMs, true)}
-      />
+      <div className="transport__seek-row">
+        <input
+          type="range"
+          className="transport__seek"
+          min={0}
+          max={Math.max(durationMs, 1)}
+          step={10}
+          value={Math.min(playheadMs, durationMs)}
+          onChange={onSeek}
+          disabled={seekDisabled}
+          aria-label={m.transport.seekPosition}
+          aria-valuetext={formatDurationMs(playheadMs, true)}
+        />
+        {/* Practice controls: playback only, so a recording pass leaves them be. */}
+        <SpeedMenu disabled={recording || !hasNotes} />
+        <LoopButton disabled={recording || !hasNotes} />
+      </div>
       {desktop && playbackMode !== 'simple' && !recording && !waitingForTraining ? (
         <p className="transport__status">{m.workflow.practiceHint}</p>
       ) : null}

@@ -12,7 +12,7 @@ export const fr: Messages = {
     recording: 'Enregistrement',
     clickVolume: 'Volume du clic',
     tempoHint:
-      'Le tempo modifie le métronome et la grille de la partition, pas la vitesse de lecture enregistrée.',
+      'Le tempo modifie le métronome et la grille de la partition. Pour lire une prise plus lentement ou plus vite, utilisez le réglage de vitesse.',
     searchTakes: 'Rechercher des prises',
     noTakesMatch: 'Aucune prise ne correspond à votre recherche.',
     clearSearch: 'Effacer la recherche',
@@ -85,6 +85,12 @@ export const fr: Messages = {
     recording: '● Enregistrement',
     emptyHint: 'Appuyez sur enregistrer et jouez quelque chose pour capturer une prise.',
     seekPosition: 'Position de lecture',
+    speed: 'Vitesse',
+    speedLabel: ({ percent }) => `Vitesse de lecture : ${percent} %`,
+    speedChoice: ({ percent }) => `${percent} %`,
+    loopStart: 'Boucler un passage : marquez son début',
+    loopEnd: ({ from }) => `Boucle depuis ${from} : marquez sa fin`,
+    loopClear: ({ from, to }) => `Arrêter la boucle ${from}–${to}`,
   },
   metronome: {
     groupLabel: 'Métronome',

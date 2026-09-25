@@ -36,6 +36,17 @@ describe('nextTrainingGate', () => {
     expect(nextTrainingGate(TAKE, 501, 'right')?.atMs).toBe(500 + CHORD_WINDOW_MS);
   });
 
+  it('asks for nothing from endMs on, where a loop goes round', () => {
+    // A loop ending as the chord's second note starts: that note never plays.
+    const endMs = 500 + CHORD_WINDOW_MS;
+    expect(nextTrainingGate(TAKE, 0, 'right', endMs)).toEqual({
+      atMs: 500,
+      midis: new Set([64]),
+      noteIds: new Set(['r1']),
+    });
+    expect(nextTrainingGate(TAKE, 501, 'right', endMs)).toBeNull();
+  });
+
   it('takes whichever hand comes first for both', () => {
     expect(nextTrainingGate(TAKE, 0, 'both')?.atMs).toBe(0);
     expect(nextTrainingGate(TAKE, 0, 'both')?.midis).toEqual(new Set([48]));

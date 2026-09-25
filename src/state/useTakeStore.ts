@@ -10,6 +10,7 @@ import type {
   InstrumentSettings,
   NoteEvent,
   PedalEvent,
+  PlaybackLoop,
   Take,
   TempoSettings,
 } from '@/domain/takeTypes';
@@ -47,6 +48,9 @@ export interface TakeStoreState {
   setPlayheadMs(playheadMs: number): void;
   setDisplayQuantization(quantization: Take['display']['quantization']): void;
   setDisplayZoom(zoom: number): void;
+  /** Practice state, like the playhead: saved, but never audible in an export. */
+  setPlaybackSpeed(speed: number): void;
+  setPlaybackLoop(loop: PlaybackLoop | null): void;
   markSaved(takeId: string, generation: number): void;
 }
 
@@ -234,6 +238,31 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
       dirty: state.dirty || state.take.notes.length > 0,
       mutationGeneration: state.mutationGeneration + 1,
     })),
+
+  setPlaybackSpeed: (speed) =>
+    set((state) => {
+      const display = { ...state.take.display };
+      // The take's own speed is stored as nothing at all.
+      if (speed === 1) delete display.speed;
+      else display.speed = speed;
+      return {
+        take: { ...state.take, display },
+        dirty: state.dirty || state.take.notes.length > 0,
+        mutationGeneration: state.mutationGeneration + 1,
+      };
+    }),
+
+  setPlaybackLoop: (loop) =>
+    set((state) => {
+      const display = { ...state.take.display };
+      if (loop) display.loop = loop;
+      else delete display.loop;
+      return {
+        take: { ...state.take, display },
+        dirty: state.dirty || state.take.notes.length > 0,
+        mutationGeneration: state.mutationGeneration + 1,
+      };
+    }),
 
   markSaved: (takeId, generation) =>
     set((state) => {

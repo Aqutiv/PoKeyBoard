@@ -21,7 +21,7 @@ test.describe('recording and playback', () => {
 
     // Playback: return to start, play, watch the clock advance.
     await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
-    await transport(page).getByRole('button', { name: 'Play' }).click();
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
     await expect(transport(page).getByRole('button', { name: 'Pause' })).toBeVisible();
     // The first non-zero reading is the proof the clock is running; polling for
     // it beats sleeping a guessed interval and reading once.
@@ -30,7 +30,7 @@ test.describe('recording and playback', () => {
       .not.toMatch(/^0:00\.0/);
 
     // Playback auto-pauses at the end of the short take.
-    await expect(transport(page).getByRole('button', { name: 'Play' })).toBeVisible({
+    await expect(transport(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible({
       timeout: 10_000,
     });
 

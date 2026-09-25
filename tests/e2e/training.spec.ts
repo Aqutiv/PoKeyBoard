@@ -52,7 +52,7 @@ test.describe('training playback', () => {
 
     await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
     await chooseMode(page, /both hands/);
-    await transport(page).getByRole('button', { name: 'Play' }).click();
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
 
     // The take opens on C4, so playback holds before it has played anything.
     await expect(page.getByText('Waiting for you to play the lit keys')).toBeVisible();
@@ -79,7 +79,7 @@ test.describe('training playback', () => {
     await expect(page.getByText('Waiting for you to play the lit keys')).toHaveCount(0, {
       timeout: 10_000,
     });
-    await expect(transport(page).getByRole('button', { name: 'Play' })).toBeVisible({
+    await expect(transport(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible({
       timeout: 10_000,
     });
   });
@@ -103,9 +103,9 @@ test.describe('training playback', () => {
     // Both recorded notes are right-hand, so training the left hand never
     // holds: playback runs to the end on its own.
     await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
-    await transport(page).getByRole('button', { name: 'Play' }).click();
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
     await expect(page.getByText('Waiting for you to play the lit keys')).toHaveCount(0);
-    await expect(transport(page).getByRole('button', { name: 'Play' })).toBeVisible({
+    await expect(transport(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible({
       timeout: 10_000,
     });
   });

@@ -12,7 +12,7 @@ export const es: Messages = {
     recording: 'Grabación',
     clickVolume: 'Volumen del clic',
     tempoHint:
-      'El tempo cambia el metrónomo y la cuadrícula de la partitura, no la velocidad de reproducción grabada.',
+      'El tempo cambia el metrónomo y la cuadrícula de la partitura. Para reproducir una toma más lenta o más rápida, usa el control de velocidad.',
     searchTakes: 'Buscar tomas',
     noTakesMatch: 'Ninguna toma coincide con tu búsqueda.',
     clearSearch: 'Borrar búsqueda',
@@ -84,6 +84,12 @@ export const es: Messages = {
     recording: '● Grabando',
     emptyHint: 'Pulsa grabar y toca algo para capturar una toma.',
     seekPosition: 'Posición de búsqueda',
+    speed: 'Velocidad',
+    speedLabel: ({ percent }) => `Velocidad de reproducción: ${percent} %`,
+    speedChoice: ({ percent }) => `${percent} %`,
+    loopStart: 'Repetir un pasaje: marca dónde empieza',
+    loopEnd: ({ from }) => `Repetir desde ${from}: marca dónde termina`,
+    loopClear: ({ from, to }) => `Dejar de repetir ${from}–${to}`,
   },
   metronome: {
     groupLabel: 'Metrónomo',

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   constantClickGrid,
   gridForTake,
+  loopClickGrid,
   MetronomeEngine,
   scheduleClicksForRange,
   takeClickGrid,
@@ -25,10 +26,10 @@ const MAPPED_TEMPO: TempoSettings = {
 
 /**
  * The bare minimum of the Web Audio surface `scheduleClick` touches, recording
- * what would have been heard.
+ * every click scheduled. One stopped at or before its start is never heard.
  */
 function stubContext(currentTime = 0) {
-  const clicks: Array<{ when: number; freq: number }> = [];
+  const clicks: Array<{ when: number; freq: number; stopAt: number }> = [];
   const param = () => ({
     value: 0,
     setValueAtTime: vi.fn(),
@@ -41,11 +42,18 @@ function stubContext(currentTime = 0) {
     destination: { name: 'destination' },
     createGain: () => ({ gain: param(), connect: vi.fn() }),
     createOscillator: () => {
+      const click = { when: 0, freq: 0, stopAt: Number.POSITIVE_INFINITY };
       const osc = {
         frequency: { value: 0 },
         connect: vi.fn(),
-        start: (when: number) => clicks.push({ when, freq: osc.frequency.value }),
-        stop: vi.fn(),
+        start: (when: number) => {
+          click.when = when;
+          click.freq = osc.frequency.value;
+          clicks.push(click);
+        },
+        stop: (when: number) => {
+          click.stopAt = when;
+        },
       };
       return osc;
     },
@@ -104,10 +112,66 @@ describe('takeClickGrid', () => {
   });
 
   it('is built from a take and a clock by gridForTake', () => {
-    const clock = { audioTimeForTakeMs, takeMsForAudioTime };
+    const clock = {
+      audioTimeForVirtualMs: audioTimeForTakeMs,
+      virtualMsForAudioTime: takeMsForAudioTime,
+      loop: null,
+    };
     const built = gridForTake(MAPPED_TEMPO, clock);
     expect(built.audioTimeAt(96)).toBeCloseTo(grid.audioTimeAt(96), 6);
     expect(built.numerator).toBe(4);
+  });
+});
+
+describe('loopClickGrid', () => {
+  // 120 bpm in 4/4: a beat is 500 ms. The loop is bar 2 (2000–4000 ms), and
+  // the run is anchored so virtual time 0 is audio time 100.
+  const map = createTakeTempoMap({ bpm: 120, timeSignature: FOUR_FOUR });
+  const loop = { startMs: 2000, endMs: 4000 };
+  const timeline = {
+    audioTimeForVirtualMs: (ms: number) => 100 + ms / 1000,
+    virtualMsForAudioTime: (t: number) => (t - 100) * 1000,
+    loop,
+  };
+  const grid = loopClickGrid(map, 4, timeline, loop);
+
+  it('clicks up to the loop’s end, then round the loop again and again', () => {
+    // Beats 0–7 (to 4000 ms), then bar 2's four beats, pass after pass.
+    expect([6, 7, 8, 9, 12].map((i) => grid.audioTimeAt(i))).toEqual([103, 103.5, 104, 104.5, 106]);
+  });
+
+  it('accents the bar line each time round', () => {
+    expect([4, 8, 9, 12, 13].map((i) => grid.isAccent(i))).toEqual([
+      true,
+      true,
+      false,
+      true,
+      false,
+    ]);
+  });
+
+  it('inverts audio time back to a click, in whichever pass it falls', () => {
+    expect(grid.indexAt(104.5)).toBeCloseTo(9, 6);
+    expect(grid.indexAt(106.25)).toBeCloseTo(12.5, 6);
+  });
+
+  it('counts a mark rounded to the millisecond as the beat it was put on', () => {
+    // 104 bpm: beat 1 falls at 576.923 ms and a mark there is stored as 577.
+    // The loop is four beats from it, and must click beats 1 to 4 each time.
+    const slow = createTakeTempoMap({ bpm: 104, timeSignature: FOUR_FOUR });
+    const rounded = { startMs: 577, endMs: Math.round(slow.msAtBeat(5)) };
+    const at = { ...timeline, loop: rounded };
+    const looped = loopClickGrid(slow, 4, at, rounded);
+    const length = rounded.endMs - rounded.startMs;
+    // Click 5 is the first after the seam: beat 1 again, one loop later.
+    expect(looped.audioTimeAt(5)).toBeCloseTo(100 + (slow.msAtBeat(1) + length) / 1000, 6);
+    // Beat 4 is bar two's downbeat, inside the loop: accented every time round.
+    expect(looped.isAccent(8)).toBe(true);
+  });
+
+  it('is what gridForTake builds for a clock that loops', () => {
+    const built = gridForTake({ bpm: 120, timeSignature: FOUR_FOUR }, timeline);
+    expect(built.audioTimeAt(12)).toBeCloseTo(106, 6);
   });
 });
 
@@ -147,6 +211,106 @@ describe('MetronomeEngine', () => {
     expect(engine.beatInBarAt(0)).toBe(0);
     expect(engine.beatInBarAt(1.2)).toBe(2);
     expect(engine.beatInBarAt(2.0)).toBe(0);
+    engine.stop();
+  });
+
+  it('lights the beat each click stands for, round a loop that is not whole bars', () => {
+    const { context } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    // 120 bpm in 4/4, looping bar 2's first three beats (2000–3500 ms), with
+    // virtual time 0 at audio time 0.
+    const loop = { startMs: 2000, endMs: 3500 };
+    const timeline = {
+      audioTimeForVirtualMs: (ms: number) => ms / 1000,
+      virtualMsForAudioTime: (t: number) => t * 1000,
+      loop,
+    };
+    const map = createTakeTempoMap({ bpm: 120, timeSignature: FOUR_FOUR });
+    engine.start(loopClickGrid(map, 4, timeline, loop));
+    // Halfway through each beat from the last before the seam: bar 2's third
+    // beat, then its first three again and again, never its fourth.
+    const at = [3.25, 3.75, 4.25, 4.75, 5.25, 5.75, 6.25, 6.75];
+    expect(at.map((t) => engine.beatInBarAt(t))).toEqual([2, 0, 1, 2, 0, 1, 2, 0]);
+    engine.stop();
+  });
+
+  it('never sounds a click twice when the grid is swapped', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 30, 4)); // clicks to 120 ms already scheduled
+    engine.setGrid(constantClickGrid(0, 30, 4));
+    engine.topUpSchedule();
+    const times = clicks.map((click) => click.when);
+    expect(new Set(times).size).toBe(times.length);
+    engine.stop();
+  });
+
+  it('calls off the clicks still to come when it starts again', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 62.5, 4)); // clicks at 0 and 62.5 ms queued
+    context.currentTime = 0.03125;
+    // Started over on a grid a little later, as a loop edit restarts playback.
+    engine.start(constantClickGrid(0.09375, 62.5, 4));
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([0, 0.09375]);
+    engine.stop();
+  });
+
+  it('calls off the clicks still to come when it stops, but not one sounding', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 62.5, 4));
+    context.currentTime = 0.0625;
+    engine.topUpSchedule(); // the click at 125 ms is queued too
+    engine.stop(); // on the click at 62.5 ms itself
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([0, 0.0625]);
+  });
+
+  it('lets the clicks already queued sound when it finishes, as a count-in does', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 62.5, 4)); // clicks at 0 and 62.5 ms queued
+    context.currentTime = 0.03125;
+    engine.finish();
+    engine.topUpSchedule();
+    expect(engine.isRunning).toBe(false);
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([0, 0.0625]);
+  });
+
+  it('calls off the clicks queued at the old speed when the speed changes', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    const tempo = { bpm: 120, timeSignature: FOUR_FOUR };
+    /** A run at `rate` that plays take time `fromMs` at audio time `fromAudio`. */
+    const run = (rate: number, fromAudio: number, fromMs: number) => ({
+      audioTimeForVirtualMs: (ms: number) => fromAudio + (ms - fromMs) / 1000 / rate,
+      virtualMsForAudioTime: (t: number) => fromMs + (t - fromAudio) * 1000 * rate,
+      loop: null,
+    });
+    engine.start(gridForTake(tempo, run(1, 0, 0)));
+    context.currentTime = 0.45;
+    engine.topUpSchedule(); // beat 1, at 0.5 s, is queued
+    // Quarter speed from here: beat 1 is 50 ms of the take away, 200 ms of audio.
+    engine.retime(gridForTake(tempo, run(0.25, 0.45, 450)));
+    for (let t = 0.45; t < 2.7; t += 0.025) {
+      context.currentTime = t;
+      engine.topUpSchedule();
+    }
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([
+      0,
+      expect.closeTo(0.65, 6),
+      expect.closeTo(2.65, 6),
+    ]);
     engine.stop();
   });
 

@@ -28,6 +28,8 @@ export interface MenuButtonGroup {
 interface MenuButtonProps {
   /** Trigger text; the ▾ caret is appended here. */
   label: string;
+  /** The trigger's accessible name, where its text alone would say too little. */
+  ariaLabel?: string;
   /** Accessible name of the popup. */
   menuLabel: string;
   /** Flat actions. Give either these or `groups`. */
@@ -49,6 +51,7 @@ interface MenuButtonProps {
 /** One button opening a small menu of actions. */
 export function MenuButton({
   label,
+  ariaLabel,
   menuLabel,
   items,
   groups,
@@ -90,6 +93,7 @@ export function MenuButton({
         ref={triggerRef}
         type="button"
         className={triggerClassName}
+        aria-label={ariaLabel}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
