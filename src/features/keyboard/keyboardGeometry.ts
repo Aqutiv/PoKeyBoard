@@ -192,10 +192,9 @@ export function hitTestKey(layout: KeyboardLayout, x: number, y: number): number
 }
 
 /**
- * Touch-position velocity: soft near the key top, strong near the bottom,
- * on a musical (non-linear) curve. yFraction 0 = top of key, 1 = bottom.
+ * Touch-position velocity: soft near the key top, strong near the bottom. It
+ * lives with the other input curves in velocityResponse.ts, where the touch
+ * sensitivity setting picks one, and is offered here beside the hit test that
+ * finds the position it reads.
  */
-export function touchVelocity(yFraction: number): number {
-  const clamped = Math.min(1, Math.max(0, yFraction));
-  return Math.min(1, 0.25 + 0.75 * Math.pow(clamped, 1.4));
-}
+export { touchVelocity } from './velocityResponse';

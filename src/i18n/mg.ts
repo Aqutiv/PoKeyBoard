@@ -486,6 +486,31 @@ export const mg: Messages = {
     velocityTouch: 'Araka ny toeran’ny fikasihana amin’ny kitendry',
     velocityFixed: 'Raikitra',
     fixedVelocity: 'Hafainganam-pandeha raikitra',
+    touchSensitivity: 'Fahatsapana ny fikasihana',
+    touchSensitivityLight: 'Maivana',
+    touchSensitivityNormal: 'Mahazatra',
+    touchSensitivityFirm: 'Henjana',
+    touchSensitivityHint:
+      'Maivana: mafy ny feo na dia eo ambony amin’ny kitendry aza. Henjana: eo amin’ny faran’ny kitendry ambany ihany ny feo mafy indrindra.',
+    accentHint: 'Amin’ny klavien’ny ordinatera, hazony ny Shift mba hanamafisana naoty iray.',
+    midiVelocityCurve: 'Fiolahan’ny hafainganam-pandeha MIDI',
+    midiCurveLight: 'Maivana',
+    midiCurveNormal: 'Mahazatra',
+    midiCurveHeavy: 'Mavesatra',
+    midiCurveHint:
+      'Maivana: mafy kokoa ny feo na dia moramora aza ny fikasihana. Mavesatra: mila kapohina mafy kokoa.',
+    midiVelocityRange: 'Elanelan’ny hafainganam-pandeha MIDI',
+    midiRangeNone:
+      'Tsy mbola nampifanarahana. Ampifanaraho mba hivelatra amin’ny elanelana manontolo ny naoty malefaka indrindra sy mafy indrindra tendrenao.',
+    midiRangeSet: ({ min, max }) => `Nampifanarahana: ${min}–${max} amin’ny 127.`,
+    midiCalibrate: 'Ampifanaraho',
+    midiCalibrateReset: 'Avereno',
+    midiCalibrateCancel: 'Aoka',
+    midiCalibrateSoftest: 'Tendreo ny naoty malefaka indrindra…',
+    midiCalibrateLoudest: ({ softest }) =>
+      `Malefaka indrindra: ${softest}. Ankehitriny, ny mafy indrindra…`,
+    midiCalibrateRejected:
+      'Tsy maintsy mafy lavitra noho ny malefaka indrindra ny naoty mafy indrindra. Andramo indray.',
     noteLabels: 'Anaran’ny naoty eo amin’ny kitendry',
     followPlayback: 'Manaraka ny famerenana ny klavie',
     scrubAudition: 'Feo rehefa mandalo ny sori-kira',

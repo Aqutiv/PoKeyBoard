@@ -43,6 +43,8 @@ export function useMidiInput(): void {
   const enabled = useSettingsStore((s) => s.midiInput);
   const velocityMode = useSettingsStore((s) => s.velocityMode);
   const fixedVelocity = useSettingsStore((s) => s.fixedVelocity);
+  const velocityCurve = useSettingsStore((s) => s.midiVelocityCurve);
+  const velocityRange = useSettingsStore((s) => s.midiVelocityRange);
   // Zustand setters are created once, so these stay referentially stable and
   // the attach effect below does not rebind the MIDI ports on every render.
   const setMasterVolume = useSettingsStore((s) => s.setMasterVolume);
@@ -138,5 +140,7 @@ export function useMidiInput(): void {
   useEffect(() => {
     inputRef.current?.setVelocity(fixedVelocity);
     inputRef.current?.setVelocityMode(velocityMode);
-  }, [fixedVelocity, velocityMode, enabled]);
+    inputRef.current?.setVelocityCurve(velocityCurve);
+    inputRef.current?.setVelocityRange(velocityRange);
+  }, [fixedVelocity, velocityMode, velocityCurve, velocityRange, enabled]);
 }

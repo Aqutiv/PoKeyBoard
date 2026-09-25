@@ -86,6 +86,14 @@
   min-height: 30px;
 }
 
+/* Buttons at the end of a row, such as the MIDI calibration's. */
+.setting-row__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .setting-row progress {
   width: 100%;
   accent-color: var(--accent);
@@ -203,6 +211,12 @@
 .settings__error {
   color: var(--record);
   font-size: 13px;
+}
+
+/* A hint asking the player to do something now, like play a note. */
+.settings__prompt {
+  color: var(--text);
+  font-weight: 600;
 }
 
 .caps-list {

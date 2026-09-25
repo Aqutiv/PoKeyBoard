@@ -1,9 +1,10 @@
-import { cleanup, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '@/audio/AudioEngine';
 import { __resetForTests as resetRange } from '@/audio/playableRange';
 import { __resetForTests as resetAccess, getSnapshot } from '@/features/keyboard/midiAccess';
 import { registerMidiKeyboard, useMidiInput } from '@/features/keyboard/useMidiInput';
+import { midiVelocity } from '@/features/keyboard/velocityResponse';
 import { SETTINGS_DEFAULTS, useSettingsStore } from '@/state/useSettingsStore';
 
 const NOTE_ON = 0x90;
@@ -171,6 +172,21 @@ describe('useMidiInput', () => {
     await Promise.resolve();
 
     expect(noteOn).toHaveBeenCalledTimes(1);
+  });
+
+  it('plays through the velocity curve and calibration chosen in Settings', async () => {
+    const noteOn = vi.spyOn(audioEngine, 'noteOn').mockReturnValue(true);
+    const range = { min: 20, max: 100 };
+    useSettingsStore.setState({ midiVelocityCurve: 'light', midiVelocityRange: range });
+    await mountShell();
+
+    send(NOTE_ON, 60, 60);
+    expect(noteOn).toHaveBeenLastCalledWith(60, midiVelocity(60, 'light', range), 'midi');
+
+    // A change made while the device is attached applies from the next note.
+    act(() => useSettingsStore.setState({ midiVelocityCurve: 'normal', midiVelocityRange: null }));
+    send(NOTE_ON, 62, 60);
+    expect(noteOn).toHaveBeenLastCalledWith(62, 60 / 127, 'midi');
   });
 
   it('does nothing at all while the setting is off', async () => {

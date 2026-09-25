@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { __resetForTests, getSnapshot } from '@/features/keyboard/midiAccess';
-import { MidiInput } from '@/features/keyboard/midiInput';
+import { MidiInput, registerRawVelocityListener } from '@/features/keyboard/midiInput';
+import { midiVelocity } from '@/features/keyboard/velocityResponse';
 
 const NOTE_ON = 0x90;
 const NOTE_OFF = 0x80;
@@ -429,5 +430,92 @@ describe('MidiInput', () => {
     send(port, NOTE_ON, 60, 127);
 
     expect(noteOn).toHaveBeenCalledWith(60, 0.4);
+  });
+
+  it('reads the device velocity through the chosen curve and calibrated range', async () => {
+    const port = new FakePort('a', 'pad');
+    plug(port);
+    const { input, noteOn } = await attachInput();
+    const range = { min: 20, max: 100 };
+    input.setVelocityCurve('heavy');
+    input.setVelocityRange(range);
+
+    send(port, NOTE_ON, 60, 60);
+    send(port, NOTE_ON, 64, 10);
+
+    expect(noteOn).toHaveBeenCalledWith(60, midiVelocity(60, 'heavy', range));
+    // Softer than the softest calibrated strike plays as that strike.
+    expect(noteOn).toHaveBeenCalledWith(64, midiVelocity(20, 'heavy', range));
+  });
+
+  it('leaves the curve and calibration out of fixed mode', async () => {
+    const port = new FakePort('a', 'pad');
+    plug(port);
+    const { input, noteOn } = await attachInput();
+    input.setVelocityCurve('light');
+    input.setVelocityRange({ min: 20, max: 100 });
+    input.setVelocityMode('fixed');
+    input.setVelocity(0.4);
+
+    send(port, NOTE_ON, 60, 60);
+
+    expect(noteOn).toHaveBeenCalledWith(60, 0.4);
+  });
+
+  // What the inline calibration in Settings listens to.
+  it('reports each struck key’s raw velocity to a registered listener', async () => {
+    const port = new FakePort('a', 'pad');
+    plug(port);
+    const { input } = await attachInput();
+    // Raw means before all of these.
+    input.setVelocityCurve('light');
+    input.setVelocityRange({ min: 30, max: 90 });
+    const heard = vi.fn();
+    const unregister = registerRawVelocityListener(heard);
+
+    send(port, NOTE_ON, 60, 23);
+    send(port, NOTE_ON, 60, 0); // a release, not a strike
+    send(port, NOTE_OFF, 60, 64);
+    send(port, CC, 64, 127);
+    send(port, NOTE_ON, 64, 118);
+    unregister();
+    send(port, NOTE_ON, 67, 90);
+
+    expect(heard.mock.calls).toEqual([[23], [118]]);
+  });
+
+  it('reports only the notes it plays', async () => {
+    const port = new FakePort('a', 'pad');
+    plug(port);
+    await attachInput();
+    const heard = vi.fn();
+    const unregister = registerRawVelocityListener(heard);
+
+    send(port, NOTE_ON, 20, 50); // off the piano
+    const dialog = openModal();
+    send(port, NOTE_ON, 60, 50);
+    dialog.remove();
+    send(port, NOTE_ON, 62, 70);
+    send(port, NOTE_ON, 62, 90); // already sounding
+    unregister();
+
+    expect(heard.mock.calls).toEqual([[70]]);
+  });
+
+  it('keeps a newer listener when an older one unregisters', async () => {
+    const port = new FakePort('a', 'pad');
+    plug(port);
+    await attachInput();
+    const older = vi.fn();
+    const newer = vi.fn();
+    const unregisterOlder = registerRawVelocityListener(older);
+    const unregisterNewer = registerRawVelocityListener(newer);
+
+    unregisterOlder();
+    send(port, NOTE_ON, 60, 50);
+    unregisterNewer();
+
+    expect(older).not.toHaveBeenCalled();
+    expect(newer).toHaveBeenCalledWith(50);
   });
 });

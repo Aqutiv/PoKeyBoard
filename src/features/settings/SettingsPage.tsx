@@ -10,6 +10,7 @@ import type { SupportedLanguage } from '@/i18n/types';
 import { installService } from '@/pwa/install';
 import { updateManager } from '@/pwa/updateManager';
 import { useUpdateAvailable } from '@/pwa/useUpdateAvailable';
+import { TOUCH_SENSITIVITIES, type TouchSensitivity } from '@/features/keyboard/velocityResponse';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { formatMB } from './formatBytes';
@@ -19,6 +20,15 @@ import './settings.css';
 
 /** Opening Settings is asking "is there an update?", so it checks sooner. */
 const SETTINGS_UPDATE_CHECK_INTERVAL_MS = 60_000;
+
+const TOUCH_SENSITIVITY_LABELS: Record<
+  TouchSensitivity,
+  'touchSensitivityLight' | 'touchSensitivityNormal' | 'touchSensitivityFirm'
+> = {
+  light: 'touchSensitivityLight',
+  normal: 'touchSensitivityNormal',
+  firm: 'touchSensitivityFirm',
+};
 
 const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
   'standaloneDisplayMode',
@@ -132,7 +142,32 @@ export function SettingsPage() {
               onChange={(e) => settings.setFixedVelocity(Number(e.target.value))}
             />
           </label>
-        ) : null}
+        ) : (
+          <>
+            <div
+              className="setting-row setting-row--stack"
+              role="radiogroup"
+              aria-label={m.settings.touchSensitivity}
+            >
+              <span>{m.settings.touchSensitivity}</span>
+              {TOUCH_SENSITIVITIES.map((sensitivity) => (
+                <label key={sensitivity}>
+                  <input
+                    type="radio"
+                    name="touch-sensitivity"
+                    checked={settings.touchSensitivity === sensitivity}
+                    onChange={() => settings.setTouchSensitivity(sensitivity)}
+                  />
+                  {m.settings[TOUCH_SENSITIVITY_LABELS[sensitivity]]}
+                </label>
+              ))}
+            </div>
+            <p className="settings__hint">{m.settings.touchSensitivityHint}</p>
+          </>
+        )}
+        {/* Under both modes: the computer keyboard plays the fixed velocity
+            in either, and the app explains that keyboard nowhere else. */}
+        <p className="settings__hint">{m.settings.accentHint}</p>
         <label className="setting-row">
           <span>{m.settings.noteLabels}</span>
           <input
