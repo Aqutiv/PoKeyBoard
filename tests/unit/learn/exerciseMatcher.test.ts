@@ -803,6 +803,39 @@ describe('playAlong', () => {
       expect(progress(TO_MINOR, [...script, ['off', E4, 1600]])).toBe('2/2 ok');
     });
 
+    it('never credits a repeated chord for keys struck for the one before', () => {
+      // The onset window is scoped to the moment: letting go of one key of a
+      // finished chord must not play the same chord again on its own.
+      const TWICE: ExerciseSpec = {
+        kind: 'playAlong',
+        phrase: line([0, ['C4', 'E4', 'G4'], 4], [4, ['C4', 'E4', 'G4'], 4]),
+        together: TOGETHER,
+      };
+      const held: Beat[] = [
+        ['on', C4, 0],
+        ['on', E4, 10],
+        ['on', G4, 20],
+        ['off', C4, 200],
+      ];
+      expect(progress(TWICE, held)).toBe('1/2');
+      // Striking the key again is playing the chord again.
+      expect(progress(TWICE, [...held, ['on', C4, 1500]])).toBe('2/2 ok');
+    });
+
+    it('takes the next chord straight away, without waiting out the last one', () => {
+      // The old third, struck for the chord before, is inside the 400ms window
+      // here — but it belongs to that chord, not this one.
+      expect(
+        progress(TO_MINOR, [
+          ['on', C4, 0],
+          ['on', E4, 10],
+          ['on', G4, 20],
+          ['off', E4, 100],
+          ['on', EB4, 150],
+        ]),
+      ).toBe('2/2 ok');
+    });
+
     it('lets a mouse roll a chord inside the onset window', () => {
       const roll: Beat[] = [C4, E4, G4].flatMap((midi, i): Beat[] => [
         ['on', midi, i * 100],
@@ -876,7 +909,7 @@ describe('playAlong', () => {
       };
       const reentry: ExerciseState = {
         ...initExercise(),
-        along: { index: 4, struck: new Set(), origin: null },
+        along: { index: 4, struck: new Set(), fresh: new Set(), origin: null },
       };
       const state = reduceExercise(spec, reentry, {
         kind: 'press',

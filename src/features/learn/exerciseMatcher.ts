@@ -58,6 +58,13 @@ export interface AlongRun {
   /** Notes of the due moment already down: half a chord, so far. */
   struck: ReadonlySet<number>;
   /**
+   * `together` only: the keys struck since this moment became due — the only
+   * presses its onset window may count. The exercise-wide onset history would
+   * otherwise carry a finished chord into the next moment: two identical
+   * chords in a row, and letting go of one key would credit the second.
+   */
+  fresh: ReadonlySet<number>;
+  /**
    * Timed only: grid beat of the bar line the attempt is measured from, or
    * `null` while waiting to come in at `index`. Always `null` untimed.
    */
@@ -338,7 +345,12 @@ function doneFor(spec: ExerciseSpec, state: ExerciseState): number {
 type PlayAlongSpec = Extract<ExerciseSpec, { kind: 'playAlong' }>;
 
 const NOTHING_STRUCK: ReadonlySet<number> = new Set();
-const AT_START: AlongRun = { index: 0, struck: NOTHING_STRUCK, origin: null };
+const AT_START: AlongRun = {
+  index: 0,
+  struck: NOTHING_STRUCK,
+  fresh: NOTHING_STRUCK,
+  origin: null,
+};
 
 interface AlongStep {
   run: AlongRun;
@@ -418,9 +430,11 @@ function advanceTogether(
     const fallback = fallbackFrom(spec, run.index);
     const target = moments[fallback.index];
     if (!target?.midis.includes(input.midi)) return { run: fallback, wrong: true };
-    return { run: gesture(target, fallback, input, onsets, together), wrong: false };
+    const retry = { ...fallback, fresh: new Set([input.midi]) };
+    return { run: gesture(target, retry, input, onsets, together), wrong: false };
   }
-  return { run: gesture(moment, run, input, onsets, together), wrong: false };
+  const fresh = input.kind === 'press' ? new Set(run.fresh).add(input.midi) : run.fresh;
+  return { run: gesture(moment, { ...run, fresh }, input, onsets, together), wrong: false };
 }
 
 function gesture(
@@ -430,10 +444,13 @@ function gesture(
   onsets: ReadonlyMap<number, number>,
   together: Togetherness,
 ): AlongRun {
-  const candidate = candidateSet(input, onsets, together);
+  // Keys held down still count, however long ago they were struck — that is
+  // how "move one note" keeps the other two. Only the onset window is scoped.
+  const recent = new Map([...onsets].filter(([midi]) => run.fresh.has(midi)));
+  const candidate = candidateSet(input, recent, together);
   const exact =
     candidate.size === moment.midis.length && moment.midis.every((midi) => candidate.has(midi));
-  if (exact) return { index: run.index + 1, struck: NOTHING_STRUCK, origin: null };
+  if (exact) return { ...AT_START, index: run.index + 1 };
   return { ...run, struck: new Set(moment.midis.filter((midi) => candidate.has(midi))) };
 }
 
@@ -478,7 +495,7 @@ function strike(moments: readonly PhraseMoment[], run: AlongRun, midi: number): 
   if (!moment || !moment.midis.includes(midi) || run.struck.has(midi)) return null;
   const struck = new Set(run.struck).add(midi);
   return struck.size >= moment.midis.length
-    ? { index: run.index + 1, struck: NOTHING_STRUCK, origin: run.origin }
+    ? { ...AT_START, index: run.index + 1, origin: run.origin }
     : { ...run, struck };
 }
 
@@ -488,7 +505,7 @@ function fallbackFrom(spec: PlayAlongSpec, index: number): AlongRun {
   for (const candidate of spec.checkpoints ?? [0]) {
     if (candidate <= index && candidate > checkpoint) checkpoint = candidate;
   }
-  return { index: checkpoint, struck: NOTHING_STRUCK, origin: null };
+  return { ...AT_START, index: checkpoint };
 }
 
 /**
