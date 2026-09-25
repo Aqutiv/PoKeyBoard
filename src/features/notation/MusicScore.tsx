@@ -146,6 +146,7 @@ export function MusicScore() {
   }, [durationMs]);
   useEffect(() => {
     loopRef.current = loop;
+    wakeRef.current();
   }, [loop]);
 
   useEffect(() => {

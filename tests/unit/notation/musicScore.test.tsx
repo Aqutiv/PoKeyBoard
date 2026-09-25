@@ -69,11 +69,13 @@ describe('MusicScore', () => {
     frame(); // nothing has changed, so nothing is drawn again
     expect(h.drawnLoops).toEqual([null]);
 
-    act(() => transportController.setLoop({ startMs: 1000, endMs: 2000 }));
+    // Set on the take itself, not through the transport, so nothing but the
+    // loop changing can wake the score to draw it.
+    act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
     frame();
     expect(h.drawnLoops).toEqual([null, { startMs: 1000, endMs: 2000 }]);
 
-    act(() => transportController.setLoop(null));
+    act(() => useTakeStore.getState().setPlaybackLoop(null));
     frame();
     expect(h.drawnLoops).toEqual([null, { startMs: 1000, endMs: 2000 }, null]);
   });
