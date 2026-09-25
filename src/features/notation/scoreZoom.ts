@@ -52,8 +52,20 @@ export function basePxPerMsFor(layout: ScoreLayout): number {
  * exactly where they began.
  */
 export function nextZoom(zoom: number, steps: number): number {
-  const next = zoom * ZOOM_STEP ** steps;
-  const clamped = Math.min(MAX_DISPLAY_ZOOM, Math.max(MIN_DISPLAY_ZOOM, next));
+  return clampZoom(zoom * ZOOM_STEP ** steps);
+}
+
+/**
+ * The zoom a pinch has reached: the zoom it began at times its `scale`, which
+ * is how far the fingers have spread since they came down (or what Safari's
+ * own gesture reports), held and rounded the same way.
+ */
+export function scaledZoom(zoom: number, scale: number): number {
+  return scale > 0 && Number.isFinite(scale) ? clampZoom(zoom * scale) : zoom;
+}
+
+function clampZoom(zoom: number): number {
+  const clamped = Math.min(MAX_DISPLAY_ZOOM, Math.max(MIN_DISPLAY_ZOOM, zoom));
   return Math.round(clamped * 1000) / 1000;
 }
 

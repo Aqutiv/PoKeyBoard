@@ -95,6 +95,17 @@ class ScrubController {
   }
 
   /**
+   * Leave scrubbing at `timeMs`, where the playhead was when the drag being
+   * undone began, without auditioning the notes on the way back. A second
+   * finger on the score does this, turning the first one's drag into a pinch.
+   */
+  cancel(timeMs: number): void {
+    if (!this.active) return;
+    this.currentTimeMs = timeMs;
+    this.end();
+  }
+
+  /**
    * Keys currently flashing from scrub auditions, each with the hand that
    * plays it (for the keyboard).
    */

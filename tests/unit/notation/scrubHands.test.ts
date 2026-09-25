@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { audioEngine } from '@/audio/AudioEngine';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { scrubController } from '@/features/notation/scrubController';
+import { transportController } from '@/features/transport/transportController';
 import { useTakeStore } from '@/state/useTakeStore';
 
 // The auditions themselves are the engine's business; this is about the
@@ -36,5 +38,20 @@ describe('scrub key lights', () => {
     scrubController.update(500);
     expect(scrubController.getActiveHands()).toEqual(new Map([[60, 'right']]));
     scrubController.end();
+  });
+
+  it('puts the playhead back without a sound when a scrub is called off', () => {
+    // A second finger on the score turns the first one's scrub into a pinch.
+    const start = transportController.getPlayheadMs();
+    const away = start < 250 ? 450 : 50; // across one of the notes either way
+    scrubController.update(away);
+    expect(transportController.getPlayheadMs()).toBe(away);
+    vi.mocked(audioEngine.scheduleNote).mockClear();
+    scrubController.cancel(start);
+    expect(scrubController.isActive).toBe(false);
+    expect(transportController.getPlayheadMs()).toBe(start);
+    // Crossing that note again on the way back auditions nothing.
+    expect(audioEngine.scheduleNote).not.toHaveBeenCalled();
+    expect(scrubController.getActiveHands().size).toBe(0);
   });
 });
