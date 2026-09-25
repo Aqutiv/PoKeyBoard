@@ -15,6 +15,7 @@ import {
   MIN_DISPLAY_ZOOM,
   MIN_ONSET_GAP_PX,
   nextZoom,
+  scaledZoom,
   wheelZoomSteps,
 } from '@/features/notation/scoreZoom';
 
@@ -90,6 +91,25 @@ describe('wheel zoom', () => {
     expect(nextZoom(1, wheelZoomSteps(-1, DOM_DELTA_PAGE))).toBe(1.25);
     expect(nextZoom(1, wheelZoomSteps(1, DOM_DELTA_PAGE))).toBe(0.8);
     expect(nextZoom(1, wheelZoomSteps(-3, DOM_DELTA_PAGE))).toBe(1.25);
+  });
+});
+
+describe('pinch zoom', () => {
+  it('follows the fingers: twice as far apart, twice the zoom', () => {
+    expect(scaledZoom(1, 2)).toBe(2);
+    expect(scaledZoom(1.5, 0.5)).toBe(0.75);
+  });
+
+  it('stays inside the range a take can store, however far the fingers go', () => {
+    expect(scaledZoom(2, 10)).toBe(MAX_DISPLAY_ZOOM);
+    expect(scaledZoom(0.5, 0.01)).toBe(MIN_DISPLAY_ZOOM);
+  });
+
+  it('leaves the zoom alone for a spread it cannot read', () => {
+    // Fingers that came down on the same spot have no spread to scale by.
+    expect(scaledZoom(1.25, 0)).toBe(1.25);
+    expect(scaledZoom(1.25, Number.POSITIVE_INFINITY)).toBe(1.25);
+    expect(scaledZoom(1.25, Number.NaN)).toBe(1.25);
   });
 });
 
