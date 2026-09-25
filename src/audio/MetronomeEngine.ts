@@ -15,9 +15,11 @@ export interface ClickGrid {
   audioTimeAt(index: number): number;
   /** Bar starts are accented. */
   isAccent(index: number): boolean;
+  /** Where click `index` falls in its bar, 0 on the bar line: the beat dot it lights. */
+  beatInBar(index: number): number;
   /** Fractional click index at an audio time; negative before the first. */
   indexAt(audioTime: number): number;
-  /** Beats per bar, for the beat dots. */
+  /** Beats per bar. */
   readonly numerator: number;
 }
 
@@ -31,6 +33,7 @@ export function constantClickGrid(
   return {
     audioTimeAt: (index) => startAudioTime + index * beatS,
     isAccent: (index) => index % numerator === 0,
+    beatInBar: (index) => index % numerator,
     indexAt: (audioTime) => (audioTime - startAudioTime) / beatS,
     numerator,
   };
@@ -51,6 +54,7 @@ export function takeClickGrid(
   return {
     audioTimeAt: (index) => audioTimeForTakeMs(map.msAtBeat(index)),
     isAccent: (index) => index % numerator === 0,
+    beatInBar: (index) => index % numerator,
     indexAt: (audioTime) => map.beatAtMs(takeMsForAudioTime(audioTime)),
     numerator,
   };
@@ -99,13 +103,17 @@ export function loopClickGrid(
       pass: 1 + Math.floor((index - end) / perPass),
     };
   };
+  // A pass need not be whole bars (three beats of a 4/4 bar, say), so a
+  // click's place in its bar comes from the beat it stands for, not its index.
+  const beatInBar = (index: number): number => (beatOf(index)?.beat ?? index) % numerator;
   return {
     audioTimeAt: (index) => {
       const at = beatOf(index);
       if (!at) return Number.POSITIVE_INFINITY;
       return timeline.audioTimeForVirtualMs(map.msAtBeat(at.beat) + at.pass * length);
     },
-    isAccent: (index) => (beatOf(index)?.beat ?? 1) % numerator === 0,
+    isAccent: (index) => beatInBar(index) === 0,
+    beatInBar,
     indexAt: (audioTime) => {
       const virtualMs = timeline.virtualMsForAudioTime(audioTime);
       if (virtualMs < loop.endMs) return map.beatAtMs(virtualMs);
@@ -219,7 +227,7 @@ export class MetronomeEngine {
     if (!this.running || !grid) return -1;
     const index = grid.indexAt(audioTime);
     if (index < 0) return -1;
-    return Math.floor(index) % grid.numerator;
+    return grid.beatInBar(Math.floor(index));
   }
 
   /** Top up from an external audio-render clock while page timers are throttled. */

@@ -207,6 +207,27 @@ describe('MetronomeEngine', () => {
     engine.stop();
   });
 
+  it('lights the beat each click stands for, round a loop that is not whole bars', () => {
+    const { context } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    // 120 bpm in 4/4, looping bar 2's first three beats (2000–3500 ms), with
+    // virtual time 0 at audio time 0.
+    const loop = { startMs: 2000, endMs: 3500 };
+    const timeline = {
+      audioTimeForVirtualMs: (ms: number) => ms / 1000,
+      virtualMsForAudioTime: (t: number) => t * 1000,
+      loop,
+    };
+    const map = createTakeTempoMap({ bpm: 120, timeSignature: FOUR_FOUR });
+    engine.start(loopClickGrid(map, 4, timeline, loop));
+    // Halfway through each beat from the last before the seam: bar 2's third
+    // beat, then its first three again and again, never its fourth.
+    const at = [3.25, 3.75, 4.25, 4.75, 5.25, 5.75, 6.25, 6.75];
+    expect(at.map((t) => engine.beatInBarAt(t))).toEqual([2, 0, 1, 2, 0, 1, 2, 0]);
+    engine.stop();
+  });
+
   it('never sounds a click twice when the grid is swapped', () => {
     const { context, clicks } = stubContext(0);
     const engine = new MetronomeEngine();
