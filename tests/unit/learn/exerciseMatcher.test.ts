@@ -541,6 +541,12 @@ describe('rhythm', () => {
     expect(progress(PULSE, atBeats(C4, [0, 1, 2, 3]))).toBe('4/4 ok');
   });
 
+  it('does not begin before the first click has sounded', () => {
+    // -0.1 is inside the tolerance of beat 0, but that click has not played
+    // yet: the press is in the grid's lead, timed against a beat nobody heard.
+    expect(progress(PULSE, atBeats(C4, [-0.1, 1, 2, 3]))).toBe('0/4');
+  });
+
   it('accepts the pattern at any bar, so nobody has to catch the first one', () => {
     // The whole reason `beats` are offsets from a bar line: you listen for a
     // bar or two, then come in. That is what counting in means.
@@ -870,6 +876,13 @@ describe('playAlong', () => {
 
     it('drops the attempt on a wrong note on the beat', () => {
       expect(progress(TIMED, timedTaps([E4, 0], [E4, 1], [D4, 2]))).toBe('0/6');
+    });
+
+    it('does not begin before the first click has sounded', () => {
+      // A press in the click's lead has a negative beat. Within tolerance of
+      // beat 0 it would otherwise snap there and count against a silent beat.
+      expect(progress(TIMED, timedTaps([E4, -0.1], ...TUNE_BEATS.slice(1)))).toBe('0/6');
+      expect(run(TIMED, timedTaps([E4, -0.1])).wrongMidi).toBe(E4);
     });
 
     it('does not begin between bar lines', () => {

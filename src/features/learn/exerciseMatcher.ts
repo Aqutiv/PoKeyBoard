@@ -527,10 +527,13 @@ function barOriginFor(
   // wrong bar for any press in the first half of one whenever the entry beat
   // is not itself 0.
   const origin = Math.round((at - entryBeat) / barBeats) * barBeats;
-  // Guarded on where the note falls, not on the bar line: a checkpoint in bar 5
-  // legitimately measures from a bar line four bars before the click began. A
-  // note before the click's own first beat would be timed against nothing.
-  if (origin + entryBeat < 0) return null;
+  // Nothing can begin before the click has made a sound: the grid starts a
+  // moment after the step opens, and a press in that lead would otherwise snap
+  // to beat 0 and be credited against a beat nobody heard. Guarded on the
+  // press itself, then on where the note falls rather than on the bar line — a
+  // checkpoint in bar 5 legitimately measures from a bar line four bars before
+  // the click began.
+  if (at < 0 || origin + entryBeat < 0) return null;
   return Math.abs(at - (origin + entryBeat)) <= tolerance ? origin : null;
 }
 
