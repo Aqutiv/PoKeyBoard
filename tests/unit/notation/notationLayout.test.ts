@@ -468,6 +468,36 @@ describe('chords struck a little unevenly', () => {
     expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
   });
 
+  it('writes a chord rolled and let go together as one value', () => {
+    // Struck at 0, 20 and 40 ms and all let go at 470: held 470, 450 and
+    // 430 ms, which as held would round to two quarters and a dotted eighth.
+    // Written to the release they share, all three are quarters.
+    const layout = layoutScore(
+      [0, 20, 40].map((startMs, i) =>
+        note({ id: `r${i}`, midi: 60 + i * 4, startMs, durationMs: 470 - startMs }),
+      ),
+      OPTS,
+    );
+    expect(layout.chords).toHaveLength(1);
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'quarter', dotted: false });
+  });
+
+  it('writes a chord rolled and let go in the same stagger as one value', () => {
+    // Struck at 0 and 40 ms and held 300 ms each. Written from their 20 ms
+    // median to their own releases, they would be 280 and 320 ms, an eighth
+    // and a dotted eighth on two stems; let go 40 ms apart, as they were
+    // struck, they are one release.
+    const layout = layoutScore(
+      [
+        note({ id: 'low', midi: 60, startMs: 0, durationMs: 300 }),
+        note({ id: 'high', midi: 64, startMs: 40, durationMs: 300 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords).toHaveLength(1);
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'eighth', dotted: false });
+  });
+
   it('keeps a chord together when one hand is a shade behind the other', () => {
     // Right hand at 55 ms, left hand at 75 ms: either side of the 62.5 ms edge.
     const layout = layoutScore(
@@ -494,6 +524,11 @@ describe('chords struck a little unevenly', () => {
       OPTS,
     );
     expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
+    // Let go far apart, each keeps the value it was held for.
+    const valueOn = (staff: 'treble' | 'bass') =>
+      layout.chords.find((chord) => chord.staff === staff)?.symbol;
+    expect(valueOn('treble')).toEqual({ base: 'sixteenth', dotted: false });
+    expect(valueOn('bass')).toEqual({ base: 'quarter', dotted: false });
   });
 
   it('keeps a chord in one column where one hand is in triplets', () => {

@@ -179,7 +179,7 @@ const BEAT_EPSILON = 1e-3;
 /**
  * How far apart a player's "together" can be. A rolled chord, or one hand a
  * shade behind the other, spreads a chord over tens of milliseconds; see
- * `chordOnsets`.
+ * `chordTimings`.
  */
 const CHORD_ONSET_WINDOW_MS = 40;
 
@@ -195,13 +195,14 @@ function sourceLine(note: NoteEvent): string | null {
 }
 
 /**
- * The onset each note is written from: its own, unless it is one of a chord
- * struck a little unevenly, in which case the chord's median onset — so the
- * chord snaps to one column, and to the column its notes are nearest together.
- * An even number of notes has two middle onsets and the median is halfway
- * between them; either one alone would lean the chord early or late. Snapped
- * note by note, a chord that straddles the middle of a grid step splits into
- * two, a column apart.
+ * The onset each note is written from, and the release it is written to: its
+ * own, unless it is one of a chord struck a little unevenly, in which case the
+ * chord's median onset — so the chord snaps to one column, and to the column
+ * its notes are nearest together — and the release it shares with the notes
+ * let go with it; see `sharedReleases`. An even number of notes has two middle
+ * onsets and the median is halfway between them; either one alone would lean
+ * the chord early or late. Snapped note by note, a chord that straddles the
+ * middle of a grid step splits into two, a column apart.
  *
  * Across both staves, because the unevenness is as often one hand behind the
  * other as a roll within one. Never over more than `windowFor` allows any note
@@ -226,12 +227,13 @@ function sourceLine(note: NoteEvent): string | null {
  * they overlap. A note that names no voice, as nothing recorded does, can still
  * join any chord. See `sourceLine`.
  */
-function chordOnsets(
+function chordTimings(
   notes: readonly NoteEvent[],
   windowFor: (note: NoteEvent) => number,
   drawnAt: (note: NoteEvent, onsetMs: number) => number,
-): number[] {
+): { onsets: number[]; releases: number[] } {
   const onsets = notes.map((note) => note.startMs);
+  const releases = notes.map((note) => note.startMs + note.durationMs);
   const order = notes.map((_, index) => index);
   order.sort((a, b) => (notes[a] as NoteEvent).startMs - (notes[b] as NoteEvent).startMs);
   let i = 0;
@@ -264,16 +266,54 @@ function chordOnsets(
       j += 1;
     }
     if (j - i > 1) {
-      const startAt = (k: number) => (notes[order[k] as number] as NoteEvent).startMs;
-      const upper = i + Math.floor((j - i) / 2);
-      const median = (j - i) % 2 === 1 ? startAt(upper) : (startAt(upper - 1) + startAt(upper)) / 2;
       const chord = order.slice(i, j).map((index) => notes[index] as NoteEvent);
-      const onset = sharedOnset(chord, median, drawnAt);
-      for (let k = i; k < j; k += 1) onsets[order[k] as number] = onset;
+      const onset = sharedOnset(chord, middleOf(chord.map((note) => note.startMs)), drawnAt);
+      const letGo = sharedReleases(chord, window);
+      for (let k = i; k < j; k += 1) {
+        onsets[order[k] as number] = onset;
+        releases[order[k] as number] = letGo[k - i] as number;
+      }
     }
     i = j;
   }
-  return onsets;
+  return { onsets, releases };
+}
+
+/** The middle of some values in order: the middle one, or halfway between two. */
+function middleOf(sorted: readonly number[]): number {
+  const upper = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) return sorted[upper] as number;
+  return ((sorted[upper - 1] as number) + (sorted[upper] as number)) / 2;
+}
+
+/**
+ * Where each note of a chord is written to: its own release, unless it was let
+ * go with others of the chord, in which case the middle of their releases.
+ *
+ * Written from the chord's onset, a note's value runs to where it was let go.
+ * That keeps a chord let go together on one value, and a note moved to the
+ * chord's onset ending where it did rather than short of the next note with a
+ * rest between. But a chord is let go as unevenly as it is struck, and a roll
+ * released in the same stagger it was played in would otherwise come out as
+ * values a step apart, on two stems. So releases fall together by the same
+ * measure onsets do — within the chord's window of the first of them — and a
+ * note let go well apart from the rest, one hand lifting early, keeps its own.
+ */
+function sharedReleases(chord: readonly NoteEvent[], window: number): number[] {
+  const releases = chord.map((note) => note.startMs + note.durationMs);
+  const order = releases.map((_, index) => index);
+  order.sort((a, b) => (releases[a] as number) - (releases[b] as number));
+  const written = [...releases];
+  let g = 0;
+  while (g < order.length) {
+    const from = releases[order[g] as number] as number;
+    let h = g + 1;
+    while (h < order.length && (releases[order[h] as number] as number) - from <= window) h += 1;
+    const release = middleOf(order.slice(g, h).map((index) => releases[index] as number));
+    for (let k = g; k < h; k += 1) written[order[k] as number] = release;
+    g = h;
+  }
+  return written;
 }
 
 /**
@@ -1427,7 +1467,7 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     return symbolForBeats(Math.max(1, Math.round(held / gridBeats)) * gridBeats, denominator);
   };
 
-  /** Half a grid step at the note, capped, and none without a grid; see `chordOnsets`. */
+  /** Half a grid step at the note, capped, and none without a grid; see `chordTimings`. */
   const chordWindowMs = (note: NoteEvent): number => {
     const division = divisionFor(note);
     const stepBeats = division !== null ? 1 / division : gridBeats;
@@ -1438,12 +1478,13 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   /** Where a note written from `onsetMs` lands on its own staff's grid; see `sharedOnset`. */
   const drawnAt = (note: NoteEvent, onsetMs: number): number =>
     snapToGrid(onsetMs, divisionFor({ ...note, startMs: onsetMs }));
-  const onsets = chordOnsets(notes, chordWindowMs, drawnAt);
+  const { onsets, releases } = chordTimings(notes, chordWindowMs, drawnAt);
   /**
    * A note written from its chord's onset rather than its own is written as
-   * lasting from there to its own release, or the notes of one chord would
-   * round to different values and come apart into voices. Its performance
-   * timing is untouched: it still lights when it actually sounds.
+   * lasting from there to its release — the one it shares with the notes let
+   * go with it — or the notes of one chord would round to different values and
+   * come apart into voices. Its performance timing is untouched: it still
+   * lights when it actually sounds.
    */
   const writtenBeats = new Map<LaidOutNote, number>();
 
@@ -1458,14 +1499,11 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   );
   const laidOut: LaidOutNote[] = notes.map((note, index) => {
     const onset = onsets[index] as number;
+    const release = releases[index] as number;
     const written =
-      onset === note.startMs
+      onset === note.startMs && release === note.startMs + note.durationMs
         ? note
-        : {
-            ...note,
-            startMs: onset,
-            durationMs: Math.max(1, note.startMs + note.durationMs - onset),
-          };
+        : { ...note, startMs: onset, durationMs: Math.max(1, release - onset) };
     const position = midiToStaffPosition(
       note.midi,
       note.staff,
