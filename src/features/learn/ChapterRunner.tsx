@@ -313,11 +313,14 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
   // Every demo goes through here — a step's Listen, "Show me", and an ear
   // quiz's Hear it — so all of them share the one lock.
+  // Resolves whether the phrase was actually scheduled — an ear quiz counts a
+  // round as heard only then, not on the click, since preparing a cold range
+  // is async and can fail outright.
   const playDemo = useCallback(
-    (phrase: LearnPhrase) => {
+    (phrase: LearnPhrase): Promise<boolean> => {
       // Guarded here rather than only by the buttons' `disabled`, because the
       // "Show me" hint calls this too.
-      if (demoPlaying) return;
+      if (demoPlaying) return Promise.resolve(false);
       // Claimed before the await, not after it. Preparing a cold range can take
       // seconds, and the button used to stay live for every one of them — each
       // extra click scheduling another copy over the first. Scheduled notes
@@ -329,16 +332,18 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
       // heard *against* the beat rather than merely near it. A whole bar of lead
       // is deliberate: it doubles as the count-in.
       const startAt = click.nextBarAudioTime(audioEngine.currentTime + LISTEN_LEAD_S);
-      void playPhrase(phrase, startAt ?? undefined).then(
+      return playPhrase(phrase, startAt ?? undefined).then(
         (durationMs) => {
           // The button simply waits the phrase out.
           demoTimer.current = window.setTimeout(() => setDemoPlaying(false), durationMs);
+          return true;
         },
         (error: unknown) => {
           // Never strand the button: a demo that could not be prepared is a
           // demo that is not playing.
           console.warn('Learn demo failed to play:', error);
           setDemoPlaying(false);
+          return false;
         },
       );
     },
@@ -346,7 +351,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   );
 
   const onListen = useCallback(() => {
-    if (listen) playDemo(listen);
+    if (listen) void playDemo(listen);
   }, [listen, playDemo]);
 
   const title = m.learn.chapterTitles[chapterId];

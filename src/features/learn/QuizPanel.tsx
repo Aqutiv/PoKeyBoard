@@ -13,7 +13,7 @@ interface QuizPanelProps {
    * scheduled note cannot be unscheduled, so a second press while the first
    * is still sounding must be refused rather than stacked on top.
    */
-  onHear: (phrase: LearnPhrase) => void;
+  onHear: (phrase: LearnPhrase) => Promise<boolean>;
   /** A demo is sounding; the Hear button waits for it. */
   hearing: boolean;
 }
@@ -60,8 +60,13 @@ export function QuizPanel({ session, onHear, hearing }: QuizPanelProps) {
           disabled={hearing || session.hear === null || session.satisfied}
           onClick={() => {
             if (!session.hear) return;
-            onHear(session.hear);
-            session.markHeard();
+            const { markHeard } = session;
+            // Heard once it is actually scheduled, not on the click: loading a
+            // cold range takes time and can fail, and answers unlocked on the
+            // click would open the round with nothing played.
+            void onHear(session.hear).then((played) => {
+              if (played) markHeard();
+            });
           }}
         >
           {m.learn.hearIt}
