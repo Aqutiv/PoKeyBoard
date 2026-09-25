@@ -13,6 +13,7 @@ import {
   dampSampleVoice,
   releaseSampleVoice,
   startSampleVoice,
+  stillSoundingAt,
   UNDAMPED_FROM_MIDI,
   type SampleVoice,
 } from './sampleVoice';
@@ -55,12 +56,10 @@ export function scheduleTakeVoices(
     const when = note.startMs / 1000;
     let keyUp = when + note.durationMs / 1000;
     const previous = sounding.get(note.midi);
-    // Still held (or never damped, up where there are no dampers) when the key
-    // comes down again: that sound gives way to this one.
-    if (
-      previous &&
-      (previous.voice.releaseTime === undefined || previous.voice.releaseTime > when)
-    ) {
+    // Still sounding when the key comes down again, held, dying away under its
+    // damper, or never damped up where there are none: that sound gives way to
+    // this one.
+    if (previous && stillSoundingAt(previous.voice, when)) {
       dampSampleVoice(previous.voice, when);
       keyUp = Math.max(keyUp, previous.keyUp);
     }
@@ -91,8 +90,27 @@ export function undampedRingOutSeconds(
   return end;
 }
 
+/**
+ * How long an export renders, in seconds: past the take's last key-up by the
+ * tail, or until its top strings fall quiet if they ring on longer. Reads the
+ * samples decoded so far.
+ */
 export function estimateRenderSeconds(take: Take): number {
-  return effectivePlaybackDurationMs(take) / 1000 + TAIL_S;
+  const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
+  return renderSeconds(take, undampedRingOutSeconds(take.notes, sampleFor));
+}
+
+function renderSeconds(take: Take, ringOutS: number): number {
+  return Math.max(effectivePlaybackDurationMs(take) / 1000, ringOutS) + TAIL_S;
+}
+
+/**
+ * The seconds a render allocates, given how long the take's top strings ring
+ * (`undampedRingOutSeconds`): never past the cap, which is what bounds the
+ * memory a render takes. A take just inside it can still ring past it.
+ */
+export function cappedRenderSeconds(take: Take, ringOutS: number): number {
+  return Math.min(renderSeconds(take, ringOutS), MAX_RENDER_MINUTES * 60);
 }
 
 /** Rough working-set estimate (render buffer + PCM copy for encoding). */
@@ -110,7 +128,8 @@ export async function renderTakeToBuffer(
   take: Take,
   options: OfflineRenderOptions,
 ): Promise<AudioBuffer> {
-  const seconds = estimateRenderSeconds(take);
+  // The take itself has to fit; how long its top strings ring is capped below.
+  const seconds = renderSeconds(take, 0);
   if (seconds > MAX_RENDER_MINUTES * 60) {
     throw new ExportError(
       `Take too long to render (${Math.round(seconds / 60)} min)`,
@@ -138,7 +157,7 @@ export async function renderTakeToBuffer(
   const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
   const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
   const ringOut = undampedRingOutSeconds(effectiveNotes, sampleFor);
-  const length = Math.ceil(Math.max(seconds, ringOut + TAIL_S) * RENDER_SAMPLE_RATE);
+  const length = Math.ceil(cappedRenderSeconds(take, ringOut) * RENDER_SAMPLE_RATE);
   const context = new OfflineAudioContext({
     numberOfChannels: 2,
     length,

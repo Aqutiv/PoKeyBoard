@@ -1,9 +1,11 @@
 import type { NoteSourceId, SampleSelection } from './audioTypes';
 import {
   dampSampleVoice,
+  fadeSampleVoice,
   holdSampleVoice,
   releaseSampleVoice,
   startSampleVoice,
+  stillSoundingAt,
   type SampleVoice,
 } from './sampleVoice';
 
@@ -21,8 +23,6 @@ interface Voice extends SampleVoice {
   heldByPedal: boolean;
   /** Counts toward the shared active-note model (live input only). */
   uiActive: boolean;
-  /** Already fading out under a new strike of the same key. */
-  restruck?: boolean;
 }
 
 /**
@@ -86,10 +86,7 @@ export class VoiceManager {
     // strike of it that playback has already queued: this sound gives way to
     // that one when it comes, as the queued one would have to this.
     const struckAgainAt = this.nextStrikeAfter(midi, when);
-    if (struckAgainAt !== undefined) {
-      dampSampleVoice(voice, struckAgainAt);
-      voice.restruck = true;
-    }
+    if (struckAgainAt !== undefined) dampSampleVoice(voice, struckAgainAt);
     this.voices.add(voice);
     voice.source.onended = () => {
       this.voices.delete(voice);
@@ -184,8 +181,9 @@ export class VoiceManager {
       }
       voice.releasing = true;
       voice.heldByPedal = false;
-      holdSampleVoice(voice, now);
-      voice.gain.gain.setTargetAtTime(0, now, ALL_OFF_FADE_TC);
+      // Kept on the voice, so a key struck again as it fades leaves it fading
+      // rather than lifting it back to the level it had before the stop.
+      fadeSampleVoice(voice, now, ALL_OFF_FADE_TC);
       this.safeStop(voice, now + 0.25);
     }
     if (changed) this.emitActive();
@@ -230,8 +228,9 @@ export class VoiceManager {
    * A key struck while its string still sounds: the old sound gives way to the
    * new one from the moment the new one starts (see `dampSampleVoice`). Every
    * source counts — a MIDI key and a finger on the same note play one string.
-   * Only voices started by then and not already let go before it, the same
-   * test `scheduleTakeVoices` makes, so an export sounds as playback does. That
+   * Only voices started by then and still sounding (`stillSoundingAt`), the
+   * same test `scheduleTakeVoices` makes, so an export sounds as playback does:
+   * one let go only just before is still dying away under its damper. That
    * includes one starting at the very same moment: a note two voices share is
    * one key struck once, not two strings sounding together. A note scheduled
    * later is its own, and this one gives way to it in turn; see `strike`.
@@ -248,15 +247,16 @@ export class VoiceManager {
     let heldUntil = Number.NEGATIVE_INFINITY;
     let changed = false;
     for (const voice of this.voices) {
-      if (voice.midi !== midi || voice.startTime > when) continue;
-      // Let go, or given way to another strike, before this one.
-      if (voice.releaseTime !== undefined && voice.releaseTime <= when) continue;
-      // A strike's fade is not a key-up: nothing is holding that key down.
-      if (voice.releaseTime !== undefined && !voice.restruck) {
+      if (voice.midi !== midi || voice.startTime > when || !stillSoundingAt(voice, when)) continue;
+      // A key-up still to come, not a strike's fade: the key is down till then.
+      if (
+        voice.fadeTc === undefined &&
+        voice.releaseTime !== undefined &&
+        voice.releaseTime > when
+      ) {
         heldUntil = Math.max(heldUntil, voice.releaseTime);
       }
       dampSampleVoice(voice, when);
-      voice.restruck = true;
       if (when > this.context.currentTime) continue;
       voice.releasing = true;
       voice.heldByPedal = false;
@@ -320,6 +320,7 @@ export class VoiceManager {
     } catch {
       // Already stopped — fine.
     }
+    voice.stopTime = when;
   }
 
   private disconnectVoice(voice: Voice): void {

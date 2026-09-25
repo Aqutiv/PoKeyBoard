@@ -1,6 +1,12 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { SampleSelection } from '@/audio/audioTypes';
-import { scheduleTakeVoices, undampedRingOutSeconds } from '@/audio/OfflineTakeRenderer';
+import {
+  cappedRenderSeconds,
+  MAX_RENDER_MINUTES,
+  scheduleTakeVoices,
+  undampedRingOutSeconds,
+} from '@/audio/OfflineTakeRenderer';
+import { createEmptyTake } from '@/domain/noteEvents';
 import {
   RELEASE_TC,
   releaseSampleVoice,
@@ -234,11 +240,39 @@ describe('shared sample voice', () => {
       voices.scheduleNote(plain, 60, 'playback', 0.15, 1);
       // Still held, so still lit...
       expect(voices.activeMidis().has(60)).toBe(true);
-      // ...and let go before that strike, it is damped as any key is.
+      // ...and let go before that strike, it is damped as any key is, until
+      // the strike silences what is left of the string.
       context.currentTime = 0.1;
       voices.noteOff(60, 'key');
-      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.1, RELEASE_TC);
+      expect(params[0]!.setTargetAtTime).toHaveBeenCalledWith(0, 0.1, RELEASE_TC);
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.15, RESTRIKE_TC);
       expect(voices.activeMidis().has(60)).toBe(false);
+    });
+
+    it('damps a string still dying away after its key came up', () => {
+      // A quick repeat: let go at 0.1 s and struck again 60 ms later, when the
+      // damper has only begun to quiet the string.
+      const { audio, context, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(plain, 64, 'key');
+      context.currentTime = 0.1;
+      voices.noteOff(64, 'key');
+      context.currentTime = 0.16;
+      voices.noteOn(plain, 64, 'key');
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.16, RESTRIKE_TC);
+    });
+
+    it('leaves a string a stop is already fading alone', () => {
+      const { audio, context, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(plain, 64, 'key');
+      context.currentTime = 1;
+      voices.allNotesOff();
+      context.currentTime = 1.05;
+      voices.noteOn(plain, 64, 'key');
+      // Not lifted back to full level only to be faded again.
+      expect(params[0]!.setValueAtTime).not.toHaveBeenCalledWith(1, 1.05);
+      expect(params[0]!.setTargetAtTime).toHaveBeenCalledTimes(1);
     });
 
     it('gives way to a strike playback queued before the key was played', () => {
@@ -310,6 +344,20 @@ describe('shared sample voice', () => {
       expect(params[4]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, RESTRIKE_TC);
       expect(params[5]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 3, RELEASE_TC);
     });
+
+    it('damps a string still dying away in an export too', () => {
+      const { audio, destination, params } = setup();
+      scheduleTakeVoices(
+        audio,
+        destination,
+        [
+          { midi: 64, velocity: 0.7, startMs: 0, durationMs: 100 },
+          { midi: 64, velocity: 0.7, startMs: 160, durationMs: 100 },
+        ],
+        () => plain,
+      );
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.16, RESTRIKE_TC);
+    });
   });
 
   it('makes room in an export for the top strings to ring out', () => {
@@ -328,6 +376,18 @@ describe('shared sample voice', () => {
     const sampleFor = (midi: number) => (midi >= UNDAMPED_FROM_MIDI ? ringing : null);
     expect(undampedRingOutSeconds(notes, sampleFor)).toBeCloseTo(15.79, 5);
     expect(undampedRingOutSeconds(notes.slice(0, 1), sampleFor)).toBe(0);
+  });
+
+  it('keeps the ring-out inside the render cap', () => {
+    const cap = MAX_RENDER_MINUTES * 60;
+    // Its last key comes up 4 s short of the cap: with the tail, inside it.
+    const take = createEmptyTake({
+      notes: [{ id: 'top', midi: 96, velocity: 0.7, startMs: (cap - 5) * 1000, durationMs: 1000 }],
+      durationMs: (cap - 4) * 1000,
+    });
+    expect(cappedRenderSeconds(take, 0)).toBe(cap - 1);
+    // But that top string rings on for 5.8 s, past the cap, and stops there.
+    expect(cappedRenderSeconds(take, cap - 5 + 5.8)).toBe(cap);
   });
 
   describe('a panic stop', () => {

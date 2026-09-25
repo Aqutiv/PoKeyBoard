@@ -49,6 +49,8 @@ export interface SampleVoice {
   releaseLevel?: number;
   /** The time constant of the fade in progress, where it differs from the damper's. */
   fadeTc?: number;
+  /** When the source is due to stop, once a stop is scheduled. */
+  stopTime?: number;
 }
 
 /** The same source, loop coordinates, and envelope for live and offline audio. */
@@ -81,11 +83,13 @@ export function startSampleVoice(
   source.connect(gain);
   gain.connect(destination);
   source.start(when, sample.offset ?? 0);
+  const voice: SampleVoice = { source, gain, sample, startTime: when };
   if (sample.envelope) {
     // A loop must eventually retire even while the key or pedal stays down.
-    source.stop(attackEnd + sample.envelope.hold + sample.envelope.decay);
+    voice.stopTime = attackEnd + sample.envelope.hold + sample.envelope.decay;
+    source.stop(voice.stopTime);
   }
-  return { source, gain, sample, startTime: when };
+  return voice;
 }
 
 function dampingTc(voice: SampleVoice): number {
@@ -140,23 +144,26 @@ export function holdSampleVoice(voice: SampleVoice, when: number): number {
 export function releaseSampleVoice(voice: SampleVoice, when: number): void {
   if (voice.sample.undamped) return;
   // Let go before a strike still to come: the damper falls as it always does,
-  // and the fade that strike scheduled never happens.
-  if (voice.fadeTc !== undefined && voice.releaseTime !== undefined && when < voice.releaseTime) {
-    voice.fadeTc = undefined;
-  }
+  // and the strike silences what is left of the string when it comes.
+  const struckAt =
+    voice.fadeTc !== undefined && voice.releaseTime !== undefined && when < voice.releaseTime
+      ? voice.releaseTime
+      : undefined;
+  if (struckAt !== undefined) voice.fadeTc = undefined;
   const level = holdSampleVoice(voice, when);
   voice.releaseTime = when;
   voice.releaseLevel = level;
   if (voice.sample.envelope) {
-    const end = when + voice.sample.envelope.release;
-    voice.gain.gain.linearRampToValueAtTime(0, end);
-    voice.source.stop(end);
+    voice.stopTime = when + voice.sample.envelope.release;
+    voice.gain.gain.linearRampToValueAtTime(0, voice.stopTime);
   } else {
     const tc = dampingTc(voice);
     voice.gain.gain.setTargetAtTime(0, when, tc);
     // Eight time constants is about 70 dB down, however slow the damper.
-    voice.source.stop(when + Math.max(RELEASE_STOP_AFTER_S, tc * 8));
+    voice.stopTime = when + Math.max(RELEASE_STOP_AFTER_S, tc * 8);
   }
+  voice.source.stop(voice.stopTime);
+  if (struckAt !== undefined && stillSoundingAt(voice, struckAt)) dampSampleVoice(voice, struckAt);
 }
 
 /**
@@ -164,10 +171,31 @@ export function releaseSampleVoice(voice: SampleVoice, when: number): void {
  * `RESTRIKE_TC`. Works on any voice, damped or not, released or still held.
  */
 export function dampSampleVoice(voice: SampleVoice, when: number): void {
+  fadeSampleVoice(voice, when, RESTRIKE_TC);
+  voice.stopTime = when + RESTRIKE_TC * 8;
+  voice.source.stop(voice.stopTime);
+}
+
+/**
+ * Fade a voice out from `when` with time constant `tc`, faster than any
+ * damper, and remember doing so, so whatever touches it later reads the level
+ * it really has. Stopping the source is left to the caller.
+ */
+export function fadeSampleVoice(voice: SampleVoice, when: number, tc: number): void {
   const level = holdSampleVoice(voice, when);
   voice.releaseTime = when;
   voice.releaseLevel = level;
-  voice.fadeTc = RESTRIKE_TC;
-  voice.gain.gain.setTargetAtTime(0, when, RESTRIKE_TC);
-  voice.source.stop(when + RESTRIKE_TC * 8);
+  voice.fadeTc = tc;
+  voice.gain.gain.setTargetAtTime(0, when, tc);
+}
+
+/**
+ * Whether a key struck at `when` finds this voice's sound still to silence:
+ * not stopped by then, nor already fading out under an earlier strike or a
+ * stop. A key let go only just before counts: its damper takes a few tenths
+ * of a second to quiet the string, too long to lay a second copy over it.
+ */
+export function stillSoundingAt(voice: SampleVoice, when: number): boolean {
+  if (voice.stopTime !== undefined && voice.stopTime <= when) return false;
+  return voice.fadeTc === undefined || voice.releaseTime === undefined || voice.releaseTime > when;
 }
