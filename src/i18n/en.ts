@@ -117,6 +117,9 @@ export const en: Messages = {
     grid32: '1/32 grid',
     grid64: '1/64 grid',
     emptyHint: 'Play the keys, or press record to capture a take.',
+    zoom: 'Zoom',
+    zoomIn: 'Zoom in',
+    zoomOut: 'Zoom out',
   },
   takes: {
     title: 'Takes',
@@ -456,6 +459,7 @@ export const en: Messages = {
     velocityFixed: 'Fixed',
     fixedVelocity: 'Fixed velocity',
     noteLabels: 'Note labels on keys',
+    followPlayback: 'Keyboard follows playback',
     scrubAudition: 'Sound while scrubbing the score',
     backgroundPlayback: 'Continue playback in the background',
     backgroundPlaybackHint:

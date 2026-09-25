@@ -286,6 +286,19 @@ function findResolutions(
   return resolutions;
 }
 
+/**
+ * How far back a note the pedal alone keeps sounding counts as the harmony a
+ * chord is spelled against. A key still held down counts however long ago it
+ * was struck.
+ */
+const HELD_CONTEXT_MS = 3_000;
+
+/** The flattest and sharpest spellings among the notes still sounding. */
+interface AnchorSpan {
+  low: number;
+  high: number;
+}
+
 /** A stretch the sustain pedal holds down, sorted and non-overlapping. */
 export interface SustainSpan {
   fromMs: number;
@@ -371,8 +384,25 @@ export function spellNotes(
     clock = onset;
     const centre = (tuning.keyWeight * prior + pull) / (tuning.keyWeight + weight);
 
-    held = held.filter((index) => (ends[index] as number) > onset + CHORD_WINDOW_MS);
-    const anchors = held.map((index) => positions[index] as number);
+    // Still sounding. A key held down is harmony however long it has been
+    // held; one the pedal alone keeps sounding only while it is recent. A pedal
+    // held for a whole piece keeps every note sounding, but harmony a few
+    // seconds back has nothing to say about this chord — and keeping all of it
+    // would make every chord rescan the whole take. Held keys are few, however
+    // long the piece.
+    const threshold = onset + CHORD_WINDOW_MS;
+    held = held.filter((index) => {
+      const note = notes[index] as NoteEvent;
+      if ((ends[index] as number) <= threshold) return false;
+      return note.startMs + note.durationMs > threshold || note.startMs > onset - HELD_CONTEXT_MS;
+    });
+    let anchors: AnchorSpan | null = null;
+    for (const index of held) {
+      const position = positions[index] as number;
+      anchors = anchors
+        ? { low: Math.min(anchors.low, position), high: Math.max(anchors.high, position) }
+        : { low: position, high: position };
+    }
 
     const choice = spellChord(notes, chord, anchors, centre, key, resolutions, tuning);
     for (const index of chord) {
@@ -400,7 +430,7 @@ export function spellNotes(
 function spellChord(
   notes: readonly NoteEvent[],
   chord: readonly number[],
-  anchors: readonly number[],
+  anchors: AnchorSpan | null,
   centre: number,
   key: SpellingKey,
   resolutions: ReadonlyMap<number, Resolution>,
@@ -456,7 +486,7 @@ function spellChord(
   // neighbour note, not a chord tone, and the chord beneath it has no say in
   // its spelling: E D♯ E over a held C stays D♯.
   const passing = pitchClasses.length === 1 && (wanted[0] as number[]).length > 0;
-  const context = passing ? [] : anchors;
+  const context = passing ? null : anchors;
 
   let best: number[] | null = null;
   let bestCost = Number.POSITIVE_INFINITY;
@@ -490,11 +520,11 @@ function spellChord(
           if (reachable) cost += tuning.resolutionWeight;
         }
       }
-      for (const anchor of context) {
-        low = Math.min(low, anchor);
-        high = Math.max(high, anchor);
+      if (context) {
+        low = Math.min(low, context.low);
+        high = Math.max(high, context.high);
       }
-      if (current.length + context.length > 1) cost += tuning.spreadWeight * (high - low);
+      if (current.length > 1 || context) cost += tuning.spreadWeight * (high - low);
       if (cost < bestCost - 1e-9 || (cost < bestCost + 1e-9 && leaning > bestLean)) {
         bestCost = cost;
         bestLean = leaning;

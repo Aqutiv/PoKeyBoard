@@ -117,6 +117,9 @@ export const fr: Messages = {
     grid32: 'Grille 1/32',
     grid64: 'Grille 1/64',
     emptyHint: 'Jouez les touches, ou appuyez sur enregistrer pour capturer une prise.',
+    zoom: 'Zoom',
+    zoomIn: 'Zoom avant',
+    zoomOut: 'Zoom arrière',
   },
   takes: {
     title: 'Prises',
@@ -456,6 +459,7 @@ export const fr: Messages = {
     velocityFixed: 'Fixe',
     fixedVelocity: 'Vélocité fixe',
     noteLabels: 'Étiquettes des notes sur les touches',
+    followPlayback: 'Le clavier suit la lecture',
     scrubAudition: 'Son lors du défilement de la partition',
     backgroundPlayback: 'Continuer la lecture en arrière-plan',
     backgroundPlaybackHint:

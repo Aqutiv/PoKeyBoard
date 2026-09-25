@@ -239,6 +239,9 @@ export interface Messages {
     grid32: string;
     grid64: string;
     emptyHint: string;
+    zoom: string;
+    zoomIn: string;
+    zoomOut: string;
   };
   takes: {
     title: string;
@@ -471,6 +474,7 @@ export interface Messages {
     velocityFixed: string;
     fixedVelocity: string;
     noteLabels: string;
+    followPlayback: string;
     scrubAudition: string;
     backgroundPlayback: string;
     backgroundPlaybackHint: string;

@@ -37,6 +37,30 @@
   right: 8px;
 }
 
+/* Zoom sits beside the grid select, left of it. */
+.score__zoom {
+  position: absolute;
+  top: 6px;
+  right: 104px;
+  display: flex;
+  gap: 2px;
+}
+
+.score__zoom button {
+  min-width: 30px;
+  min-height: 30px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.score__zoom button:disabled {
+  opacity: 0.4;
+}
+
 .score__quant select {
   min-height: 30px;
   background: var(--surface-2);
@@ -53,6 +77,17 @@
   .score__quant {
     top: 4px;
     right: 5px;
+  }
+
+  .score__zoom {
+    top: 4px;
+    right: 88px;
+  }
+
+  .score__zoom button {
+    min-width: 26px;
+    min-height: 26px;
+    opacity: 0.75;
   }
 
   .score__quant select {

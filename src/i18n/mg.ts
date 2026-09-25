@@ -118,6 +118,9 @@ export const mg: Messages = {
     grid32: 'Makarakara 1/32',
     grid64: 'Makarakara 1/64',
     emptyHint: 'Tendreo ny kitendry, na tsindrio ny fandraketana mba hahazoana rakitra.',
+    zoom: 'Fanakaikezana',
+    zoomIn: 'Akaikezo',
+    zoomOut: 'Alavirio',
   },
   takes: {
     title: 'Rakitra',
@@ -459,6 +462,7 @@ export const mg: Messages = {
     velocityFixed: 'Raikitra',
     fixedVelocity: 'Hafainganam-pandeha raikitra',
     noteLabels: 'Anaran’ny naoty eo amin’ny kitendry',
+    followPlayback: 'Manaraka ny famerenana ny klavie',
     scrubAudition: 'Feo rehefa mandalo ny sori-kira',
     backgroundPlayback: 'Tohizo any ambadika ny fandefasana',
     backgroundPlaybackHint:

@@ -116,6 +116,9 @@ export const es: Messages = {
     grid32: 'Cuadrícula 1/32',
     grid64: 'Cuadrícula 1/64',
     emptyHint: 'Toca las teclas o pulsa grabar para capturar una toma.',
+    zoom: 'Zoom',
+    zoomIn: 'Acercar',
+    zoomOut: 'Alejar',
   },
   takes: {
     title: 'Tomas',
@@ -453,6 +456,7 @@ export const es: Messages = {
     velocityFixed: 'Fija',
     fixedVelocity: 'Velocidad fija',
     noteLabels: 'Etiquetas de notas en las teclas',
+    followPlayback: 'El teclado sigue la reproducción',
     scrubAudition: 'Sonido al desplazar la partitura',
     backgroundPlayback: 'Continuar la reproducción en segundo plano',
     backgroundPlaybackHint:
