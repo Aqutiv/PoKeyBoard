@@ -22,16 +22,19 @@ const METRONOME_PEAK = 0.6;
 
 /**
  * The worst-case per-voice gain the app can produce: SampleBank multiplies
- * velocityGain by the pack's levelMatch *outside* velocityGain's own clamp, and
- * headroom-grand's levelMatch is the largest of any pack.
+ * velocityGain by the layer's levelMatch *outside* velocityGain's own clamp, and
+ * headroom-grand's loud layer carries the largest of any pack, about 2 in all.
+ * The match is read per layer, where the manifest keeps it and where SampleBank
+ * reads it (`levelMatchFor`).
  */
 function worstCaseVoiceGain(): number {
   const packDir = pianoInstrument('headroom-grand').path.replace(/\/$/, '');
   const manifest = JSON.parse(
     readFileSync(path.resolve('public', packDir, 'manifest.json'), 'utf8'),
-  ) as SamplePackManifest & { levelMatch?: number[] };
+  ) as SamplePackManifest;
   const layer = velocityToLayer(LOUD_VELOCITY);
-  const levelMatch = manifest.levelMatch?.[layer] ?? 1;
+  const levelMatch = manifest.velocityLayers.find((entry) => entry.index === layer)?.levelMatch;
+  if (levelMatch === undefined) throw new Error('headroom-grand has lost its loud levelMatch');
   return velocityGain(LOUD_VELOCITY, layer) * levelMatch;
 }
 
