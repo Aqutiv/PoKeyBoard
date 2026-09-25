@@ -572,6 +572,25 @@ describe('chords struck a little unevenly', () => {
     expect(startsOn('bass')).toEqual([0, 125, 250, 375]);
   });
 
+  it('leaves each note where it was played where the hands’ grids share no point', () => {
+    // A right-hand triplet at 160 ms and a straight left-hand note at 200,
+    // overlapping. Their 180 ms median rounds to 167 on the triplet grid and
+    // to 125 on the sixteenth grid, and neither is on both: two rhythms
+    // meeting, not a chord, so each keeps the column it was played nearest.
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 160, durationMs: 150, tuplet: triplet }),
+        note({ id: 'lh', midi: 48, startMs: 200, durationMs: 250 }),
+      ],
+      OPTS,
+    );
+    const startOn = (staff: 'treble' | 'bass') =>
+      layout.chords.find((chord) => chord.staff === staff)?.displayStartMs;
+    expect(startOn('treble')).toBe(167);
+    expect(startOn('bass')).toBe(250);
+  });
+
   it('writes a two-note chord from halfway between its notes, not from the later one', () => {
     // 40 ms and 80 ms: halfway is 60, which rounds to the beat (0 ms); the
     // later note alone would round the chord to the next sixteenth.
