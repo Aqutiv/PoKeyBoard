@@ -120,6 +120,12 @@ interface PianoKeyboardProps {
   onAnchorChange?: (midi: number) => void;
   /** Reported whenever the visible window changes, including on first layout. */
   onRangeChange?: (range: { lowMidi: number; highMidi: number }) => void;
+  /**
+   * Show at least this many white keys, narrowing them to fit — down to a
+   * floor; see `computeVisibleWhites`. Learn asks for it when a step's line
+   * spans more than a phone shows, since a scale cannot pause for a shift.
+   */
+  minVisibleWhites?: number;
 }
 
 export function PianoKeyboard({
@@ -132,6 +138,7 @@ export function PianoKeyboard({
   anchorMidi: anchorMidiOverride,
   onAnchorChange,
   onRangeChange,
+  minVisibleWhites,
 }: PianoKeyboardProps) {
   const m = useMessages();
   const keysRef = useRef<HTMLDivElement | null>(null);
@@ -181,7 +188,10 @@ export function PianoKeyboard({
     return () => element.removeEventListener('touchstart', preventLoupe);
   }, []);
 
-  const visibleWhites = useMemo(() => computeVisibleWhites(containerWidth), [containerWidth]);
+  const visibleWhites = useMemo(
+    () => computeVisibleWhites(containerWidth, minVisibleWhites),
+    [containerWidth, minVisibleWhites],
+  );
 
   const layout: KeyboardLayout = useMemo(() => {
     const anchor = snapToWhite(Math.max(FULL_RANGE_LOW, Math.min(anchorMidi, FULL_RANGE_HIGH)), 1);

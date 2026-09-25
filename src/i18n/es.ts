@@ -260,6 +260,7 @@ export const es: Messages = {
     quizWrong: ({ answer }) => `Esa es ${answer}.`,
     quizAnswerLabel: ({ note }) => `Responder ${note}`,
     playNote: ({ note }) => `Toca ${note}.`,
+    playDegree: ({ degree }) => `Toca el grado ${degree}.`,
     readNotePrompt: '¿Qué nota es esta?',
     playWhatYouSee: 'Toca la nota que ves.',
     chapterTitles: {

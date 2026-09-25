@@ -122,7 +122,7 @@ test.describe('learn outline', () => {
 
     for (const level of ['Beginner', 'Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
-      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 7 : 0);
+      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 8 : 0);
       await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
       await page.getByText('Upcoming lessons', { exact: true }).click();
@@ -174,15 +174,16 @@ test.describe('learn outline', () => {
       'The Bass Staff & the Grand Staff',
       'Rhythm & the Beat',
       'Your First Melody',
+      'The C Major Scale',
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
-    await expect(page.getByText('7 lessons available')).toBeVisible();
+    await expect(page.getByText('8 lessons available')).toBeVisible();
     await page.getByText('Upcoming lessons', { exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'The C Major Scale — coming soon' }),
+      page.getByRole('button', { name: 'Triads: Major and Minor — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(3);
+    await expect(page.getByText('Coming soon')).toHaveCount(2);
   });
 });
 
@@ -977,10 +978,77 @@ test.describe('chapter six', () => {
   });
 });
 
+/**
+ * Open a chapter at `step` (0-based) by seeding the saved progress, so a test
+ * about a late exercise does not first have to pass every step before it.
+ */
+async function openChapterAt(
+  page: Page,
+  title: string,
+  chapterId: string,
+  step: number,
+): Promise<void> {
+  await gotoLearn(page);
+  await page.evaluate(
+    ({ id, seeded }) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('pokeyboard');
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const database = open.result;
+          const request = database
+            .transaction('metadata', 'readwrite')
+            .objectStore('metadata')
+            .put({
+              key: 'learnProgress',
+              value: { v: 1, chapters: { [id]: { step: seeded, done: false } } },
+            });
+          request.onerror = () => reject(request.error);
+          request.onsuccess = () => {
+            database.close();
+            resolve();
+          };
+        };
+      }),
+    { id: chapterId, seeded: step },
+  );
+  await page.reload();
+  await openChapter(page, title);
+}
+
+/** Wall-clock ms of the lesson click's first beat; see chapter six. */
+async function lessonClickOrigin(page: Page): Promise<number> {
+  const section = page.locator('section[data-click-origin-ms]');
+  await section.waitFor({ timeout: 30_000 });
+  return Number(await section.getAttribute('data-click-origin-ms'));
+}
+
+/**
+ * Play [key code, beat] presses in time with the lesson click, from inside the
+ * page and a bar or two ahead so nothing is raced — chapter six's approach,
+ * with a key per note. Every lesson is clicked at 60bpm in 4/4.
+ */
+async function playKeysInTime(
+  page: Page,
+  presses: readonly (readonly [string, number])[],
+): Promise<void> {
+  const originMs = await lessonClickOrigin(page);
+  await page.evaluate(
+    async ({ originMs, presses, barMs, beatMs }) => {
+      const bar = Math.ceil((performance.now() - originMs) / barMs) + 1;
+      for (const [code, beat] of presses) {
+        const at = originMs + bar * barMs + beat * beatMs;
+        await new Promise((resolve) => setTimeout(resolve, Math.max(0, at - performance.now())));
+        window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+        window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+      }
+    },
+    { originMs, presses: presses.map(([code, beat]) => [code, beat]), barMs: 4000, beatMs: 1000 },
+  );
+}
+
 test.describe('chapter seven', () => {
   const CHAPTER = 'Your First Melody';
-  const BEAT_MS = 1000;
-  const BAR_MS = BEAT_MS * 4;
 
   /** The computer-keyboard key for each note of the C position, from C4. */
   const KEY = { C: 'KeyA', D: 'KeyS', E: 'KeyD', F: 'KeyF', G: 'KeyG' } as const;
@@ -1011,69 +1079,14 @@ test.describe('chapter seven', () => {
   ];
   const WHOLE = [...QUESTION, ...ANSWER.map(([note, beat]) => [note, beat + 16] as const)];
 
-  /**
-   * Open the chapter at `step` (0-based) by seeding the saved progress, so a
-   * test about the last exercise does not first have to pass the other three.
-   */
-  async function openAt(page: Page, step: number): Promise<void> {
-    await gotoLearn(page);
-    await page.evaluate(
-      (seeded) =>
-        new Promise<void>((resolve, reject) => {
-          const open = indexedDB.open('pokeyboard');
-          open.onerror = () => reject(open.error);
-          open.onsuccess = () => {
-            const database = open.result;
-            const request = database
-              .transaction('metadata', 'readwrite')
-              .objectStore('metadata')
-              .put({
-                key: 'learnProgress',
-                value: { v: 1, chapters: { firstMelody: { step: seeded, done: false } } },
-              });
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-              database.close();
-              resolve();
-            };
-          };
-        }),
-      step,
-    );
-    await page.reload();
-    await openChapter(page, CHAPTER);
-  }
+  const openAt = (page: Page, step: number) => openChapterAt(page, CHAPTER, 'firstMelody', step);
 
-  async function clickOrigin(page: Page): Promise<number> {
-    const section = page.locator('section[data-click-origin-ms]');
-    await section.waitFor({ timeout: 30_000 });
-    return Number(await section.getAttribute('data-click-origin-ms'));
-  }
-
-  /**
-   * Play a line in time from inside the page, a bar or two ahead so nothing
-   * is raced — the same approach as chapter six, with a key per note.
-   */
-  async function playInTime(page: Page, line: readonly (readonly [Note, number])[]): Promise<void> {
-    const originMs = await clickOrigin(page);
-    await page.evaluate(
-      async ({ originMs, presses, barMs, beatMs }) => {
-        const bar = Math.ceil((performance.now() - originMs) / barMs) + 1;
-        for (const [code, beat] of presses) {
-          const at = originMs + bar * barMs + beat * beatMs;
-          await new Promise((resolve) => setTimeout(resolve, Math.max(0, at - performance.now())));
-          window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
-          window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
-        }
-      },
-      {
-        originMs,
-        presses: line.map(([note, beat]) => [KEY[note], beat] as const),
-        barMs: BAR_MS,
-        beatMs: BEAT_MS,
-      },
+  /** Play a line of notes in time, a key per note. */
+  const playInTime = (page: Page, line: readonly (readonly [Note, number])[]) =>
+    playKeysInTime(
+      page,
+      line.map(([note, beat]) => [KEY[note], beat] as const),
     );
-  }
 
   test('finds the first phrase note by note, and a wrong note starts it over', async ({ page }) => {
     await openAt(page, 3);
@@ -1140,5 +1153,59 @@ test.describe('chapter seven', () => {
     await expect(
       page.getByRole('button', { name: `Open ${CHAPTER}` }).getByText('Completed'),
     ).toBeVisible();
+  });
+});
+
+test.describe('chapter eight', () => {
+  const CHAPTER = 'The C Major Scale';
+  const openAt = (page: Page, step: number) => openChapterAt(page, CHAPTER, 'cMajorScale', step);
+
+  /** C4 up to C5 on the computer keyboard, from the lesson's C4 base. */
+  const UP = ['KeyA', 'KeyS', 'KeyD', 'KeyF', 'KeyG', 'KeyH', 'KeyJ', 'KeyK'];
+
+  test('shows the whole octave on the narrowest phone', async ({ page }) => {
+    // Eight white keys, where a 320px phone would otherwise show seven: a
+    // scale cannot stop halfway for a shift.
+    await page.setViewportSize({ width: 320, height: 568 });
+    await openAt(page, 6);
+    await expect(page.getByRole('heading', { name: 'Play it up' })).toBeVisible();
+    await expect(page.locator('.piano__range')).toHaveText('C4 – C5');
+  });
+
+  test('asks for scale degrees by number, and takes them in any octave', async ({ page }) => {
+    await openAt(page, 4);
+    await expect(page.getByRole('heading', { name: 'Find the degree' })).toBeVisible();
+    await expect(page.getByText('Play degree 1.')).toBeVisible();
+    // The C an octave up is still degree 1.
+    await playKey(page, 'KeyK');
+    await expect(progressLine(page)).toHaveText('1 of 5');
+    await settleDrillHold(page);
+    await expect(page.getByText('Play degree 4.')).toBeVisible();
+    await playKey(page, 'KeyF');
+    await expect(progressLine(page)).toHaveText('2 of 5');
+  });
+
+  test('plays the scale up, and a note the wrong way starts it over', async ({ page }) => {
+    await openAt(page, 6);
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const code of UP.slice(0, 3)) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('3 of 8');
+    // Back down to D: the line is going up, so it starts again.
+    await playKey(page, 'KeyS');
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const code of UP) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('plays the scale up and back down in time', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openAt(page, 9);
+    await expect(page.getByRole('heading', { name: 'Up and down, in time' })).toBeVisible();
+    const down = [...UP].reverse().slice(1);
+    await playKeysInTime(
+      page,
+      [...UP, ...down].map((code, beat) => [code, beat] as const),
+    );
+    await expect(progressLine(page)).toHaveText('Nicely done.');
   });
 });

@@ -260,6 +260,7 @@ export const en: Messages = {
     quizWrong: ({ answer }) => `That one is ${answer}.`,
     quizAnswerLabel: ({ note }) => `Answer ${note}`,
     playNote: ({ note }) => `Play ${note}.`,
+    playDegree: ({ degree }) => `Play degree ${degree}.`,
     readNotePrompt: 'Which note is this?',
     playWhatYouSee: 'Play the note shown.',
     chapterTitles: {

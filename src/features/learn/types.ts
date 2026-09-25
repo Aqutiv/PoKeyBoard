@@ -63,6 +63,13 @@ interface StepBase {
   /** Where the keyboard should park for this step. Omitted leaves it alone. */
   anchorMidi?: number;
   /**
+   * A range the keyboard must show whole, however narrow the screen: keys are
+   * narrowed to fit it, down to a floor. For a line nobody can pause to shift
+   * the keyboard in the middle of — a scale is eight white keys, and a 320px
+   * phone shows seven. `lowMidi` should be the step's `anchorMidi`.
+   */
+  fit?: { lowMidi: number; highMidi: number };
+  /**
    * Run the lesson click through this step.
    *
    * Only ever needed to turn the click on *early* — a `rhythm` exercise brings
@@ -113,6 +120,18 @@ export interface DrillStep extends StepBase {
 }
 
 export type DrillPool =
+  | {
+      /**
+       * The round names a degree of a major scale — "play degree 5" — and the
+       * user plays it, in any octave. Knowing a scale is knowing where each of
+       * its steps lives, not only reciting them in order.
+       */
+      kind: 'scaleDegree';
+      /** Degree 1: the scale's home note. */
+      tonic: PitchClass;
+      /** The degrees asked for, 1–7, in the shared stride order. */
+      degrees: readonly number[];
+    }
   | {
       kind: 'namedKey';
       pitchClasses: readonly PitchClass[];

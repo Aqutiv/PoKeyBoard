@@ -261,6 +261,7 @@ export const fr: Messages = {
     quizWrong: ({ answer }) => `Celle-ci est ${answer}.`,
     quizAnswerLabel: ({ note }) => `Répondre ${note}`,
     playNote: ({ note }) => `Jouez ${note}.`,
+    playDegree: ({ degree }) => `Jouez le degré ${degree}.`,
     readNotePrompt: 'Quelle est cette note ?',
     playWhatYouSee: 'Jouez la note affichée.',
     chapterTitles: {

@@ -72,17 +72,33 @@ export const MAX_VISIBLE_WHITES = whiteKeyCount(FULL_RANGE_LOW, FULL_RANGE_HIGH)
 export const DEFAULT_VISIBLE_WHITES = 14;
 
 /**
+ * The narrowest a key may be squeezed to fit a range someone asked for. Well
+ * under MIN_WHITE_KEY_PX, which is a comfortable width rather than a playable
+ * one — but still a fingertip wide on a phone.
+ */
+export const MIN_FITTED_WHITE_KEY_PX = 26;
+
+/**
  * How many white keys a container of `widthPx` shows. Narrow containers get
  * as many keys as fit at MIN_WHITE_KEY_PX, stretched to fill; once keys
  * would stretch past MAX_WHITE_KEY_PX more keys appear instead, up to the
  * full piano.
+ *
+ * `minWhites` asks for at least that many — a lesson whose line spans a whole
+ * octave cannot be played on a phone that shows seven keys, because nobody can
+ * shift the keyboard in the middle of a scale. Honoured down to
+ * MIN_FITTED_WHITE_KEY_PX and no further: past that, the keys would stop being
+ * playable, which is worse than asking for a shift.
  */
-export function computeVisibleWhites(widthPx: number): number {
+export function computeVisibleWhites(widthPx: number, minWhites?: number): number {
   if (widthPx <= 0) return DEFAULT_VISIBLE_WHITES;
   const fitAtMin = Math.floor(widthPx / MIN_WHITE_KEY_PX);
   const neededAtMax = Math.ceil(widthPx / MAX_WHITE_KEY_PX);
   const target = Math.min(fitAtMin, Math.max(STRETCH_MAX_WHITES, neededAtMax));
-  return Math.min(MAX_VISIBLE_WHITES, Math.max(MIN_VISIBLE_WHITES, target));
+  const natural = Math.min(MAX_VISIBLE_WHITES, Math.max(MIN_VISIBLE_WHITES, target));
+  if (minWhites === undefined || minWhites <= natural) return natural;
+  const fitAtFloor = Math.floor(widthPx / MIN_FITTED_WHITE_KEY_PX);
+  return Math.min(MAX_VISIBLE_WHITES, Math.max(natural, Math.min(minWhites, fitAtFloor)));
 }
 
 /**

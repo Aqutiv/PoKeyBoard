@@ -67,7 +67,13 @@ export const LEARN_CHAPTERS: readonly LearnChapterMeta[] = [
     part: 'playing',
     load: () => import('./chapters/firstMelody').then((m) => m.FIRST_MELODY),
   },
-  { id: 'cMajorScale', level: 'beginner', order: 8, part: 'playing', load: null },
+  {
+    id: 'cMajorScale',
+    level: 'beginner',
+    order: 8,
+    part: 'playing',
+    load: () => import('./chapters/cMajorScale').then((m) => m.C_MAJOR_SCALE),
+  },
   { id: 'triads', level: 'beginner', order: 9, part: 'playing', load: null },
   { id: 'chordsPedalAndHands', level: 'beginner', order: 10, part: 'playing', load: null },
 

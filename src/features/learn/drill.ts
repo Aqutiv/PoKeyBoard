@@ -1,5 +1,5 @@
 import type { StaffMode } from '@/features/notation/scoreRenderer';
-import type { ExerciseSpec } from './exerciseSpec';
+import type { ExerciseSpec, PitchClass } from './exerciseSpec';
 import { noteLabel } from './noteLabel';
 import { roundEntryAt } from './rounds';
 import { singleNotePhrase, staffModeFor } from './staffPhrase';
@@ -18,7 +18,12 @@ export interface DrillRound {
   phrase?: LearnPhrase;
   /** Which staves that phrase is drawn on. Treble unless the pool says. */
   staves?: StaffMode;
+  /** For a degree round, the degree asked for — the prompt names it, not a note. */
+  degree?: number;
 }
+
+/** Semitones above the tonic of each degree of a major scale: W W H W W W H. */
+export const MAJOR_SCALE_STEPS: readonly number[] = [0, 2, 4, 5, 7, 9, 11];
 
 /**
  * What round `round` asks for. Pure, so the whole round order is testable
@@ -29,6 +34,17 @@ export interface DrillRound {
  * machinery, and a drill only decides what to ask next.
  */
 export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null {
+  if (pool.kind === 'scaleDegree') {
+    const degree = roundEntryAt(pool.degrees, round);
+    const offset = degree === undefined ? undefined : MAJOR_SCALE_STEPS[degree - 1];
+    if (degree === undefined || offset === undefined) return null;
+    // Any octave: the question is where degree 5 lives in the scale, and the
+    // same key an octave up is the same degree. Nothing is drawn, and no note
+    // is named — the name would be the answer.
+    const pitchClass = ((pool.tonic + offset) % 12) as PitchClass;
+    return { spec: { kind: 'pitchClass', pitchClass }, label: '', degree };
+  }
+
   const pitchClass = roundEntryAt(pool.pitchClasses, round);
   if (pitchClass === undefined) return null;
 
