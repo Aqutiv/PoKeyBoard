@@ -52,6 +52,7 @@ function beamEdges(layout: ScoreLayout, geometry: ScoreGeometry, index: number) 
     anchors,
     beam.stemDown,
     GAP,
+    beam.beamCount,
   );
   const half = (BEAM_THICKNESS_G * GAP) / 2;
   return { top: Math.min(span.y1, span.y2) - half, bottom: Math.max(span.y1, span.y2) + half };
@@ -149,6 +150,24 @@ describe('computeScoreGeometry', () => {
     const geometry = computeScoreGeometry(layout);
     expect(geometry.minHeight).toBeGreaterThan(SCORE_MIN_HEIGHT);
     expect(beamEdges(layout, geometry, 0).bottom).toBeLessThanOrEqual(geometry.minHeight);
+  });
+
+  // Three or four beams lengthen the stems, which carries the whole run
+  // further out than a sixteenth's; the room above the staff has to follow.
+  it('fits every beam of a run of 32nds or 64ths carried up over a high note', () => {
+    for (const [lengthMs, quantization, beamCount] of [
+      [62.5, '1/32', 3],
+      [31.25, '1/64', 4],
+    ] as const) {
+      const layout = layoutScore(
+        [64, 67, 69, 84].map((midi, i) => note(midi, i * lengthMs, lengthMs)), // E4 G4 A4 C6
+        { ...LAYOUT_OPTS, quantization },
+      );
+      const beam = layout.beams[0];
+      expect(beam?.stemDown).toBe(false);
+      expect(beam?.beamCount).toBe(beamCount);
+      expect(beamEdges(layout, computeScoreGeometry(layout), 0).top).toBeGreaterThanOrEqual(0);
+    }
   });
 
   // An unbeamed stem is shorter than a beam's reach but still four times the

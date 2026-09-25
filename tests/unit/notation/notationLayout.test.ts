@@ -436,6 +436,326 @@ describe('layoutScore', () => {
   });
 });
 
+describe('chords struck a little unevenly', () => {
+  it('keeps a chord that straddles the middle of a grid step in one column', () => {
+    // At 120 bpm a sixteenth is 125 ms, so 62.5 ms is the rounding edge: the
+    // lower note lands just before it and the upper just after.
+    const layout = layoutScore(
+      [
+        note({ id: 'low', midi: 60, startMs: 55, durationMs: 440 }),
+        note({ id: 'high', midi: 64, startMs: 70, durationMs: 425 }),
+      ],
+      OPTS,
+    );
+    const starts = layout.chords.flatMap((chord) => chord.notes.map((n) => n.displayStartMs));
+    expect(new Set(starts).size).toBe(1);
+    expect(layout.chords).toHaveLength(1);
+    // Performance timing is untouched: each note still sounds when it did.
+    const notes = layout.chords[0]!.notes;
+    expect(notes.map((n) => n.startMs).sort((a, b) => a - b)).toEqual([55, 70]);
+  });
+
+  it('writes a rolled chord as one chord, not a stack of voices', () => {
+    // Rolled bottom to top over 60 ms, all released together.
+    const layout = layoutScore(
+      [0, 20, 40].map((startMs, i) =>
+        note({ id: `r${i}`, midi: 60 + i * 4, startMs, durationMs: 1000 - startMs }),
+      ),
+      OPTS,
+    );
+    expect(layout.chords).toHaveLength(1);
+    expect(layout.chords[0]!.notes).toHaveLength(3);
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'half', dotted: false });
+  });
+
+  it('writes a chord rolled and let go together as one value', () => {
+    // Struck at 0, 20 and 40 ms and all let go at 470: held 470, 450 and
+    // 430 ms, which as held would round to two quarters and a dotted eighth.
+    // Written to the release they share, all three are quarters.
+    const layout = layoutScore(
+      [0, 20, 40].map((startMs, i) =>
+        note({ id: `r${i}`, midi: 60 + i * 4, startMs, durationMs: 470 - startMs }),
+      ),
+      OPTS,
+    );
+    expect(layout.chords).toHaveLength(1);
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'quarter', dotted: false });
+  });
+
+  it('writes a chord rolled and let go in the same stagger as one value', () => {
+    // Struck at 0 and 40 ms and held 300 ms each. Written from their 20 ms
+    // median to their own releases, they would be 280 and 320 ms, an eighth
+    // and a dotted eighth on two stems; let go 40 ms apart, as they were
+    // struck, they are one release.
+    const layout = layoutScore(
+      [
+        note({ id: 'low', midi: 60, startMs: 0, durationMs: 300 }),
+        note({ id: 'high', midi: 64, startMs: 40, durationMs: 300 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords).toHaveLength(1);
+    expect(layout.chords[0]!.symbol).toEqual({ base: 'eighth', dotted: false });
+  });
+
+  it('keeps a chord together when one hand is a shade behind the other', () => {
+    // Right hand at 55 ms, left hand at 75 ms: either side of the 62.5 ms edge.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 55, durationMs: 440 }),
+        note({ id: 'lh', midi: 48, startMs: 75, durationMs: 420 }),
+      ],
+      OPTS,
+    );
+    const starts = new Set(layout.chords.map((chord) => chord.displayStartMs));
+    expect(layout.chords.map((chord) => chord.staff).sort()).toEqual(['bass', 'treble']);
+    expect(starts.size).toBe(1);
+  });
+
+  it('keeps a chord together when one hand lets go early', () => {
+    // A short right-hand note over a held bass, either side of the 62.5 ms
+    // edge. They are down together for most of the shorter note, which is
+    // what makes a chord, however much longer the other is held.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 50, durationMs: 100 }),
+        note({ id: 'lh', midi: 48, startMs: 70, durationMs: 430 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
+    // Let go far apart, each keeps the value it was held for.
+    const valueOn = (staff: 'treble' | 'bass') =>
+      layout.chords.find((chord) => chord.staff === staff)?.symbol;
+    expect(valueOn('treble')).toEqual({ base: 'sixteenth', dotted: false });
+    expect(valueOn('bass')).toEqual({ base: 'quarter', dotted: false });
+  });
+
+  it('keeps a chord in one column where one hand is in triplets', () => {
+    // The right hand's note declares a triplet; the left's is straight. Struck
+    // at 55 and 75 ms, the chord is written from 65 ms, which the triplet grid
+    // rounds to the beat and the sixteenth grid to 125 ms. Only the beat is on
+    // both grids, so both notes go there.
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 55, durationMs: 150, tuplet: triplet }),
+        note({ id: 'lh', midi: 48, startMs: 75, durationMs: 420 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
+    // Measured from where it is drawn, the left hand's note still fills its beat.
+    const bass = layout.chords.find((chord) => chord.staff === 'bass');
+    expect(bass?.symbol).toEqual({ base: 'quarter', dotted: false });
+  });
+
+  it('keeps a chord in one column where one hand is read in sextuplets', () => {
+    // Recorded: sixteenth-note triplets in the right hand over straight
+    // sixteenths in the left, the first of each struck at 35 and 52 ms. Their
+    // 43.5 ms median rounds to the right hand's second slot, where its next
+    // note already stands, and to the beat on the left's; the beat is on both.
+    const layout = layoutScore(
+      [
+        ...[35, 83, 167, 250, 333, 417].map((startMs, i) =>
+          note({ id: `rh${i}`, midi: 72 + i, startMs, durationMs: 80 }),
+        ),
+        ...[52, 125, 250, 375].map((startMs, i) =>
+          note({ id: `lh${i}`, midi: 48 + i, startMs, durationMs: 75 }),
+        ),
+      ],
+      OPTS,
+    );
+    const startsOn = (staff: 'treble' | 'bass'): number[] =>
+      layout.chords.filter((chord) => chord.staff === staff).map((chord) => chord.displayStartMs);
+    expect(startsOn('treble')).toEqual([0, 83, 167, 250, 333, 417]);
+    expect(startsOn('bass')).toEqual([0, 125, 250, 375]);
+  });
+
+  it('leaves each note where it was played where the hands’ grids share no point', () => {
+    // A right-hand triplet at 160 ms and a straight left-hand note at 200,
+    // overlapping. Their 180 ms median rounds to 167 on the triplet grid and
+    // to 125 on the sixteenth grid, and neither is on both: two rhythms
+    // meeting, not a chord, so each keeps the column it was played nearest.
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 160, durationMs: 150, tuplet: triplet }),
+        note({ id: 'lh', midi: 48, startMs: 200, durationMs: 250 }),
+      ],
+      OPTS,
+    );
+    const startOn = (staff: 'treble' | 'bass') =>
+      layout.chords.find((chord) => chord.staff === staff)?.displayStartMs;
+    expect(startOn('treble')).toBe(167);
+    expect(startOn('bass')).toBe(250);
+  });
+
+  it('still groups the notes after one that fits no chord', () => {
+    // A right-hand triplet at 140 ms over a left hand playing straight: on the
+    // beat, a chord struck at 180 and 195, and the last sixteenth. The triplet
+    // and the chord's first note share no grid point, so the triplet stands
+    // alone; the chord is still one, written from 187.5 ms and together at
+    // 250, not split between 125 and 250.
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 140, durationMs: 150, tuplet: triplet }),
+        note({ id: 'lh0', midi: 43, startMs: 0, durationMs: 125 }),
+        note({ id: 'lh1', midi: 48, startMs: 180, durationMs: 180 }),
+        note({ id: 'lh2', midi: 52, startMs: 195, durationMs: 165 }),
+        note({ id: 'lh3', midi: 50, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    const startsOn = (staff: 'treble' | 'bass'): number[] =>
+      layout.chords.filter((chord) => chord.staff === staff).map((chord) => chord.displayStartMs);
+    expect(startsOn('treble')).toEqual([167]);
+    expect(startsOn('bass')).toEqual([0, 250, 375]);
+  });
+
+  it('writes a two-note chord from halfway between its notes, not from the later one', () => {
+    // 40 ms and 80 ms: halfway is 60, which rounds to the beat (0 ms); the
+    // later note alone would round the chord to the next sixteenth.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 40, durationMs: 460 }),
+        note({ id: 'lh', midi: 48, startMs: 80, durationMs: 420 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
+  });
+
+  it('keeps every onset exactly as played when there is no grid', () => {
+    // An ornament 25 ms apart: with the grid off there is nothing to straddle,
+    // and the exact timing is what was asked for.
+    const layout = layoutScore(
+      [
+        note({ id: 'grace', midi: 74, startMs: 1000, durationMs: 25 }),
+        note({ id: 'main', midi: 72, startMs: 1025, durationMs: 400 }),
+      ],
+      { ...OPTS, quantization: 'off' },
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([1000, 1025]);
+  });
+
+  it('never mistakes a fast run for a chord', () => {
+    // Thirty-seconds at 120 bpm are 62.5 ms apart: well inside the chord
+    // window, but a whole grid step apart on a 1/32 grid.
+    const layout = layoutScore(
+      [0, 63, 125, 188].map((startMs, i) =>
+        note({ id: `f${i}`, midi: 72 + i, startMs, durationMs: 60 }),
+      ),
+      { ...OPTS, quantization: '1/32' },
+    );
+    expect(layout.chords).toHaveLength(4);
+  });
+
+  it('never stretches a chord past half the finest grid among its notes', () => {
+    // A plain note on the beat, and one 30 ms later that declares a 32nd-note
+    // triplet, whose slots are 41.7 ms apart. The plain note's grid allows
+    // 40 ms, but the triplet's allows only half its own step, 20.8 ms, so the
+    // later note keeps its own slot.
+    const layout = layoutScore(
+      [
+        note({ id: 'plain', midi: 72, startMs: 0, durationMs: 125 }),
+        note({
+          id: 'fine',
+          midi: 76,
+          startMs: 30,
+          durationMs: 40,
+          tuplet: { actual: 3, normal: 2, unit: 32 },
+        }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 42]);
+  });
+
+  it('never takes a key struck twice in quick succession for a chord', () => {
+    // On a 1/8 grid at 120 bpm the rounding edge is 125 ms. The key goes down
+    // at 110, up at 130 and down again at 145: two notes, one either side of
+    // the edge, and not one chord at 127.5 ms with the same head twice.
+    const layout = layoutScore(
+      [
+        note({ id: 'first', midi: 72, startMs: 110, durationMs: 20 }),
+        note({ id: 'again', midi: 72, startMs: 145, durationMs: 20 }),
+      ],
+      { ...OPTS, quantization: '1/8' },
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 250]);
+    expect(layout.chords.map((chord) => chord.notes.length)).toEqual([1, 1]);
+  });
+
+  it('never takes a grace note for part of the note it leads into', () => {
+    // Let go at 60 ms, before the main note sounds at 75: played in turn, so
+    // each rounds to its own side of the 62.5 ms edge.
+    const layout = layoutScore(
+      [
+        note({ id: 'grace', midi: 74, startMs: 40, durationMs: 20 }),
+        note({ id: 'main', midi: 72, startMs: 75, durationMs: 425 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
+
+  it('never takes notes played legato for a chord', () => {
+    // Each key comes up just after the next goes down: 55 ms and 85 ms, held
+    // 40 ms each, so down together for only 10 ms of either. Played in turn,
+    // each rounds to its own side of the 62.5 ms edge, not both from 70 ms.
+    const layout = layoutScore(
+      [
+        note({ id: 'first', midi: 72, startMs: 55, durationMs: 40 }),
+        note({ id: 'next', midi: 74, startMs: 85, durationMs: 40 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
+
+  it('never writes one key twice in a chord, even where its notes overlap', () => {
+    // Struck again before it was let go, as an imported file can have it: the
+    // onsets of the key struck twice above, and still two notes, not a chord.
+    const layout = layoutScore(
+      [
+        note({ id: 'first', midi: 72, startMs: 110, durationMs: 60 }),
+        note({ id: 'again', midi: 72, startMs: 145, durationMs: 60 }),
+      ],
+      { ...OPTS, quantization: '1/8' },
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 250]);
+  });
+
+  it('never groups notes the score puts in different voices', () => {
+    // Two lines on one staff, the upper held from 50 ms and the lower coming in
+    // at 80, overlapping either side of the 62.5 ms edge. Played, they would
+    // pass for an uneven chord; the score says they are separate lines.
+    const layout = layoutScore(
+      [
+        note({ id: 'upper', midi: 76, startMs: 50, durationMs: 450, staff: 'treble', voice: 0 }),
+        note({ id: 'lower', midi: 67, startMs: 80, durationMs: 170, staff: 'treble', voice: 1 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
+
+  it('reads a voice number as its own staff’s', () => {
+    // The importer numbers each staff's voices from 0, so voice 0 in the treble
+    // and voice 0 in the bass are the two hands' own lines, not one.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 50, durationMs: 450, staff: 'treble', voice: 0 }),
+        note({ id: 'lh', midi: 48, startMs: 80, durationMs: 420, staff: 'bass', voice: 0 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
+});
+
 describe('beam grouping', () => {
   /** Eighths at 120bpm 4/4: a beat is 500ms, so an eighth is 250ms. */
   function eighths(starts: number[], partial: Partial<NoteEvent> = {}): NoteEvent[] {
@@ -444,13 +764,105 @@ describe('beam grouping', () => {
     );
   }
 
-  it('beams each beat of a run on its own', () => {
+  it('beams four eighths in common time as one half-bar group', () => {
     const layout = layoutScore(eighths([0, 250, 500, 750]), OPTS);
-    expect(layout.beams).toHaveLength(2);
-    expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
-    expect(layout.beams.every((beam) => beam.beamCount === 1)).toBe(true);
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.members).toHaveLength(4);
+    expect(layout.beams[0]!.beamCount).toBe(1);
+    expect(layout.beams[0]!.secondary).toEqual([]);
     // Every chord points back at the run it belongs to.
+    expect(layout.chords.map((chord) => chord.beamId)).toEqual([0, 0, 0, 0]);
+  });
+
+  it('never beams across the middle of a common-time bar', () => {
+    // Beats two and three: the half-bar accent has to stay visible.
+    const layout = layoutScore(eighths([500, 750, 1000, 1250]), OPTS);
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
+  });
+
+  it('keeps the half bar’s pairs apart where a rest falls between them', () => {
+    // A pair in each of beats one and two, with a sixteenth of silence at
+    // 500 ms between them: one beam over all four would run across the rest.
+    const layout = layoutScore(eighths([0, 250, 625, 875]), OPTS);
+    expect(
+      layout.rests.some((rest) => rest.staff === 'treble' && rest.displayStartMs === 500),
+    ).toBe(true);
+    expect(layout.beams.map((beam) => beam.members.map((chord) => chord.displayStartMs))).toEqual([
+      [0, 250],
+      [625, 875],
+    ]);
+  });
+
+  it('beams by the beat where a lesson asks it to', () => {
+    const layout = layoutScore(eighths([0, 250, 500, 750]), { ...OPTS, eighthsByHalfBar: false });
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
     expect(layout.chords.map((chord) => chord.beamId)).toEqual([0, 0, 1, 1]);
+  });
+
+  it('beams an eighth with the two sixteenths after it', () => {
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 250 }),
+        note({ id: 'b', midi: 74, startMs: 250, durationMs: 125 }),
+        note({ id: 'c', midi: 76, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams).toHaveLength(1);
+    const beam = layout.beams[0]!;
+    expect(beam.members).toHaveLength(3);
+    expect(beam.beamCount).toBe(2);
+    // The second beam joins the two sixteenths only.
+    expect(beam.secondary).toEqual([[{ from: 1, to: 2 }]]);
+  });
+
+  it('beams a dotted eighth with its sixteenth, the second beam a stub pointing back', () => {
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 375 }),
+        note({ id: 'b', midi: 74, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.members.map((chord) => chord.symbol)).toEqual([
+      { base: 'eighth', dotted: true },
+      { base: 'sixteenth', dotted: false },
+    ]);
+    expect(layout.beams[0]!.secondary).toEqual([[{ from: 1, to: 1, stub: -1 }]]);
+  });
+
+  it('points a sixteenth’s stub toward the note it pairs with', () => {
+    // Sixteenth, eighth, sixteenth: the first pairs forward, the last back.
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 125 }),
+        note({ id: 'b', midi: 74, startMs: 125, durationMs: 250 }),
+        note({ id: 'c', midi: 76, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams[0]!.secondary).toEqual([
+      [
+        { from: 0, to: 0, stub: 1 },
+        { from: 2, to: 2, stub: -1 },
+      ],
+    ]);
+  });
+
+  it('keeps a triplet run whole, numbered, and with no beams of its own to mix', () => {
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'a', midi: 72, startMs: 0, durationMs: 167, tuplet: triplet }),
+        note({ id: 'b', midi: 74, startMs: 167, durationMs: 167, tuplet: triplet }),
+        note({ id: 'c', midi: 76, startMs: 333, durationMs: 167, tuplet: triplet }),
+      ],
+      OPTS,
+    );
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]!.tupletCount).toBe(3);
+    expect(layout.beams[0]!.secondary).toEqual([]);
   });
 
   it('leaves a lone eighth to its flag', () => {
