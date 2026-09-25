@@ -35,21 +35,27 @@ function matches(note: NoteEvent, hand: TrainingHand): boolean {
  * gates, which is what a seek onto a chord should do. Callers resuming from a
  * gate pass a time past the chord they just cleared.
  *
+ * A loop plays nothing from its end on, so a caller looping passes that end as
+ * `endMs`: no note from there is asked for, not even as part of a chord that
+ * starts before it.
+ *
  * `notes` must be sorted by startMs.
  */
 export function nextTrainingGate(
   notes: readonly NoteEvent[],
   fromMs: number,
   hand: TrainingHand,
+  endMs = Number.POSITIVE_INFINITY,
 ): TrainingGate | null {
+  const end = lowerBoundByStart(notes, endMs);
   let index = lowerBoundByStart(notes, fromMs);
-  while (index < notes.length && !matches(notes[index] as NoteEvent, hand)) index += 1;
-  if (index >= notes.length) return null;
+  while (index < end && !matches(notes[index] as NoteEvent, hand)) index += 1;
+  if (index >= end) return null;
 
   const atMs = (notes[index] as NoteEvent).startMs;
   const midis = new Set<number>();
   const noteIds = new Set<string>();
-  for (let i = index; i < notes.length; i += 1) {
+  for (let i = index; i < end; i += 1) {
     const note = notes[i] as NoteEvent;
     if (note.startMs > atMs + CHORD_WINDOW_MS) break;
     if (!matches(note, hand)) continue;

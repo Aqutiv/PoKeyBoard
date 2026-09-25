@@ -69,6 +69,24 @@ function run(seconds: number): void {
   }
 }
 
+function press(midi: number): void {
+  for (const listener of [...h.inputs]) {
+    listener({ type: 'on', midi, velocity: 0.7, audioTime: h.now, sourceId: 'kbd' });
+  }
+}
+
+/** Run on through `count` training holds, playing what each asks for. */
+function playThroughHolds(count: number): Array<{ atMs: number; midis: number[] }> {
+  const holds: Array<{ atMs: number; midis: number[] }> = [];
+  for (let hold = 0; hold < count; hold += 1) {
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    const midis = [...transportController.getTrainingTargets()];
+    holds.push({ atMs: transportController.getPlayheadMs(), midis });
+    for (const midi of midis) press(midi);
+  }
+  return holds;
+}
+
 describe('playback speed and looping', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -193,6 +211,40 @@ describe('playback speed and looping', () => {
       }
       expect(transportController.isWaitingForTraining()).toBe(false);
     }
+  });
+
+  it('asks only for the loop’s own notes where a chord runs over its end', () => {
+    // The loop's first note, and a chord at 1980 whose other note, at 2020, is
+    // past the loop's end and never plays.
+    const notes = [note('top', 60, 1000), note('last', 64, 1980), note('past', 67, 2020)];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 3000 }));
+    useSettingsStore.getState().setPlaybackMode('training-right');
+    transportController.setLoop({ startMs: 1000, endMs: 2000 });
+    transportController.play();
+    // Round and round: the top, then the last note before the end on its own.
+    expect(playThroughHolds(4)).toEqual([
+      { atMs: 1000, midis: [60] },
+      { atMs: 1980, midis: [64] },
+      { atMs: 1000, midis: [60] },
+      { atMs: 1980, midis: [64] },
+    ]);
+    // Every note was played by hand as it was asked for, so the take sounded none.
+    expect(h.scheduled).toEqual([]);
+  });
+
+  it('asks for a chord across the loop’s top whole on the way in, then only its inside', () => {
+    // A chord at 980 whose other note, at 1010, is the loop's first: both play
+    // on the way in, and only the one inside the loop after that.
+    const notes = [note('lead', 60, 980), note('top', 64, 1010)];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 3000 }));
+    useSettingsStore.getState().setPlaybackMode('training-right');
+    transportController.setLoop({ startMs: 1000, endMs: 2000 });
+    transportController.play();
+    expect(playThroughHolds(3)).toEqual([
+      { atMs: 980, midis: [60, 64] },
+      { atMs: 1010, midis: [64] },
+      { atMs: 1010, midis: [64] },
+    ]);
   });
 
   it('still holds for a note already in sight when the speed changes', () => {

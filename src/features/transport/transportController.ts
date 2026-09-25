@@ -565,7 +565,10 @@ export class TransportController {
     }
     this.send('PLAY');
     this.trainingSkipNoteIds = resume?.skipNoteIds ?? null;
-    this.beginPlaybackScheduler(notes, fromMs, resume?.gateFromMs ?? fromMs);
+    // A resumed run looks for its next hold past the chord just cleared, but
+    // not past the loop's end, or the next pass would skip the notes at its top.
+    const gateFromMs = Math.min(resume?.gateFromMs ?? fromMs, loop?.endMs ?? Infinity);
+    this.beginPlaybackScheduler(notes, fromMs, gateFromMs);
   }
 
   /**
@@ -717,8 +720,8 @@ export class TransportController {
     let pass = loopPassAt(loop, fromMs);
     let takeMs = foldIntoLoop(loop, fromMs);
     for (let tries = 0; tries < 2; tries += 1) {
-      const gate = nextTrainingGate(this.playNotes, Math.max(0, takeMs), hand);
-      if (gate && gate.atMs < loop.endMs) {
+      const gate = nextTrainingGate(this.playNotes, Math.max(0, takeMs), hand, loop.endMs);
+      if (gate) {
         this.trainingGate = gate;
         this.trainingGateVirtualMs = gate.atMs + pass * (loop.endMs - loop.startMs);
         return;
