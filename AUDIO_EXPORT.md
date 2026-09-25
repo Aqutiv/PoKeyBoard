@@ -4,7 +4,7 @@ Goal: a rendered take must be sendable through WhatsApp and similar apps and pla
 
 ## Pipeline (src/audio/AudioExportService.ts)
 
-1. **Hash** the audible content (`takeHash`): notes/pedals (id-independent), tempo, instrument gains, sample-pack version + exporter version, bitrate, metronome inclusion, loudness mode. A cache hit in the `audioCache` table returns the stored MP3 instantly. The sample-pack version is how choosing a different piano invalidates a cached export: the take is re-stamped when the selection changes, so the render always uses the piano the user just heard.
+1. **Hash** the audible content (`takeHash`): notes/pedals (id-independent), tempo, reverb, sample-pack version + exporter version, bitrate, metronome inclusion, loudness mode — not the volume slider, which the render ignores. A cache hit in the `audioCache` table returns the stored MP3 instantly. The sample-pack version is how choosing a different piano invalidates a cached export: the take is re-stamped when the selection changes, so the render always uses the piano the user just heard.
 2. **Save** the take (forced autosave flush).
 3. **Render** via `OfflineTakeRenderer`: `OfflineAudioContext` (2ch/48kHz, take + 3 s tail), the same `PianoGraphFactory` graph, `SampleBank` buffers, and envelope constants as live playback; sustain pedal pre-applied to durations. The piano plays at the default volume and without the live peak guard (see Level below); the optional metronome is a click track rather than a render — one accented click and one plain one, each rendered by the live metronome's own synthesis, and the time of every beat — so it costs a few kilobytes instead of another full-length channel, and never counts toward the piano's loudness.
 4. **Master and encode** in `mp3Encoder.worker`: channel copies are **transferred** (no clones), `masterExport` sets the level and holds the peaks in place, LAME encodes in ~2 s chunks with progress messages, and the finished buffer transfers back.
@@ -37,7 +37,7 @@ The ready panel offers **Share audio** (builds a `File`, checks `navigator.canSh
 
 ## Cache invalidation
 
-The take store bumps `contentRevision` only on audible edits (notes, pedals, tempo, instrument, clear/undo). The autosave layer deletes the cached MP3 exactly when that revision moves. Renaming a take or moving the playhead keeps the cache (the filename is regenerated from the current title at share time). Deleting a take cascades its cached audio.
+The take store bumps `contentRevision` only on audible edits (notes, pedals, tempo, piano, reverb, clear/undo). The autosave layer deletes the cached MP3 exactly when that revision moves. Renaming a take, moving the playhead or moving the volume slider keeps the cache (the filename is regenerated from the current title at share time, and the render plays at the default volume). Deleting a take cascades its cached audio.
 
 ## Memory management
 

@@ -47,7 +47,9 @@ function canonicalNotes(notes: readonly NoteEvent[]): CanonicalNote[] {
 
 /**
  * The audible content of a take: everything that changes the rendered audio,
- * nothing that does not (title, timestamps, display state, note ids).
+ * nothing that does not (title, timestamps, display state, note ids). That
+ * leaves out the volume slider too, since an export renders at the default
+ * volume wherever it was left.
  */
 export function canonicalAudioContent(take: Take): Record<string, unknown> {
   return {
@@ -60,7 +62,6 @@ export function canonicalAudioContent(take: Take): Record<string, unknown> {
     },
     instrument: {
       id: take.instrument.id,
-      masterVolume: take.instrument.masterVolume,
       reverbMix: take.instrument.reverbMix,
     },
     notes: canonicalNotes(take.notes),

@@ -27,9 +27,9 @@ export interface TakeStoreState {
   /** Last generation confirmed written for the active take. */
   savedGeneration: number;
   /**
-   * Bumps only when the audible content changes (notes, pedals, tempo,
-   * instrument) — the autosave layer invalidates cached export audio when
-   * this moves. Title and playhead changes do not bump it.
+   * Bumps only when the audible content changes (notes, pedals, tempo, piano,
+   * reverb) — the autosave layer invalidates cached export audio when this
+   * moves. Title, playhead and volume changes do not bump it.
    */
   contentRevision: number;
 
@@ -195,12 +195,20 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
     })),
 
   setInstrumentSettings: (instrument) =>
-    set((state) => ({
-      take: touched({ ...state.take, instrument }),
-      dirty: true,
-      mutationGeneration: state.mutationGeneration + 1,
-      contentRevision: state.contentRevision + 1,
-    })),
+    set((state) => {
+      // The volume is saved with the take but never exported: the render plays
+      // at the default volume, so moving it alone leaves the cached export in
+      // place.
+      const audible =
+        instrument.id !== state.take.instrument.id ||
+        instrument.reverbMix !== state.take.instrument.reverbMix;
+      return {
+        take: touched({ ...state.take, instrument }),
+        dirty: true,
+        mutationGeneration: state.mutationGeneration + 1,
+        contentRevision: audible ? state.contentRevision + 1 : state.contentRevision,
+      };
+    }),
 
   setPlayheadMs: (playheadMs) =>
     set((state) => ({

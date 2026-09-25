@@ -105,6 +105,14 @@ describe('computeExportHash', () => {
     expect(await computeExportHash({ ...baseInput, take: wetter })).not.toBe(base);
   });
 
+  it('ignores the volume slider, which the export renders without', async () => {
+    const take = takeWithNotes();
+    const quieter: Take = { ...take, instrument: { ...take.instrument, masterVolume: 0.3 } };
+    expect(await computeExportHash({ ...baseInput, take: quieter })).toBe(
+      await computeExportHash({ ...baseInput, take }),
+    );
+  });
+
   it('changes with click volume only when the metronome is included', async () => {
     const take = takeWithNotes();
     const withoutClicks = await computeExportHash({ ...baseInput, take });
