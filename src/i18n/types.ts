@@ -471,6 +471,7 @@ export interface Messages {
     velocityFixed: string;
     fixedVelocity: string;
     noteLabels: string;
+    followPlayback: string;
     scrubAudition: string;
     backgroundPlayback: string;
     backgroundPlaybackHint: string;
