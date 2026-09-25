@@ -1,5 +1,5 @@
 import { createMp3Encoder } from 'wasm-media-encoders';
-import { masterExport, type ClickTrack, type LoudnessMode } from './loudness';
+import { masterExport, masterExportInSlices, type ClickTrack, type LoudnessMode } from './loudness';
 
 /** The only bitrates the app offers; matches the encoder's CBR union type. */
 export type ExportBitrateKbps = 128 | 192;
@@ -67,17 +67,34 @@ export interface ExportPcm {
 }
 
 /**
- * Everything after the render: set the level and hold the peaks
- * (`masterExport`, in place), then encode. The worker runs this, and the
- * main-thread fallback runs it identically.
+ * Everything after the render, in the worker: set the level and hold the peaks
+ * (`masterExport`, in place), then encode. Mastering runs straight through,
+ * since nothing waits on a worker's thread.
  */
 export async function finishMp3(
   pcm: ExportPcm,
   bitrateKbps: ExportBitrateKbps,
   onProgress?: (fraction: number) => void,
-  signal?: AbortSignal,
 ): Promise<Uint8Array> {
-  signal?.throwIfAborted();
   masterExport(pcm.left, pcm.right, pcm.clicks, pcm.loudness, pcm.sampleRate);
+  return encodePcmToMp3(pcm.sampleRate, bitrateKbps, pcm.left, pcm.right, onProgress);
+}
+
+/**
+ * The same on the main thread, for when the worker cannot run. Straight
+ * through, mastering a long take would freeze the page for seconds and leave a
+ * click on Cancel waiting until it was done; so it runs a slice at a time, as
+ * the encoder does, and a cancelled export stops at the next slice. The file
+ * comes out exactly as the worker's would.
+ */
+export async function finishMp3OnMainThread(
+  pcm: ExportPcm,
+  bitrateKbps: ExportBitrateKbps,
+  onProgress: (fraction: number) => void,
+  signal: AbortSignal,
+): Promise<Uint8Array> {
+  await masterExportInSlices(pcm.left, pcm.right, pcm.clicks, pcm.loudness, pcm.sampleRate, {
+    signal,
+  });
   return encodePcmToMp3(pcm.sampleRate, bitrateKbps, pcm.left, pcm.right, onProgress, signal);
 }

@@ -4,8 +4,8 @@ import { finishMp3, type ExportBitrateKbps } from '@/audio/mp3Encode';
 /**
  * Mastering and MP3 encoding off the main thread. PCM arrives as transferred
  * ArrayBuffers (never cloned); the finished MP3 transfers back the same way.
- * The work lives in the shared, isomorphic finishMp3 so the main-thread
- * fallback in AudioExportService runs identical code.
+ * The work lives in mp3Encode, shared with the main-thread fallback in
+ * AudioExportService, which runs the same code a slice at a time.
  */
 export interface EncodeRequest {
   type: 'encode';

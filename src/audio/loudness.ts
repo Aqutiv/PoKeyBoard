@@ -1,3 +1,5 @@
+import { runInSlices, runToEnd, type SliceOptions, type Steps } from '@/utils/steps';
+
 /**
  * How loud an export is, and how it is kept from clipping.
  *
@@ -11,9 +13,18 @@
  * ceiling, one that counts the peaks between samples a decoder reconstructs
  * as well as the samples themselves.
  *
- * Pure and synchronous, so the worker that encodes the MP3 can run it — a long
- * take is tens of millions of samples, too many for the main thread.
+ * Pure. A long take is tens of millions of samples, and each pass over them is
+ * written as steps (`Steps`) that pause every few thousand frames: the worker
+ * that encodes the MP3 runs them straight through, and the main thread, when
+ * the worker cannot run, runs the same code a slice at a time so the page
+ * never freezes for the seconds a pass can take there.
  */
+
+/**
+ * Frames a pass works through between pauses: well under a millisecond even
+ * for the limiter, so a slice ends close to when it should.
+ */
+const FRAMES_PER_STEP = 4096;
 
 export interface Biquad {
   b0: number;
@@ -75,6 +86,14 @@ function lufsOf(power: number): number {
  * −Infinity when nothing is loud enough to measure, or shorter than a block.
  */
 export function integratedLoudness(channels: readonly Float32Array[], sampleRate: number): number {
+  return runToEnd(integratedLoudnessSteps(channels, sampleRate));
+}
+
+/** `integratedLoudness`, pausing after every 100 ms of each channel. */
+function* integratedLoudnessSteps(
+  channels: readonly Float32Array[],
+  sampleRate: number,
+): Steps<number> {
   const step = Math.round(sampleRate * STEP_S);
   const segments = Math.floor((channels[0]?.length ?? 0) / step);
   if (segments < STEPS_PER_BLOCK) return Number.NEGATIVE_INFINITY;
@@ -102,6 +121,7 @@ export function integratedLoudness(channels: readonly Float32Array[], sampleRate
         sum += weighted * weighted;
       }
       energy[segment] = (energy[segment] as number) + sum;
+      yield;
     }
   }
 
@@ -198,19 +218,34 @@ function mayReach(x: Float32Array, n: number, level: number): boolean {
 
 /** The highest magnitude the signal reaches, between samples as well as on them. */
 export function truePeak(channels: readonly Float32Array[]): number {
+  return runToEnd(truePeakSteps(channels));
+}
+
+/** `truePeak`, pausing every `FRAMES_PER_STEP` frames of each channel. */
+function* truePeakSteps(channels: readonly Float32Array[]): Steps<number> {
   let samplePeak = 0;
   for (const samples of channels) {
-    for (const sample of samples) {
-      const magnitude = Math.abs(sample);
-      if (magnitude > samplePeak) samplePeak = magnitude;
+    for (let from = 0; from < samples.length; from += FRAMES_PER_STEP) {
+      const to = Math.min(samples.length, from + FRAMES_PER_STEP);
+      for (let i = from; i < to; i += 1) {
+        const magnitude = Math.abs(samples[i] as number);
+        if (magnitude > samplePeak) samplePeak = magnitude;
+      }
+      yield;
     }
   }
   let peak = samplePeak;
   for (const samples of channels) {
-    for (let n = 0; n + 1 < samples.length; n += 1) {
-      if (!mayReach(samples, n, samplePeak)) continue;
-      const between = peakBetween(samples, n);
-      if (between > peak) peak = between;
+    // Every stretch from one sample to the next: all but the last sample start one.
+    const stretches = samples.length - 1;
+    for (let from = 0; from < stretches; from += FRAMES_PER_STEP) {
+      const to = Math.min(stretches, from + FRAMES_PER_STEP);
+      for (let n = from; n < to; n += 1) {
+        if (!mayReach(samples, n, samplePeak)) continue;
+        const between = peakBetween(samples, n);
+        if (between > peak) peak = between;
+      }
+      yield;
     }
   }
   return peak;
@@ -242,6 +277,19 @@ export function limitTruePeak(
   ceiling: number,
   sampleRate: number,
 ): number {
+  return runToEnd(limitTruePeakSteps(channels, ceiling, sampleRate));
+}
+
+/**
+ * `limitTruePeak`, pausing every `FRAMES_PER_STEP` frames. The window, its
+ * minima and the gain all live in the generator's own variables, so a pause
+ * picks up on the very next frame as if there had been none.
+ */
+function* limitTruePeakSteps(
+  channels: readonly Float32Array[],
+  ceiling: number,
+  sampleRate: number,
+): Steps<number> {
   const length = channels[0]?.length ?? 0;
   const window = Math.max(HALF_TAPS + 2, Math.round(LOOKAHEAD_S * sampleRate));
   const recover = 1 - Math.exp(-1 / (RELEASE_S * sampleRate));
@@ -257,47 +305,52 @@ export function limitTruePeak(
   let gain = 1;
   let deepest = 1;
 
-  for (let n = 0; n < length + window - 1; n += 1) {
-    let wanted = 1;
-    if (n < length) {
-      let peak = 0;
-      for (const samples of channels) {
-        const magnitude = Math.abs(samples[n] as number);
-        if (magnitude > peak) peak = magnitude;
-        if (n + 1 < length && mayReach(samples, n, ceiling)) {
-          const between = peakBetween(samples, n);
-          if (between > peak) peak = between;
+  const frames = length + window - 1;
+  for (let from = 0; from < frames; from += FRAMES_PER_STEP) {
+    const to = Math.min(frames, from + FRAMES_PER_STEP);
+    for (let n = from; n < to; n += 1) {
+      let wanted = 1;
+      if (n < length) {
+        let peak = 0;
+        for (const samples of channels) {
+          const magnitude = Math.abs(samples[n] as number);
+          if (magnitude > peak) peak = magnitude;
+          if (n + 1 < length && mayReach(samples, n, ceiling)) {
+            const between = peakBetween(samples, n);
+            if (between > peak) peak = between;
+          }
         }
+        if (peak > ceiling) wanted = ceiling / peak;
       }
-      if (peak > ceiling) wanted = ceiling / peak;
-    }
 
-    // One frame leaves the window as this one joins it; out first, so the
-    // queue never holds more than the window.
-    if (size > 0 && (minIndex[head] as number) <= n - window) {
-      head = (head + 1) % window;
-      size -= 1;
-    }
-    while (size > 0 && (minValue[(head + size - 1) % window] as number) >= wanted) size -= 1;
-    minIndex[(head + size) % window] = n;
-    minValue[(head + size) % window] = wanted;
-    size += 1;
+      // One frame leaves the window as this one joins it; out first, so the
+      // queue never holds more than the window.
+      if (size > 0 && (minIndex[head] as number) <= n - window) {
+        head = (head + 1) % window;
+        size -= 1;
+      }
+      while (size > 0 && (minValue[(head + size - 1) % window] as number) >= wanted) size -= 1;
+      minIndex[(head + size) % window] = n;
+      minValue[(head + size) % window] = wanted;
+      size += 1;
 
-    // The minimum for the window starting at `frame`. Windows that start before
-    // the first frame are still counted, over the frames they do reach: a loud
-    // attack in the take's first few milliseconds has to be brought down in time
-    // as much as any other.
-    const frame = n - window + 1;
-    const minimum = minValue[head] as number;
-    const slot = ((frame % window) + window) % window;
-    minimaSum += minimum - (minima[slot] as number);
-    minima[slot] = minimum;
-    if (frame < 0) continue;
-    gain = Math.min(minimaSum / window, gain + (1 - gain) * recover);
-    if (gain < deepest) deepest = gain;
-    if (gain < 1) {
-      for (const samples of channels) samples[frame] = (samples[frame] as number) * gain;
+      // The minimum for the window starting at `frame`. Windows that start
+      // before the first frame are still counted, over the frames they do
+      // reach: a loud attack in the take's first few milliseconds has to be
+      // brought down in time as much as any other.
+      const frame = n - window + 1;
+      const minimum = minValue[head] as number;
+      const slot = ((frame % window) + window) % window;
+      minimaSum += minimum - (minima[slot] as number);
+      minima[slot] = minimum;
+      if (frame < 0) continue;
+      gain = Math.min(minimaSum / window, gain + (1 - gain) * recover);
+      if (gain < deepest) deepest = gain;
+      if (gain < 1) {
+        for (const samples of channels) samples[frame] = (samples[frame] as number) * gain;
+      }
     }
+    yield;
   }
   return 20 * Math.log10(deepest);
 }
@@ -355,13 +408,16 @@ export interface ClickTrack {
   beatSound: Float32Array;
 }
 
-/** Add every click of `track` to both channels, at `CLICK_LEVEL`. */
-function mixClicks(
+/**
+ * Add every click of `track` to both channels, at `CLICK_LEVEL`, pausing after
+ * each: a click is a few thousand frames, and a long take thousands of clicks.
+ */
+function* mixClicks(
   left: Float32Array,
   right: Float32Array,
   track: ClickTrack,
   sampleRate: number,
-): void {
+): Steps<void> {
   for (let c = 0; c < track.atS.length; c += 1) {
     const sound = track.accent[c] ? track.accentSound : track.beatSound;
     const at = Math.round((track.atS[c] as number) * sampleRate);
@@ -371,6 +427,7 @@ function mixClicks(
       left[at + j] = (left[at + j] as number) + click;
       right[at + j] = (right[at + j] as number) + click;
     }
+    yield;
   }
 }
 
@@ -396,24 +453,53 @@ export function masterExport(
   mode: LoudnessMode,
   sampleRate: number,
 ): MasteringResult {
+  return runToEnd(masterExportSteps(left, right, clicks, mode, sampleRate));
+}
+
+/**
+ * `masterExport` on the main thread, for when the worker cannot run it: the
+ * same work a slice at a time, so the page can paint and take a click on
+ * Cancel between slices, stopping at the next one once `options.signal` is
+ * aborted. The samples come out exactly as `masterExport` leaves them.
+ */
+export function masterExportInSlices(
+  left: Float32Array,
+  right: Float32Array,
+  clicks: ClickTrack | null,
+  mode: LoudnessMode,
+  sampleRate: number,
+  options?: SliceOptions,
+): Promise<MasteringResult> {
+  return runInSlices(masterExportSteps(left, right, clicks, mode, sampleRate), options);
+}
+
+/** `masterExport` as steps, for either way of running it. */
+function* masterExportSteps(
+  left: Float32Array,
+  right: Float32Array,
+  clicks: ClickTrack | null,
+  mode: LoudnessMode,
+  sampleRate: number,
+): Steps<MasteringResult> {
   const piano = [left, right];
-  const renderedLufs = integratedLoudness(piano, sampleRate);
+  const renderedLufs = yield* integratedLoudnessSteps(piano, sampleRate);
   const ceiling = 10 ** (CEILING_DBTP / 20);
   let gain = 10 ** (LIVE_MAKEUP_DB / 20);
   if (mode === 'normalized' && Number.isFinite(renderedLufs)) {
     gain = 10 ** ((TARGET_LUFS - renderedLufs) / 20);
-    const peak = truePeak(piano);
+    const peak = yield* truePeakSteps(piano);
     const most = ceiling * 10 ** (MAX_LIMITING_DB / 20);
     if (peak * gain > most) gain = most / peak;
   }
-  for (let i = 0; i < left.length; i += 1) {
-    left[i] = (left[i] as number) * gain;
-    right[i] = (right[i] as number) * gain;
+  for (let from = 0; from < left.length; from += FRAMES_PER_STEP) {
+    const to = Math.min(left.length, from + FRAMES_PER_STEP);
+    for (let i = from; i < to; i += 1) {
+      left[i] = (left[i] as number) * gain;
+      right[i] = (right[i] as number) * gain;
+    }
+    yield;
   }
-  if (clicks) mixClicks(left, right, clicks, sampleRate);
-  return {
-    renderedLufs,
-    gainDb: 20 * Math.log10(gain),
-    limitedDb: limitTruePeak(piano, ceiling, sampleRate),
-  };
+  if (clicks) yield* mixClicks(left, right, clicks, sampleRate);
+  const limitedDb = yield* limitTruePeakSteps(piano, ceiling, sampleRate);
+  return { renderedLufs, gainDb: 20 * Math.log10(gain), limitedDb };
 }

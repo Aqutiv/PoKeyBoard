@@ -9,7 +9,7 @@ import type { EncoderResponse } from '@/workers/mp3Encoder.worker';
 import { id3v2Tag } from './id3';
 import { instrumentForPackVersion } from './instruments';
 import type { LoudnessMode } from './loudness';
-import { finishMp3, type ExportBitrateKbps, type ExportPcm } from './mp3Encode';
+import { finishMp3OnMainThread, type ExportBitrateKbps, type ExportPcm } from './mp3Encode';
 import { renderTakeForExport, type RenderedTake } from './OfflineTakeRenderer';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 
@@ -237,9 +237,10 @@ class AudioExportService {
    * Master and encode the rendered take. The Web Worker is the fast path (keeps
    * the UI responsive); if it can't be constructed, crashes, or errors — which
    * happens when a background/suspended tab kills the worker mid-compile, or on
-   * browsers with flaky module-worker support — we fall back to encoding on the
-   * main thread with the identical encoder. The worker is an optimization, not
-   * a requirement, so export never dies just because the worker did.
+   * browsers with flaky module-worker support — we fall back to the main
+   * thread, where the same mastering and encoder run a slice at a time. The
+   * worker is an optimization, not a requirement, so export never dies just
+   * because the worker did.
    */
   private async encode(
     job: ActiveExportJob,
@@ -255,7 +256,7 @@ class AudioExportService {
       console.error('[export] MP3 worker failed, falling back to main thread:', workerError);
       try {
         // Worker transfers detach the PCM buffers; re-extract from the render.
-        const out = await finishMp3(
+        const out = await finishMp3OnMainThread(
           extractPcm(rendered, loudness),
           bitrateKbps,
           onFraction,

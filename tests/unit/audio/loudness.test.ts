@@ -1,13 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   CEILING_DBTP,
   integratedLoudness,
   kWeighting,
   limitTruePeak,
   masterExport,
+  masterExportInSlices,
   MAX_LIMITING_DB,
   TARGET_LUFS,
   truePeak,
+  type ClickTrack,
 } from '@/audio/loudness';
 
 const RATE = 48_000;
@@ -236,5 +238,84 @@ describe('mastering an export', () => {
     expect(result.renderedLufs).toBe(-Infinity);
     expect(result.gainDb).toBeCloseTo(2.9, 5);
     expect(left!.every((sample) => sample === 0)).toBe(true);
+  });
+});
+
+describe('mastering on the main thread', () => {
+  /**
+   * A quiet tone with a loud burst every five seconds, and a metronome over it,
+   * so every pass has work to do: the level to set, peaks to find and limit,
+   * and clicks to mix.
+   */
+  function longTake(seconds: number) {
+    const parts: Float32Array[] = [];
+    for (let at = 0; at < seconds; at += 5) parts.push(sine(440, -24, 4.8), sine(440, 0, 0.2));
+    const [left, right] = stereo(faded(joined(...parts)));
+    const beats = seconds * 2;
+    const clicks: ClickTrack = {
+      atS: Float64Array.from({ length: beats }, (_, i) => i / 2),
+      accent: Uint8Array.from({ length: beats }, (_, i) => (i % 4 === 0 ? 1 : 0)),
+      accentSound: sine(1000, -6, 0.065),
+      beatSound: sine(800, -12, 0.065),
+    };
+    return { left: left!, right: right!, clicks };
+  }
+
+  /** Whether two buffers hold the very same bits, sample for sample. */
+  function sameBits(a: Float32Array, b: Float32Array): boolean {
+    const x = new Uint32Array(a.buffer, a.byteOffset, a.length);
+    const y = new Uint32Array(b.buffer, b.byteOffset, b.length);
+    return x.length === y.length && x.every((bits, i) => bits === y[i]);
+  }
+
+  it('masters in slices exactly as it does in one go', async () => {
+    for (const mode of ['normalized', 'asPlayed'] as const) {
+      const whole = longTake(20);
+      const sliced = longTake(20);
+      const expected = masterExport(whole.left, whole.right, whole.clicks, mode, RATE);
+      // A turn after every step: as many slices as the work can be cut into.
+      const pause = vi.fn(async () => undefined);
+      const result = await masterExportInSlices(
+        sliced.left,
+        sliced.right,
+        sliced.clicks,
+        mode,
+        RATE,
+        { pause, sliceMs: 0 },
+      );
+      expect(pause.mock.calls.length).toBeGreaterThan(100);
+      expect(result).toEqual(expected);
+      expect(sameBits(sliced.left, whole.left)).toBe(true);
+      expect(sameBits(sliced.right, whole.right)).toBe(true);
+    }
+  });
+
+  it('gives the page a turn more than once while mastering a long take', async () => {
+    // Two minutes: a dozen slices' work at the usual length, even on a fast machine.
+    const { left, right, clicks } = longTake(120);
+    const pause = vi.fn(async () => undefined);
+    await masterExportInSlices(left, right, clicks, 'normalized', RATE, { pause });
+    expect(pause.mock.calls.length).toBeGreaterThan(1);
+  });
+
+  it('stops when the export is cancelled, with the abort error, before it finishes', async () => {
+    const { left, right, clicks } = longTake(20);
+    const before = left.slice();
+    const controller = new AbortController();
+    const pause = vi.fn(async () => {
+      if (pause.mock.calls.length === 3) controller.abort();
+    });
+    const error = await masterExportInSlices(left, right, clicks, 'normalized', RATE, {
+      signal: controller.signal,
+      pause,
+      sliceMs: 0,
+    }).catch((reason: unknown) => reason);
+    // The signal's own reason, as `throwIfAborted` throws it in the encoder.
+    expect(error).toBe(controller.signal.reason);
+    expect(error).toMatchObject({ name: 'AbortError' });
+    // Nothing more once it knew, and it was still measuring: not a sample
+    // has been touched.
+    expect(pause).toHaveBeenCalledTimes(3);
+    expect(sameBits(left, before)).toBe(true);
   });
 });
