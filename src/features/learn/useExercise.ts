@@ -57,12 +57,16 @@ export function useExercise(
   // changes on a click, but a drill hands over a new spec the instant a round
   // is satisfied, and a stale "satisfied" would make it skip a round.
   const [activeSpec, setActiveSpec] = useState(spec);
+  // The furthest this step has got, so patience runs out on someone going
+  // round in circles as surely as on someone doing nothing.
+  const [bestDone, setBestDone] = useState(0);
   let current = state;
   if (activeSpec !== spec) {
     current = initExercise();
     setActiveSpec(spec);
     setState(current);
     setIdleTicks(0);
+    setBestDone(0);
   }
 
   useEffect(() => {
@@ -104,10 +108,11 @@ export function useExercise(
 
   const progress = spec ? progressOf(spec, current) : IDLE_PROGRESS;
 
-  // Any forward progress buys more patience before we start offering help.
-  const [lastDone, setLastDone] = useState(progress.done);
-  if (lastDone !== progress.done) {
-    setLastDone(progress.done);
+  // Only getting further than ever before buys more patience. Resetting on any
+  // change meant a timed line — where every slip sends the readout back to
+  // nothing — never offered help to the person retrying it hardest.
+  if (progress.done > bestDone) {
+    setBestDone(progress.done);
     setIdleTicks(0);
   }
 

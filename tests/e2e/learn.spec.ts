@@ -122,7 +122,7 @@ test.describe('learn outline', () => {
 
     for (const level of ['Beginner', 'Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
-      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 6 : 0);
+      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 7 : 0);
       await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
       await page.getByText('Upcoming lessons', { exact: true }).click();
@@ -131,9 +131,12 @@ test.describe('learn outline', () => {
 
   test('groups each level into three named parts', async ({ page }) => {
     await gotoLearn(page);
+    // Playing is split across the two lists: its first chapter has shipped
+    // and the rest are still upcoming, so each list heads its own run of it.
     await expect(page.locator('.learn-part__heading')).toHaveText([
       'The instrument',
       'Reading music',
+      'Playing',
       'Playing',
     ]);
 
@@ -170,15 +173,16 @@ test.describe('learn outline', () => {
       'Reading the Treble Staff',
       'The Bass Staff & the Grand Staff',
       'Rhythm & the Beat',
+      'Your First Melody',
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
-    await expect(page.getByText('6 lessons available')).toBeVisible();
+    await expect(page.getByText('7 lessons available')).toBeVisible();
     await page.getByText('Upcoming lessons', { exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'Your First Melody — coming soon' }),
+      page.getByRole('button', { name: 'The C Major Scale — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(4);
+    await expect(page.getByText('Coming soon')).toHaveCount(3);
   });
 });
 
@@ -970,5 +974,171 @@ test.describe('chapter six', () => {
     await expect(progressLine(page)).toHaveText('0 of 3');
     await playInTime(page, [0, 2, 3]);
     await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+});
+
+test.describe('chapter seven', () => {
+  const CHAPTER = 'Your First Melody';
+  const BEAT_MS = 1000;
+  const BAR_MS = BEAT_MS * 4;
+
+  /** The computer-keyboard key for each note of the C position, from C4. */
+  const KEY = { C: 'KeyA', D: 'KeyS', E: 'KeyD', F: 'KeyF', G: 'KeyG' } as const;
+  type Note = keyof typeof KEY;
+
+  /** The first phrase — the question — as [note, beat]. */
+  const QUESTION: readonly (readonly [Note, number])[] = [
+    ['E', 0],
+    ['E', 1],
+    ['F', 2],
+    ['G', 3],
+    ['G', 4],
+    ['F', 5],
+    ['E', 6],
+    ['D', 7],
+    ['C', 8],
+    ['C', 9],
+    ['D', 10],
+    ['E', 11],
+    ['E', 12],
+    ['D', 14],
+  ];
+  /** The second phrase differs only in its last bar. */
+  const ANSWER: readonly (readonly [Note, number])[] = [
+    ...QUESTION.slice(0, 12),
+    ['D', 12],
+    ['C', 14],
+  ];
+  const WHOLE = [...QUESTION, ...ANSWER.map(([note, beat]) => [note, beat + 16] as const)];
+
+  /**
+   * Open the chapter at `step` (0-based) by seeding the saved progress, so a
+   * test about the last exercise does not first have to pass the other three.
+   */
+  async function openAt(page: Page, step: number): Promise<void> {
+    await gotoLearn(page);
+    await page.evaluate(
+      (seeded) =>
+        new Promise<void>((resolve, reject) => {
+          const open = indexedDB.open('pokeyboard');
+          open.onerror = () => reject(open.error);
+          open.onsuccess = () => {
+            const database = open.result;
+            const request = database
+              .transaction('metadata', 'readwrite')
+              .objectStore('metadata')
+              .put({
+                key: 'learnProgress',
+                value: { v: 1, chapters: { firstMelody: { step: seeded, done: false } } },
+              });
+            request.onerror = () => reject(request.error);
+            request.onsuccess = () => {
+              database.close();
+              resolve();
+            };
+          };
+        }),
+      step,
+    );
+    await page.reload();
+    await openChapter(page, CHAPTER);
+  }
+
+  async function clickOrigin(page: Page): Promise<number> {
+    const section = page.locator('section[data-click-origin-ms]');
+    await section.waitFor({ timeout: 30_000 });
+    return Number(await section.getAttribute('data-click-origin-ms'));
+  }
+
+  /**
+   * Play a line in time from inside the page, a bar or two ahead so nothing
+   * is raced — the same approach as chapter six, with a key per note.
+   */
+  async function playInTime(page: Page, line: readonly (readonly [Note, number])[]): Promise<void> {
+    const originMs = await clickOrigin(page);
+    await page.evaluate(
+      async ({ originMs, presses, barMs, beatMs }) => {
+        const bar = Math.ceil((performance.now() - originMs) / barMs) + 1;
+        for (const [code, beat] of presses) {
+          const at = originMs + bar * barMs + beat * beatMs;
+          await new Promise((resolve) => setTimeout(resolve, Math.max(0, at - performance.now())));
+          window.dispatchEvent(new KeyboardEvent('keydown', { code, bubbles: true }));
+          window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
+        }
+      },
+      {
+        originMs,
+        presses: line.map(([note, beat]) => [KEY[note], beat] as const),
+        barMs: BAR_MS,
+        beatMs: BEAT_MS,
+      },
+    );
+  }
+
+  test('finds the first phrase note by note, and a wrong note starts it over', async ({ page }) => {
+    await openAt(page, 3);
+    await expect(page.getByRole('heading', { name: 'Find the notes first' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 14');
+
+    for (const note of ['E', 'E', 'F'] as const) await playKey(page, KEY[note]);
+    await expect(progressLine(page)).toHaveText('3 of 14');
+    // A is nowhere in the tune: back to the start of the phrase.
+    await playKey(page, 'KeyH');
+    await expect(progressLine(page)).toHaveText('0 of 14');
+
+    for (const [note] of QUESTION) await playKey(page, KEY[note]);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('plays the first phrase in time with the click', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openAt(page, 4);
+    await expect(page.getByRole('heading', { name: 'Now in time' })).toBeVisible();
+    await expect(nextButton(page)).toBeDisabled();
+    await playInTime(page, QUESTION);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('cannot be passed by mashing on the beats', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openAt(page, 4);
+    const mash: [Note, number][] = [];
+    for (let beat = 0; beat < 16; beat += 1) {
+      for (const note of ['C', 'E', 'G'] as const) mash.push([note, beat]);
+    }
+    await playInTime(page, mash);
+    await expect(progressLine(page)).not.toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeDisabled();
+  });
+
+  test('breaks the whole melody onto several lines on a phone', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await openAt(page, 8);
+    await expect(page.getByRole('heading', { name: 'Play the whole melody' })).toBeVisible();
+    expect(await page.locator('.learn-staff__canvas').count()).toBeGreaterThan(1);
+  });
+
+  test('plays all eight bars in time', async ({ page }) => {
+    test.setTimeout(120_000);
+    await openAt(page, 8);
+    await expect(page.getByRole('heading', { name: 'Play the whole melody' })).toBeVisible();
+    await playInTime(page, WHOLE);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('hands the melody off to Play, in right-hand Training', async ({ page }) => {
+    await openAt(page, 9);
+    await expect(page.getByRole('heading', { name: 'That is chapter seven' })).toBeVisible();
+    await page.getByRole('button', { name: 'Practise Ode to Joy (first steps) on Play' }).click();
+    await expect(page.getByText('Ode to Joy (first steps)').first()).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-right');
+
+    await nav(page).getByRole('button', { name: 'Learn' }).click();
+    await expect(
+      page.getByRole('button', { name: `Open ${CHAPTER}` }).getByText('Completed'),
+    ).toBeVisible();
   });
 });

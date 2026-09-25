@@ -11,6 +11,11 @@ import { MUSICAL_ALPHABET } from '@/features/learn/chapters/musicalAlphabet';
 import { TREBLE_STAFF } from '@/features/learn/chapters/trebleStaff';
 import { BASS_AND_GRAND_STAFF } from '@/features/learn/chapters/bassAndGrandStaff';
 import { RHYTHM_AND_BEAT } from '@/features/learn/chapters/rhythmAndBeat';
+import { FIRST_MELODY } from '@/features/learn/chapters/firstMelody';
+import { momentsOf } from '@/features/learn/phrase';
+import type { LearnChapter } from '@/features/learn/types';
+import { LIBRARY_TRACKS } from '@/features/library/catalog';
+import { ODE_TO_JOY_EVENTS } from '@/features/library/tracks/odeToJoyFirstSteps';
 import { drillRoundAt } from '@/features/learn/drill';
 import { phraseToNotes } from '@/features/learn/phrase';
 import { layoutScore } from '@/features/notation/notationLayout';
@@ -63,6 +68,7 @@ describe('learn catalog', () => {
       'trebleStaff',
       'bassAndGrandStaff',
       'rhythmAndBeat',
+      'firstMelody',
     ]);
   });
 
@@ -720,6 +726,190 @@ describe('chapter six', () => {
       expect(text?.heading, step.id).toBeTruthy();
       expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);
       if (step.kind === 'exercise') expect(text?.prompt, step.id).toBeTruthy();
+    }
+  });
+});
+
+/**
+ * The rules every chapter from seven on is held to, whatever it teaches. Each
+ * one guards a silent failure somewhere else: a picture that disagrees with
+ * its gate, a note no phone or computer keyboard can reach, a Listen button
+ * that frees up while the tail still rings.
+ */
+function sharedChapterChecks(chapter: LearnChapter): void {
+  /** Every lesson is clicked at 60bpm in 4/4. */
+  const BEAT_MS = 1000;
+  const BAR_BEATS = 4;
+  /** The C-snapped computer-keyboard base reaches this far up. */
+  const COMPUTER_KEYBOARD_SPAN = 17;
+
+  it('gives every step a unique id', () => {
+    const ids = chapter.steps.map((step) => step.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('states a reachable goal for every exercise', () => {
+    for (const step of chapter.steps) {
+      if (step.kind !== 'exercise') continue;
+      expect(goalTotal(step.spec), step.id).toBeGreaterThan(0);
+    }
+  });
+
+  it('draws exactly the line it grades', () => {
+    // Identity, not equality: one object is what makes the drawing, the gate
+    // and the lit heads agree by construction.
+    for (const step of chapter.steps) {
+      if (step.kind !== 'exercise' || step.spec.kind !== 'playAlong') continue;
+      expect(step.visual?.kind, step.id).toBe('staff');
+      if (step.visual?.kind !== 'staff') continue;
+      expect(step.visual.phrase, step.id).toBe(step.spec.phrase);
+    }
+  });
+
+  it('clicks every timed line at the lesson tempo, with room between its moments', () => {
+    for (const step of chapter.steps) {
+      if (step.kind !== 'exercise' || step.spec.kind !== 'playAlong' || !step.spec.timed) continue;
+      const { phrase, timed } = step.spec;
+      expect(phrase.bpm, step.id).toBe(60);
+      expect(phrase.timeSignature, step.id).toEqual({ numerator: BAR_BEATS, denominator: 4 });
+      const tolerance = timed.toleranceBeats ?? DEFAULT_RHYTHM_TOLERANCE_BEATS;
+      const moments = momentsOf(phrase);
+      expect(moments[0]?.beat, `${step.id} starts on a bar line`).toBe(0);
+      for (let i = 1; i < moments.length; i += 1) {
+        const gap = (moments[i]?.beat ?? 0) - (moments[i - 1]?.beat ?? 0);
+        expect(gap, `${step.id}[${i}]`).toBeGreaterThanOrEqual(2 * tolerance);
+      }
+      for (const checkpoint of step.spec.checkpoints ?? [0]) {
+        expect((moments[checkpoint]?.beat ?? -1) % BAR_BEATS, `${step.id}@${checkpoint}`).toBe(0);
+      }
+    }
+  });
+
+  it('sounds a note on the final beat of every Listen phrase', () => {
+    for (const step of chapter.steps) {
+      if (!step.listen) continue;
+      const notes = phraseToNotes(step.listen);
+      const end = Math.max(...notes.map((note) => note.startMs + note.durationMs));
+      expect(end % (BAR_BEATS * BEAT_MS), step.id).toBe(0);
+    }
+  });
+
+  it('parks every playing step where a phone and a computer keyboard both reach it', () => {
+    for (const step of chapter.steps) {
+      if (step.kind !== 'exercise' || step.spec.kind !== 'playAlong') continue;
+      const anchor = step.anchorMidi;
+      expect(anchor, step.id).toBeDefined();
+      const high = stepWhites(anchor!, MIN_VISIBLE_WHITES, 1);
+      const base = Math.floor(anchor! / 12) * 12;
+      for (const moment of momentsOf(step.spec.phrase)) {
+        for (const midi of moment.midis) {
+          expect(midi, `${step.id}: ${midi}`).toBeGreaterThanOrEqual(anchor!);
+          expect(midi, `${step.id}: ${midi}`).toBeLessThanOrEqual(high);
+          expect(midi - base, `${step.id}: ${midi}`).toBeLessThanOrEqual(COMPUTER_KEYBOARD_SPAN);
+        }
+      }
+    }
+  });
+
+  it('draws every note on a staff its snippet shows', () => {
+    for (const step of chapter.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      const staves = step.visual.staves ?? 'treble';
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        const resolved = midiToStaffPosition(note.midi, note.staff).staff;
+        if (staves === 'grand') expect(['treble', 'bass']).toContain(resolved);
+        else expect(resolved, `${step.id}: ${note.midi}`).toBe(staves);
+      }
+    }
+  });
+
+  it('never carries a note across a bar line', () => {
+    const barMs = BAR_BEATS * BEAT_MS;
+    for (const step of chapter.steps) {
+      if (step.visual?.kind !== 'staff') continue;
+      for (const note of phraseToNotes(step.visual.phrase)) {
+        const startBar = Math.floor(note.startMs / barMs);
+        const endBar = Math.ceil((note.startMs + note.durationMs) / barMs) - 1;
+        expect(endBar, `${step.id}: ${note.startMs}`).toBe(startBar);
+      }
+    }
+  });
+
+  it('writes English prose, with a prompt for every exercise', async () => {
+    const prose = await loadChapterProse(chapter.id, 'en');
+    for (const step of chapter.steps) {
+      const text = prose[step.id];
+      expect(text?.heading, step.id).toBeTruthy();
+      expect(text?.body.length ?? 0, step.id).toBeGreaterThan(0);
+      if (step.kind === 'exercise') expect(text?.prompt, step.id).toBeTruthy();
+    }
+  });
+
+  it('hands off only to a Library track that exists', () => {
+    if (!chapter.handoff) return;
+    const trackId = chapter.handoff.trackId;
+    expect(LIBRARY_TRACKS.some((def) => def.trackId === trackId)).toBe(true);
+  });
+}
+
+describe('chapter seven', () => {
+  sharedChapterChecks(FIRST_MELODY);
+
+  const exercises = FIRST_MELODY.steps.filter((step) => step.kind === 'exercise');
+
+  it('plays the melody four ways, with no quiz or drill', () => {
+    const kinds = FIRST_MELODY.steps.map((step) => step.kind);
+    expect(kinds).toHaveLength(10);
+    expect(exercises).toHaveLength(4);
+    expect(kinds.filter((kind) => kind === 'quiz' || kind === 'drill')).toHaveLength(0);
+    // Notes first with no clock, then everything in time.
+    expect(exercises.map((step) => step.spec.kind === 'playAlong' && !!step.spec.timed)).toEqual([
+      false,
+      true,
+      true,
+      true,
+    ]);
+  });
+
+  it('opens on the click, a step before anything is timed', () => {
+    expect(FIRST_MELODY.steps[0]?.click).toBe(true);
+  });
+
+  it('writes eight bars in the right-hand C position, in quarters and halves', () => {
+    const last = exercises.at(-1);
+    if (last?.spec.kind !== 'playAlong') throw new Error('expected a playAlong line');
+    const notes = phraseToNotes(last.spec.phrase);
+    const end = Math.max(...notes.map((note) => note.startMs + note.durationMs));
+    expect(end).toBe(8 * 4000);
+    for (const note of notes) {
+      expect(note.midi).toBeGreaterThanOrEqual(60);
+      expect(note.midi).toBeLessThanOrEqual(67);
+      expect([1000, 2000]).toContain(note.durationMs);
+    }
+  });
+
+  it('grades the two phrases apart, then the whole line without a checkpoint', () => {
+    const lines = exercises.map((step) => (step.spec.kind === 'playAlong' ? step.spec : null));
+    const [, question, answer, whole] = lines;
+    expect(question && momentsOf(question.phrase)).toHaveLength(14);
+    expect(answer && momentsOf(answer.phrase)).toHaveLength(14);
+    expect(whole && momentsOf(whole.phrase)).toHaveLength(28);
+    // The join between the phrases is the thing the last step tests.
+    expect(whole?.checkpoints).toBeUndefined();
+  });
+
+  it('hands off to the same melody it teaches, in right-hand Training', () => {
+    expect(FIRST_MELODY.handoff?.mode).toBe('training-right');
+    const track = LIBRARY_TRACKS.find((def) => def.trackId === FIRST_MELODY.handoff?.trackId);
+    expect(track?.events).toEqual([...ODE_TO_JOY_EVENTS]);
+    // Right-hand Training waits only for right-hand notes, and the hands split
+    // at middle C: every note has to be at or above it.
+    for (const note of phraseToNotes({
+      bpm: 60,
+      timeSignature: { numerator: 4, denominator: 4 },
+      events: track?.events ?? [],
+    })) {
+      expect(note.midi).toBeGreaterThanOrEqual(TREBLE_SPLIT_MIDI);
     }
   });
 });

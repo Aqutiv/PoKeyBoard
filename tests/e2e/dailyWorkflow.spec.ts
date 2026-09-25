@@ -35,7 +35,7 @@ test('library restores the search after opening a result and switching folders',
   await expect(filter).toHaveValue('fur elise');
   await page.getByRole('button', { name: 'Clear filter' }).click();
   await expect(filter).toHaveValue('');
-  await expect(page.locator('.library-item')).toHaveCount(63);
+  await expect(page.locator('.library-item')).toHaveCount(64);
 });
 
 test('Now playing stays visible when paused, resumes, and disappears on stop', async ({ page }) => {

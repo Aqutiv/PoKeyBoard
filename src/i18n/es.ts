@@ -203,6 +203,8 @@ export const es: Messages = {
       crookedLanternWaltz:
         'Un vals de Halloween original en A menor: una campana aguda sobre un pum-pam-pam desvencijado, una sección central llena de sombras y un final que se frena hasta desvanecerse.',
       furElise: 'La querida bagatela de Beethoven — el famoso tema inicial.',
+      odeToJoyFirstSteps:
+        'Los primeros ocho compases de la gran melodía de Beethoven, solo para la mano derecha — la melodía del capítulo siete de Aprender.',
       gymnopedie1:
         'El clásico soñador de Satie — lento, suave y espacioso. Solo escucha, o déjate llevar.',
       bluesInC:
@@ -250,6 +252,8 @@ export const es: Messages = {
     diagramLabel: 'Diagrama del teclado',
     staffLabel: 'Ejemplo de notación musical',
     tryOnPlay: 'Probarlo en Tocar',
+    practiseOnPlay: ({ title }) => `Practicar ${title} en Tocar`,
+    practiseOnPlayHint: 'Se abre en Entrenamiento, así que Tocar te espera en cada nota.',
     backToChapters: 'Volver a los capítulos',
     quizPrompt: '¿Qué tecla está resaltada?',
     quizCorrect: 'Correcto.',
