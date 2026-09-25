@@ -306,7 +306,9 @@ function StaffSystemCanvas({
           gutterPx,
           staves,
           chrome,
-          continues,
+          // A continuing system closes at its span's end — the bar line the
+          // line breaks at — even under a note held on across it.
+          ...(continues ? { systemBreakMs: spanMs } : {}),
         },
         {
           layout,

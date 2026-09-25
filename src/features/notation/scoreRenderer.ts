@@ -437,11 +437,12 @@ export interface ScoreView {
    */
   chrome?: ScoreChrome;
   /**
-   * The music carries on in another view after this one — the next system of
-   * a lesson's line — so the view closes on a plain bar line. Without it the
-   * closing line is the final one, where the music ends.
+   * Where the music breaks onto another view — the next system of a lesson's
+   * line. The view closes there on a plain bar line, whatever its layout holds
+   * past it: a note held across the break is laid out on into the next bar.
+   * Without it the closing line is the final one, where the music ends.
    */
-  continues?: boolean;
+  systemBreakMs?: number;
 }
 
 export interface GhostNote {
@@ -837,9 +838,11 @@ function drawMeasures(
   }
   // The closing bar line: the final one where the music ends, a plain one where
   // it only breaks onto the next system.
-  const endX = Math.round(dividerX(view, layout, scoreEndMs(layout, chromeOf(view)))) + 0.5;
+  const { systemBreakMs } = view;
+  const endMs = systemBreakMs ?? scoreEndMs(layout, chromeOf(view));
+  const endX = Math.round(dividerX(view, layout, endMs)) + 0.5;
   if (endX > view.gutterPx && endX < view.widthPx + 4) {
-    ctx.lineWidth = view.continues ? 1 : 2;
+    ctx.lineWidth = systemBreakMs === undefined ? 2 : 1;
     ctx.beginPath();
     for (const top of staffTops(view)) {
       ctx.moveTo(endX, top);

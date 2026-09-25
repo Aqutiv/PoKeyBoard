@@ -207,7 +207,7 @@ function render(
   staves: StaffMode = 'treble',
   /** `null` omits the property entirely, which is what the Play page does. */
   chrome: ScoreChrome | null = 'bare',
-  overrides: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'continues'>> = {},
+  overrides: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'systemBreakMs'>> = {},
 ): Recorder {
   const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
@@ -693,9 +693,28 @@ describe('drawScore bar lines', () => {
     });
 
     it('closes a system the music runs on from with a plain bar line', () => {
-      const drawn = render(quarters(1), {}, 'treble', 'bare', { ...WIDE, continues: true });
+      const drawn = render(quarters(1), {}, 'treble', 'bare', { ...WIDE, systemBreakMs: 4000 });
       expect(finalLines(drawn)).toEqual([]);
       expect(barLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+    });
+
+    it('closes a system at its break under a note held on across it', () => {
+      // A whole note from beat 3 is laid out tied on into the next bar, so the
+      // layout's own music runs a bar past the break. The system still closes
+      // at the break, and only there.
+      const held = written([
+        [0, 1],
+        [1, 1],
+        [2, 1],
+        [3, 4],
+      ]);
+      expect(scoreEndMs(held, 'bare')).toBe(8000);
+      const drawn = render(held, {}, 'treble', 'bare', { ...WIDE, systemBreakMs: 4000 });
+      expect(finalLines(drawn)).toEqual([]);
+      const lines = [...new Set(barLines(drawn))];
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toBeGreaterThan(onsetX(3000));
+      expect(lines[0]).toBeLessThan(onsetX(4000));
     });
 
     it('ends a bar left partly silent at the bar, not at its last note', () => {
