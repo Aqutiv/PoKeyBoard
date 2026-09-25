@@ -8,10 +8,11 @@ import { velocityGain, velocityToLayer } from '../../src/audio/SampleBank';
 
 /**
  * The only spec that measures actual audio. Node has no Web Audio and the
- * preview build exports nothing to `window`, so the real PianoGraphFactory
- * module is bundled here and injected into the page, where it is driven by an
- * OfflineAudioContext. That way the assertion is about the shipped graph, not
- * about a reimplementation of it.
+ * preview build exports nothing to `window`, so the real modules — the graph,
+ * the export's loudness constants and the metronome's click — are bundled here
+ * and injected into the page, where they are driven by an OfflineAudioContext.
+ * That way the assertions are about the shipped code, not about a
+ * reimplementation of it.
  */
 
 const LOUD_VELOCITY = 1;
@@ -19,6 +20,8 @@ const LOUD_VELOCITY = 1;
 const VOICE_COUNT = 12;
 /** MetronomeEngine's accent click peak × the default metronome volume. */
 const METRONOME_PEAK = 0.6;
+/** The default metronome volume (MetronomeEngine's own default config). */
+const METRONOME_VOLUME = 0.6;
 
 /**
  * The worst-case per-voice gain the app can produce: SampleBank multiplies
@@ -38,8 +41,15 @@ function worstCaseVoiceGain(): number {
   return velocityGain(LOUD_VELOCITY, layer) * levelMatch;
 }
 
-/** IIFE bundle of the real graph module, exposed as `window.PianoGraph`. */
-async function bundleGraphModule(): Promise<string> {
+/** The bundled modules, as the page sees them. */
+interface Modules {
+  PianoGraph: typeof import('../../src/audio/PianoGraphFactory');
+  Loudness: typeof import('../../src/audio/loudness');
+  Metronome: typeof import('../../src/audio/MetronomeEngine');
+}
+
+/** IIFE bundle of one real module, exposed as `window[name]`. */
+async function bundleModule(entry: string, name: keyof Modules): Promise<string> {
   const result = (await build({
     logLevel: 'silent',
     configFile: false,
@@ -48,15 +58,15 @@ async function bundleGraphModule(): Promise<string> {
       write: false,
       minify: false,
       lib: {
-        entry: path.resolve('src/audio/PianoGraphFactory.ts'),
+        entry: path.resolve(entry),
         formats: ['iife'],
-        name: 'PianoGraph',
-        fileName: () => 'pianoGraph.js',
+        name,
+        fileName: () => `${name}.js`,
       },
     },
   })) as unknown as Array<{ output: Array<{ code?: string }> }>;
   const code = result[0]?.output[0]?.code;
-  if (!code) throw new Error('could not bundle PianoGraphFactory');
+  if (!code) throw new Error(`could not bundle ${entry}`);
   return code;
 }
 
@@ -66,6 +76,8 @@ interface RenderInput {
   metronomePeak: number;
   masterVolume: number;
   reverbMix: number;
+  /** When the chord and the click land, in seconds; 0.25 unless said otherwise. */
+  onsetS?: number;
 }
 
 /**
@@ -76,19 +88,15 @@ interface RenderInput {
  */
 async function renderPeak(
   page: import('@playwright/test').Page,
-  bundle: string,
   input: RenderInput,
 ): Promise<number> {
-  await page.addScriptTag({ content: bundle });
   return page.evaluate(async (options: RenderInput) => {
-    const factory = (
-      window as unknown as { PianoGraph: typeof import('../../src/audio/PianoGraphFactory') }
-    ).PianoGraph;
+    const factory = (window as unknown as Modules).PianoGraph;
     const sampleRate = 48000;
-    const seconds = 2;
+    const onset = options.onsetS ?? 0.25;
     const context = new OfflineAudioContext({
       numberOfChannels: 2,
-      length: sampleRate * seconds,
+      length: Math.round(sampleRate * (onset + 1.75)),
       sampleRate,
     });
     const graph = factory.createPianoGraph(context, {
@@ -116,7 +124,7 @@ async function renderPeak(
       gain.gain.value = options.voiceGain;
       source.connect(gain);
       gain.connect(graph.voiceDestination);
-      source.start(0.25);
+      source.start(onset);
     }
 
     // The metronome accent lands on the same instant as the chord.
@@ -126,7 +134,7 @@ async function renderPeak(
     clickGain.gain.value = options.metronomePeak;
     click.connect(clickGain);
     clickGain.connect(graph.outputDestination);
-    click.start(0.25);
+    click.start(onset);
 
     const rendered = await context.startRendering();
     let peak = 0;
@@ -142,17 +150,25 @@ async function renderPeak(
 }
 
 test.describe('output headroom', () => {
-  let bundle: string;
+  let bundles: string[];
 
   test.beforeAll(async () => {
-    bundle = await bundleGraphModule();
+    bundles = [
+      await bundleModule('src/audio/PianoGraphFactory.ts', 'PianoGraph'),
+      await bundleModule('src/audio/loudness.ts', 'Loudness'),
+      await bundleModule('src/audio/MetronomeEngine.ts', 'Metronome'),
+    ];
+  });
+
+  test.beforeEach(async ({ page }) => {
+    await page.goto('/');
+    for (const content of bundles) await page.addScriptTag({ content });
   });
 
   test('a dense fortissimo chord plus a metronome accent stays below full scale', async ({
     page,
   }) => {
-    await page.goto('/');
-    const peak = await renderPeak(page, bundle, {
+    const peak = await renderPeak(page, {
       voiceGain: worstCaseVoiceGain(),
       voiceCount: VOICE_COUNT,
       metronomePeak: METRONOME_PEAK,
@@ -165,8 +181,7 @@ test.describe('output headroom', () => {
   });
 
   test('stays below full scale at maximum volume and reverb', async ({ page }) => {
-    await page.goto('/');
-    const peak = await renderPeak(page, bundle, {
+    const peak = await renderPeak(page, {
       voiceGain: worstCaseVoiceGain(),
       voiceCount: VOICE_COUNT,
       metronomePeak: METRONOME_PEAK,
@@ -176,44 +191,248 @@ test.describe('output headroom', () => {
     expect(peak).toBeLessThanOrEqual(1);
   });
 
-  test('keeps responding above full scale instead of flat-topping', async ({ page }) => {
-    await page.goto('/');
-    const dense = {
+  test('keeps the corrected worst case under full scale once the limiter has settled', async ({
+    page,
+  }) => {
+    // The two tests above strike at 0.25 s, while a newly made
+    // DynamicsCompressorNode may still be opening up — it starts out ducking
+    // hard — so the worst case is struck again a second in, against a limiter
+    // that has settled, as the live one always has. The click lands with it.
+    const peak = await renderPeak(page, {
+      voiceGain: worstCaseVoiceGain(),
       voiceCount: VOICE_COUNT,
       metronomePeak: METRONOME_PEAK,
       masterVolume: 1,
-      reverbMix: 0.18,
-    };
-    // Deliberately absurd levels — far past anything the app produces. The
-    // shaper's curve is addressed over [-1, 1] and a WaveShaperNode clamps
-    // beyond that, so without the 1/SOFT_CLIP_INPUT_RANGE pre-gain every
-    // overshoot collapses onto one endpoint value and flat-tops the waveform:
-    // hard clipping moved inside the graph rather than removed. Up here that
-    // plateau is reached, so a materially higher peak from a higher input is
-    // what proves the transfer function is still curving.
-    //
-    // Measured: gain-staged, doubling the input moves the peak by ~0.0086
-    // (0.9474 → 0.9559). With the pre-gain removed both pin to the curve's
-    // endpoint and the gap collapses to ~0.00003, so the margin below is what
-    // makes this a real guard rather than a float comparison.
-    const loud = await renderPeak(page, bundle, { ...dense, voiceGain: worstCaseVoiceGain() * 8 });
-    const louder = await renderPeak(page, bundle, {
-      ...dense,
-      voiceGain: worstCaseVoiceGain() * 16,
+      reverbMix: 1,
+      onsetS: 1,
     });
-    expect(louder - loud).toBeGreaterThan(0.002);
-    expect(louder).toBeLessThanOrEqual(1);
+    test.info().annotations.push({ type: 'peak', description: peak.toFixed(4) });
+    expect(peak).toBeGreaterThan(0.9); // the stage really is at work up there
+    expect(peak).toBeLessThanOrEqual(1);
+  });
+
+  test('bends an overshoot into the ceiling rather than flat-topping below it', async ({
+    page,
+  }) => {
+    // The metronome joins right at the soft clipper, past the limiter, so the
+    // clipper's own transfer can be read straight off the output: a steady
+    // tone in at each level, its peak out. Up to the knee it is untouched;
+    // over it, it bends to the ceiling and, however far over, stays there.
+    //
+    // The shaper's curve is addressed over [-1, 1] and a WaveShaperNode clamps
+    // beyond that. Without the 1/SOFT_CLIP_INPUT_RANGE pre-gain the curve would
+    // have to end at full scale, and every overshoot would collapse onto its
+    // value there, about 0.978, short of the ceiling: hard clipping moved
+    // inside the graph rather than removed. Drop the pre-gain but keep the
+    // stretched curve instead, and even the quiet tone comes out at the
+    // ceiling. Either way this fails.
+    const levels = [0.5, 0.9, 1, 1.5, 4, 16];
+    const { peaks, ceiling } = await page.evaluate(async (inputs: number[]) => {
+      const { PianoGraph } = window as unknown as Modules;
+      const sampleRate = 48000;
+      const out: number[] = [];
+      for (const level of inputs) {
+        const context = new OfflineAudioContext({
+          numberOfChannels: 2,
+          length: sampleRate,
+          sampleRate,
+        });
+        const graph = PianoGraph.createPianoGraph(context, {
+          masterVolume: 0.85,
+          reverbMix: 0.18,
+        });
+        const tone = context.createOscillator();
+        tone.frequency.value = 110;
+        const gain = context.createGain();
+        gain.gain.value = level;
+        tone.connect(gain);
+        gain.connect(graph.outputDestination);
+        tone.start(0);
+        const rendered = await context.startRendering();
+        let peak = 0;
+        for (let channel = 0; channel < rendered.numberOfChannels; channel += 1) {
+          const data = rendered.getChannelData(channel);
+          for (let i = sampleRate / 2; i < data.length; i += 1) {
+            peak = Math.max(peak, Math.abs(data[i] as number));
+          }
+        }
+        out.push(peak);
+      }
+      return { peaks: out, ceiling: PianoGraph.SOFT_CLIP_CEILING };
+    }, levels);
+    test.info().annotations.push({
+      type: 'peaks',
+      description: peaks.map((peak) => peak.toFixed(5)).join(' '),
+    });
+    const [half, underKnee, fullScale, ...over] = peaks as [number, number, number, ...number[]];
+    expect(half).toBeCloseTo(0.5, 3);
+    expect(underKnee).toBeCloseTo(0.9, 3);
+    expect(fullScale).toBeGreaterThan(underKnee);
+    for (const peak of over) {
+      expect(peak).toBeGreaterThan(ceiling - 0.001);
+      expect(peak).toBeLessThanOrEqual(1);
+    }
   });
 
   test('stays linear for quiet material — no squashing below the threshold', async ({ page }) => {
-    await page.goto('/');
     const quiet = { voiceCount: 1, metronomePeak: 0, masterVolume: 0.85, reverbMix: 0 };
-    const loud = await renderPeak(page, bundle, { ...quiet, voiceGain: 0.3 });
-    const half = await renderPeak(page, bundle, { ...quiet, voiceGain: 0.15 });
+    const loud = await renderPeak(page, { ...quiet, voiceGain: 0.3 });
+    const half = await renderPeak(page, { ...quiet, voiceGain: 0.15 });
     // Both sit below the limiter threshold and the soft clipper's knee, so
-    // halving the input must halve the output exactly. (Absolute levels are not
-    // asserted: Chrome's DynamicsCompressorNode applies its own makeup gain,
-    // which is an implementation detail we do not want to pin.)
+    // halving the input must halve the output exactly. (The absolute level is
+    // the business of the test after next.)
     expect(loud / half).toBeCloseTo(2, 1);
+  });
+
+  test('an accented click leaves the piano where it was', async ({ page }) => {
+    // Clicks join after the limiter, so a click can no longer make it turn the
+    // piano down for the moments after it — which an accent at the default
+    // volume used to. A held tone on the piano path, well under the limiter's
+    // threshold, is rendered with the metronome and without; two low-passes
+    // far under the click's pitch take the click itself back out, and what is
+    // left of the tone has to be where it was, window by window.
+    const result = await page.evaluate(
+      async ({ clicksAtS, volume }) => {
+        const { PianoGraph, Metronome } = window as unknown as Modules;
+        const sampleRate = 48000;
+        const seconds = (clicksAtS.at(-1) ?? 0) + 1;
+        const render = async (clicks: boolean) => {
+          const context = new OfflineAudioContext({
+            numberOfChannels: 2,
+            length: sampleRate * seconds,
+            sampleRate,
+          });
+          const graph = PianoGraph.createPianoGraph(context, {
+            masterVolume: 0.85,
+            reverbMix: 0.18,
+          });
+          const tone = context.createOscillator();
+          tone.frequency.value = 110;
+          const level = context.createGain();
+          level.gain.value = 0.3;
+          tone.connect(level);
+          level.connect(graph.voiceDestination);
+          tone.start(0);
+          if (clicks) {
+            const metronome = context.createGain();
+            metronome.gain.value = volume;
+            metronome.connect(graph.outputDestination);
+            for (const at of clicksAtS) Metronome.scheduleClick(context, metronome, at, true);
+          }
+          return context.startRendering();
+        };
+        const lowPassed = async (buffer: AudioBuffer) => {
+          const context = new OfflineAudioContext({
+            numberOfChannels: 2,
+            length: buffer.length,
+            sampleRate,
+          });
+          const source = context.createBufferSource();
+          source.buffer = buffer;
+          let node: AudioNode = source;
+          for (let stage = 0; stage < 2; stage += 1) {
+            const filter = context.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 300;
+            node.connect(filter);
+            node = filter;
+          }
+          node.connect(context.destination);
+          source.start(0);
+          return context.startRendering();
+        };
+        const rms = (buffer: AudioBuffer, fromS: number, toS: number) => {
+          let energy = 0;
+          let count = 0;
+          for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+            const data = buffer.getChannelData(channel);
+            for (let i = Math.round(fromS * sampleRate); i < Math.round(toS * sampleRate); i += 1) {
+              energy += (data[i] as number) ** 2;
+              count += 1;
+            }
+          }
+          return Math.sqrt(energy / count);
+        };
+
+        const [clicked, plain] = await Promise.all([render(true), render(false)]);
+        // The clicks really do sound: the two renders differ by a click's height.
+        let clickHeight = 0;
+        const a = clicked.getChannelData(0);
+        const b = plain.getChannelData(0);
+        for (let i = 0; i < a.length; i += 1) {
+          clickHeight = Math.max(clickHeight, Math.abs((a[i] as number) - (b[i] as number)));
+        }
+        const [clickedTone, plainTone] = await Promise.all([lowPassed(clicked), lowPassed(plain)]);
+        const windowsDb: number[] = [];
+        for (const at of clicksAtS) {
+          for (let from = at; from < at + 0.25; from += 0.02) {
+            const ratio = rms(clickedTone, from, from + 0.02) / rms(plainTone, from, from + 0.02);
+            windowsDb.push(20 * Math.log10(ratio));
+          }
+        }
+        return { clickHeight, windowsDb };
+      },
+      { clicksAtS: [2, 3, 4, 5], volume: METRONOME_VOLUME },
+    );
+    test.info().annotations.push({
+      type: 'deepest window',
+      description: `${Math.min(...result.windowsDb).toFixed(3)} dB`,
+    });
+    expect(result.clickHeight).toBeGreaterThan(0.3);
+    for (const db of result.windowsDb) expect(Math.abs(db)).toBeLessThanOrEqual(0.1);
+  });
+
+  test('plays quiet material as loud as an export kept at its played level', async ({ page }) => {
+    // Under the limiter's threshold the live stage is pure gain: its output
+    // gain and the compressor's own makeup. An export leaves the stage out and
+    // "As played" adds LIVE_MAKEUP_DB back instead, so the two have to agree.
+    const { liveOverExportDb, liveMakeupDb } = await page.evaluate(async () => {
+      const { PianoGraph, Loudness } = window as unknown as Modules;
+      const sampleRate = 48000;
+      const render = async (peakGuard: boolean) => {
+        const context = new OfflineAudioContext({
+          numberOfChannels: 2,
+          length: sampleRate * 3,
+          sampleRate,
+        });
+        const graph = PianoGraph.createPianoGraph(context, {
+          masterVolume: 0.85,
+          reverbMix: 0.18,
+          peakGuard,
+        });
+        const tone = context.createOscillator();
+        tone.frequency.value = 440;
+        const level = context.createGain();
+        level.gain.value = 0.05;
+        tone.connect(level);
+        level.connect(graph.voiceDestination);
+        tone.start(0);
+        return context.startRendering();
+      };
+      // Measured a second and a half in: a DynamicsCompressorNode starts out
+      // ducking hard and takes a moment to open up.
+      const rms = (buffer: AudioBuffer) => {
+        let energy = 0;
+        let count = 0;
+        for (let channel = 0; channel < buffer.numberOfChannels; channel += 1) {
+          const data = buffer.getChannelData(channel);
+          for (let i = sampleRate * 1.5; i < sampleRate * 2.5; i += 1) {
+            energy += (data[i] as number) ** 2;
+            count += 1;
+          }
+        }
+        return Math.sqrt(energy / count);
+      };
+      const [live, exported] = await Promise.all([render(true), render(false)]);
+      return {
+        liveOverExportDb: 20 * Math.log10(rms(live) / rms(exported)),
+        liveMakeupDb: Loudness.LIVE_MAKEUP_DB,
+      };
+    });
+    test.info().annotations.push({
+      type: 'live over export',
+      description: `${liveOverExportDb.toFixed(3)} dB against ${liveMakeupDb} dB`,
+    });
+    expect(Math.abs(liveOverExportDb - liveMakeupDb)).toBeLessThanOrEqual(0.3);
   });
 });

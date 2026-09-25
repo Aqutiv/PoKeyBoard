@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
+  compressorMakeupDb,
+  LIMITER_LOOKAHEAD_S,
+  LIMITER_MAKEUP_DB,
+  LIMITER_THRESHOLD_DB,
+  LIVE_OUTPUT_GAIN_DB,
+} from '@/audio/gainStaging';
+import {
   createPianoGraph,
   createSoftClipCurve,
   SOFT_CLIP_CEILING,
@@ -77,6 +84,8 @@ function createStubContext() {
       ),
     createWaveShaper: () =>
       track(node('waveshaper', { curve: null as Float32Array | null, oversample: 'none' })),
+    createDelay: (maxDelayTime: number) =>
+      track(node('delay', { delayTime: param(0), maxDelayTime })),
     createConvolver: () => track(node('convolver', { buffer: null as AudioBuffer | null })),
     createBuffer: (channels: number, length: number, rate: number) => ({
       numberOfChannels: channels,
@@ -92,6 +101,32 @@ function findNode(created: StubNode[], kind: string): StubNode {
   const found = created.find((n) => n.kind === kind);
   if (!found) throw new Error(`no ${kind} node created`);
   return found;
+}
+
+/** Everything a signal entering `from` passes through, `from` included. */
+function reachable(from: StubNode): Set<StubNode> {
+  const seen = new Set<StubNode>();
+  const visit = (n: StubNode) => {
+    if (seen.has(n)) return;
+    seen.add(n);
+    n.outputs.forEach(visit);
+  };
+  visit(from);
+  return seen;
+}
+
+/** Every route from `from` to `to`, each as the nodes along it. */
+function routes(from: StubNode, to: StubNode): StubNode[][] {
+  if (from === to) return [[to]];
+  return from.outputs.flatMap((next) => routes(next, to).map((rest) => [from, ...rest]));
+}
+
+/** A route as the kinds of its nodes, each gain with its value. */
+function describeRoute(route: StubNode[]): string[] {
+  return route.map((n) => {
+    const gain = (n as StubNode & { gain?: StubParam }).gain;
+    return gain ? `gain ${+gain.value.toFixed(4)}` : n.kind;
+  });
 }
 
 describe('createSoftClipCurve', () => {
@@ -136,6 +171,15 @@ describe('createSoftClipCurve', () => {
     }
   });
 
+  it('bends only just under the ceiling, over what the limiter lets out', () => {
+    expect(SOFT_CLIP_KNEE).toBe(0.95);
+    // Where the limiter starts holding, what it lets out is well under the
+    // knee: its output climbs a twentieth as fast as its input from there, so
+    // 8 dB of limiting passes the clipper untouched.
+    const limiterLetsOut = 10 ** ((LIMITER_THRESHOLD_DB + LIMITER_MAKEUP_DB) / 20);
+    expect(limiterLetsOut).toBeLessThan(SOFT_CLIP_KNEE);
+  });
+
   it('never reaches full scale, even at the endpoints', () => {
     expect(curve[curve.length - 1] as number).toBeLessThan(1);
     expect(curve[0] as number).toBeGreaterThan(-1);
@@ -172,15 +216,40 @@ describe('createPianoGraph', () => {
     expect(created.length).toBeGreaterThan(0);
   });
 
-  it('configures the limiter with limiting rather than compression settings', () => {
+  it('configures the limiter to catch peaks, not to compress', () => {
     const { context, created } = createStubContext();
     createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
     const limiter = findNode(created, 'compressor') as unknown as Record<string, StubParam>;
-    expect(limiter.threshold?.value).toBe(-6);
-    expect(limiter.knee?.value).toBe(3);
+    expect(limiter.threshold?.value).toBe(-2);
+    expect(limiter.knee?.value).toBe(0);
     expect(limiter.ratio?.value).toBe(20);
     expect(limiter.attack?.value).toBe(0.001);
-    expect(limiter.release?.value).toBe(0.18);
+    expect(limiter.release?.value).toBe(0.3);
+  });
+
+  it('turns the piano up by the live output gain, after master and ahead of the limiter', () => {
+    const { context, created } = createStubContext();
+    createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    const limiter = findNode(created, 'compressor');
+    const feeding = created.filter((n) => n.outputs.includes(limiter));
+    expect(feeding).toHaveLength(1);
+    const outputGain = feeding[0] as StubNode & { gain: StubParam };
+    expect(LIVE_OUTPUT_GAIN_DB).toBe(1.76);
+    expect(outputGain.gain.value).toBeCloseTo(10 ** (LIVE_OUTPUT_GAIN_DB / 20), 10);
+    const master = created.find((n) => n.outputs.includes(outputGain)) as unknown as {
+      gain: StubParam;
+    };
+    expect(master.gain.value).toBe(0.85);
+  });
+
+  it("counts the limiter's own makeup gain: the spec's formula, for a hard knee", () => {
+    // Full scale in comes out at the threshold plus a twentieth of the way
+    // back up, −1.9 dB; the makeup is that loss to the power 0.6.
+    expect(compressorMakeupDb(-2, 20)).toBeCloseTo(1.14, 10);
+    expect(compressorMakeupDb(0, 20)).toBeCloseTo(0, 10);
+    expect(LIMITER_MAKEUP_DB).toBe(compressorMakeupDb(-2, 20));
+    // With the output gain: the 2.9 dB the app has always played at.
+    expect(LIVE_OUTPUT_GAIN_DB + LIMITER_MAKEUP_DB).toBeCloseTo(2.9, 10);
   });
 
   it('ends in an oversampled soft clipper feeding the destination', () => {
@@ -203,32 +272,47 @@ describe('createPianoGraph', () => {
     expect(directToDestination).toEqual([softClip]);
   });
 
-  it('takes the mix straight to the destination for an export', () => {
-    // An export's peaks are held afterwards, by a limiter that looks ahead.
+  it('takes the mix straight to the destination for an export, as it always has', () => {
+    // An export's level is set, and its peaks held, once it is all rendered.
     const { context, created, destination } = createStubContext();
     const graph = createPianoGraph(context, {
       masterVolume: 0.85,
       reverbMix: 0.18,
       peakGuard: false,
     });
-    const outputStage = graph.outputDestination as unknown as StubNode;
-    expect(outputStage.outputs).toEqual([destination]);
+    // Dry and reverb, stage by stage: no output gain, limiter or clipper.
+    const voiceBus = graph.voiceDestination as unknown as StubNode;
+    expect(routes(voiceBus, destination).map(describeRoute)).toEqual([
+      ['gain 0.7', 'gain 0.91', 'gain 0.85', 'gain 1', 'destination'],
+      ['gain 0.7', 'gain 0.18', 'convolver', 'gain 1', 'gain 0.85', 'gain 1', 'destination'],
+    ]);
     expect(findNode(created, 'compressor').outputs).toEqual([]);
-    const directToDestination = created.filter((n) => n.outputs.includes(destination));
-    expect(directToDestination).toEqual([outputStage]);
+    expect(findNode(created, 'waveshaper').outputs).toEqual([]);
+    // Clicks go straight out too; an export mixes its own.
+    const clickBus = graph.outputDestination as unknown as StubNode;
+    expect(clickBus.outputs).toEqual([destination]);
   });
 
-  it('exposes an output stage that bypasses master volume but not the limiter', () => {
-    const { context, created } = createStubContext();
+  it('joins clicks after the limiter but ahead of the soft clipper', () => {
+    const { context, created, destination } = createStubContext();
     const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
-    const outputStage = graph.outputDestination as unknown as StubNode;
-    const limiter = findNode(created, 'compressor');
-    expect(outputStage.outputs).toContain(limiter);
-    // master feeds the stage; the stage is not the master itself.
-    const master = created.find(
-      (n) => n.kind === 'gain' && n.outputs.includes(outputStage),
-    ) as unknown as { gain: StubParam } | undefined;
-    expect(master?.gain.value).toBe(0.85);
+    const clickPath = reachable(graph.outputDestination as unknown as StubNode);
+    // A click can never have the limiter turn the piano down…
+    expect(clickPath.has(findNode(created, 'compressor'))).toBe(false);
+    // …nor does it pass master volume or the live output gain: the bus itself
+    // and the soft clipper's pre-gain are the only gains on its way…
+    expect(describeRoute([...clickPath].filter((n) => n.kind === 'gain'))).toEqual([
+      'gain 1',
+      `gain ${1 / SOFT_CLIP_INPUT_RANGE}`,
+    ]);
+    // …but the soft clipper still holds the sum under full scale.
+    expect(clickPath.has(findNode(created, 'waveshaper'))).toBe(true);
+    expect(clickPath.has(destination)).toBe(true);
+    // Held back by the limiter's look-ahead, to land with the piano.
+    const lookAhead = findNode(created, 'delay') as StubNode & { delayTime: StubParam };
+    expect(clickPath.has(lookAhead)).toBe(true);
+    expect(LIMITER_LOOKAHEAD_S).toBe(0.006);
+    expect(lookAhead.delayTime.value).toBe(LIMITER_LOOKAHEAD_S);
   });
 
   it('pulls the dry path back as reverb comes up', () => {
