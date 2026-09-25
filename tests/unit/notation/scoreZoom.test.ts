@@ -15,6 +15,7 @@ import {
   MIN_DISPLAY_ZOOM,
   MIN_ONSET_GAP_PX,
   nextZoom,
+  wheelZoomSteps,
 } from '@/features/notation/scoreZoom';
 
 const OPTS = {
@@ -63,6 +64,32 @@ describe('zoom steps', () => {
   it('stays inside the range a take can store', () => {
     expect(nextZoom(3.9, 5)).toBe(MAX_DISPLAY_ZOOM);
     expect(nextZoom(0.3, -5)).toBe(MIN_DISPLAY_ZOOM);
+  });
+});
+
+describe('wheel zoom', () => {
+  const { DOM_DELTA_PIXEL, DOM_DELTA_LINE, DOM_DELTA_PAGE } = WheelEvent;
+
+  it('reads a wheel that counts in pixels as it always has', () => {
+    // A notch is about 100 pixels; a pinch sends a little at a time, and a
+    // fast spin several notches at once.
+    expect(wheelZoomSteps(100, DOM_DELTA_PIXEL)).toBe(-1);
+    expect(wheelZoomSteps(-4, DOM_DELTA_PIXEL)).toBe(0.04);
+    expect(wheelZoomSteps(-300, DOM_DELTA_PIXEL)).toBe(3);
+  });
+
+  it('zooms as far for a notch counted in lines as for one counted in pixels', () => {
+    // Three lines a notch.
+    expect(wheelZoomSteps(3, DOM_DELTA_LINE)).toBeCloseTo(-1, 9);
+    expect(wheelZoomSteps(-1, DOM_DELTA_LINE)).toBeCloseTo(1 / 3, 9);
+  });
+
+  it('zooms a step for a notch counted in pages, not to a limit', () => {
+    // A wheel set to scroll a screen at a time sends a page a notch; even
+    // three at once make only a step.
+    expect(nextZoom(1, wheelZoomSteps(-1, DOM_DELTA_PAGE))).toBe(1.25);
+    expect(nextZoom(1, wheelZoomSteps(1, DOM_DELTA_PAGE))).toBe(0.8);
+    expect(nextZoom(1, wheelZoomSteps(-3, DOM_DELTA_PAGE))).toBe(1.25);
   });
 });
 

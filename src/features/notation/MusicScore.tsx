@@ -10,7 +10,13 @@ import { midiToNoteName } from '@/utils/midi';
 import { detectFifths } from './keyDetection';
 import { normalizeFifths } from './keySignature';
 import { layoutScore, type ScoreLayout } from './notationLayout';
-import { basePxPerMsFor, MAX_DISPLAY_ZOOM, MIN_DISPLAY_ZOOM, nextZoom } from './scoreZoom';
+import {
+  basePxPerMsFor,
+  MAX_DISPLAY_ZOOM,
+  MIN_DISPLAY_ZOOM,
+  nextZoom,
+  wheelZoomSteps,
+} from './scoreZoom';
 import {
   computeScoreGeometry,
   drawScore,
@@ -366,8 +372,7 @@ export function MusicScore() {
       event.preventDefault();
       const rect = canvas.getBoundingClientRect();
       const anchorX = (event.clientX - rect.left) / fitRef.current;
-      // A notch of a wheel is about 100; a pinch sends many small deltas.
-      zoomBy(-event.deltaY / 100, anchorX);
+      zoomBy(wheelZoomSteps(event.deltaY, event.deltaMode), anchorX);
     };
     canvas.addEventListener('wheel', onWheel, { passive: false });
     return () => canvas.removeEventListener('wheel', onWheel);

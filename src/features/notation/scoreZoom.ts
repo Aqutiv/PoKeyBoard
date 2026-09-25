@@ -56,3 +56,25 @@ export function nextZoom(zoom: number, steps: number): number {
   const clamped = Math.min(MAX_DISPLAY_ZOOM, Math.max(MIN_DISPLAY_ZOOM, next));
   return Math.round(clamped * 1000) / 1000;
 }
+
+/**
+ * A wheel's travel in pixels: about 100 a notch, which is one step of the
+ * buttons. A wheel that counts lines moves three a notch, and one set to
+ * scroll a screen at a time moves a page, about a screenful.
+ */
+const WHEEL_NOTCH_PX = 100;
+const WHEEL_LINE_PX = WHEEL_NOTCH_PX / 3;
+const WHEEL_PAGE_PX = 800;
+
+/**
+ * Zoom steps for a Ctrl/⌘ + wheel event, whose `deltaY` counts in the unit
+ * its `deltaMode` names: a step a notch, and a fraction of one for each of the
+ * many small deltas a pinch sends. A line or a page is only an estimate in
+ * pixels, so such an event is held to a step: a page would otherwise carry the
+ * zoom to a limit in one notch.
+ */
+export function wheelZoomSteps(deltaY: number, deltaMode: number): number {
+  if (deltaMode === WheelEvent.DOM_DELTA_PIXEL) return -deltaY / WHEEL_NOTCH_PX;
+  const px = deltaY * (deltaMode === WheelEvent.DOM_DELTA_LINE ? WHEEL_LINE_PX : WHEEL_PAGE_PX);
+  return Math.min(1, Math.max(-1, -px / WHEEL_NOTCH_PX));
+}
