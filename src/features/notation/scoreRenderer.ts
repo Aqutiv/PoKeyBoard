@@ -14,6 +14,7 @@ import {
   measureIndexAt,
   type BeamGroup,
   type ChordGroup,
+  type MeasureInfo,
   type LaidOutNote,
   type ScoreLayout,
 } from './notationLayout';
@@ -469,6 +470,58 @@ function yForStep(view: ScoreView, staff: StaffKind, step: number): number {
   return staffTopFor(view, staff) + STAFF_H - (step * GAP) / 2;
 }
 
+/**
+ * First index of `items`, sorted ascending by `at`, whose `at` is at least
+ * `value`. Every pass below starts from here rather than walking the take from
+ * its first bar each frame: the view is a few seconds wide, the take may be
+ * twenty minutes long.
+ */
+export function firstAtOrAfter<T>(
+  items: readonly T[],
+  value: number,
+  at: (item: T) => number,
+): number {
+  let low = 0;
+  let high = items.length;
+  while (low < high) {
+    const mid = (low + high) >> 1;
+    if (at(items[mid] as T) < value) low = mid + 1;
+    else high = mid;
+  }
+  return low;
+}
+
+/**
+ * The beams in order of where they start, with the longest one's length.
+ * `layout.beams` is in bar order but not time order within a bar — a staff's
+ * runs are collected one voice after another — so it cannot be searched as
+ * it stands. Built once per layout, which is immutable.
+ */
+interface BeamIndex {
+  ids: number[];
+  starts: number[];
+  longestMs: number;
+}
+
+const beamIndexes = new WeakMap<ScoreLayout, BeamIndex>();
+
+function beamIndexFor(layout: ScoreLayout): BeamIndex {
+  const cached = beamIndexes.get(layout);
+  if (cached) return cached;
+  const startOf = (id: number) =>
+    ((layout.beams[id] as BeamGroup).members[0] as ChordGroup).displayStartMs;
+  const ids = layout.beams.map((_, id) => id).sort((a, b) => startOf(a) - startOf(b));
+  let longestMs = 0;
+  for (const beam of layout.beams) {
+    const first = beam.members[0] as ChordGroup;
+    const last = beam.members[beam.members.length - 1] as ChordGroup;
+    longestMs = Math.max(longestMs, last.displayStartMs - first.displayStartMs);
+  }
+  const index = { ids, starts: ids.map(startOf), longestMs };
+  beamIndexes.set(layout, index);
+  return index;
+}
+
 function xForMs(view: ScoreView, ms: number): number {
   return view.gutterPx + SCORE_LEAD_IN + (ms - view.scrollMs) * view.pxPerMs;
 }
@@ -535,8 +588,14 @@ function drawMeasures(
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
 
-  for (const measure of layout.measures) {
-    if (measure.endMs < fromMs || measure.startMs > toMs) continue;
+  const { measures } = layout;
+  for (
+    let i = firstAtOrAfter(measures, fromMs, (measure) => measure.endMs);
+    i < measures.length;
+    i += 1
+  ) {
+    const measure = measures[i] as MeasureInfo;
+    if (measure.startMs > toMs) break;
     // A note that exactly fills its bar spills a second, empty measure into the
     // layout — and that measure brings a bar line and a whole rest with it. A
     // bare view draws the music, not the silence around it.
@@ -629,9 +688,10 @@ function drawRests(
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
   ctx.fillStyle = palette.rest;
   ctx.strokeStyle = palette.rest;
-  for (const rest of layout.rests) {
-    if (rest.displayStartMs < fromMs) continue;
-    if (rest.displayStartMs > toMs) break; // sorted by display start
+  const { rests } = layout;
+  for (let i = firstAtOrAfter(rests, fromMs, (rest) => rest.displayStartMs); ; i += 1) {
+    const rest = rests[i];
+    if (!rest || rest.displayStartMs > toMs) break; // sorted by display start
     const x = xForMs(view, rest.displayStartMs);
     if (x < view.gutterPx) continue;
     // A rest for a staff this view is not drawing would otherwise land on the
@@ -665,9 +725,12 @@ function drawPedals(
   ctx.strokeStyle = palette.rest;
   ctx.lineWidth = 1.2;
 
-  for (const pedal of layout.pedals) {
+  const { pedals } = layout;
+  // Sorted and never overlapping, so their ends are in order too.
+  for (let i = firstAtOrAfter(pedals, fromMs, (pedal) => pedal.toMs); ; i += 1) {
+    const pedal = pedals[i];
+    if (!pedal || pedal.fromMs >= toMs) break; // sorted by start
     if (pedal.toMs <= fromMs) continue;
-    if (pedal.fromMs >= toMs) break; // sorted by start
     const openLeft = pedal.fromMs < fromMs;
     const openRight = pedal.toMs > toMs;
     const x1 = openLeft ? view.gutterPx : xForMs(view, pedal.fromMs);
@@ -813,8 +876,9 @@ function drawTies(
   const open = new Map<string, { x: number; y: number; above: boolean }>();
   ctx.fillStyle = palette.noteDim;
 
-  for (const chord of layout.chords) {
-    if (chord.displayStartMs < fromMs) continue;
+  const { chords } = layout;
+  for (let i = firstChordIndexAt(chords, fromMs); i < chords.length; i += 1) {
+    const chord = chords[i] as ChordGroup;
     if (chord.displayStartMs > toMs) break; // sorted by display start
     // Same rule as `drawChords`: a single-staff view has one set of staff
     // origins, so a tie from the staff it is not showing would arc across the
@@ -884,7 +948,13 @@ function computeBeamLines(view: ScoreView, layout: ScoreLayout): BeamLines {
   const fromMs = view.scrollMs - 2000;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
 
-  for (let id = 0; id < layout.beams.length; id += 1) {
+  const index = beamIndexFor(layout);
+  for (
+    let k = firstAtOrAfter(index.starts, fromMs - index.longestMs, (start) => start);
+    k < index.ids.length && (index.starts[k] as number) <= toMs;
+    k += 1
+  ) {
+    const id = index.ids[k] as number;
     const beam = layout.beams[id] as BeamGroup;
     const first = beam.members[0] as ChordGroup;
     const last = beam.members[beam.members.length - 1] as ChordGroup;
@@ -1286,9 +1356,15 @@ function drawClefChanges(
 ): void {
   const fromMs = view.scrollMs - 200;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 200;
-  for (const measure of layout.measures) {
-    if (measure.endMs < fromMs || measure.startMs > toMs) continue;
-    const previous = layout.measures[measure.index - 1];
+  const { measures } = layout;
+  for (
+    let i = firstAtOrAfter(measures, fromMs, (measure) => measure.endMs);
+    i < measures.length;
+    i += 1
+  ) {
+    const measure = measures[i] as MeasureInfo;
+    if (measure.startMs > toMs) break;
+    const previous = measures[measure.index - 1];
     if (!previous) continue;
     const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
     if (x < view.gutterPx + INLINE_CLEF_W || x > view.widthPx) continue;

@@ -175,6 +175,10 @@ export interface Messages {
     menuLabel: string;
     audio: string;
     sheet: string;
+    midi: string;
+    /** Names of a MIDI file's two tracks, which a sequencer shows. */
+    rightHandTrack: string;
+    leftHandTrack: string;
   };
   transport: {
     groupLabel: string;
@@ -246,6 +250,9 @@ export interface Messages {
     grid32: string;
     grid64: string;
     emptyHint: string;
+    zoom: string;
+    zoomIn: string;
+    zoomOut: string;
   };
   takes: {
     title: string;
@@ -397,6 +404,9 @@ export interface Messages {
     quality: string;
     shareable: (p: { kbps: number }) => string;
     high: (p: { kbps: number }) => string;
+    loudness: string;
+    loudnessNormalized: string;
+    loudnessAsPlayed: string;
     includeMetronome: string;
     reverbNote: string;
     longTakeWarning: (p: { mb: number }) => string;

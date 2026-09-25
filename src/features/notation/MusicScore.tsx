@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { themeController } from '@/app/theme';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -12,6 +12,13 @@ import { detectFifths } from './keyDetection';
 import { normalizeFifths } from './keySignature';
 import { layoutScore, type ScoreLayout } from './notationLayout';
 import {
+  basePxPerMsFor,
+  MAX_DISPLAY_ZOOM,
+  MIN_DISPLAY_ZOOM,
+  nextZoom,
+  wheelZoomSteps,
+} from './scoreZoom';
+import {
   computeScoreGeometry,
   drawScore,
   gutterWidthFor,
@@ -24,7 +31,6 @@ import { scrubController } from './scrubController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import './notation.css';
 
-const BASE_PX_PER_MS = 0.09;
 /**
  * How far the score may be scaled down to fit the height it is given.
  *
@@ -82,6 +88,7 @@ export function MusicScore() {
   const loop = useMemo(() => playableLoop(take), [take]);
   const quantization = useTakeStore((s) => s.take.display.quantization);
   const setDisplayQuantization = useTakeStore((s) => s.setDisplayQuantization);
+  const setDisplayZoom = useTakeStore((s) => s.setDisplayZoom);
   const [lastNoteName, setLastNoteName] = useState<string | null>(null);
 
   // An imported score says which key it is in; a recording never does, so the
@@ -106,6 +113,7 @@ export function MusicScore() {
     [notes, tempo.bpm, tempo.timeSignature, tempo.changes, quantization, keySignature, pedalEvents],
   );
   const geometry = useMemo(() => computeScoreGeometry(layout), [layout]);
+  const basePxPerMs = useMemo(() => basePxPerMsFor(layout), [layout]);
 
   // Everything the rAF loop reads lives in refs, written from effects only.
   const sizeRef = useRef({ width: 0, height: 0, dpr: 1 });
@@ -115,6 +123,15 @@ export function MusicScore() {
   const keyRef = useRef(keySignature);
   const zoomRef = useRef(zoom);
   const loopRef = useRef(loop);
+  const baseRef = useRef(basePxPerMs);
+  /** Schedule a frame if none is coming; see the render loop below. */
+  const wakeRef = useRef<() => void>(() => {});
+  /**
+   * Where the playhead was when the player put the score somewhere of their
+   * own — a wheel zoom around the pointer — or null. Until the playhead moves,
+   * the score stays where they put it, even with the playhead out of view.
+   */
+  const heldScrollAtRef = useRef<number | null>(null);
   const ghostsRef = useRef<LiveGhost[]>([]);
   const scrollMsRef = useRef(0);
   /** Design pixels → screen pixels; written by the render loop. */
@@ -133,18 +150,24 @@ export function MusicScore() {
 
   useEffect(() => {
     layoutBoxRef.current = { layout, geometry, version: layoutBoxRef.current.version + 1 };
-  }, [layout, geometry]);
+    baseRef.current = basePxPerMs;
+    wakeRef.current();
+  }, [layout, geometry, basePxPerMs]);
   useEffect(() => {
     stateRef.current = state;
+    wakeRef.current();
   }, [state]);
   useEffect(() => {
     tempoRef.current = tempo;
+    wakeRef.current();
   }, [tempo]);
   useEffect(() => {
     keyRef.current = keySignature;
+    wakeRef.current();
   }, [keySignature]);
   useEffect(() => {
     zoomRef.current = zoom;
+    wakeRef.current();
   }, [zoom]);
 
   // Canvas sizing with DPR backing store.
@@ -158,6 +181,7 @@ export function MusicScore() {
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
       lastSignatureRef.current = '';
+      wakeRef.current();
     };
     apply(container.clientWidth, container.clientHeight);
     const observer = new ResizeObserver((entries) => {
@@ -176,19 +200,32 @@ export function MusicScore() {
         setLastNoteName(midiToNoteName(event.midi));
         if (transportController.getState() === 'recording') return;
         ghostsRef.current.push({ midi: event.midi, bornAt: performance.now() });
+        wakeRef.current();
       }),
     [],
   );
 
-  // The render loop: always scheduled, draws only when something changed.
+  // The render loop. It runs while anything on the score moves — playback,
+  // recording, a scrub coasting to rest, a ghost note fading — and sleeps
+  // otherwise, rather than waking every frame to find nothing changed. Whatever
+  // does change the picture wakes it: the transport, the take, the theme, a
+  // resize, a key played, a finger on the score.
   useEffect(() => {
     let raf = 0;
     const tick = () => {
-      raf = requestAnimationFrame(tick);
+      raf = 0;
+      if (draw()) raf = requestAnimationFrame(tick);
+    };
+    const wake = () => {
+      if (raf === 0) raf = requestAnimationFrame(tick);
+    };
+    /** Draw if anything changed; true while there is more to come. */
+    const draw = (): boolean => {
       const canvas = canvasRef.current;
       const ctx = canvas?.getContext('2d');
       const { width, height, dpr } = sizeRef.current;
-      if (!canvas || !ctx || width <= 0) return;
+      // Nothing to draw on yet; the resize that sizes the canvas wakes the loop.
+      if (!canvas || !ctx || width <= 0) return false;
 
       // Inertial scrubbing: keep coasting and auditioning between frames.
       const inertia = inertiaRef.current;
@@ -225,14 +262,19 @@ export function MusicScore() {
       fitRef.current = fit;
       const viewWidth = width / fit;
 
-      const pxPerMs = BASE_PX_PER_MS * zoomRef.current;
+      const pxPerMs = baseRef.current * zoomRef.current;
       const gutterPx = gutterWidthFor(keyRef.current);
       const musicLeft = gutterPx + SCORE_LEAD_IN;
       const anchorOffsetMs = ((viewWidth - musicLeft) * PLAYHEAD_ANCHOR) / pxPerMs;
       const moving = currentState === 'playing' || currentState === 'recording';
+      if (heldScrollAtRef.current !== null && (moving || heldScrollAtRef.current !== playheadMs)) {
+        heldScrollAtRef.current = null;
+      }
       if (moving) {
         scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
-      } else {
+      } else if (heldScrollAtRef.current === null) {
+        // Keep the playhead in view — a seek, a take opened — unless the
+        // player has just put the score somewhere else themselves.
         const x = musicLeft + (playheadMs - scrollMsRef.current) * pxPerMs;
         if (x < gutterPx - 1 || x > viewWidth - 20) {
           scrollMsRef.current = Math.max(0, playheadMs - anchorOffsetMs);
@@ -248,6 +290,7 @@ export function MusicScore() {
         width,
         height,
         fit.toFixed(3),
+        pxPerMs.toFixed(5),
         ghosts.length,
         openNotes.length,
         theme,
@@ -255,7 +298,9 @@ export function MusicScore() {
         loopRef.current?.endMs,
       ].join('|');
       const animating = ghosts.length > 0 || openNotes.length > 0;
-      if (signature === lastSignatureRef.current && !animating) return;
+      const more =
+        moving || currentState === 'scrubbing' || inertiaRef.current !== null || animating;
+      if (signature === lastSignatureRef.current && !animating) return more;
       lastSignatureRef.current = signature;
 
       ctx.setTransform(dpr * fit, 0, 0, dpr * fit, 0, 0);
@@ -288,10 +333,61 @@ export function MusicScore() {
         },
         SCORE_PALETTES[theme],
       );
+      return more;
     };
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    wakeRef.current = wake;
+    wake();
+    const unsubscribeTransport = transportController.subscribeState(wake);
+    const unsubscribeTheme = themeController.subscribe(wake);
+    return () => {
+      cancelAnimationFrame(raf);
+      unsubscribeTransport();
+      unsubscribeTheme();
+      wakeRef.current = () => {};
+    };
   }, []);
+
+  /**
+   * Zoom by `steps` (see `nextZoom`), keeping the moment at `anchorX` — design
+   * pixels across the view, the pointer for a wheel — where it is on screen.
+   * While the playhead moves it holds its own place, so there is nothing to keep.
+   */
+  const zoomBy = useCallback(
+    (steps: number, anchorX?: number) => {
+      const next = nextZoom(zoomRef.current, steps);
+      if (next === zoomRef.current) return;
+      const moving = stateRef.current === 'playing' || stateRef.current === 'recording';
+      if (anchorX !== undefined && !moving) {
+        const musicLeft = gutterWidthFor(keyRef.current) + SCORE_LEAD_IN;
+        const before = baseRef.current * zoomRef.current;
+        const after = baseRef.current * next;
+        const atMs = scrollMsRef.current + (anchorX - musicLeft) / before;
+        scrollMsRef.current = Math.max(0, atMs - (anchorX - musicLeft) / after);
+        heldScrollAtRef.current = transportController.getPlayheadMs();
+      }
+      zoomRef.current = next;
+      setDisplayZoom(next);
+      wakeRef.current();
+    },
+    [setDisplayZoom],
+  );
+
+  // Ctrl/⌘ + wheel zooms, as it does in any document — and it is what a
+  // trackpad pinch arrives as. Native and not passive, so the page itself
+  // does not zoom instead.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      const rect = canvas.getBoundingClientRect();
+      const anchorX = (event.clientX - rect.left) / fitRef.current;
+      zoomBy(wheelZoomSteps(event.deltaY, event.deltaMode), anchorX);
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, [zoomBy]);
 
   const onScorePointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
     const current = transportController.getState();
@@ -299,6 +395,7 @@ export function MusicScore() {
     inertiaRef.current = null;
     if (!scrubController.isActive && !scrubController.begin()) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    wakeRef.current();
     dragRef.current = {
       pointerId: event.pointerId,
       startClientX: event.clientX,
@@ -313,13 +410,14 @@ export function MusicScore() {
     if (!drag || drag.pointerId !== event.pointerId) return;
     // The drag is in screen pixels, so the rate has to be too — the music
     // must keep up with the finger whatever the score is scaled to.
-    const pxPerMs = BASE_PX_PER_MS * zoomRef.current * fitRef.current;
+    const pxPerMs = baseRef.current * zoomRef.current * fitRef.current;
     const dx = event.clientX - drag.startClientX;
     scrubController.update(drag.playhead0 - dx / pxPerMs);
     const clampedTime = transportController.getPlayheadMs();
     scrollMsRef.current = Math.max(0, drag.scroll0 + (clampedTime - drag.playhead0));
     drag.samples.push({ t: performance.now(), x: event.clientX });
     if (drag.samples.length > 6) drag.samples.shift();
+    wakeRef.current();
   };
 
   const onScorePointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
@@ -331,11 +429,12 @@ export function MusicScore() {
     const last = drag.samples[drag.samples.length - 1];
     let velocity = 0;
     if (first && last && last.t > first.t && performance.now() - last.t < 120) {
-      const pxPerMs = BASE_PX_PER_MS * zoomRef.current * fitRef.current;
+      const pxPerMs = baseRef.current * zoomRef.current * fitRef.current;
       velocity = -((last.x - first.x) / (last.t - first.t)) / pxPerMs;
     }
     if (Math.abs(velocity) > INERTIA_MIN_VELOCITY) {
       inertiaRef.current = { velocity, lastT: performance.now() };
+      wakeRef.current();
     } else {
       scrubController.end();
     }
@@ -370,6 +469,24 @@ export function MusicScore() {
       {/* A visual echo only: as a live region it announced every note played,
           over the very notes it was naming. */}
       {lastNoteName ? <div className="score__notename">{lastNoteName}</div> : null}
+      <div className="score__zoom" role="group" aria-label={m.score.zoom}>
+        <button
+          type="button"
+          onClick={() => zoomBy(-1)}
+          disabled={zoom <= MIN_DISPLAY_ZOOM}
+          aria-label={m.score.zoomOut}
+        >
+          −
+        </button>
+        <button
+          type="button"
+          onClick={() => zoomBy(1)}
+          disabled={zoom >= MAX_DISPLAY_ZOOM}
+          aria-label={m.score.zoomIn}
+        >
+          +
+        </button>
+      </div>
       <label className="score__quant">
         <span className="visually-hidden">{m.score.displayQuantization}</span>
         <select

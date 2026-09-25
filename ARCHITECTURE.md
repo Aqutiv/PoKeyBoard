@@ -14,12 +14,14 @@ src/
   audio/        AudioEngine (facade singleton), instruments (the piano
                 registry), SampleBank, VoiceManager, PianoGraphFactory
                 (+ procedural reverb IR), MetronomeEngine, OfflineTakeRenderer,
-                AudioExportService, audioCapabilities, iosAudioSession
-  workers/      mp3Encoder.worker (LAME wasm, transferred PCM)
+                AudioExportService, loudness (BS.1770 loudness, true peak,
+                look-ahead limiter), id3, audioCapabilities, iosAudioSession
+  workers/      mp3Encoder.worker (mastering + LAME wasm, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
                 tempoMap (piecewise beats↔ms; shared by import, library, score),
-                hands (which hand plays a note), trainingGate (pure)
+                hands (which hand plays a note), midiExport (Standard MIDI
+                File writer), trainingGate (pure)
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
@@ -39,8 +41,8 @@ src/
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportTakeDialog, ImportUrlDialog,
                 remoteImportMessage
-    export/     AudioExportDialog, SheetExportDialog, sheetPdfService
-                (pdf-lib, dynamic import — see SHEET_EXPORT.md)
+    export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService
+                (pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
     settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
                 reset), PianoSection (piano choice with its own offline pack,
                 levels)
@@ -127,13 +129,15 @@ that field, a switch invalidates cached exports on its own.
 
 ## Live/offline engine reuse
 
-`PianoGraphFactory` builds `voices → bus → (dry + convolver send) → master → limiter → destination` for **any** `BaseAudioContext`. `OfflineTakeRenderer` constructs an `OfflineAudioContext`, replays sustain-applied notes through the same factory with the same attack/release constants and the same `SampleBank` buffers, optionally adds scheduled metronome clicks, and rescales only if the peak would clip.
+`PianoGraphFactory` builds `voices → bus → (dry + convolver send) → master → limiter → soft clip → destination` for **any** `BaseAudioContext`. `OfflineTakeRenderer` constructs an `OfflineAudioContext` and replays sustain-applied notes through the same factory with the same attack/release constants and the same `SampleBank` buffers. Two things differ, both about level: the piano plays at the default volume (the volume slider is for the room, not the file), and without the graph's live peak guard (`peakGuard: false`) — a compressor has to react to peaks it cannot see coming, while an export can look ahead. The metronome travels as a click track: its two click sounds, rendered once, and where every beat falls. The encoder worker then masters the render (`loudness.masterExport`: BS.1770 loudness to −16 LUFS, or the played level, then a true-peak look-ahead limiter at −1 dBTP) before encoding; see AUDIO_EXPORT.md.
 
 A voice behaves like the string it stands for, the same way live and offline (`sampleVoice.ts`). It starts at its recording's onset rather than the top of the file (`onsetOffsetOf`, found once at decode), which takes the libraries' lead-in silence out of every note. Its damper falls more slowly in the bass than the treble (`releaseTcFor`), and above F6 there is none, so a released key there rings on. Striking a key that still sounds fades the old voice from the new one's start (`VoiceManager.restrike`, `scheduleTakeVoices` for exports) instead of stacking a second copy of one string, which would build up level and comb-filter.
 
 ## Scrubbing
 
 `getCrossedNoteOnsets(prev, next, sortedNotes)` is pure and binary-searched with asymmetric boundaries — forward `(prev, next]`, backward `(next, prev)` — so chords travel together and boundary jitter can't double-fire. The scrub controller adds hysteresis (3 ms), a per-move audition cap, clamped preview voices, and a key-flash set; `MusicScore` translates drags into times (playhead visually fixed, score moves) and continues feeding the controller during inertial coasting.
+
+`MusicScore`'s render loop runs only while something on the score moves — playback, recording, a scrub or its coast, a fading ghost note — and sleeps otherwise; the transport, the take, the theme, a resize, a key played or a finger on the score wakes it. Each pass of `scoreRenderer` finds its place in the take by binary search (`firstAtOrAfter`; beams through a per-layout index, since they are in bar order but not time order within a bar), so a frame costs the same twenty minutes into a take as at its start. Spacing is time-proportional, stretched per take (`scoreZoom.basePxPerMsFor`, at most 3×) so its closest common onsets stand 16 px apart, then scaled by the take's `display.zoom`.
 
 ## Learn
 
@@ -175,7 +179,7 @@ read and therefore device-local rather than part of the settings backup.
 
 Dexie v1: `takes` (denormalized summary columns + full JSON — lists never parse takes), `audioCache` (MP3 blobs in a separate table so lists never load audio), `settings`, `metadata`. Schema versions are the migration mechanism. The persistence service debounces autosaves (800 ms), forces saves on recording stop / page hide / before export, restores the last take + playhead, and requests persistent storage after the first meaningful save.
 
-Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/instrument/pack + bitrate + metronome + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames and playhead changes never rerender audio.
+Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/reverb/pack + bitrate + metronome + loudness + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
 
 ## Theming
 

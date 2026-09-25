@@ -28,9 +28,9 @@ export interface TakeStoreState {
   /** Last generation confirmed written for the active take. */
   savedGeneration: number;
   /**
-   * Bumps only when the audible content changes (notes, pedals, tempo,
-   * instrument) — the autosave layer invalidates cached export audio when
-   * this moves. Title and playhead changes do not bump it.
+   * Bumps only when the audible content changes (notes, pedals, tempo, piano,
+   * reverb) — the autosave layer invalidates cached export audio when this
+   * moves. Title, playhead and volume changes do not bump it.
    */
   contentRevision: number;
 
@@ -47,6 +47,7 @@ export interface TakeStoreState {
   setInstrumentSettings(instrument: InstrumentSettings): void;
   setPlayheadMs(playheadMs: number): void;
   setDisplayQuantization(quantization: Take['display']['quantization']): void;
+  setDisplayZoom(zoom: number): void;
   /** Practice state, like the playhead: saved, but never audible in an export. */
   setPlaybackSpeed(speed: number): void;
   setPlaybackLoop(loop: PlaybackLoop | null): void;
@@ -199,12 +200,20 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
     })),
 
   setInstrumentSettings: (instrument) =>
-    set((state) => ({
-      take: touched({ ...state.take, instrument }),
-      dirty: true,
-      mutationGeneration: state.mutationGeneration + 1,
-      contentRevision: state.contentRevision + 1,
-    })),
+    set((state) => {
+      // The volume is saved with the take but never exported: the render plays
+      // at the default volume, so moving it alone leaves the cached export in
+      // place.
+      const audible =
+        instrument.id !== state.take.instrument.id ||
+        instrument.reverbMix !== state.take.instrument.reverbMix;
+      return {
+        take: touched({ ...state.take, instrument }),
+        dirty: true,
+        mutationGeneration: state.mutationGeneration + 1,
+        contentRevision: audible ? state.contentRevision + 1 : state.contentRevision,
+      };
+    }),
 
   setPlayheadMs: (playheadMs) =>
     set((state) => ({
@@ -219,6 +228,14 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
       // Display-only change: saves, but never invalidates cached audio.
       take: { ...state.take, display: { ...state.take.display, quantization } },
       dirty: true,
+      mutationGeneration: state.mutationGeneration + 1,
+    })),
+
+  setDisplayZoom: (zoom) =>
+    set((state) => ({
+      // Display-only change: saves, but never invalidates cached audio.
+      take: { ...state.take, display: { ...state.take.display, zoom } },
+      dirty: state.dirty || state.take.notes.length > 0,
       mutationGeneration: state.mutationGeneration + 1,
     })),
 

@@ -131,6 +131,20 @@ describe('parseTakeJson', () => {
     expect(take.display.loop).toBeUndefined();
   });
 
+  it('keeps the key a score declared, and parses a take that never had one', () => {
+    const raw = specExampleTake();
+    raw.tempo = { ...(raw.tempo as object), keySignature: 0, keyMode: 'minor' };
+    const { take, repairs } = parseTakeJson(raw);
+    expect(repairs).toEqual([]);
+    expect(take.tempo).toMatchObject({ keySignature: 0, keyMode: 'minor' });
+
+    expect(parseTakeJson(specExampleTake()).take.tempo).not.toHaveProperty('keyMode');
+
+    const dorian = specExampleTake();
+    dorian.tempo = { ...(dorian.tempo as object), keySignature: 0, keyMode: 'dorian' };
+    expect(() => parseTakeJson(dorian)).toThrow(ImportValidationError);
+  });
+
   it('rejects an unknown staff name', () => {
     const raw = specExampleTake();
     (raw.notes as Record<string, unknown>[])[0]!.staff = 'middle';

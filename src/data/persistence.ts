@@ -144,11 +144,11 @@ class PersistenceService {
       if (state.masterVolume !== previous.masterVolume || state.reverbMix !== previous.reverbMix) {
         audioEngine.setMasterVolume(state.masterVolume);
         audioEngine.setReverbMix(state.reverbMix);
-        // The take carries its own copy — the export renderer reads the levels
-        // off it and the export cache key hashes them — so it has to follow
-        // what is actually being heard. Opening a take gets here with the two
-        // already in agreement; writing anyway would dirty a freshly opened
-        // take and queue a pointless save.
+        // The take carries its own copy — opening it again restores both, and
+        // the export renders its reverb — so it has to follow what is actually
+        // being heard. Opening a take gets here with the two already in
+        // agreement; writing anyway would dirty a freshly opened take and
+        // queue a pointless save.
         const { take, setInstrumentSettings } = useTakeStore.getState();
         if (
           take.instrument.masterVolume !== state.masterVolume ||

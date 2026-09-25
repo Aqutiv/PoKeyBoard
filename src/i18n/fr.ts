@@ -53,6 +53,9 @@ export const fr: Messages = {
     menuLabel: 'Options de partage',
     audio: 'Audio (MP3)',
     sheet: 'Partition (PDF)',
+    midi: 'MIDI (.mid)',
+    rightHandTrack: 'Main droite',
+    leftHandTrack: 'Main gauche',
   },
   transport: {
     groupLabel: 'Transport',
@@ -123,6 +126,9 @@ export const fr: Messages = {
     grid32: 'Grille 1/32',
     grid64: 'Grille 1/64',
     emptyHint: 'Jouez les touches, ou appuyez sur enregistrer pour capturer une prise.',
+    zoom: 'Zoom',
+    zoomIn: 'Zoom avant',
+    zoomOut: 'Zoom arrière',
   },
   takes: {
     title: 'Prises',
@@ -376,6 +382,9 @@ export const fr: Messages = {
     quality: 'Qualité',
     shareable: ({ kbps }) => `Partageable — ${kbps} kbps`,
     high: ({ kbps }) => `Haute — ${kbps} kbps`,
+    loudness: 'Niveau',
+    loudnessNormalized: 'Égalisé — aussi fort que d’autres musiques',
+    loudnessAsPlayed: 'Tel que joué — le doux reste doux',
     includeMetronome: 'Inclure le métronome',
     reverbNote: 'Réverbération : utilise le réglage actuel de la prise.',
     longTakeWarning: ({ mb }) =>

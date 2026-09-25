@@ -109,6 +109,9 @@ export const tempoSchema = z.object({
   // Additive for the same reason, and inaudible in the same way: dropping it
   // costs a build the spelling of the accidentals, never a note.
   keySignature: z.number().int().min(-MAX_FIFTHS).max(MAX_FIFTHS).optional(),
+  // And again: a build without it reads the mode from the pitches, as it
+  // always did.
+  keyMode: z.enum(['major', 'minor']).optional(),
 });
 
 export const instrumentSchema = z.object({

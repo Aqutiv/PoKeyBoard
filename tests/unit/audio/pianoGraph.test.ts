@@ -203,6 +203,21 @@ describe('createPianoGraph', () => {
     expect(directToDestination).toEqual([softClip]);
   });
 
+  it('takes the mix straight to the destination for an export', () => {
+    // An export's peaks are held afterwards, by a limiter that looks ahead.
+    const { context, created, destination } = createStubContext();
+    const graph = createPianoGraph(context, {
+      masterVolume: 0.85,
+      reverbMix: 0.18,
+      peakGuard: false,
+    });
+    const outputStage = graph.outputDestination as unknown as StubNode;
+    expect(outputStage.outputs).toEqual([destination]);
+    expect(findNode(created, 'compressor').outputs).toEqual([]);
+    const directToDestination = created.filter((n) => n.outputs.includes(destination));
+    expect(directToDestination).toEqual([outputStage]);
+  });
+
   it('exposes an output stage that bypasses master volume but not the limiter', () => {
     const { context, created } = createStubContext();
     const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
