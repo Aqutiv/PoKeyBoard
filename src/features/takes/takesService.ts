@@ -108,9 +108,20 @@ export async function createNewTake(): Promise<void> {
   await activate(emptyTakeWithDefaults());
 }
 
-/** Make `take` the active take on the Play screen (the library open flow). */
-export async function activateTake(take: Take): Promise<void> {
-  await activate(take);
+/**
+ * Make `take` the active take on the Play screen (the library open flow).
+ *
+ * `signal` is checked again once the pending save has flushed — the one await
+ * between being asked and replacing the take. A caller that walked away during
+ * that flush (a Library row left mid-open, a Learn chapter closed on its
+ * hand-off) must find the take it left on Play still there, not the one it no
+ * longer asked for. Resolves whether the take was made active.
+ */
+export async function activateTake(take: Take, signal?: AbortSignal): Promise<boolean> {
+  await prepareActiveOperation();
+  if (signal?.aborted === true) return false;
+  await activatePrepared(take);
+  return true;
 }
 
 export async function openTake(id: string): Promise<boolean> {
