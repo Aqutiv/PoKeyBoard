@@ -1,5 +1,13 @@
 import { TooltipButton } from '@/ui/TooltipButton';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { subscribeFrame } from '@/app/frameClock';
 import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
@@ -59,6 +67,17 @@ function setFlag(element: HTMLElement, name: string, on: boolean): void {
   if (on === name in element.dataset) return;
   if (on) element.dataset[name] = '';
   else delete element.dataset[name];
+}
+
+/**
+ * Mark a key pressed while it is lit, by the player's hand (`is-active`,
+ * rendered) or by the take (`data-playback`, drawn by the frame loop), so a
+ * screen reader is told what the eye is shown. Touches the DOM only on a change.
+ */
+function syncPressed(element: HTMLElement): void {
+  const pressed = String(element.classList.contains('is-active') || 'playback' in element.dataset);
+  if (element.getAttribute('aria-pressed') === pressed) return;
+  element.setAttribute('aria-pressed', pressed);
 }
 
 interface PianoKeyboardProps {
@@ -273,6 +292,15 @@ export function PianoKeyboard({
     };
   });
 
+  // A key's `aria-pressed` is written, here and by the frame loop, and never
+  // rendered. The take presses keys between renders, where a rendered value
+  // cannot follow; and React, which rewrites a prop only when its own value
+  // changes, would put a key the player lets go of back up while the take
+  // still plays it. A layout effect, so it lands before paint as a prop would.
+  useLayoutEffect(() => {
+    for (const element of keyElements.current.values()) syncPressed(element);
+  });
+
   useEffect(() => {
     if (!playbackCues) return;
     const sounding = new SoundingNotes();
@@ -294,6 +322,7 @@ export function PianoKeyboard({
         if (element.dataset.playback === hand) continue;
         if (hand) element.dataset.playback = hand;
         else delete element.dataset.playback;
+        syncPressed(element);
       }
       const { lowMidi, highMidi } = frameInputs.current.layout;
       let below = false;
@@ -591,7 +620,6 @@ export function PianoKeyboard({
               role="button"
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
-              aria-pressed={isActive(key.midi)}
               className={`piano-key piano-key--white${isActive(key.midi) ? ' is-active' : ''}${
                 isTarget(key.midi) ? ' is-target' : ''
               }${isWrong(key.midi) ? ' is-wrong' : ''}`}
@@ -617,7 +645,6 @@ export function PianoKeyboard({
               role="button"
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
-              aria-pressed={isActive(key.midi)}
               className={`piano-key piano-key--black${isActive(key.midi) ? ' is-active' : ''}${
                 isTarget(key.midi) ? ' is-target' : ''
               }${isWrong(key.midi) ? ' is-wrong' : ''}`}
