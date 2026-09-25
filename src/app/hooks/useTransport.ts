@@ -1,4 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
+import { subscribeFrame } from '@/app/frameClock';
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
 
@@ -21,6 +22,7 @@ export function useMetronomeOn(): boolean {
   return useSyncExternalStore(subscribe, () => transportController.isMetronomeOn());
 }
 
+/** The readout's resolution: tenths, so it changes ten times a second at most. */
 const PLAYHEAD_TICK_MS = 100;
 
 /** Quantized so the snapshot is stable between ticks (uSES contract). */
@@ -28,9 +30,10 @@ const getPlayheadSnapshot = () =>
   Math.round(transportController.getPlayheadMs() / PLAYHEAD_TICK_MS) * PLAYHEAD_TICK_MS;
 
 /**
- * Low-frequency playhead sampling (~10 Hz) for text readouts and sliders.
- * Smooth 60fps motion (the score playhead) reads the transport clock in its
- * own rAF loop instead of going through React state.
+ * The playhead for text readouts and sliders, read on the frame clock and
+ * quantized to a tenth of a second, so React renders only when the readout
+ * would change. Smooth motion (the score playhead) reads the transport clock
+ * in its own rAF loop instead of going through React state.
  */
 export function usePlayheadMs(): number {
   const state = useTransportState();
@@ -39,10 +42,10 @@ export function usePlayheadMs(): number {
   const subscribePlayhead = useCallback(
     (onStoreChange: () => void) => {
       const unsubscribe = transportController.subscribeState(onStoreChange);
-      const timer = moving ? setInterval(onStoreChange, PLAYHEAD_TICK_MS) : null;
+      const stopFrames = moving ? subscribeFrame(onStoreChange) : null;
       return () => {
         unsubscribe();
-        if (timer !== null) clearInterval(timer);
+        stopFrames?.();
       };
     },
     [moving],

@@ -24,6 +24,8 @@ export interface SettingsState {
   velocityMode: VelocityMode;
   fixedVelocity: number;
   showNoteLabels: boolean;
+  /** Slide the Play keyboard to where playback is playing. */
+  keyboardFollowsPlayback: boolean;
   scrubAudition: boolean;
   /** Keep recorded-take playback running while the page is hidden. */
   backgroundPlayback: boolean;
@@ -52,6 +54,7 @@ export interface SettingsState {
   setVelocityMode(mode: VelocityMode): void;
   setFixedVelocity(value: number): void;
   setShowNoteLabels(show: boolean): void;
+  setKeyboardFollowsPlayback(follow: boolean): void;
   setScrubAudition(enabled: boolean): void;
   setBackgroundPlayback(enabled: boolean): void;
   setGamepadInput(enabled: boolean): void;
@@ -75,6 +78,7 @@ export const SETTINGS_DEFAULTS = {
   velocityMode: 'touch' as VelocityMode,
   fixedVelocity: 0.75,
   showNoteLabels: true,
+  keyboardFollowsPlayback: true,
   scrubAudition: true,
   backgroundPlayback: false,
   gamepadInput: true,
@@ -109,6 +113,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setVelocityMode: (velocityMode) => set({ velocityMode }),
   setFixedVelocity: (fixedVelocity) => set({ fixedVelocity }),
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
+  setKeyboardFollowsPlayback: (keyboardFollowsPlayback) => set({ keyboardFollowsPlayback }),
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),

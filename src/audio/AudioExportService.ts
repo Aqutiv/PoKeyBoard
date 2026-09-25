@@ -14,9 +14,11 @@ import { renderTakeForExport, type RenderedTake } from './OfflineTakeRenderer';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 
 /**
- * Bumped whenever the same take would render differently, so no cached export
- * outlives the change. 4: level set by loudness and held by a true-peak
- * limiter, not by the live graph's compressor.
+ * Part of every cached MP3's key: bump it whenever rendering itself changes,
+ * so a cached file made the old way is rendered again. 3: voices start at the
+ * sample's onset, re-struck keys damp their string, the top octaves ring on.
+ * 4: level set by loudness and held by a true-peak limiter, not by the live
+ * graph's compressor.
  */
 export const AUDIO_EXPORTER_VERSION = 4;
 

@@ -8,8 +8,16 @@ import { ExportError } from '@/utils/errors';
 import { audioEngine } from './AudioEngine';
 import type { ClickTrack } from './loudness';
 import { CLICK_LENGTH_S, clickBeatsForRange, scheduleClick } from './MetronomeEngine';
+import type { SampleSelection } from './audioTypes';
 import { createPianoGraph } from './PianoGraphFactory';
-import { releaseSampleVoice, startSampleVoice } from './sampleVoice';
+import {
+  dampSampleVoice,
+  releaseSampleVoice,
+  startSampleVoice,
+  stillSoundingAt,
+  UNDAMPED_FROM_MIDI,
+  type SampleVoice,
+} from './sampleVoice';
 
 const RENDER_SAMPLE_RATE = 48_000;
 /** Ring-out after the last note: release plus the reverb tail. */
@@ -38,8 +46,86 @@ export interface RenderedTake {
   clicks: ClickTrack | null;
 }
 
+/**
+ * Schedule a whole take's notes (sorted, sustain already applied) as voices,
+ * the way the live engine sounds them: a key struck while its string still
+ * rings damps the old sound from the new note's start (`VoiceManager`'s
+ * `restrike`), so a pedalled repeated note is one string, not a pile of them,
+ * and the key stays down until both notes have let go (`scheduleNote`).
+ * Returns how many notes had no decoded sample.
+ */
+export function scheduleTakeVoices(
+  context: BaseAudioContext,
+  destination: AudioNode,
+  notes: readonly { midi: number; velocity: number; startMs: number; durationMs: number }[],
+  sampleFor: (midi: number, velocity: number) => SampleSelection | null,
+): number {
+  let missing = 0;
+  const sounding = new Map<number, { voice: SampleVoice; keyUp: number }>();
+  for (const note of notes) {
+    const sample = sampleFor(note.midi, note.velocity);
+    if (!sample) {
+      missing += 1;
+      continue;
+    }
+    const when = note.startMs / 1000;
+    let keyUp = when + note.durationMs / 1000;
+    const previous = sounding.get(note.midi);
+    // Still sounding when the key comes down again, held, dying away under its
+    // damper, or never damped up where there are none: that sound gives way to
+    // this one.
+    if (previous && stillSoundingAt(previous.voice, when)) {
+      dampSampleVoice(previous.voice, when);
+      keyUp = Math.max(keyUp, previous.keyUp);
+    }
+    const voice = startSampleVoice(context, destination, sample, when);
+    releaseSampleVoice(voice, keyUp);
+    sounding.set(note.midi, { voice, keyUp });
+  }
+  return missing;
+}
+
+/**
+ * When the last string with no damper falls quiet on its own, in seconds. Up
+ * there a key rings until its recording ends, however soon it was let go, so a
+ * take ending on one sounds for longer than its last key-up says.
+ */
+export function undampedRingOutSeconds(
+  notes: readonly { midi: number; velocity: number; startMs: number }[],
+  sampleFor: (midi: number, velocity: number) => SampleSelection | null,
+): number {
+  let end = 0;
+  for (const note of notes) {
+    if (note.midi < UNDAMPED_FROM_MIDI) continue;
+    const sample = sampleFor(note.midi, note.velocity);
+    if (!sample?.undamped) continue;
+    const ring = (sample.buffer.duration - (sample.offset ?? 0)) / sample.playbackRate;
+    end = Math.max(end, note.startMs / 1000 + ring);
+  }
+  return end;
+}
+
+/**
+ * How long an export renders, in seconds: past the take's last key-up by the
+ * tail, or until its top strings fall quiet if they ring on longer. Reads the
+ * samples decoded so far.
+ */
 export function estimateRenderSeconds(take: Take): number {
-  return effectivePlaybackDurationMs(take) / 1000 + TAIL_S;
+  const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
+  return renderSeconds(take, undampedRingOutSeconds(take.notes, sampleFor));
+}
+
+function renderSeconds(take: Take, ringOutS: number): number {
+  return Math.max(effectivePlaybackDurationMs(take) / 1000, ringOutS) + TAIL_S;
+}
+
+/**
+ * The seconds a render allocates, given how long the take's top strings ring
+ * (`undampedRingOutSeconds`): never past the cap, which is what bounds the
+ * memory a render takes. A take just inside it can still ring past it.
+ */
+export function cappedRenderSeconds(take: Take, ringOutS: number): number {
+  return Math.min(renderSeconds(take, ringOutS), MAX_RENDER_MINUTES * 60);
 }
 
 /** Rough working-set estimate (render buffer + PCM copy for encoding). */
@@ -59,7 +145,8 @@ export async function renderTakeForExport(
   take: Take,
   options: OfflineRenderOptions,
 ): Promise<RenderedTake> {
-  const seconds = estimateRenderSeconds(take);
+  // The take itself has to fit; how long its top strings ring is capped below.
+  const seconds = renderSeconds(take, 0);
   if (seconds > MAX_RENDER_MINUTES * 60) {
     throw new ExportError(
       `Take too long to render (${Math.round(seconds / 60)} min)`,
@@ -84,7 +171,10 @@ export async function renderTakeForExport(
   }
   await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
 
-  const length = Math.ceil(seconds * RENDER_SAMPLE_RATE);
+  const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
+  const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
+  const ringOut = undampedRingOutSeconds(effectiveNotes, sampleFor);
+  const length = Math.ceil(cappedRenderSeconds(take, ringOut) * RENDER_SAMPLE_RATE);
   const context = new OfflineAudioContext({
     numberOfChannels: 2,
     length,
@@ -97,19 +187,12 @@ export async function renderTakeForExport(
     peakGuard: false,
   });
 
-  const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
-  let missingSamples = 0;
-  for (const note of effectiveNotes) {
-    const sample = audioEngine.bank.getSample(note.midi, note.velocity);
-    if (!sample) {
-      missingSamples += 1;
-      continue;
-    }
-    const when = note.startMs / 1000;
-    const releaseAt = when + note.durationMs / 1000;
-    const voice = startSampleVoice(context, graph.voiceDestination, sample, when);
-    releaseSampleVoice(voice, releaseAt);
-  }
+  const missingSamples = scheduleTakeVoices(
+    context,
+    graph.voiceDestination,
+    effectiveNotes,
+    sampleFor,
+  );
   if (missingSamples > 0) {
     throw new ExportError(
       `${missingSamples} notes had no decoded sample`,
