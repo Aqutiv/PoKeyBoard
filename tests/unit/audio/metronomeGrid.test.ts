@@ -247,6 +247,44 @@ describe('MetronomeEngine', () => {
     engine.stop();
   });
 
+  it('calls off the clicks still to come when it starts again', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 62.5, 4)); // clicks at 0 and 62.5 ms queued
+    context.currentTime = 0.03125;
+    // Started over on a grid a little later, as a loop edit restarts playback.
+    engine.start(constantClickGrid(0.09375, 62.5, 4));
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([0, 0.09375]);
+    engine.stop();
+  });
+
+  it('calls off the clicks still to come when it stops, but not one sounding', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 62.5, 4));
+    context.currentTime = 0.0625;
+    engine.topUpSchedule(); // the click at 125 ms is queued too
+    engine.stop(); // on the click at 62.5 ms itself
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([0, 0.0625]);
+  });
+
+  it('lets the clicks already queued sound when it finishes, as a count-in does', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    engine.start(constantClickGrid(0, 62.5, 4)); // clicks at 0 and 62.5 ms queued
+    context.currentTime = 0.03125;
+    engine.finish();
+    engine.topUpSchedule();
+    expect(engine.isRunning).toBe(false);
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([0, 0.0625]);
+  });
+
   it('calls off the clicks queued at the old speed when the speed changes', () => {
     const { context, clicks } = stubContext(0);
     const engine = new MetronomeEngine();

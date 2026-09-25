@@ -438,8 +438,10 @@ export class TransportController {
 
     const begin = () => {
       if (this.state !== 'countIn') return; // stopped during count-in
+      // Without the metronome, the count-in's last click, due on the anchor
+      // itself, still sounds.
       if (this.metronomeOn) this.metronome.setGrid(this.takeGrid());
-      else this.metronome.stop();
+      else this.metronome.finish();
       this.beginCapture();
       this.send('COUNT_IN_DONE');
     };

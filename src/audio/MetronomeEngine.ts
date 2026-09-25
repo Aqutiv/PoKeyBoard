@@ -199,7 +199,6 @@ export class MetronomeEngine {
     this.grid = grid;
     this.running = true;
     this.scheduledUntil = Number.NEGATIVE_INFINITY;
-    this.queued = [];
     this.seekToNow();
     this.scheduleWindow();
     this.timer = setInterval(() => this.scheduleWindow(), LOOKAHEAD_INTERVAL_MS);
@@ -226,16 +225,25 @@ export class MetronomeEngine {
     const context = this.context;
     if (context) {
       const now = context.currentTime;
-      for (const click of this.queued) {
-        if (click.when > now) click.osc.stop(now);
-      }
-      this.queued = this.queued.filter((click) => click.when <= now);
+      this.callOffQueued(now);
       this.scheduledUntil = Math.min(this.scheduledUntil, now);
     }
     this.setGrid(grid);
   }
 
+  /** Stop clicking. Clicks queued but not yet sounded are called off too. */
   stop(): void {
+    this.finish();
+    if (this.context) this.callOffQueued(this.context.currentTime);
+    this.queued = [];
+  }
+
+  /**
+   * Stop clicking, but let the clicks already queued sound. A count-in that
+   * hands over to a recording without the metronome ends this way: its last
+   * click, on the record anchor itself, is still to come when it does.
+   */
+  finish(): void {
     if (this.timer !== null) {
       clearInterval(this.timer);
       this.timer = null;
@@ -255,6 +263,14 @@ export class MetronomeEngine {
   /** Top up from an external audio-render clock while page timers are throttled. */
   topUpSchedule(): void {
     this.scheduleWindow();
+  }
+
+  /** Call off the queued clicks that have not sounded by `now`. */
+  private callOffQueued(now: number): void {
+    for (const click of this.queued) {
+      if (click.when > now) click.osc.stop(now);
+    }
+    this.queued = this.queued.filter((click) => click.when <= now);
   }
 
   /** Resume scheduling at the first beat at or after the current audio time. */

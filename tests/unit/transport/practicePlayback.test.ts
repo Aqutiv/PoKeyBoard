@@ -61,6 +61,7 @@ vi.mock('@/audio/MetronomeEngine', () => ({
     configure(): void {}
     start(): void {}
     stop(): void {}
+    finish(): void {}
     setGrid(): void {}
     topUpSchedule(): void {}
   },
