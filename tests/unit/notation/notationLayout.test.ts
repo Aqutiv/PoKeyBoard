@@ -575,6 +575,27 @@ describe('chords struck a little unevenly', () => {
     expect(layout.chords).toHaveLength(4);
   });
 
+  it('never stretches a chord past half the finest grid among its notes', () => {
+    // A plain note on the beat, and one 30 ms later that declares a 32nd-note
+    // triplet, whose slots are 41.7 ms apart. The plain note's grid allows
+    // 40 ms, but the triplet's allows only half its own step, 20.8 ms, so the
+    // later note keeps its own slot.
+    const layout = layoutScore(
+      [
+        note({ id: 'plain', midi: 72, startMs: 0, durationMs: 125 }),
+        note({
+          id: 'fine',
+          midi: 76,
+          startMs: 30,
+          durationMs: 40,
+          tuplet: { actual: 3, normal: 2, unit: 32 },
+        }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 42]);
+  });
+
   it('never takes a key struck twice in quick succession for a chord', () => {
     // On a 1/8 grid at 120 bpm the rounding edge is 125 ms. The key goes down
     // at 110, up at 130 and down again at 145: two notes, one either side of

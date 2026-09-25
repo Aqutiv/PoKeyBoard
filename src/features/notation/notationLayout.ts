@@ -204,13 +204,13 @@ function sourceLine(note: NoteEvent): string | null {
  * two, a column apart.
  *
  * Across both staves, because the unevenness is as often one hand behind the
- * other as a roll within one. Never over more than `windowFor` allows — half a
- * grid step, at most, and nothing at all with no grid, where there is no grid
- * line to straddle and exact onsets are what was asked for — so a fast run is
- * never mistaken for a chord, and a score, whose chords share one onset
- * exactly, is left as it was. Where the staves are on different grids, one
- * hand in threes, the chord is written from a point both can draw; see
- * `sharedOnset`.
+ * other as a roll within one. Never over more than `windowFor` allows any note
+ * of it — half a grid step, at most, on the finest grid among them, and
+ * nothing at all with no grid, where there is no grid line to straddle and
+ * exact onsets are what was asked for — so a fast run is never mistaken for a
+ * chord, and a score, whose chords share one onset exactly, is left as it
+ * was. Where the staves are on different grids, one hand in threes, the chord
+ * is written from a point both can draw; see `sharedOnset`.
  *
  * And only notes held down together for at least half as long as the
  * shortest of them lasts. However unevenly a chord is struck, its notes are
@@ -237,7 +237,8 @@ function chordOnsets(
   let i = 0;
   while (i < order.length) {
     const first = notes[order[i] as number] as NoteEvent;
-    const window = windowFor(first);
+    /** The narrowest window of any note in the chord, which its span has to fit. */
+    let window = windowFor(first);
     /** The soonest any note of the chord is let go. */
     let heldTogetherUntil = first.startMs + first.durationMs;
     /** How long the chord's shortest note is held. */
@@ -248,12 +249,14 @@ function chordOnsets(
     let j = i + 1;
     while (j < order.length) {
       const next = notes[order[j] as number] as NoteEvent;
-      if (next.startMs - first.startMs > window || pitches.has(next.midi)) break;
+      const nextWindow = Math.min(window, windowFor(next));
+      if (next.startMs - first.startMs > nextWindow || pitches.has(next.midi)) break;
       const nextLine = sourceLine(next);
       if (line !== null && nextLine !== null && nextLine !== line) break;
       const releasedAt = Math.min(heldTogetherUntil, next.startMs + next.durationMs);
       const shortest = Math.min(shortestMs, next.durationMs);
       if (releasedAt - next.startMs < shortest / 2) break;
+      window = nextWindow;
       heldTogetherUntil = releasedAt;
       shortestMs = shortest;
       pitches.add(next.midi);
