@@ -48,6 +48,8 @@ interface Recorder {
    * rotation are not tracked.
    */
   ellipses: Point[];
+  /** Every paint, in order, as "fill:", "stroke:" or "rect:" and the style. */
+  ops: string[];
 }
 
 function recordingContext(): Recorder {
@@ -57,6 +59,7 @@ function recordingContext(): Recorder {
   const paths: StrokedPath[] = [];
   const rects: { style: string; x: number; width: number }[] = [];
   const ellipses: Point[] = [];
+  const ops: string[] = [];
   const state = { fillStyle: '#000', strokeStyle: '#000', lineWidth: 1 };
   let offset: Point = { x: 0, y: 0 };
   const saved: Point[] = [];
@@ -110,12 +113,18 @@ function recordingContext(): Recorder {
     ellipse: (x: number, y: number) => void ellipses.push(at(x, y)),
     rect: () => {},
     clearRect: () => {},
-    fillRect: (x: number, _y: number, width: number) =>
-      void rects.push({ style: state.fillStyle, x: offset.x + x, width }),
+    fillRect: (x: number, _y: number, width: number) => {
+      rects.push({ style: state.fillStyle, x: offset.x + x, width });
+      ops.push(`rect:${state.fillStyle}`);
+    },
     strokeRect: () => {},
-    fill: () => void fills.push(state.fillStyle),
+    fill: () => {
+      fills.push(state.fillStyle);
+      ops.push(`fill:${state.fillStyle}`);
+    },
     stroke: () => {
       strokes.push(state.strokeStyle);
+      ops.push(`stroke:${state.strokeStyle}`);
       paths.push({ style: state.strokeStyle, width: state.lineWidth, points: path });
     },
     fillText: (text: string) => void texts.push(text),
@@ -126,7 +135,7 @@ function recordingContext(): Recorder {
     setLineDash: () => {},
   } as unknown as CanvasRenderingContext2D;
 
-  return { ctx, fills, strokes, texts, paths, rects, ellipses };
+  return { ctx, fills, strokes, texts, paths, rects, ellipses, ops };
 }
 
 const LAYOUT_OPTS = {
@@ -792,5 +801,69 @@ describe('drawScore bar lines', () => {
       expect(scoreEndMs(empty, 'lesson')).toBe(empty.totalMs);
       expect(empty.totalMs).toBeGreaterThan(0);
     });
+  });
+
+  /** A bass line that turns to the treble clef for a note on beat `at`. */
+  const turning = (tail: number, at: number): ScoreLayout => {
+    const notes: NoteEvent[] = [
+      { id: 'a', midi: 48, startMs: 0, durationMs: tail * 1000, velocity: 0.7, staff: 'bass' },
+      {
+        id: 'b',
+        midi: 50,
+        startMs: tail * 1000,
+        durationMs: (4 - tail) * 1000,
+        velocity: 0.7,
+        staff: 'bass',
+      },
+      {
+        id: 'c',
+        midi: 67,
+        startMs: at * 1000,
+        durationMs: 1000,
+        velocity: 0.7,
+        staff: 'bass',
+        clef: 'treble',
+      },
+    ];
+    return { ...layoutScore(notes, LAYOUT_OPTS), dynamics: [], hairpins: [], rests: [] };
+  };
+  const clefWash = (drawn: Recorder) =>
+    drawn.rects.find((rect) => rect.style === gutterBg && rect.x > gutterWidthFor(0));
+
+  it('makes room for a clef change where the bar leaves it', () => {
+    // An eighth half a beat before the bar, and nothing until half a beat
+    // after it: at the bar's own time the clef's wash would cover the eighth.
+    const drawn = render(turning(3.5, 4.5), {}, 'grand', null, WIDE);
+    const wash = clefWash(drawn);
+    expect(wash).toBeDefined();
+    expect(wash?.x).toBeGreaterThan(onsetX(3500) + HEAD_RX);
+    const line = barLines(drawn).find((x) => Math.abs(x - onsetX(4000)) < 25);
+    expect(line).toBeDefined();
+    expect((wash?.x ?? 0) + (wash?.width ?? 0)).toBeLessThanOrEqual(line ?? 0);
+    expect(line).toBeLessThan(onsetX(4500) - HEAD_RX);
+  });
+
+  it('lays the wash of a clef change under the music, so it never erases a note', () => {
+    // A note a quarter of a beat before the downbeat's leaves no room for the
+    // clef, so its wash reaches that note. The note is drawn over the wash.
+    const drawn = render(turning(3.25, 4), {}, 'grand', null, WIDE);
+    const wash = drawn.ops.indexOf(`rect:${gutterBg}`);
+    const firstNote = drawn.ops.findIndex((op) => op.endsWith(`:${note}`));
+    expect(wash).toBeGreaterThanOrEqual(0);
+    expect(firstNote).toBeGreaterThan(wash);
+  });
+
+  it('numbers the first bar over its downbeat, whatever its opening chord carries', () => {
+    // Two columns of sharps and a displaced head reach back past the lead-in,
+    // so the first bar's line would have stood in the gutter. It has no line;
+    // its number stays where it always was.
+    const opening = written([
+      [0, 4, 61],
+      [0, 4, 63],
+      [0, 4, 66],
+      [0, 4, 68],
+    ]);
+    const drawn = render(opening, {}, 'treble', null, WIDE);
+    expect(drawn.texts).toContain('1');
   });
 });
