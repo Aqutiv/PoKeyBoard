@@ -50,9 +50,16 @@ const UP_AND_DOWN = phrase(
  */
 const D_MAJOR_UP = phrase(...quarters(['D4', 'E4', 'F#4', 'G4', 'A4', 'B4', 'C#5', 'D5']));
 
-/** The octave on a diagram, the scale's own keys lit. */
+/**
+ * The octave on a diagram, the scale's own keys lit — except any the caller
+ * picks out in the second tint. A key in both would take the first colour
+ * (`KeyboardDiagram` checks it first), and the keys a card points at in the
+ * second colour would never show it.
+ */
 function octave(extra: Partial<Extract<LearnVisual, { kind: 'keyboard' }>> = {}): LearnVisual {
-  return { kind: 'keyboard', lowMidi: MIDDLE_C, highMidi: HIGH_C, highlight: C_MAJOR, ...extra };
+  const second = extra.highlightSecondary ?? [];
+  const highlight = C_MAJOR.filter((midi) => !second.includes(midi));
+  return { kind: 'keyboard', lowMidi: MIDDLE_C, highMidi: HIGH_C, highlight, ...extra };
 }
 
 function staff(line: LearnPhrase): LearnVisual {
@@ -94,7 +101,8 @@ export const C_MAJOR_SCALE: LearnChapter = {
         kind: 'keyboard',
         lowMidi: 62,
         highMidi: 74,
-        highlight: [62, 64, 66, 67, 69, 71, 73, 74],
+        // The two black keys the pattern reaches, in the second tint only.
+        highlight: [62, 64, 67, 69, 71, 74],
         highlightSecondary: [66, 73],
         labels: [62, 64, 66, 67, 69, 71, 73, 74],
         spelling: 'sharp',

@@ -87,6 +87,32 @@ describe('learn catalog', () => {
   });
 });
 
+describe('every authored chapter', () => {
+  const AUTHORED = [
+    MEET_THE_KEYBOARD,
+    MUSICAL_ALPHABET,
+    HALF_STEPS_WHOLE_STEPS,
+    TREBLE_STAFF,
+    BASS_AND_GRAND_STAFF,
+    RHYTHM_AND_BEAT,
+    FIRST_MELODY,
+    C_MAJOR_SCALE,
+  ];
+
+  it('keeps the two tints of a diagram apart', () => {
+    // `KeyboardDiagram` checks the first tint first, so a key in both sets
+    // shows the first colour and the second is silently never seen.
+    for (const chapter of AUTHORED) {
+      for (const step of chapter.steps) {
+        if (step.visual?.kind !== 'keyboard') continue;
+        const first = new Set(step.visual.highlight ?? []);
+        const overlap = (step.visual.highlightSecondary ?? []).filter((midi) => first.has(midi));
+        expect(overlap, `${chapter.id}/${step.id}`).toEqual([]);
+      }
+    }
+  });
+});
+
 describe('learn parts', () => {
   it('splits every level into three parts', () => {
     for (const level of LEARN_LEVEL_IDS) {
@@ -1014,7 +1040,23 @@ describe('chapter eight', () => {
     const picture = step('whyAllWhite')?.visual;
     if (picture?.kind !== 'keyboard') throw new Error('expected a keyboard diagram');
     expect(picture.spelling).toBe('sharp');
-    expect(stepsBetween(picture.highlight ?? [])).toEqual(MAJOR_PATTERN);
+    // The scale is both tints together: the black keys are the second one.
+    const scale = [...(picture.highlight ?? []), ...(picture.highlightSecondary ?? [])].sort(
+      (a, b) => a - b,
+    );
+    expect(stepsBetween(scale)).toEqual(MAJOR_PATTERN);
+    expect(picture.highlightSecondary).toEqual([66, 73]);
+  });
+
+  it('shows the half steps, the tuck and the crossing in the second tint', () => {
+    const secondOf = (id: string) => {
+      const picture = step(id)?.visual;
+      if (picture?.kind !== 'keyboard') throw new Error(`expected a diagram at ${id}`);
+      return picture.highlightSecondary;
+    };
+    expect(secondOf('thePattern')).toEqual([64, 65, 71, 72]);
+    expect(secondOf('thumbTuck')).toEqual([65]);
+    expect(secondOf('crossingBack')).toEqual([64]);
   });
 
   it('numbers the fingers of the thumb tuck the same way up and down', () => {
