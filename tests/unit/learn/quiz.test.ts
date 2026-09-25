@@ -186,8 +186,28 @@ describe('useQuiz: major or minor, by ear', () => {
     expect(result.current.hear).toBe(first);
   });
 
+  it('takes no answer until the round’s chord has been heard', () => {
+    // Otherwise the whole quiz could be passed from a memorised answer order.
+    const { result } = renderHook(() => useQuiz(EAR));
+    expect(result.current.needsHearing).toBe(true);
+    act(() => result.current.answer('major'));
+    expect(result.current.done).toBe(0);
+    act(() => result.current.markHeard());
+    expect(result.current.needsHearing).toBe(false);
+    act(() => result.current.answer('major'));
+    expect(result.current.done).toBe(1);
+    // A new round is a new chord: hearing the last one does not count.
+    expect(result.current.needsHearing).toBe(true);
+  });
+
+  it('never asks to hear anything in a round that is not heard', () => {
+    const { result } = renderHook(() => useQuiz(step));
+    expect(result.current.needsHearing).toBe(false);
+  });
+
   it('corrects a wrong answer to the chord’s quality and asks again', () => {
     const { result } = renderHook(() => useQuiz(EAR));
+    act(() => result.current.markHeard());
     act(() => result.current.answer('minor'));
     expect(result.current.wrong).toBe('minor');
     expect(result.current.correct).toBe('major');
@@ -200,6 +220,7 @@ describe('useQuiz: major or minor, by ear', () => {
   it('is satisfied once every round is heard and named', () => {
     const { result } = renderHook(() => useQuiz(EAR));
     for (let round = 0; round < 3; round += 1) {
+      act(() => result.current.markHeard());
       act(() => result.current.answer(result.current.correct));
     }
     expect(result.current.satisfied).toBe(true);

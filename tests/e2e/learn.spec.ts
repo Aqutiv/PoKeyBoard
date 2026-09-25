@@ -1227,18 +1227,33 @@ test.describe('chapter nine', () => {
     // Heard, never seen: no stave and no diagram for this question.
     await expect(page.locator('.learn-quiz .learn-staff__canvas')).toHaveCount(0);
     const hear = page.getByRole('button', { name: 'Hear it' });
+    const answer = (quality: string) => page.getByRole('button', { name: `Answer ${quality}` });
+    // Nothing can be answered before the chord has been heard.
+    await expect(answer('Major')).toBeDisabled();
     await expect(hear).toBeEnabled();
     await hear.click();
     // Held while the chord sounds, so presses cannot stack copies of it.
     await expect(hear).toBeDisabled();
 
-    await page.getByRole('button', { name: 'Answer Minor' }).click();
+    await answer('Minor').click();
     await expect(page.getByText('That one was major.')).toBeVisible();
     await expect(nextButton(page)).toBeDisabled();
 
-    // The stride asks C, E minor, D minor, G, A minor, F.
-    for (const quality of ['Major', 'Minor', 'Minor', 'Major', 'Minor', 'Major']) {
-      await page.getByRole('button', { name: `Answer ${quality}` }).click();
+    // The stride asks C, E minor, D minor, G, A minor, F — each heard first.
+    for (const [round, quality] of [
+      'Major',
+      'Minor',
+      'Minor',
+      'Major',
+      'Minor',
+      'Major',
+    ].entries()) {
+      if (round > 0) {
+        await expect(answer(quality)).toBeDisabled();
+        await expect(hear).toBeEnabled({ timeout: 10_000 });
+        await hear.click();
+      }
+      await answer(quality).click();
     }
     await expect(page.locator('.learn-quiz__status')).toHaveText('Nicely done.');
     await expect(nextButton(page)).toBeEnabled();

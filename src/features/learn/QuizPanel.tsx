@@ -59,7 +59,9 @@ export function QuizPanel({ session, onHear, hearing }: QuizPanelProps) {
           className="btn btn--small learn-quiz__hear"
           disabled={hearing || session.hear === null || session.satisfied}
           onClick={() => {
-            if (session.hear) onHear(session.hear);
+            if (!session.hear) return;
+            onHear(session.hear);
+            session.markHeard();
           }}
         >
           {m.learn.hearIt}
@@ -93,7 +95,7 @@ export function QuizPanel({ session, onHear, hearing }: QuizPanelProps) {
               type="button"
               className="learn-quiz__choice"
               aria-label={m.learn.quizAnswerLabel({ note: label })}
-              disabled={session.satisfied}
+              disabled={session.satisfied || session.needsHearing}
               onClick={() => session.answer(choice)}
             >
               {label}

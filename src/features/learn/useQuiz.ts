@@ -46,6 +46,14 @@ export interface QuizSession {
    * what it sounds like.
    */
   hear: LearnPhrase | null;
+  /**
+   * An ear round whose chord has not been played yet. Its answers wait: a
+   * listening question answered without listening grades a memorised answer
+   * order, not the ear.
+   */
+  needsHearing: boolean;
+  /** Record that this round's chord was played. */
+  markHeard: () => void;
   /** Which staves that phrase is drawn on. */
   staves: StaffMode;
   answer: (choice: QuizChoice) => void;
@@ -59,9 +67,11 @@ export function quizPitchClassAt(pool: readonly PitchClass[], round: number): Pi
 const triadCache = new Map<string, LearnPhrase>();
 
 /**
- * A triad to listen to: one bar, root position, rooted in the octave above
- * middle C. Cached so its identity holds for as long as the round does — the
- * same reason `singleNotePhrase` caches.
+ * A triad to listen to: two beats, root position, rooted in the octave above
+ * middle C. Long enough to hear its quality, short enough that a six-round
+ * quiz is not spent waiting for the Hear button to come back. Cached so its
+ * identity holds for as long as the round does — the same reason
+ * `singleNotePhrase` caches.
  */
 export function triadPhrase(chord: NamedChord): LearnPhrase {
   const key = `${chord.root}|${chord.quality}`;
@@ -71,7 +81,7 @@ export function triadPhrase(chord: NamedChord): LearnPhrase {
     phrase = {
       bpm: 60,
       timeSignature: { numerator: 4, denominator: 4 },
-      events: [[0, names, 4, 0.7, 'treble']],
+      events: [[0, names, 2, 0.7, 'treble']],
     };
     triadCache.set(key, phrase);
   }
@@ -91,6 +101,8 @@ export function triadPhrase(chord: NamedChord): LearnPhrase {
 export function useQuiz(step: QuizStep | null): QuizSession {
   const [round, setRound] = useState(0);
   const [wrong, setWrong] = useState<QuizChoice | null>(null);
+  /** The last round whose chord was played; -1 before any. */
+  const [heardRound, setHeardRound] = useState(-1);
 
   // Same render-phase reset as useExercise: an effect would paint the new step
   // once against the previous step's score.
@@ -99,23 +111,29 @@ export function useQuiz(step: QuizStep | null): QuizSession {
     setActiveStep(step);
     setRound(0);
     setWrong(null);
+    setHeardRound(-1);
   }
 
   const question = step?.question;
   const total = step?.rounds ?? 0;
   const satisfied = total > 0 && round >= total;
 
-  const heard =
+  const asked =
     question?.kind === 'chordQuality' ? roundEntryAt(question.chords, round) : undefined;
+  // Each round's chord must be played before it can be answered — a new round
+  // is a new question, so hearing the last one does not count.
+  const needsHearing = asked !== undefined && heardRound !== round && !satisfied;
   const pool =
     question !== undefined && question.kind !== 'chordQuality' ? question.pitchClasses : EMPTY_POOL;
   const pitchClass = quizPitchClassAt(pool, round);
-  const correct: QuizChoice = heard ? heard.quality : pitchClass;
+  const correct: QuizChoice = asked ? asked.quality : pitchClass;
 
   // A plain function: it only ever reaches an onClick, so nothing downstream
   // depends on its identity.
   const answer = (choice: QuizChoice): void => {
-    if (satisfied) return;
+    // Refused here as well as by the disabled buttons: the rule is the quiz's,
+    // not the panel's.
+    if (satisfied || needsHearing) return;
     if (choice === correct) {
       setRound((current) => current + 1);
       setWrong(null);
@@ -141,7 +159,9 @@ export function useQuiz(step: QuizStep | null): QuizSession {
       question !== undefined && 'spelling' in question ? (question.spelling ?? 'sharp') : 'sharp',
     kind: question?.kind ?? 'nameTheKey',
     phrase: reading ? singleNotePhrase(midi, staff) : null,
-    hear: heard ? triadPhrase(heard) : null,
+    hear: asked ? triadPhrase(asked) : null,
+    needsHearing,
+    markHeard: () => setHeardRound(round),
     staves: staffModeFor(staff),
     answer,
   };
