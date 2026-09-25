@@ -629,6 +629,33 @@ describe('chords struck a little unevenly', () => {
     );
     expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 250]);
   });
+
+  it('never groups notes the score puts in different voices', () => {
+    // Two lines on one staff, the upper held from 50 ms and the lower coming in
+    // at 80, overlapping either side of the 62.5 ms edge. Played, they would
+    // pass for an uneven chord; the score says they are separate lines.
+    const layout = layoutScore(
+      [
+        note({ id: 'upper', midi: 76, startMs: 50, durationMs: 450, staff: 'treble', voice: 0 }),
+        note({ id: 'lower', midi: 67, startMs: 80, durationMs: 170, staff: 'treble', voice: 1 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
+
+  it('reads a voice number as its own staff’s', () => {
+    // The importer numbers each staff's voices from 0, so voice 0 in the treble
+    // and voice 0 in the bass are the two hands' own lines, not one.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 50, durationMs: 450, staff: 'treble', voice: 0 }),
+        note({ id: 'lh', midi: 48, startMs: 80, durationMs: 420, staff: 'bass', voice: 0 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
 });
 
 describe('beam grouping', () => {

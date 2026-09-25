@@ -184,6 +184,17 @@ const BEAT_EPSILON = 1e-3;
 const CHORD_ONSET_WINDOW_MS = 40;
 
 /**
+ * The line a note's source wrote it in, or null where it names none, as
+ * nothing recorded does. The voice number alone is not enough: the importer
+ * numbers each staff's voices afresh from 0 (a part with one staff, across the
+ * part), so voice 0 of the treble and voice 0 of the bass are the two hands'
+ * own lines, and the staff is part of the answer.
+ */
+function sourceLine(note: NoteEvent): string | null {
+  return note.voice === undefined ? null : `${note.staff ?? ''}|${note.voice}`;
+}
+
+/**
  * The onset each note is written from: its own, unless it is one of a chord
  * struck a little unevenly, in which case the chord's median onset — so the
  * chord snaps to one column, and to the column its notes are nearest together.
@@ -209,6 +220,11 @@ const CHORD_ONSET_WINDOW_MS = 40;
  * before the next note starts, and legato overlaps two notes only briefly,
  * the earlier key coming up just after the next goes down. One key is never
  * two notes of a chord, whatever the timing.
+ *
+ * Nor across the voices a score declares: notes its source put in different
+ * voices are separate lines, however near together they start and however long
+ * they overlap. A note that names no voice, as nothing recorded does, can still
+ * join any chord. See `sourceLine`.
  */
 function chordOnsets(
   notes: readonly NoteEvent[],
@@ -227,16 +243,21 @@ function chordOnsets(
     /** How long the chord's shortest note is held. */
     let shortestMs = first.durationMs;
     const pitches = new Set([first.midi]);
+    /** The line the chord was written in, once a note of it names one. */
+    let line = sourceLine(first);
     let j = i + 1;
     while (j < order.length) {
       const next = notes[order[j] as number] as NoteEvent;
       if (next.startMs - first.startMs > window || pitches.has(next.midi)) break;
+      const nextLine = sourceLine(next);
+      if (line !== null && nextLine !== null && nextLine !== line) break;
       const releasedAt = Math.min(heldTogetherUntil, next.startMs + next.durationMs);
       const shortest = Math.min(shortestMs, next.durationMs);
       if (releasedAt - next.startMs < shortest / 2) break;
       heldTogetherUntil = releasedAt;
       shortestMs = shortest;
       pitches.add(next.midi);
+      line ??= nextLine;
       j += 1;
     }
     if (j - i > 1) {
