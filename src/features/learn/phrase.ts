@@ -1,6 +1,7 @@
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { createBeatTempoMap } from '@/domain/tempoMap';
+import { writtenSpellingOf } from '@/domain/writtenSpelling';
 import { noteNameToMidi } from '@/utils/midi';
 import type { LearnPhrase } from './types';
 
@@ -28,12 +29,16 @@ export function phraseToNotes(phrase: LearnPhrase): NoteEvent[] {
       if (midi === null) {
         throw new Error(`Learn phrase: invalid note "${name}" in event ${index}`);
       }
+      const spelling = writtenSpellingOf(name);
       notes.push({
         id: `learn-n${index}-${chordIndex}`,
         midi,
         startMs,
         durationMs,
         velocity: velocity ?? DEFAULT_VELOCITY,
+        // A name that states an accidental is written that way — "Eb4" in a C
+        // minor chord is E♭, never the D♯ a context speller could land on.
+        ...(spelling !== undefined ? { spelling } : {}),
         // Without this, `midiToStaffPosition` splits purely on middle C, so a
         // lesson could never show a low note on the treble staff. Omitted
         // entirely when unsaid, so phrases that never mention a staff lay out

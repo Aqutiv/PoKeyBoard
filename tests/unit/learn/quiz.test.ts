@@ -148,3 +148,81 @@ describe('useQuiz reading rounds', () => {
     expect(result.current.staves).toBe('treble');
   });
 });
+
+describe('useQuiz: major or minor, by ear', () => {
+  const EAR: QuizStep = {
+    id: 'hearTheMood',
+    kind: 'quiz',
+    rounds: 3,
+    question: {
+      kind: 'chordQuality',
+      chords: [
+        { root: 0, quality: 'major' },
+        { root: 9, quality: 'minor' },
+        { root: 5, quality: 'major' },
+      ],
+    },
+  };
+
+  it('answers with the two qualities, whatever the chord', () => {
+    const { result } = renderHook(() => useQuiz(EAR));
+    expect(result.current.choices).toEqual(['major', 'minor']);
+    expect(result.current.kind).toBe('chordQuality');
+    // Heard, never drawn: a triad on a staff can be told apart by counting.
+    expect(result.current.phrase).toBeNull();
+  });
+
+  it('plays the round’s chord in root position, all three notes at once', () => {
+    const { result } = renderHook(() => useQuiz(EAR));
+    const notes = phraseToNotes(result.current.hear!);
+    expect(notes.map((note) => note.midi)).toEqual([60, 64, 67]);
+    expect(new Set(notes.map((note) => note.startMs)).size).toBe(1);
+  });
+
+  it('keeps the chord the same object for as long as the round lasts', () => {
+    const { result, rerender } = renderHook(() => useQuiz(EAR));
+    const first = result.current.hear;
+    rerender();
+    expect(result.current.hear).toBe(first);
+  });
+
+  it('takes no answer until the round’s chord has been heard', () => {
+    // Otherwise the whole quiz could be passed from a memorised answer order.
+    const { result } = renderHook(() => useQuiz(EAR));
+    expect(result.current.needsHearing).toBe(true);
+    act(() => result.current.answer('major'));
+    expect(result.current.done).toBe(0);
+    act(() => result.current.markHeard());
+    expect(result.current.needsHearing).toBe(false);
+    act(() => result.current.answer('major'));
+    expect(result.current.done).toBe(1);
+    // A new round is a new chord: hearing the last one does not count.
+    expect(result.current.needsHearing).toBe(true);
+  });
+
+  it('never asks to hear anything in a round that is not heard', () => {
+    const { result } = renderHook(() => useQuiz(step));
+    expect(result.current.needsHearing).toBe(false);
+  });
+
+  it('corrects a wrong answer to the chord’s quality and asks again', () => {
+    const { result } = renderHook(() => useQuiz(EAR));
+    act(() => result.current.markHeard());
+    act(() => result.current.answer('minor'));
+    expect(result.current.wrong).toBe('minor');
+    expect(result.current.correct).toBe('major');
+    expect(result.current.done).toBe(0);
+    act(() => result.current.answer('major'));
+    expect(result.current.done).toBe(1);
+    expect(result.current.wrong).toBeNull();
+  });
+
+  it('is satisfied once every round is heard and named', () => {
+    const { result } = renderHook(() => useQuiz(EAR));
+    for (let round = 0; round < 3; round += 1) {
+      act(() => result.current.markHeard());
+      act(() => result.current.answer(result.current.correct));
+    }
+    expect(result.current.satisfied).toBe(true);
+  });
+});

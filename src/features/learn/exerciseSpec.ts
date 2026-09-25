@@ -12,6 +12,24 @@ import type { LearnPhrase } from './types';
 /** 0 = C, 1 = C♯ … 11 = B. */
 export type PitchClass = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11;
 
+/** Whether a triad's third is the big one (4 half steps) or the small one (3). */
+export type ChordQuality = 'major' | 'minor';
+
+/** A named triad: "A minor" is `{ root: 9, quality: 'minor' }`. */
+export interface NamedChord {
+  root: PitchClass;
+  quality: ChordQuality;
+}
+
+/**
+ * The three notes of a triad in close root position, from `rootMidi`: the root,
+ * a third above it — big or small, which is the whole difference — and the
+ * fifth, seven half steps up either way.
+ */
+export function triadMidis(rootMidi: number, quality: ChordQuality): readonly number[] {
+  return [rootMidi, rootMidi + (quality === 'major' ? 4 : 3), rootMidi + 7];
+}
+
 /**
  * How "at the same time" is judged.
  *
@@ -132,7 +150,17 @@ export type ExerciseSpec =
        * coming back in means coming in on a downbeat.
        */
       checkpoints?: readonly number[];
-    };
+    }
+  /**
+   * A named triad as a block, in close root position, in any octave: "play A
+   * minor" is A–C–E anywhere on the keyboard, root at the bottom. The keys down
+   * must be exactly those three — a chord with a fourth key in it is a
+   * different chord, not a better attempt at this one.
+   *
+   * Octave-free where `exactKeys` is pinned, because nothing is drawn: the
+   * name is the question, and a chord is the same chord in every octave.
+   */
+  | { kind: 'chord'; chord: NamedChord; together: Togetherness };
 
 /**
  * Every kind counted by membership. `sequence`, `rhythm` and `playAlong` are
@@ -140,7 +168,7 @@ export type ExerciseSpec =
  */
 export type UnorderedSpec = Exclude<
   ExerciseSpec,
-  { kind: 'sequence' } | { kind: 'rhythm' } | { kind: 'playAlong' }
+  { kind: 'sequence' } | { kind: 'rhythm' } | { kind: 'playAlong' } | { kind: 'chord' }
 >;
 
 /** Denominator of the "{done} of {total}" readout. */
@@ -164,6 +192,8 @@ export function goalTotal(spec: ExerciseSpec): number {
       return spec.beats.length;
     case 'playAlong':
       return momentsOf(spec.phrase).length;
+    case 'chord':
+      return 3;
   }
 }
 

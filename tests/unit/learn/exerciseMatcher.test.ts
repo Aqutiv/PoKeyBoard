@@ -947,3 +947,68 @@ describe('playAlong', () => {
     });
   });
 });
+
+describe('chord', () => {
+  const TOGETHER = { overlap: true, onsetWindowMs: 400 };
+  const A_MINOR: ExerciseSpec = {
+    kind: 'chord',
+    chord: { root: 9, quality: 'minor' },
+    together: TOGETHER,
+  };
+  const C_MAJOR: ExerciseSpec = {
+    kind: 'chord',
+    chord: { root: 0, quality: 'major' },
+    together: TOGETHER,
+  };
+
+  /** Hold these keys down together. */
+  const hold = (...midis: readonly number[]): Beat[] =>
+    midis.map((midi, i): Beat => ['on', midi, i * 10]);
+
+  it('takes the triad in close root position, in any octave', () => {
+    expect(progress(A_MINOR, hold(57, 60, 64))).toBe('3/3 ok');
+    expect(progress(A_MINOR, hold(69, 72, 76))).toBe('3/3 ok');
+    expect(progress(C_MAJOR, hold(48, 52, 55))).toBe('3/3 ok');
+  });
+
+  it('refuses the chord of the other quality on the same root', () => {
+    // A–C♯–E is A major: the third decides.
+    expect(progress(A_MINOR, hold(57, 61, 64))).not.toContain('ok');
+  });
+
+  it('refuses a chord with an extra key down, and reads it as not yet clean', () => {
+    // The A goes down first: C–E–G arriving under it is never the chord alone.
+    expect(progress(C_MAJOR, hold(69, 60, 64, 67))).toBe('2/3');
+    // Letting it go is not enough while it is still part of the same gesture
+    // — struck inside the onset window, like a rolled chord's released keys.
+    const extra = [...hold(69, 60, 64, 67), ['off', 69, 500]] satisfies Beat[];
+    expect(progress(C_MAJOR, extra)).toBe('2/3');
+    // Striking again, with only the chord down, plays the chord.
+    expect(progress(C_MAJOR, [...extra, ['off', 67, 600], ['on', 67, 1000]])).toBe('3/3 ok');
+  });
+
+  it('counts two notes of the chord as two, whichever two', () => {
+    expect(progress(C_MAJOR, hold(64, 67))).toBe('2/3');
+    expect(progress(C_MAJOR, hold(60, 67))).toBe('2/3');
+  });
+
+  it('refuses the same notes out of root position', () => {
+    // E–G–C is C major's first inversion: the same chord, but not the one a
+    // Beginner is asked for — inversions are Intermediate chapter 6.
+    expect(progress(C_MAJOR, hold(64, 67, 72))).not.toContain('ok');
+  });
+
+  it('lets a mouse roll the chord inside the onset window', () => {
+    const roll: Beat[] = [57, 60, 64].flatMap((midi, i): Beat[] => [
+      ['on', midi, i * 100],
+      ['off', midi, i * 100 + 50],
+    ]);
+    expect(progress(A_MINOR, roll)).toBe('3/3 ok');
+  });
+
+  it('points at the lowest whole instance on screen', () => {
+    const range = { lowMidi: 60, highMidi: 76 };
+    expect([...targetMidisFor(A_MINOR, initExercise(), range)]).toEqual([69, 72, 76]);
+    expect(needsRangeShift(A_MINOR, initExercise(), { lowMidi: 60, highMidi: 72 })).toBe(true);
+  });
+});

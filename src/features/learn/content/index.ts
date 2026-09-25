@@ -44,6 +44,9 @@ const PROSE: Partial<
   cMajorScale: {
     en: () => import('./en/cMajorScale').then((m) => m.cMajorScaleEn),
   },
+  triads: {
+    en: () => import('./en/triads').then((m) => m.triadsEn),
+  },
 };
 
 /**

@@ -13,6 +13,7 @@ import { BASS_AND_GRAND_STAFF } from '@/features/learn/chapters/bassAndGrandStaf
 import { RHYTHM_AND_BEAT } from '@/features/learn/chapters/rhythmAndBeat';
 import { FIRST_MELODY } from '@/features/learn/chapters/firstMelody';
 import { C_MAJOR_SCALE } from '@/features/learn/chapters/cMajorScale';
+import { TRIADS } from '@/features/learn/chapters/triads';
 import { MAJOR_SCALE_STEPS } from '@/features/learn/drill';
 import { momentsOf } from '@/features/learn/phrase';
 import type { LearnChapter } from '@/features/learn/types';
@@ -29,7 +30,14 @@ import {
   whiteKeyCount,
 } from '@/features/keyboard/keyboardGeometry';
 import { loadChapterProse } from '@/features/learn/content';
-import { DEFAULT_RHYTHM_TOLERANCE_BEATS, goalTotal } from '@/features/learn/exerciseSpec';
+import {
+  DEFAULT_RHYTHM_TOLERANCE_BEATS,
+  goalTotal,
+  triadMidis,
+  type NamedChord,
+} from '@/features/learn/exerciseSpec';
+import { roundEntryAt } from '@/features/learn/rounds';
+import { isBlackKey } from '@/utils/midi';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { catalogs } from '@/i18n';
 import { SUPPORTED_LANGUAGES } from '@/i18n/types';
@@ -77,6 +85,7 @@ describe('learn catalog', () => {
       'rhythmAndBeat',
       'firstMelody',
       'cMajorScale',
+      'triads',
     ]);
   });
 
@@ -97,6 +106,7 @@ describe('every authored chapter', () => {
     RHYTHM_AND_BEAT,
     FIRST_MELODY,
     C_MAJOR_SCALE,
+    TRIADS,
   ];
 
   it('keeps the two tints of a diagram apart', () => {
@@ -235,6 +245,7 @@ describe('chapter two', () => {
     for (const step of MUSICAL_ALPHABET.steps) {
       if (step.kind !== 'quiz') continue;
       expect(step.rounds).toBeGreaterThan(0);
+      if (step.question.kind === 'chordQuality') throw new Error('expected a note quiz');
       expect(step.question.pitchClasses.length).toBeGreaterThanOrEqual(2);
     }
   });
@@ -296,8 +307,8 @@ describe('chapter three', () => {
   it('drills the same five black keys the quiz names, in the other spelling', () => {
     const quiz = HALF_STEPS_WHOLE_STEPS.steps.find((s) => s.kind === 'quiz');
     const drill = HALF_STEPS_WHOLE_STEPS.steps.find((s) => s.kind === 'drill');
-    expect(quiz?.question.kind).toBe('nameTheKey');
-    expect(quiz?.question.pitchClasses).toEqual([1, 3, 6, 8, 10]);
+    if (quiz?.question.kind !== 'nameTheKey') throw new Error('expected a naming quiz');
+    expect(quiz.question.pitchClasses).toEqual([1, 3, 6, 8, 10]);
     if (drill?.drill.kind !== 'namedKey') throw new Error('expected a named-key drill');
     expect(drill.drill.pitchClasses).toEqual([1, 3, 6, 8, 10]);
     if (quiz?.question.kind === 'nameTheKey') expect(quiz.question.spelling).toBe('sharp');
@@ -362,9 +373,9 @@ describe('chapter four', () => {
   it('asks the quiz and the drill about the same five notes', () => {
     const quiz = TREBLE_STAFF.steps.find((s) => s.kind === 'quiz');
     const drill = TREBLE_STAFF.steps.find((s) => s.kind === 'drill');
-    expect(quiz?.question.kind).toBe('readNote');
+    if (quiz?.question.kind !== 'readNote') throw new Error('expected a reading quiz');
     if (drill?.drill.kind !== 'readNote') throw new Error('expected a reading drill');
-    expect(quiz?.question.pitchClasses).toEqual([0, 2, 4, 5, 7]);
+    expect(quiz.question.pitchClasses).toEqual([0, 2, 4, 5, 7]);
     expect(drill.drill.pitchClasses).toEqual([0, 2, 4, 5, 7]);
   });
 
@@ -860,6 +871,23 @@ function sharedChapterChecks(chapter: LearnChapter): void {
     }
   });
 
+  it('lets a one-pointer mouse finish everything played together', () => {
+    // A mouse is one pointer: anything asking for keys at once must also take
+    // a quick roll, or a desktop user without a MIDI keyboard is stuck.
+    const MOUSE_FRIENDLY = { overlap: true, onsetWindowMs: 400 };
+    for (const step of chapter.steps) {
+      if (step.kind === 'exercise' && 'together' in step.spec && step.spec.together) {
+        expect(step.spec.together, step.id).toEqual(MOUSE_FRIENDLY);
+      }
+      if (step.kind === 'drill') {
+        const spec = drillRoundAt(step.drill, 0)?.spec;
+        if (spec && 'together' in spec && spec.together) {
+          expect(spec.together, step.id).toEqual(MOUSE_FRIENDLY);
+        }
+      }
+    }
+  });
+
   it('draws every note on a staff its snippet shows', () => {
     for (const step of chapter.steps) {
       if (step.visual?.kind !== 'staff') continue;
@@ -1076,5 +1104,110 @@ describe('chapter eight', () => {
       72: '5',
     });
     expect(down.labelText).toEqual(up.labelText);
+  });
+});
+
+describe('chapter nine', () => {
+  sharedChapterChecks(TRIADS);
+
+  const step = (id: string) => TRIADS.steps.find((s) => s.id === id);
+  /** The six chords of the chapter, as "root:quality", in any order. */
+  const SIX = ['0:major', '5:major', '7:major', '9:minor', '2:minor', '4:minor'].sort();
+  const named = (chord: NamedChord) => `${chord.root}:${chord.quality}`;
+
+  it('teaches by hand, by ear and by name', () => {
+    const kinds = TRIADS.steps.map((s) => s.kind);
+    expect(kinds).toHaveLength(12);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(3);
+    expect(kinds.filter((kind) => kind === 'quiz')).toHaveLength(1);
+    expect(kinds.filter((kind) => kind === 'drill')).toHaveLength(1);
+  });
+
+  it('hears and drills the same six white-key chords', () => {
+    const quiz = step('hearTheMood');
+    const drill = step('playNamedTriads');
+    if (quiz?.kind !== 'quiz' || quiz.question.kind !== 'chordQuality') {
+      throw new Error('expected an ear quiz');
+    }
+    if (drill?.kind !== 'drill' || drill.drill.kind !== 'namedChord') {
+      throw new Error('expected a named-chord drill');
+    }
+    expect(quiz.question.chords.map(named).sort()).toEqual(SIX);
+    expect(drill.drill.chords.map(named).sort()).toEqual(SIX);
+    // Every one of them is all white keys, root position, from middle C up.
+    for (const chord of drill.drill.chords) {
+      for (const midi of triadMidis(60 + chord.root, chord.quality)) {
+        expect(isBlackKey(midi), named(chord)).toBe(false);
+      }
+    }
+  });
+
+  it('asks the ear quiz in no pattern a guesser could follow', () => {
+    const quiz = step('hearTheMood');
+    if (quiz?.kind !== 'quiz' || quiz.question.kind !== 'chordQuality') {
+      throw new Error('expected an ear quiz');
+    }
+    const order = Array.from({ length: quiz.rounds }, (_, round) =>
+      roundEntryAt(quiz.question.kind === 'chordQuality' ? quiz.question.chords : [], round),
+    ).map((chord) => chord?.quality);
+    // Neither all one answer nor a strict alternation.
+    expect(new Set(order).size).toBe(2);
+    expect(order.every((quality, i) => i === 0 || quality !== order[i - 1])).toBe(false);
+  });
+
+  it('prompts each drill round with exactly the chord it grades', () => {
+    const drill = step('playNamedTriads');
+    if (drill?.kind !== 'drill' || drill.drill.kind !== 'namedChord') {
+      throw new Error('expected a named-chord drill');
+    }
+    for (let round = 0; round < drill.rounds; round += 1) {
+      const asked = drillRoundAt(drill.drill, round);
+      if (asked?.spec.kind !== 'chord') throw new Error('expected a chord round');
+      expect(asked.chord).toEqual(asked.spec.chord);
+      expect(asked.label).toBe('');
+    }
+    // A minor from middle C's octave tops out at E5: all six fit the fit.
+    expect(drill.fit).toEqual({ lowMidi: 60, highMidi: 76 });
+  });
+
+  it('moves exactly one note, by a half step, to change the mood', () => {
+    for (const id of ['makeItMinor', 'makeItMajor']) {
+      const found = step(id);
+      if (found?.kind !== 'exercise' || found.spec.kind !== 'playAlong') {
+        throw new Error(`expected a playAlong line at ${id}`);
+      }
+      const [from, to] = momentsOf(found.spec.phrase).map((moment) => moment.midis);
+      const moved = from!.filter((midi) => !to!.includes(midi));
+      const arrived = to!.filter((midi) => !from!.includes(midi));
+      expect(moved, id).toHaveLength(1);
+      expect(arrived, id).toHaveLength(1);
+      expect(Math.abs(arrived[0]! - moved[0]!), id).toBe(1);
+      expect(found.spec.together, id).toBeDefined();
+    }
+  });
+
+  it('writes the moved third as the flat or sharp that keeps the letters stacked', () => {
+    const spelled = (id: string) => {
+      const found = step(id);
+      if (found?.visual?.kind !== 'staff') throw new Error(`expected a stave at ${id}`);
+      return phraseToNotes(found.visual.phrase)
+        .filter((note) => note.spelling !== undefined)
+        .map((note) => note.spelling);
+    };
+    // C–E♭–G, not C–D♯–G; D–F♯–A, not D–G♭–A.
+    expect(spelled('makeItMinor')).toEqual([{ step: 'E', alter: -1 }]);
+    expect(spelled('makeItMajor')).toEqual([{ step: 'F', alter: 1 }]);
+  });
+
+  it('draws every triad in root position, root at the bottom', () => {
+    for (const s of TRIADS.steps) {
+      if (s.visual?.kind !== 'staff') continue;
+      for (const moment of momentsOf(s.visual.phrase)) {
+        if (moment.midis.length !== 3) continue;
+        const [root, third, fifth] = moment.midis as [number, number, number];
+        expect([3, 4], s.id).toContain(third - root);
+        expect(fifth - root, s.id).toBe(7);
+      }
+    }
   });
 });

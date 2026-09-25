@@ -3,7 +3,7 @@ import type { TrackEvent } from '@/features/library/trackBuilder';
 import type { ScoreChrome, StaffMode } from '@/features/notation/scoreRenderer';
 import type { PlaybackMode } from '@/features/transport/modes';
 import type { Messages } from '@/i18n/types';
-import type { ExerciseSpec, PitchClass } from './exerciseSpec';
+import type { ExerciseSpec, NamedChord, PitchClass } from './exerciseSpec';
 import type { NoteSpelling } from './noteLabel';
 import type { LearnLevelId } from './levels';
 
@@ -122,6 +122,15 @@ export interface DrillStep extends StepBase {
 export type DrillPool =
   | {
       /**
+       * The round names a triad — "Play A minor." — and the user plays it as a
+       * block, in close root position, in any octave. Nothing is drawn: the
+       * name is the question.
+       */
+      kind: 'namedChord';
+      chords: readonly NamedChord[];
+    }
+  | {
+      /**
        * The round names a degree of a major scale — "play degree 5" — and the
        * user plays it, in any octave. Knowing a scale is knowing where each of
        * its steps lives, not only reciting them in order.
@@ -157,6 +166,16 @@ export type DrillPool =
     };
 
 export type QuizQuestion =
+  | {
+      /**
+       * A triad is heard, never seen, and the answer is its quality: major or
+       * minor. The only question the course asks of the ear alone — the third
+       * decides the mood, and the mood is something you hear.
+       */
+      kind: 'chordQuality';
+      /** Drawn from in the shared stride order. */
+      chords: readonly NamedChord[];
+    }
   | {
       kind: 'nameTheKey';
       /** Drawn from in a fixed order; also the order the answer buttons appear in. */

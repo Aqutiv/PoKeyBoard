@@ -231,3 +231,29 @@ describe('drillRoundAt: scale degrees', () => {
     expect(drillRoundAt({ kind: 'scaleDegree', tonic: 0, degrees: [] }, 0)).toBeNull();
   });
 });
+
+describe('drillRoundAt: named chords', () => {
+  const pool: DrillPool = {
+    kind: 'namedChord',
+    chords: [
+      { root: 0, quality: 'major' },
+      { root: 9, quality: 'minor' },
+    ],
+  };
+
+  it('asks for the named chord as a block a mouse can roll', () => {
+    const round = drillRoundAt(pool, 0);
+    expect(round?.chord).toEqual({ root: 0, quality: 'major' });
+    expect(round?.spec).toEqual({
+      kind: 'chord',
+      chord: { root: 0, quality: 'major' },
+      together: { overlap: true, onsetWindowMs: 400 },
+    });
+  });
+
+  it('draws nothing and names no notes, since the name is the question', () => {
+    const round = drillRoundAt(pool, 1);
+    expect(round?.label).toBe('');
+    expect(round?.phrase).toBeUndefined();
+  });
+});

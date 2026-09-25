@@ -3,7 +3,9 @@ import {
   DEFAULT_RHYTHM_TOLERANCE_BEATS,
   goalTotal,
   pitchClassOf,
+  triadMidis,
   type ExerciseSpec,
+  type NamedChord,
   type Togetherness,
   type UnorderedSpec,
 } from './exerciseSpec';
@@ -163,6 +165,16 @@ export function reduceExercise(
     return { ...state, run, onsets, satisfied: run.length >= goalTotal(spec) };
   }
 
+  if (spec.kind === 'chord') {
+    // Credited is the best instance's notes that are down; satisfied only when
+    // the keys down are that instance exactly. An extra key is not a near miss
+    // — C–E–G with an A in it is A minor seventh, not C major.
+    const candidate = candidateSet(input, onsets, spec.together);
+    const credited = bestTriad(candidate, spec.chord);
+    const exact = credited.size === 3 && candidate.size === 3;
+    return { ...state, credited, onsets, satisfied: exact };
+  }
+
   const candidate = candidateSet(input, onsets, togethernessOf(spec));
   const credited = creditFrom(spec, candidate);
   return { ...state, credited, onsets, satisfied: credited.size >= goalTotal(spec) };
@@ -245,6 +257,18 @@ export function targetMidisFor(
       // The moment due, and only what is left of it — `sequence`'s reasoning:
       // lighting the whole line would read the page for the user.
       for (const midi of remainingAlong(spec, state)) if (inRange(midi)) out.add(midi);
+      return out;
+
+    case 'chord':
+      // The lowest whole instance on screen, as `blackKeyGroup` points at one
+      // group: a hint should point somewhere, not paper the keyboard.
+      for (let root = range.lowMidi; root <= range.highMidi; root += 1) {
+        if (pitchClassOf(root) !== spec.chord.root) continue;
+        const members = triadMidis(root, spec.chord.quality);
+        if (!members.every(inRange)) continue;
+        for (const midi of members) out.add(midi);
+        return out;
+      }
       return out;
 
     case 'sequence': {
@@ -335,6 +359,10 @@ function doneFor(spec: ExerciseSpec, state: ExerciseState): number {
       return state.rhythm?.hits ?? 0;
     case 'playAlong':
       return state.along?.index ?? 0;
+    case 'chord':
+      // All three found with something else down reads 2 of 3, not a 3 of 3
+      // that somehow is not done: the chord is not clean yet.
+      return state.satisfied ? 3 : Math.min(state.credited.size, 2);
     default:
       return state.credited.size;
   }
@@ -706,6 +734,25 @@ function bestBlackGroup(candidate: ReadonlySet<number>, size: 2 | 3): ReadonlySe
       // `%` keeps the sign in JS, so a root below 0 would compare wrongly.
       if (root < 0 || pitchClassOf(root) !== rootPitchClass) continue;
       const present = new Set(groupMembers(root, size).filter((m) => candidate.has(m)));
+      if (present.size > best.size) best = present;
+    }
+  }
+  return best;
+}
+
+/**
+ * The notes of the most complete instance of `chord` present. Any key down
+ * could be its root, third or fifth, so each is walked back to the root it
+ * would imply — two notes of the chord read 2 of 3 whichever two they are.
+ */
+function bestTriad(candidate: ReadonlySet<number>, chord: NamedChord): ReadonlySet<number> {
+  const offsets = triadMidis(0, chord.quality);
+  let best = new Set<number>();
+  for (const midi of candidate) {
+    for (const offset of offsets) {
+      const root = midi - offset;
+      if (root < 0 || pitchClassOf(root) !== chord.root) continue;
+      const present = new Set(triadMidis(root, chord.quality).filter((m) => candidate.has(m)));
       if (present.size > best.size) best = present;
     }
   }

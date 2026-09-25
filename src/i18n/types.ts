@@ -376,6 +376,18 @@ export interface Messages {
     /** Reading rounds, where the question is a staff rather than a name. */
     readNotePrompt: string;
     playWhatYouSee: string;
+    /** A triad's quality as a word inside a sentence: the "minor" of "A minor". */
+    chordQuality: { major: string; minor: string };
+    /** The same, standing alone on an answer button. */
+    chordQualityAnswer: { major: string; minor: string };
+    /** A triad's name from its root and quality words, in the locale's order. */
+    chordName: (p: { note: string; quality: string }) => string;
+    /** A drill round that names a chord. */
+    playChord: (p: { chord: string }) => string;
+    /** Ear rounds: the button that plays the chord in question. */
+    hearIt: string;
+    chordQualityPrompt: string;
+    chordQualityWrong: (p: { answer: string }) => string;
     chapterTitles: LearnChapterMessages;
     chapterBlurbs: LearnChapterMessages;
     partTitles: LearnPartMessages;

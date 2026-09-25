@@ -1,5 +1,11 @@
 import type { StaffMode } from '@/features/notation/scoreRenderer';
-import type { ExerciseSpec, PitchClass } from './exerciseSpec';
+import {
+  DEFAULT_ONSET_WINDOW_MS,
+  type ExerciseSpec,
+  type NamedChord,
+  type PitchClass,
+  type Togetherness,
+} from './exerciseSpec';
 import { noteLabel } from './noteLabel';
 import { roundEntryAt } from './rounds';
 import { singleNotePhrase, staffModeFor } from './staffPhrase';
@@ -20,7 +26,15 @@ export interface DrillRound {
   staves?: StaffMode;
   /** For a degree round, the degree asked for — the prompt names it, not a note. */
   degree?: number;
+  /** For a chord round, the chord asked for — the prompt names it. */
+  chord?: NamedChord;
 }
+
+/**
+ * How "a chord" is judged in a drill round: held together, or rolled inside
+ * the onset window — a desktop mouse is one pointer and cannot hold three keys.
+ */
+const CHORD_TOGETHER: Togetherness = { overlap: true, onsetWindowMs: DEFAULT_ONSET_WINDOW_MS };
 
 /** Semitones above the tonic of each degree of a major scale: W W H W W W H. */
 export const MAJOR_SCALE_STEPS: readonly number[] = [0, 2, 4, 5, 7, 9, 11];
@@ -34,6 +48,12 @@ export const MAJOR_SCALE_STEPS: readonly number[] = [0, 2, 4, 5, 7, 9, 11];
  * machinery, and a drill only decides what to ask next.
  */
 export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null {
+  if (pool.kind === 'namedChord') {
+    const chord = roundEntryAt(pool.chords, round);
+    if (chord === undefined) return null;
+    return { spec: { kind: 'chord', chord, together: CHORD_TOGETHER }, label: '', chord };
+  }
+
   if (pool.kind === 'scaleDegree') {
     const degree = roundEntryAt(pool.degrees, round);
     const offset = degree === undefined ? undefined : MAJOR_SCALE_STEPS[degree - 1];

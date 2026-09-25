@@ -9,6 +9,7 @@ import { openLibraryTrack } from '@/features/library/libraryService';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { transportController } from '@/features/transport/transportController';
 import { useI18n } from '@/i18n/i18nContext';
+import type { Messages } from '@/i18n/types';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { KeyboardDiagram } from './KeyboardDiagram';
 import { QuizPanel } from './QuizPanel';
@@ -17,6 +18,8 @@ import { findLearnChapter } from './chapters';
 import { loadChapterProse } from './content';
 import type { ChapterProse } from './content/types';
 import { playPhrase } from './demo';
+import type { DrillRound } from './drill';
+import { noteLabel } from './noteLabel';
 import {
   dueNoteId,
   needsRangeShift,
@@ -25,7 +28,7 @@ import {
   type MidiRange,
 } from './exerciseMatcher';
 import { chapterStep, withChapterDone, withChapterStep, type LearnProgress } from './progress';
-import type { LearnChapter, LearnChapterId, LearnStep } from './types';
+import type { LearnChapter, LearnChapterId, LearnPhrase, LearnStep } from './types';
 import { useDrill } from './useDrill';
 import { useExercise } from './useExercise';
 import { useLessonClick } from './useLessonClick';
@@ -39,6 +42,19 @@ const LESSON_TIME_SIGNATURE = { numerator: 4, denominator: 4 } as const;
 const LISTEN_LEAD_S = 0.25;
 const EMPTY_TARGETS: ReadonlySet<number> = new Set();
 const NO_WRONG: ReadonlySet<number> = new Set();
+
+/** What a drill round asks for, in words. A reading round asks with its picture. */
+function drillPrompt(round: DrillRound | null, m: Messages): string {
+  if (!round) return '';
+  if (round.phrase) return m.learn.playWhatYouSee;
+  if (round.chord) {
+    const quality = m.learn.chordQuality[round.chord.quality];
+    const chord = m.learn.chordName({ note: noteLabel(round.chord.root), quality });
+    return m.learn.playChord({ chord });
+  }
+  if (round.degree !== undefined) return m.learn.playDegree({ degree: round.degree });
+  return m.learn.playNote({ note: round.label });
+}
 
 interface ChapterRunnerProps {
   chapterId: LearnChapterId;
@@ -295,34 +311,48 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
     [],
   );
 
+  // Every demo goes through here — a step's Listen, "Show me", and an ear
+  // quiz's Hear it — so all of them share the one lock.
+  // Resolves whether the phrase was actually scheduled — an ear quiz counts a
+  // round as heard only then, not on the click, since preparing a cold range
+  // is async and can fail outright.
+  const playDemo = useCallback(
+    (phrase: LearnPhrase): Promise<boolean> => {
+      // Guarded here rather than only by the buttons' `disabled`, because the
+      // "Show me" hint calls this too.
+      if (demoPlaying) return Promise.resolve(false);
+      // Claimed before the await, not after it. Preparing a cold range can take
+      // seconds, and the button used to stay live for every one of them — each
+      // extra click scheduling another copy over the first. Scheduled notes
+      // cannot be unscheduled, and `allNotesOff` would cut the user's own keys,
+      // so the only defence is not starting the second one.
+      setDemoPlaying(true);
+      window.clearTimeout(demoTimer.current);
+      // Started on the next bar line whenever a click is running, so the demo is
+      // heard *against* the beat rather than merely near it. A whole bar of lead
+      // is deliberate: it doubles as the count-in.
+      const startAt = click.nextBarAudioTime(audioEngine.currentTime + LISTEN_LEAD_S);
+      return playPhrase(phrase, startAt ?? undefined).then(
+        (durationMs) => {
+          // The button simply waits the phrase out.
+          demoTimer.current = window.setTimeout(() => setDemoPlaying(false), durationMs);
+          return true;
+        },
+        (error: unknown) => {
+          // Never strand the button: a demo that could not be prepared is a
+          // demo that is not playing.
+          console.warn('Learn demo failed to play:', error);
+          setDemoPlaying(false);
+          return false;
+        },
+      );
+    },
+    [click, demoPlaying],
+  );
+
   const onListen = useCallback(() => {
-    // Guarded here rather than only by the button's `disabled`, because the
-    // "Show me" hint calls this too.
-    if (!listen || demoPlaying) return;
-    // Claimed before the await, not after it. Preparing a cold range can take
-    // seconds, and the button used to stay live for every one of them — each
-    // extra click scheduling another copy over the first. Scheduled notes
-    // cannot be unscheduled, and `allNotesOff` would cut the user's own keys,
-    // so the only defence is not starting the second one.
-    setDemoPlaying(true);
-    window.clearTimeout(demoTimer.current);
-    // Started on the next bar line whenever a click is running, so the demo is
-    // heard *against* the beat rather than merely near it. A whole bar of lead
-    // is deliberate: it doubles as the count-in.
-    const startAt = click.nextBarAudioTime(audioEngine.currentTime + LISTEN_LEAD_S);
-    void playPhrase(listen, startAt ?? undefined).then(
-      (durationMs) => {
-        // The button simply waits the phrase out.
-        demoTimer.current = window.setTimeout(() => setDemoPlaying(false), durationMs);
-      },
-      (error: unknown) => {
-        // Never strand the button: a demo that could not be prepared is a
-        // demo that is not playing.
-        console.warn('Learn demo failed to play:', error);
-        setDemoPlaying(false);
-      },
-    );
-  }, [click, demoPlaying, listen]);
+    if (listen) void playDemo(listen);
+  }, [listen, playDemo]);
 
   const title = m.learn.chapterTitles[chapterId];
   const text = step ? prose?.[step.id] : undefined;
@@ -412,7 +442,9 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
           </button>
         ) : null}
 
-        {step?.kind === 'quiz' ? <QuizPanel session={quiz} /> : null}
+        {step?.kind === 'quiz' ? (
+          <QuizPanel session={quiz} onHear={playDemo} hearing={demoPlaying} />
+        ) : null}
 
         {step?.kind === 'exercise' || isDrill ? (
           <div className="learn-exercise">
@@ -429,15 +461,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
             {/* A drill's prompt changes every round, so it is announced; an
                 exercise's is fixed prose and would only repeat itself. */}
             <p className="learn-exercise__prompt" role={isDrill ? 'status' : undefined}>
-              {isDrill
-                ? drill.round?.phrase
-                  ? m.learn.playWhatYouSee
-                  : drill.round?.degree !== undefined
-                    ? m.learn.playDegree({ degree: drill.round.degree })
-                    : drill.round
-                      ? m.learn.playNote({ note: drill.round.label })
-                      : ''
-                : text?.prompt}
+              {isDrill ? drillPrompt(drill.round, m) : text?.prompt}
             </p>
             {/* A timed attempt that resets mid-bar would fire this live
                 region up to four times a second, so the announcement is
