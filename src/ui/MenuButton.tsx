@@ -39,6 +39,11 @@ interface MenuButtonProps {
   triggerClassName: string;
   /** Which edge the panel aligns to. */
   align?: 'left' | 'right';
+  /**
+   * Runs as the panel opens: the moment to prepare what an item will need, so
+   * its onSelect can use it at once rather than after an await.
+   */
+  onOpen?: () => void;
 }
 
 /** One button opening a small menu of actions. */
@@ -50,6 +55,7 @@ export function MenuButton({
   disabled,
   triggerClassName,
   align = 'right',
+  onOpen,
 }: MenuButtonProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLSpanElement | null>(null);
@@ -87,7 +93,10 @@ export function MenuButton({
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
-        onClick={() => setOpen((v) => !v)}
+        onClick={() => {
+          if (!open) onOpen?.();
+          setOpen(!open);
+        }}
       >
         {label} <span aria-hidden="true">▾</span>
       </button>

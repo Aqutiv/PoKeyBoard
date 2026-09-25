@@ -24,6 +24,7 @@ test.describe('MP3 export', () => {
       await page.getByRole('menuitem', { name: 'Audio (MP3)' }).click();
       const dialog = page.getByRole('dialog', { name: 'Export audio' });
       await expect(dialog).toBeVisible();
+      await expect(dialog.getByRole('radio', { name: /^Even/ })).toBeChecked();
       await dialog.getByRole('button', { name: 'Render audio' }).click();
 
       await expect(dialog.getByText(/Audio ready/)).toBeVisible({ timeout: 30_000 });
@@ -39,10 +40,13 @@ test.describe('MP3 export', () => {
       expect(filePath).not.toBeNull();
       const { statSync, readFileSync } = await import('node:fs');
       expect(statSync(filePath!).size).toBeGreaterThan(5_000);
-      const head = readFileSync(filePath!).subarray(0, 2);
-      const isMp3 = head[0] === 0xff && ((head[1] ?? 0) & 0xe0) === 0xe0;
-      const isId3 = head[0] === 0x49 && head[1] === 0x44;
-      expect(isMp3 || isId3).toBe(true);
+      // An ID3 tag naming the take, then the first MP3 frame right after it.
+      const bytes = readFileSync(filePath!);
+      expect(bytes.subarray(0, 3).toString('latin1')).toBe('ID3');
+      const tagSize = (bytes[6]! << 21) | (bytes[7]! << 14) | (bytes[8]! << 7) | bytes[9]!;
+      expect(bytes.subarray(10, 14).toString('latin1')).toBe('TIT2');
+      const frame = bytes.subarray(10 + tagSize, 12 + tagSize);
+      expect(frame[0] === 0xff && ((frame[1] ?? 0) & 0xe0) === 0xe0).toBe(true);
     });
 
   test('reuses the cached export for an unchanged take', async ({ page }) => {

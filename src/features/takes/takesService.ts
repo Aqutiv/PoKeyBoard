@@ -193,7 +193,7 @@ export async function getTakeForExport(id: string): Promise<Take | null> {
  * or flushed save, and the Takes row prepares its share file the moment it
  * opens — settling there stopped the very take the user was listening to.
  */
-async function snapshotTake(id: string): Promise<Take | null> {
+export async function snapshotTake(id: string): Promise<Take | null> {
   const active = useTakeStore.getState().take;
   if (active.id === id) return active;
   return getTake(id);

@@ -16,6 +16,11 @@ export interface PianoInstrument {
   name: string;
   /** Sample path relative to BASE_URL. */
   path: string;
+  /**
+   * The General MIDI program a MIDI export names, numbered from zero: what a
+   * sequencer that never heard of this piano should play instead.
+   */
+  midiProgram: number;
 }
 
 export const DEFAULT_PIANO_INSTRUMENT_ID: PianoInstrumentId = 'salamander-grand';
@@ -32,18 +37,21 @@ export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
     packVersion: 'salamander-grand-v3',
     name: 'Salamander',
     path: 'piano/salamander-grand-v3/',
+    midiProgram: 0, // Acoustic Grand Piano
   },
   {
     id: 'headroom-grand',
     packVersion: 'headroom-grand-v2',
     name: 'Headroom',
     path: 'piano/headroom-grand-v2/',
+    midiProgram: 0, // Acoustic Grand Piano
   },
   {
     id: 'wurlitzer-ep203w',
     name: 'Wurlitzer',
     packVersion: 'wurlitzer-ep203w-v1',
     path: 'piano/wurlitzer-ep203w-v1/',
+    midiProgram: 4, // Electric Piano 1, General MIDI's nearest to a Wurlitzer
   },
 ];
 

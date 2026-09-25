@@ -17,6 +17,7 @@ const baseInput = {
   bitrateKbps: 128,
   includeMetronome: false,
   metronomeVolume: 0.6,
+  loudness: 'normalized',
 };
 
 describe('stableStringify', () => {
@@ -93,14 +94,23 @@ describe('computeExportHash', () => {
     );
   });
 
-  it('changes with bitrate, metronome inclusion, reverb, and exporter version', async () => {
+  it('changes with bitrate, metronome inclusion, reverb, loudness, and exporter version', async () => {
     const take = takeWithNotes();
     const base = await computeExportHash({ ...baseInput, take });
     expect(await computeExportHash({ ...baseInput, take, bitrateKbps: 192 })).not.toBe(base);
+    expect(await computeExportHash({ ...baseInput, take, loudness: 'asPlayed' })).not.toBe(base);
     expect(await computeExportHash({ ...baseInput, take, includeMetronome: true })).not.toBe(base);
     expect(await computeExportHash({ ...baseInput, take, exporterVersion: 2 })).not.toBe(base);
     const wetter: Take = { ...take, instrument: { ...take.instrument, reverbMix: 0.5 } };
     expect(await computeExportHash({ ...baseInput, take: wetter })).not.toBe(base);
+  });
+
+  it('ignores the volume slider, which the export renders without', async () => {
+    const take = takeWithNotes();
+    const quieter: Take = { ...take, instrument: { ...take.instrument, masterVolume: 0.3 } };
+    expect(await computeExportHash({ ...baseInput, take: quieter })).toBe(
+      await computeExportHash({ ...baseInput, take }),
+    );
   });
 
   it('changes with click volume only when the metronome is included', async () => {

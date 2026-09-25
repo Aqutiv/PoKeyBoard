@@ -52,6 +52,9 @@ export const es: Messages = {
     menuLabel: 'Opciones para compartir',
     audio: 'Audio (MP3)',
     sheet: 'Partitura (PDF)',
+    midi: 'MIDI (.mid)',
+    rightHandTrack: 'Mano derecha',
+    leftHandTrack: 'Mano izquierda',
   },
   transport: {
     groupLabel: 'Transporte',
@@ -370,6 +373,9 @@ export const es: Messages = {
     quality: 'Calidad',
     shareable: ({ kbps }) => `Compartible — ${kbps} kbps`,
     high: ({ kbps }) => `Alta — ${kbps} kbps`,
+    loudness: 'Nivel',
+    loudnessNormalized: 'Uniforme — tan fuerte como otra música',
+    loudnessAsPlayed: 'Como se tocó — lo suave sigue suave',
     includeMetronome: 'Incluir metrónomo',
     reverbNote: 'Reverberación: usa el ajuste actual de la toma.',
     longTakeWarning: ({ mb }) =>

@@ -98,4 +98,25 @@ describe('MenuButton', () => {
     fireEvent.keyDown(window, { key: 'Escape' });
     expect(document.activeElement).toBe(elsewhere);
   });
+
+  it('says when it opens, so an item can be ready before it is chosen', () => {
+    const onOpen = vi.fn();
+    render(
+      <MenuButton
+        label="Share"
+        menuLabel="Share options"
+        triggerClassName="btn"
+        onOpen={onOpen}
+        items={[{ label: 'MIDI (.mid)', onSelect: () => {} }]}
+      />,
+    );
+    const trigger = screen.getByRole('button', { name: 'Share' });
+    fireEvent.click(trigger);
+    expect(onOpen).toHaveBeenCalledOnce();
+    // Closing is not opening.
+    fireEvent.click(trigger);
+    expect(onOpen).toHaveBeenCalledOnce();
+    fireEvent.click(trigger);
+    expect(onOpen).toHaveBeenCalledTimes(2);
+  });
 });
