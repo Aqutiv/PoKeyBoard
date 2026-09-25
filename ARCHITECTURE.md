@@ -135,6 +135,8 @@ A voice behaves like the string it stands for, the same way live and offline (`s
 
 `getCrossedNoteOnsets(prev, next, sortedNotes)` is pure and binary-searched with asymmetric boundaries — forward `(prev, next]`, backward `(next, prev)` — so chords travel together and boundary jitter can't double-fire. The scrub controller adds hysteresis (3 ms), a per-move audition cap, clamped preview voices, and a key-flash set; `MusicScore` translates drags into times (playhead visually fixed, score moves) and continues feeding the controller during inertial coasting.
 
+`MusicScore`'s render loop runs only while something on the score moves — playback, recording, a scrub or its coast, a fading ghost note — and sleeps otherwise; the transport, the take, the theme, a resize, a key played or a finger on the score wakes it. Each pass of `scoreRenderer` finds its place in the take by binary search (`firstAtOrAfter`; beams through a per-layout index, since they are in bar order but not time order within a bar), so a frame costs the same twenty minutes into a take as at its start. Spacing is time-proportional, stretched per take (`scoreZoom.basePxPerMsFor`, at most 3×) so its closest common onsets stand 16 px apart, then scaled by the take's `display.zoom`.
+
 ## Learn
 
 A chapter is data, not code: an ordered list of steps, each either theory (prose

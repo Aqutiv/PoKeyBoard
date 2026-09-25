@@ -46,6 +46,7 @@ export interface TakeStoreState {
   setInstrumentSettings(instrument: InstrumentSettings): void;
   setPlayheadMs(playheadMs: number): void;
   setDisplayQuantization(quantization: Take['display']['quantization']): void;
+  setDisplayZoom(zoom: number): void;
   markSaved(takeId: string, generation: number): void;
 }
 
@@ -215,6 +216,14 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
       // Display-only change: saves, but never invalidates cached audio.
       take: { ...state.take, display: { ...state.take.display, quantization } },
       dirty: true,
+      mutationGeneration: state.mutationGeneration + 1,
+    })),
+
+  setDisplayZoom: (zoom) =>
+    set((state) => ({
+      // Display-only change: saves, but never invalidates cached audio.
+      take: { ...state.take, display: { ...state.take.display, zoom } },
+      dirty: state.dirty || state.take.notes.length > 0,
       mutationGeneration: state.mutationGeneration + 1,
     })),
 

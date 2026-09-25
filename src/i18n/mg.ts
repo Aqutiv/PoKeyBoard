@@ -118,6 +118,9 @@ export const mg: Messages = {
     grid32: 'Makarakara 1/32',
     grid64: 'Makarakara 1/64',
     emptyHint: 'Tendreo ny kitendry, na tsindrio ny fandraketana mba hahazoana rakitra.',
+    zoom: 'Fanakaikezana',
+    zoomIn: 'Akaikezo',
+    zoomOut: 'Alavirio',
   },
   takes: {
     title: 'Rakitra',

@@ -117,6 +117,9 @@ export const fr: Messages = {
     grid32: 'Grille 1/32',
     grid64: 'Grille 1/64',
     emptyHint: 'Jouez les touches, ou appuyez sur enregistrer pour capturer une prise.',
+    zoom: 'Zoom',
+    zoomIn: 'Zoom avant',
+    zoomOut: 'Zoom arrière',
   },
   takes: {
     title: 'Prises',
