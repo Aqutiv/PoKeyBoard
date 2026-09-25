@@ -197,7 +197,9 @@ const CHORD_ONSET_WINDOW_MS = 40;
  * grid step, at most, and nothing at all with no grid, where there is no grid
  * line to straddle and exact onsets are what was asked for — so a fast run is
  * never mistaken for a chord, and a score, whose chords share one onset
- * exactly, is left as it was.
+ * exactly, is left as it was. Where the staves are on different grids, one
+ * hand in threes, the chord is written from a point both can draw; see
+ * `sharedOnset`.
  *
  * And only notes held down together for at least half as long as the
  * shortest of them lasts. However unevenly a chord is struck, its notes are
@@ -211,6 +213,7 @@ const CHORD_ONSET_WINDOW_MS = 40;
 function chordOnsets(
   notes: readonly NoteEvent[],
   windowFor: (note: NoteEvent) => number,
+  drawnAt: (note: NoteEvent, onsetMs: number) => number,
 ): number[] {
   const onsets = notes.map((note) => note.startMs);
   const order = notes.map((_, index) => index);
@@ -240,11 +243,44 @@ function chordOnsets(
       const startAt = (k: number) => (notes[order[k] as number] as NoteEvent).startMs;
       const upper = i + Math.floor((j - i) / 2);
       const median = (j - i) % 2 === 1 ? startAt(upper) : (startAt(upper - 1) + startAt(upper)) / 2;
-      for (let k = i; k < j; k += 1) onsets[order[k] as number] = median;
+      const chord = order.slice(i, j).map((index) => notes[index] as NoteEvent);
+      const onset = sharedOnset(chord, median, drawnAt);
+      for (let k = i; k < j; k += 1) onsets[order[k] as number] = onset;
     }
     i = j;
   }
   return onsets;
+}
+
+/**
+ * Where a chord whose median onset is `median` is written from, so that all of
+ * it is drawn in one column.
+ *
+ * Each note is drawn on its own staff's grid, and those differ where one hand
+ * plays in threes: the triplet grid can round the median to the beat while the
+ * sixteenth grid rounds it to the sixteenth after. So where the grids disagree
+ * the chord is written from whichever of their answers every note of it can be
+ * drawn at, which is usually the beat the hands share, and its values are
+ * measured from there. Where there is no such answer the notes are two
+ * rhythms meeting, three against two, rather than one chord, and each keeps
+ * its own grid's answer: drawn where its grid has no place, a note would leave
+ * its bar short of rests or push its triplet out of step.
+ *
+ * `drawnAt` is where a note's own staff draws it, written from a given onset.
+ */
+function sharedOnset(
+  chord: readonly NoteEvent[],
+  median: number,
+  drawnAt: (note: NoteEvent, onsetMs: number) => number,
+): number {
+  const answers = new Set(chord.map((note) => drawnAt(note, median)));
+  if (answers.size === 1) return median;
+  let shared: number | null = null;
+  for (const answer of answers) {
+    if (!chord.every((note) => drawnAt(note, answer) === answer)) continue;
+    if (shared === null || Math.abs(answer - median) < Math.abs(shared - median)) shared = answer;
+  }
+  return shared ?? median;
 }
 
 /**
@@ -1375,7 +1411,10 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
     const stepMs = tempoMap.msAtBeat(tempoMap.beatAtMs(note.startMs) + stepBeats) - note.startMs;
     return Math.min(CHORD_ONSET_WINDOW_MS, stepMs / 2);
   };
-  const onsets = chordOnsets(notes, chordWindowMs);
+  /** Where a note written from `onsetMs` lands on its own staff's grid; see `sharedOnset`. */
+  const drawnAt = (note: NoteEvent, onsetMs: number): number =>
+    snapToGrid(onsetMs, divisionFor({ ...note, startMs: onsetMs }));
+  const onsets = chordOnsets(notes, chordWindowMs, drawnAt);
   /**
    * A note written from its chord's onset rather than its own is written as
    * lasting from there to its own release, or the notes of one chord would

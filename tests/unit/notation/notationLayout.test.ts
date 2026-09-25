@@ -496,6 +496,47 @@ describe('chords struck a little unevenly', () => {
     expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
   });
 
+  it('keeps a chord in one column where one hand is in triplets', () => {
+    // The right hand's note declares a triplet; the left's is straight. Struck
+    // at 55 and 75 ms, the chord is written from 65 ms, which the triplet grid
+    // rounds to the beat and the sixteenth grid to 125 ms. Only the beat is on
+    // both grids, so both notes go there.
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 55, durationMs: 150, tuplet: triplet }),
+        note({ id: 'lh', midi: 48, startMs: 75, durationMs: 420 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
+    // Measured from where it is drawn, the left hand's note still fills its beat.
+    const bass = layout.chords.find((chord) => chord.staff === 'bass');
+    expect(bass?.symbol).toEqual({ base: 'quarter', dotted: false });
+  });
+
+  it('keeps a chord in one column where one hand is read in sextuplets', () => {
+    // Recorded: sixteenth-note triplets in the right hand over straight
+    // sixteenths in the left, the first of each struck at 35 and 52 ms. Their
+    // 43.5 ms median rounds to the right hand's second slot, where its next
+    // note already stands, and to the beat on the left's; the beat is on both.
+    const layout = layoutScore(
+      [
+        ...[35, 83, 167, 250, 333, 417].map((startMs, i) =>
+          note({ id: `rh${i}`, midi: 72 + i, startMs, durationMs: 80 }),
+        ),
+        ...[52, 125, 250, 375].map((startMs, i) =>
+          note({ id: `lh${i}`, midi: 48 + i, startMs, durationMs: 75 }),
+        ),
+      ],
+      OPTS,
+    );
+    const startsOn = (staff: 'treble' | 'bass'): number[] =>
+      layout.chords.filter((chord) => chord.staff === staff).map((chord) => chord.displayStartMs);
+    expect(startsOn('treble')).toEqual([0, 83, 167, 250, 333, 417]);
+    expect(startsOn('bass')).toEqual([0, 125, 250, 375]);
+  });
+
   it('writes a two-note chord from halfway between its notes, not from the later one', () => {
     // 40 ms and 80 ms: halfway is 60, which rounds to the beat (0 ms); the
     // later note alone would round the chord to the next sixteenth.
