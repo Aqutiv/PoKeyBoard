@@ -204,6 +204,8 @@ export const fr: Messages = {
       crookedLanternWaltz:
         'Une valse d’Halloween originale en A mineur : une cloche aiguë au-dessus d’un pom-pom-pom bancal, une section centrale pleine d’ombres, et une fin qui ralentit jusqu’à disparaître.',
       furElise: 'La bagatelle bien-aimée de Beethoven — le célèbre thème d’ouverture.',
+      odeToJoyFirstSteps:
+        'Les huit premières mesures du grand air de Beethoven, pour la main droite seule — la mélodie du chapitre sept d’Apprendre.',
       gymnopedie1: 'Le classique rêveur de Satie — lent, doux et aérien. Écoutez, tout simplement.',
       bluesInC:
         'Une ligne de basse boogie entraînante. Lancez l’enregistrement et improvisez par-dessus — essayez la gamme blues de C : C, E♭, F, F♯, G, B♭.',
@@ -251,6 +253,8 @@ export const fr: Messages = {
     diagramLabel: 'Schéma du clavier',
     staffLabel: 'Exemple de notation musicale',
     tryOnPlay: 'Essayer dans Jouer',
+    practiseOnPlay: ({ title }) => `Travailler ${title} dans Jouer`,
+    practiseOnPlayHint: 'Il s’ouvre en Entraînement : Jouer vous attend à chaque note.',
     backToChapters: 'Retour aux chapitres',
     quizPrompt: 'Quelle touche est mise en évidence ?',
     quizCorrect: 'Correct.',

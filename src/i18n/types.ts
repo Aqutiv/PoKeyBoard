@@ -318,6 +318,7 @@ export interface Messages {
       forwardGently: string;
       crookedLanternWaltz: string;
       furElise: string;
+      odeToJoyFirstSteps: string;
       gymnopedie1: string;
       bluesInC: string;
       goodNight: string;
@@ -359,6 +360,9 @@ export interface Messages {
     diagramLabel: string;
     staffLabel: string;
     tryOnPlay: string;
+    /** A chapter's closing hand-off: open its piece on Play, in Training. */
+    practiseOnPlay: (p: { title: string }) => string;
+    practiseOnPlayHint: string;
     backToChapters: string;
     /** Recognition steps: a key lights up and the user names it. */
     quizPrompt: string;

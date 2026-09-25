@@ -433,6 +433,13 @@ export interface ScoreRenderInput {
    * Learn uses it so a lesson's stave and the keyboard under it agree.
    */
   litMidis?: ReadonlySet<number>;
+  /**
+   * Notes to draw lit by *which note* they are rather than by pitch. When
+   * given, it replaces `litMidis`: a lesson walking a written line lights the
+   * heads already played, and a tune with six Es would otherwise light all six
+   * the moment one E is held.
+   */
+  litNoteIds?: ReadonlySet<string>;
   /** The passage playback repeats, shaded behind the music. */
   loop?: { startMs: number; endMs: number } | null;
 }
@@ -1036,7 +1043,8 @@ function drawChords(
   palette: ScorePalette,
   beamLines: BeamLines,
 ): void {
-  const { layout, playheadMs, litMidis } = input;
+  const { layout, playheadMs } = input;
+  const lit = litTest(input);
   const fromMs = view.scrollMs - 2000;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
   const start = firstChordIndexAt(layout.chords, fromMs);
@@ -1052,8 +1060,19 @@ function drawChords(
     // The last two used to be excused on the grounds that a lesson snippet was
     // whole notes with no ties; the rhythm chapter's beamed eighths ended that.
     if (!drawsStaff(view, chord.staff)) continue;
-    drawChord(ctx, view, chord, playheadMs, palette, beamLines, litMidis);
+    drawChord(ctx, view, chord, playheadMs, palette, beamLines, lit);
   }
+}
+
+/** Whether a note is lit by the player, as opposed to by the playhead. */
+type LitTest = (note: LaidOutNote) => boolean;
+
+const NOTHING_LIT: LitTest = () => false;
+
+function litTest({ litMidis, litNoteIds }: ScoreRenderInput): LitTest {
+  if (litNoteIds) return (note) => litNoteIds.has(note.id);
+  if (litMidis) return (note) => litMidis.has(note.midi);
+  return NOTHING_LIT;
 }
 
 function drawChord(
@@ -1063,7 +1082,7 @@ function drawChord(
   playheadMs: number,
   palette: ScorePalette,
   beamLines: BeamLines,
-  litMidis?: ReadonlySet<number>,
+  lit: LitTest,
 ): void {
   const x = xForMs(view, chord.displayStartMs);
   if (x < view.gutterPx - 40) return;
@@ -1104,7 +1123,7 @@ function drawChord(
     // Two independent reasons a head lights, kept named apart rather than
     // folded together: the cursor is inside it, or the user is holding it.
     const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
-    const held = litMidis?.has(note.midi) ?? false;
+    const held = lit(note);
     const color = sounding || held ? palette.highlight : palette.note;
 
     ctx.save();

@@ -206,6 +206,8 @@ export const mg: Messages = {
       crookedLanternWaltz:
         'Valsa Halloween noforonina amin’ny A minora — lakolosy avo eo ambonin’ny gadona valsa mikitoantoana, fizarana afovoany feno aloka, ary fiafarana miadana tsikelikely mandra-panjavony.',
       furElise: 'Ilay bagatelle sarobidin’i Beethoven — ny lohahevitra fanokafana malaza.',
+      odeToJoyFirstSteps:
+        'Ireo fizarana valo voalohany amin’ilay hira lehibe nataon’i Beethoven, ho an’ny tanana havanana irery — ilay hira ao amin’ny toko fahafito amin’ny Mianatra.',
       gymnopedie1:
         'Ilay hira manonofin’i Satie — miadana, malefaka, ary malalaka. Mihainoa fotsiny.',
       bluesInC:
@@ -252,6 +254,9 @@ export const mg: Messages = {
     diagramLabel: 'Sarin’ny klavie',
     staffLabel: 'Ohatra amin’ny soratra mozika',
     tryOnPlay: 'Andramo ao amin’ny Mitendry',
+    practiseOnPlay: ({ title }) => `Manaova fanazaran-tena amin’ny ${title} ao amin’ny Mitendry`,
+    practiseOnPlayHint:
+      'Misokatra amin’ny Fanazaran-tena izy, ka miandry anao amin’ny naoty tsirairay ny Mitendry.',
     backToChapters: 'Hiverina amin’ny toko',
     quizPrompt: 'Kitendry inona no voamariky?',
     quizCorrect: 'Marina.',

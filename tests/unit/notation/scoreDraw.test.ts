@@ -204,6 +204,26 @@ describe('drawScore note highlighting', () => {
     const drawn = render(oneNote(60), { litMidis: new Set() });
     expect(drawn.strokes).not.toContain(highlight);
   });
+
+  it('lights a head by which note it is, when asked by id', () => {
+    const drawn = render(oneNote(60), { litNoteIds: new Set(['n']) });
+    expect(drawn.strokes).toContain(highlight);
+  });
+
+  it('lights by id instead of by pitch, never both', () => {
+    // A lesson walking a line passes ids; a held key must not then light every
+    // head of its pitch on top of them.
+    const drawn = render(oneNote(60), { litNoteIds: new Set(), litMidis: new Set([60]) });
+    expect(drawn.strokes).not.toContain(highlight);
+  });
+
+  it('lights one of two heads of the same pitch, by id', () => {
+    // Quarter notes are filled, so each lit head is one highlight fill.
+    const drawn = render(bar([0, 1]), { litNoteIds: new Set(['n0']) });
+    expect(drawn.fills.filter((fill) => fill === highlight)).toHaveLength(1);
+    const both = render(bar([0, 1]), { litMidis: new Set([60]) });
+    expect(both.fills.filter((fill) => fill === highlight)).toHaveLength(2);
+  });
 });
 
 describe('drawScore bare chrome', () => {

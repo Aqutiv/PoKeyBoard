@@ -26,6 +26,7 @@ describe('library catalog', () => {
       'blues-in-c',
       'good-night',
       'moonlight-sonata',
+      'ode-to-joy-first-steps',
       'where-starlight-lingers',
       'silverwood-tale',
     ]);
@@ -47,11 +48,11 @@ describe('library catalog', () => {
       LIBRARY_FOLDER_SUMMARIES.classics
         .filter((track) => track.source === 'authored')
         .map((track) => track.trackId),
-    ).toEqual(['fur-elise', 'gymnopedie-1', 'moonlight-sonata']);
+    ).toEqual(['fur-elise', 'gymnopedie-1', 'moonlight-sonata', 'ode-to-joy-first-steps']);
     expect(
-      LIBRARY_FOLDER_SUMMARIES.classics.slice(0, 3).every((t) => t.source === 'authored'),
+      LIBRARY_FOLDER_SUMMARIES.classics.slice(0, 4).every((t) => t.source === 'authored'),
     ).toBe(true);
-    expect(LIBRARY_FOLDER_SUMMARIES.classics.slice(3).every((t) => t.source === 'score')).toBe(
+    expect(LIBRARY_FOLDER_SUMMARIES.classics.slice(4).every((t) => t.source === 'score')).toBe(
       true,
     );
     // The default folder is the one shown before the user has chosen.
@@ -86,6 +87,7 @@ describe('library catalog', () => {
       'fur-elise',
       'gymnopedie-1',
       'moonlight-sonata',
+      'ode-to-joy-first-steps',
     ]);
     expect(groups.length).toBeGreaterThan(1);
     // Every later section is a real composer holding only their own tracks.
@@ -288,6 +290,12 @@ describe('library catalog', () => {
     expect(getLibraryTake('not-a-library-id')).toBeUndefined();
   });
 
+  /**
+   * Tracks a Learn chapter hands off to, which are exactly as long as the
+   * lesson that teaches them — short on purpose, not a snippet by accident.
+   */
+  const LESSON_PIECES = new Set(['ode-to-joy-first-steps']);
+
   for (const def of LIBRARY_TRACKS) {
     describe(`track "${def.trackId}"`, () => {
       const take = buildLibraryTake(def);
@@ -296,7 +304,7 @@ describe('library catalog', () => {
         expect(take.id).toBe(libraryTakeId(def.trackId));
         expect(isLibraryTakeId(take.id)).toBe(true);
         expect(take.title).toBe(def.title);
-        expect(take.notes.length).toBeGreaterThan(50);
+        expect(take.notes.length).toBeGreaterThan(LESSON_PIECES.has(def.trackId) ? 20 : 50);
         // Every launch track is a real piece, not a snippet (the longest,
         // the full Moonlight first movement, runs about five minutes).
         expect(take.durationMs).toBeGreaterThan(30_000);

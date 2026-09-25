@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dueNoteId,
   initExercise,
   needsRangeShift,
   progressOf,
   reduceExercise,
+  struckNoteIds,
   targetMidisFor,
   type ExerciseState,
 } from '@/features/learn/exerciseMatcher';
 import { goalTotal, type ExerciseSpec } from '@/features/learn/exerciseSpec';
+import type { LearnPhrase } from '@/features/learn/types';
+import type { TrackEvent } from '@/features/library/trackBuilder';
 
 /**
  * One scripted event: press or release a midi at an audio-clock millisecond,
@@ -537,6 +541,12 @@ describe('rhythm', () => {
     expect(progress(PULSE, atBeats(C4, [0, 1, 2, 3]))).toBe('4/4 ok');
   });
 
+  it('does not begin before the first click has sounded', () => {
+    // -0.1 is inside the tolerance of beat 0, but that click has not played
+    // yet: the press is in the grid's lead, timed against a beat nobody heard.
+    expect(progress(PULSE, atBeats(C4, [-0.1, 1, 2, 3]))).toBe('0/4');
+  });
+
   it('accepts the pattern at any bar, so nobody has to catch the first one', () => {
     // The whole reason `beats` are offsets from a bar line: you listen for a
     // bar or two, then come in. That is what counting in means.
@@ -657,5 +667,283 @@ describe('rhythm', () => {
     expect(needsRangeShift(ON_C4, initExercise(), { lowMidi: 60, highMidi: 72 })).toBe(false);
     // "Any key" has no targets by design, so an empty set is not a hint.
     expect(needsRangeShift(PULSE, initExercise(), offScreen)).toBe(false);
+  });
+});
+
+describe('playAlong', () => {
+  const D4 = 62;
+  const EB4 = 63;
+  const E4 = 64;
+  const F4 = 65;
+  const G4 = 67;
+
+  /** 4/4 at 60bpm, one event per [beat, note or chord, beats]. */
+  function line(...events: readonly [number, string | string[], number][]): LearnPhrase {
+    return {
+      bpm: 60,
+      timeSignature: { numerator: 4, denominator: 4 },
+      events: events.map(([beat, note, beats]): TrackEvent => [beat, note, beats, 0.7]),
+    };
+  }
+
+  /** E E F G | G(h) E(h) — two bars, opening on a repeated pitch. */
+  const TUNE = line(
+    [0, 'E4', 1],
+    [1, 'E4', 1],
+    [2, 'F4', 1],
+    [3, 'G4', 1],
+    [4, 'G4', 2],
+    [6, 'E4', 2],
+  );
+  const UNTIMED: ExerciseSpec = { kind: 'playAlong', phrase: TUNE };
+  const TIMED: ExerciseSpec = { kind: 'playAlong', phrase: TUNE, timed: {} };
+
+  /** Press and release each midi in turn, with no click running. */
+  function taps(...midis: readonly number[]): Beat[] {
+    return midis.flatMap((midi, i): Beat[] => [
+      ['on', midi, i * 1000],
+      ['off', midi, i * 1000 + 50],
+    ]);
+  }
+
+  /** Press and release each [midi, grid beat]. */
+  function timedTaps(...notes: readonly (readonly [number, number])[]): Beat[] {
+    return notes.flatMap(([midi, beat]): Beat[] => [
+      ['on', midi, beat * 1000, beat],
+      ['off', midi, beat * 1000 + 50, beat + 0.05],
+    ]);
+  }
+
+  describe('untimed', () => {
+    it('counts the line in order, one moment at a time', () => {
+      expect(goalTotal(UNTIMED)).toBe(6);
+      expect(progress(UNTIMED, taps(E4, E4, F4))).toBe('3/6');
+      expect(progress(UNTIMED, taps(E4, E4, F4, G4, G4, E4))).toBe('6/6 ok');
+    });
+
+    it('drops back to the start on a wrong note, and re-tests it there', () => {
+      // D is nowhere in the line: back to nothing, and marked wrong.
+      const wrong = run(UNTIMED, taps(E4, E4, D4));
+      expect(progressOf(UNTIMED, wrong).done).toBe(0);
+      expect(wrong.wrongMidi).toBe(D4);
+      // A slip onto E is the line's first note, so the line begins again there.
+      expect(progress(UNTIMED, taps(E4, E4, F4, E4))).toBe('1/6');
+    });
+
+    it('falls back to the latest checkpoint, not the start', () => {
+      const spec: ExerciseSpec = { kind: 'playAlong', phrase: TUNE, checkpoints: [0, 4] };
+      expect(progress(spec, taps(E4, E4, F4, G4, G4, D4))).toBe('4/6');
+      // A slip before the checkpoint still goes all the way back.
+      expect(progress(spec, taps(E4, E4, D4))).toBe('0/6');
+    });
+
+    it('clears the wrong mark on the next press', () => {
+      expect(run(UNTIMED, taps(D4, E4)).wrongMidi).toBeNull();
+    });
+
+    it('cannot be passed by mashing every key in turn', () => {
+      const mash = Array.from({ length: 13 }, (_, i) => 60 + i);
+      expect(progress(UNTIMED, [...taps(...mash), ...taps(...mash)])).not.toContain('ok');
+    });
+
+    it('lights the heads played so far, by position rather than by pitch', () => {
+      if (UNTIMED.kind !== 'playAlong') throw new Error('expected playAlong');
+      const played = run(UNTIMED, taps(E4, E4));
+      // The third E, at beat 6, stays dark: only the two already played light.
+      expect([...struckNoteIds(UNTIMED, played)]).toEqual(['learn-n0-0', 'learn-n1-0']);
+      expect(dueNoteId(UNTIMED, played)).toBe('learn-n2-0');
+    });
+
+    it('accumulates a chord in any order, however far apart', () => {
+      // One mouse pointer can finish a moment meant for two hands.
+      const spec: ExerciseSpec = {
+        kind: 'playAlong',
+        phrase: line([0, ['C3', 'E3', 'G3', 'E4'], 4], [4, 'D4', 4]),
+      };
+      expect(progress(spec, taps(55, 64, 48))).toBe('0/2');
+      expect(progress(spec, taps(55, 64, 48, 52))).toBe('1/2');
+      // Striking one of the chord's notes twice costs nothing.
+      expect(progress(spec, taps(55, 55, 64, 48, 52, D4))).toBe('2/2 ok');
+    });
+
+    it('points at what is left of the due moment, and asks for a shift if any of it is off screen', () => {
+      const spec: ExerciseSpec = { kind: 'playAlong', phrase: line([0, ['C3', 'E4'], 4]) };
+      const range = { lowMidi: 60, highMidi: 72 };
+      const state = run(spec, taps(E4));
+      expect([...targetMidisFor(spec, state, range)]).toEqual([]);
+      expect(needsRangeShift(spec, state, range)).toBe(true);
+      expect(needsRangeShift(spec, initExercise(), { lowMidi: 48, highMidi: 72 })).toBe(false);
+    });
+  });
+
+  describe('together', () => {
+    const TOGETHER = { overlap: true, onsetWindowMs: 400 };
+    /** C major, then C minor: one note moves. */
+    const TO_MINOR: ExerciseSpec = {
+      kind: 'playAlong',
+      phrase: line([0, ['C4', 'E4', 'G4'], 4], [4, ['C4', 'Eb4', 'G4'], 4]),
+      together: TOGETHER,
+    };
+
+    it('takes a block chord, then the chord with one note moved', () => {
+      expect(
+        progress(TO_MINOR, [
+          ['on', C4, 0],
+          ['on', E4, 10],
+          ['on', G4, 20],
+          ['off', E4, 1000],
+          ['on', EB4, 1500],
+        ]),
+      ).toBe('2/2 ok');
+    });
+
+    it('refuses the second chord while the old third is still held', () => {
+      const script: Beat[] = [
+        ['on', C4, 0],
+        ['on', E4, 10],
+        ['on', G4, 20],
+        ['on', EB4, 1500],
+      ];
+      expect(progress(TO_MINOR, script)).toBe('1/2');
+      // Letting the E go is what moves it — and it finishes the chord.
+      expect(progress(TO_MINOR, [...script, ['off', E4, 1600]])).toBe('2/2 ok');
+    });
+
+    it('never credits a repeated chord for keys struck for the one before', () => {
+      // The onset window is scoped to the moment: letting go of one key of a
+      // finished chord must not play the same chord again on its own.
+      const TWICE: ExerciseSpec = {
+        kind: 'playAlong',
+        phrase: line([0, ['C4', 'E4', 'G4'], 4], [4, ['C4', 'E4', 'G4'], 4]),
+        together: TOGETHER,
+      };
+      const held: Beat[] = [
+        ['on', C4, 0],
+        ['on', E4, 10],
+        ['on', G4, 20],
+        ['off', C4, 200],
+      ];
+      expect(progress(TWICE, held)).toBe('1/2');
+      // Striking the key again is playing the chord again.
+      expect(progress(TWICE, [...held, ['on', C4, 1500]])).toBe('2/2 ok');
+    });
+
+    it('takes the next chord straight away, without waiting out the last one', () => {
+      // The old third, struck for the chord before, is inside the 400ms window
+      // here — but it belongs to that chord, not this one.
+      expect(
+        progress(TO_MINOR, [
+          ['on', C4, 0],
+          ['on', E4, 10],
+          ['on', G4, 20],
+          ['off', E4, 100],
+          ['on', EB4, 150],
+        ]),
+      ).toBe('2/2 ok');
+    });
+
+    it('lets a mouse roll a chord inside the onset window', () => {
+      const roll: Beat[] = [C4, E4, G4].flatMap((midi, i): Beat[] => [
+        ['on', midi, i * 100],
+        ['off', midi, i * 100 + 50],
+      ]);
+      expect(progress(TO_MINOR, roll)).toBe('1/2');
+    });
+  });
+
+  describe('timed', () => {
+    const TUNE_BEATS: readonly (readonly [number, number])[] = [
+      [E4, 0],
+      [E4, 1],
+      [F4, 2],
+      [G4, 3],
+      [G4, 4],
+      [E4, 6],
+    ];
+    const shifted = (by: number) => TUNE_BEATS.map(([midi, beat]) => [midi, beat + by] as const);
+
+    it('credits the line played in time, from any bar line', () => {
+      expect(progress(TIMED, timedTaps(...TUNE_BEATS))).toBe('6/6 ok');
+      expect(progress(TIMED, timedTaps(...shifted(8)))).toBe('6/6 ok');
+    });
+
+    it('drops the attempt on the right note at the wrong time', () => {
+      // The F comes half a beat late: twice the tolerance.
+      const late = timedTaps([E4, 0], [E4, 1], [F4, 2.5]);
+      expect(progress(TIMED, late)).toBe('0/6');
+      expect(run(TIMED, late).wrongMidi).toBe(F4);
+    });
+
+    it('drops the attempt on a wrong note on the beat', () => {
+      expect(progress(TIMED, timedTaps([E4, 0], [E4, 1], [D4, 2]))).toBe('0/6');
+    });
+
+    it('does not begin before the first click has sounded', () => {
+      // A press in the click's lead has a negative beat. Within tolerance of
+      // beat 0 it would otherwise snap there and count against a silent beat.
+      expect(progress(TIMED, timedTaps([E4, -0.1], ...TUNE_BEATS.slice(1)))).toBe('0/6');
+      expect(run(TIMED, timedTaps([E4, -0.1])).wrongMidi).toBe(E4);
+    });
+
+    it('does not begin between bar lines', () => {
+      expect(progress(TIMED, timedTaps(...shifted(1)))).not.toContain('ok');
+    });
+
+    it('cannot be passed by mashing on the beats', () => {
+      const mash: [number, number][] = [];
+      for (let beat = 0; beat < 16; beat += 1) {
+        for (const midi of [E4, F4, G4]) mash.push([midi, beat]);
+      }
+      expect(progress(TIMED, timedTaps(...mash))).not.toContain('ok');
+    });
+
+    it('comes back in at a later checkpoint on a downbeat', () => {
+      // Checkpoint at moment 4, which is beat 4 of the line. After the slip in
+      // bar 2, coming back in on grid beat 8 measures from bar line 4.
+      const spec: ExerciseSpec = {
+        kind: 'playAlong',
+        phrase: TUNE,
+        timed: {},
+        checkpoints: [0, 4],
+      };
+      const slip = timedTaps(...TUNE_BEATS.slice(0, 5), [D4, 5]);
+      expect(progress(spec, slip)).toBe('4/6');
+      expect(progress(spec, [...slip, ...timedTaps([G4, 8], [E4, 10])])).toBe('6/6 ok');
+    });
+
+    it('re-enters at a checkpoint whose bar line comes before the click began', () => {
+      // Entering moment 4 (beat 4 of the line) on grid beat 0 measures from
+      // bar line -4. The note itself is on a beat that sounded, so it counts.
+      const spec: ExerciseSpec = {
+        kind: 'playAlong',
+        phrase: TUNE,
+        timed: {},
+        checkpoints: [0, 4],
+      };
+      const reentry: ExerciseState = {
+        ...initExercise(),
+        along: { index: 4, struck: new Set(), fresh: new Set(), origin: null },
+      };
+      const state = reduceExercise(spec, reentry, {
+        kind: 'press',
+        midi: G4,
+        atMs: 0,
+        atBeats: 0,
+        held: new Set([G4]),
+      });
+      expect(state.along?.index).toBe(5);
+      expect(state.along?.origin).toBe(-4);
+    });
+
+    it('takes a chord whose notes each land in the window, in any order', () => {
+      const spec: ExerciseSpec = {
+        kind: 'playAlong',
+        phrase: line([0, ['C4', 'E4'], 2], [2, 'G4', 2]),
+        timed: {},
+      };
+      expect(progress(spec, timedTaps([E4, 0.1], [C4, 0.05], [G4, 2]))).toBe('2/2 ok');
+      // The next moment's note before the chord is complete is a break.
+      expect(progress(spec, timedTaps([E4, 0], [G4, 2]))).toBe('0/2');
+    });
   });
 });

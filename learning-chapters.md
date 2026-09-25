@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 6     | 4         |
+| Beginner     | 7     | 3         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -42,7 +42,7 @@ _Never touched a piano → a simple piece, hands together._
 
 | #   | Chapter                        | Teaches                                                                                                 | Exercises validate                                                                     |
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 7   | Your First Melody              | Pitch and rhythm together; phrases; following notation left to right                                    | an 8-bar melody from the page, in tempo → hand off to Play                             |
+| 7   | **Your First Melody** ✅       | Pitch and rhythm together; phrases; following notation left to right                                    | an 8-bar melody from the page, in tempo → hand off to Play                             |
 | 8   | The C Major Scale              | W-W-H-W-W-W-H; why C major is all white keys; the thumb tuck; degrees 1–8                               | the scale up and down, one octave, in order                                            |
 | 9   | Triads: Major and Minor        | Stacking thirds; root/third/fifth; C, F, G major and A, D, E minor; the third decides the mood          | named triads as blocks; turn a major triad minor by moving one note                    |
 | 10  | Chords, Pedal & Hands Together | I–V–vi–IV; the sustain pedal and changing it on the harmony; left-hand chords under a right-hand melody | the progression with pedal changes; a short piece hands together → hand off to Library |
@@ -259,6 +259,7 @@ key is C♯ or D♭.
 | `exactKeys`     | exactly these midis                                        | B5, B9, A1     |
 | `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I3 |
 | `rhythm`        | these beat offsets, in time with the click                 | B6, I7, A4     |
+| `playAlong`     | a written line, in order — optionally in time, as chords   | B7–B10, A6     |
 
 An `interval` with no `lowerPitchClass` and no `together` reads the cumulative
 candidate set, which makes it "any two keys N semitones apart" rather than one
@@ -287,7 +288,39 @@ tempo. Two windows must not overlap, so a chapter authoring anything shorter
 than an eighth note has to tighten it — a catalog test enforces the relationship
 rather than the number.
 
-Still likely: a `playAlong` spec that follows a written line (B7, A6).
+`playAlong` grades a written line: pitch and order, and — with `timed` — the
+rhythm too. It carries the phrase itself, so the picture, the gate and the
+lit heads read one object; a catalog check pins `visual.phrase === spec.phrase`.
+The line is walked as _moments_ (`momentsOf`), every note that starts on one
+beat, so a chord is one step however it is struck.
+
+One rule for getting it wrong in all three modes: a press that is not one of
+the due moment's remaining notes — or, timed, not where it was due — falls
+back to the latest `checkpoints` entry and is re-tested there. That is
+`sequence`'s restart and `rhythm`'s re-test-as-a-start, and it is what makes
+mashing fail. Untimed, a moment's notes accumulate in any order (Play's
+Training semantics, and what lets one mouse pointer finish a two-hand moment);
+with `together` the keys down must equal the moment exactly, so "move one note"
+means the old note has to come up. Timed, the entry rule is `rhythm`'s, shared
+through `barOriginFor`, guarded on where the _note_ falls rather than the bar
+line, since a checkpoint in bar 5 legitimately measures from before the click.
+
+The stave lights a line **by position**, not by pitch: `litNoteIds` replaces
+`litMidis` for a `playAlong` step, so a tune with six Es lights the ones played
+rather than all six. A line longer than two bars breaks onto several _systems_
+(`staffSystems.ts`) — four bars to a line at most, a divisor of the line so a
+phrase never ends partway along one — each laid out from its own notes, and the
+system holding the due note is scrolled into view as the attempt moves on.
+
+Patience runs on the step's best, not its latest: the idle clock resets only
+when `done` reaches a new high. Resetting on any change meant a timed line,
+where every slip sends the readout to zero, never offered Skip to the person
+retrying it hardest.
+
+A chapter may end by handing off to a Library track (`LearnChapter.handoff`):
+the outro opens it on Play in a Training mode, which it writes to the saved
+setting — so the button says so. Chapter 7's melody _is_ that track's events,
+imported from `tracks/odeToJoyFirstSteps.ts`.
 
 ---
 
