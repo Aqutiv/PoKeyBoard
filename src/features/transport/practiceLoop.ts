@@ -29,15 +29,18 @@ export function nearestBeatMs(tempo: TempoSettings, ms: number): number {
 
 /**
  * The loop two marks make, whichever came first: inside the take, and a beat
- * long at least — two taps on the same beat still make a passage. Null when
- * the take is too short for one.
+ * long at least — two taps on the same beat still make a passage. Where one
+ * beat is shorter than a loop can be, fast in sixteenths, it takes as many
+ * whole beats as a loop needs. Null when the take is too short for one.
  */
 export function loopBetween(take: Take, a: number, b: number): PlaybackLoop | null {
   const map = createTakeTempoMap(take.tempo);
   const startMs = Math.max(0, Math.min(a, b));
   let endMs = Math.max(a, b);
   if (endMs - startMs < MIN_LOOP_MS) {
-    endMs = Math.round(map.msAtBeat(Math.round(map.beatAtMs(startMs)) + 1));
+    const beat = Math.round(map.beatAtMs(startMs));
+    const endBeat = Math.max(beat + 1, Math.ceil(map.beatAtMs(startMs + MIN_LOOP_MS)));
+    endMs = Math.round(map.msAtBeat(endBeat));
   }
   endMs = Math.min(endMs, effectivePlaybackDurationMs(take));
   return endMs - startMs >= MIN_LOOP_MS ? { startMs, endMs } : null;

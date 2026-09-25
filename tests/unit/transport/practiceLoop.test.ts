@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { loopBetween, nearestBeatMs, playableLoop } from '@/features/transport/practiceLoop';
+import { MIN_LOOP_MS } from '@/features/transport/transportClock';
 import { useTakeStore } from '@/state/useTakeStore';
 
 /** 120 bpm in 4/4, four seconds of notes: a beat every 500 ms. */
@@ -25,6 +26,19 @@ describe('marking a loop', () => {
 
   it('makes two marks on one beat a loop of that beat', () => {
     expect(loopBetween(take(), 1500, 1500)).toEqual({ startMs: 1500, endMs: 2000 });
+  });
+
+  it('takes as many beats as a loop needs where one beat is too short', () => {
+    // 240 bpm in 4/16: a beat is 62.5 ms, so a loop needs two of them.
+    const fast = take();
+    fast.tempo = { ...fast.tempo, bpm: 240, timeSignature: { numerator: 4, denominator: 16 } };
+    const loop = loopBetween(fast, 1000, 1000);
+    expect(loop).toEqual({ startMs: 1000, endMs: 1125 });
+    expect(loop!.endMs - loop!.startMs).toBeGreaterThanOrEqual(MIN_LOOP_MS);
+    // Marks on neighbouring beats, 1000 and 1062.5 ms, make the same loop.
+    expect(loopBetween(fast, 1000, 1063)).toEqual({ startMs: 1000, endMs: 1125 });
+    // Too near the take's end for one, there is still none.
+    expect(loopBetween(fast, 3938, 3938)).toBeNull();
   });
 
   it('keeps a loop inside the take', () => {
