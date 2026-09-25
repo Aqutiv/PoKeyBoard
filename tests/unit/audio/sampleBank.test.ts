@@ -1,10 +1,53 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  onsetOffsetOf,
   SampleBank,
   velocityGain,
   velocityToLayer,
   VELOCITY_LAYER_THRESHOLDS,
 } from '@/audio/SampleBank';
+
+/** Two channels of silence with a note starting at `onsetS` — enough AudioBuffer for the scan. */
+function recording(onsetS: number, rate = 48_000): AudioBuffer {
+  const length = rate;
+  const channels = [new Float32Array(length), new Float32Array(length)];
+  const onset = Math.round(onsetS * rate);
+  for (const data of channels) {
+    // A little noise floor, 60 dB down, then a decaying strike.
+    for (let i = 0; i < onset; i += 1) data[i] = (i % 2 === 0 ? 1 : -1) * 0.0008;
+    for (let i = onset; i < length; i += 1) data[i] = 0.8 * Math.exp(-(i - onset) / rate / 0.3);
+  }
+  return {
+    sampleRate: rate,
+    length,
+    numberOfChannels: 2,
+    getChannelData: (channel: number) => channels[channel]!,
+  } as unknown as AudioBuffer;
+}
+
+describe('onsetOffsetOf', () => {
+  it('skips the silence before the note, keeping a millisecond of it', () => {
+    expect(onsetOffsetOf(recording(0.012))).toBeCloseTo(0.011, 3);
+  });
+
+  it('leaves a recording that starts on its note alone', () => {
+    expect(onsetOffsetOf(recording(0))).toBe(0);
+  });
+
+  it('never trims more than a recording could plausibly need', () => {
+    expect(onsetOffsetOf(recording(0.2))).toBe(0.05);
+  });
+
+  it('leaves a silent file alone rather than guessing', () => {
+    const silent = {
+      sampleRate: 48_000,
+      length: 480,
+      numberOfChannels: 1,
+      getChannelData: () => new Float32Array(480),
+    } as unknown as AudioBuffer;
+    expect(onsetOffsetOf(silent)).toBe(0);
+  });
+});
 
 afterEach(() => {
   vi.useRealTimers();

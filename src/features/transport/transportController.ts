@@ -602,7 +602,7 @@ export class TransportController {
     if (this.state === 'playing') {
       const durationMs = this.playDurationMs;
       if (this.playCursor >= this.playNotes.length && this.clock.currentTakeMs() >= durationMs) {
-        this.pauseInternal(durationMs);
+        this.pauseInternal(durationMs, { ringOut: true });
       }
     }
   }
@@ -717,13 +717,19 @@ export class TransportController {
     this.pauseInternal(Math.round(this.clock.currentTakeMs()));
   }
 
-  private pauseInternal(atMs: number): void {
+  /**
+   * `ringOut` is for a take that has played to its end. Every note has been
+   * let go by then, so all that still sounds is strings dying away, for
+   * seconds where a key has no damper; they are left to, as in an export,
+   * unless the player stops.
+   */
+  private pauseInternal(atMs: number, { ringOut = false } = {}): void {
     // A training wait is a pause that keeps its gate; every other pause drops
     // it, so resuming by hand never lands back on the same hold.
     if (!this.trainingWaiting) this.clearTrainingGate();
     this.clearScheduler();
     this.metronome.stop();
-    audioEngine.allNotesOff();
+    if (!ringOut) audioEngine.allNotesOff();
     this.clock.pause();
     const duration = this.takeDurationMs();
     this.pausedPlayheadMs = clamp(atMs, 0, duration);
