@@ -103,3 +103,26 @@ export function releaseSampleVoice(voice: SampleVoice, when: number): void {
     voice.source.stop(when + RELEASE_STOP_AFTER_S);
   }
 }
+
+/**
+ * Move a release that is still to come to `when`. Setting it cut short the
+ * envelope's own ramps, so those are laid down again first, and the voice
+ * sounds on to `when` as though the first release had never been set.
+ */
+export function moveSampleVoiceRelease(voice: SampleVoice, when: number): void {
+  const pending = voice.releaseTime;
+  if (pending === undefined) return;
+  const { gain, sample, startTime } = voice;
+  gain.gain.cancelScheduledValues(pending);
+  voice.releaseTime = undefined;
+  voice.releaseLevel = undefined;
+  const attackEnd = startTime + (sample.envelope?.attack ?? ATTACK_S);
+  if (pending < attackEnd) gain.gain.linearRampToValueAtTime(sample.gain, attackEnd);
+  if (sample.envelope) {
+    const decayStart = attackEnd + sample.envelope.hold;
+    const decayEnd = decayStart + sample.envelope.decay;
+    if (pending < decayStart) gain.gain.setValueAtTime(sample.gain, decayStart);
+    if (pending < decayEnd) gain.gain.linearRampToValueAtTime(0, decayEnd);
+  }
+  releaseSampleVoice(voice, when);
+}

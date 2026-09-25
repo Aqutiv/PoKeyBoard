@@ -28,6 +28,20 @@ vi.mock('@/audio/AudioEngine', () => ({
     scheduleNote: vi.fn((event: { midi: number; durationMs: number }, when: number) =>
       h.scheduled.push({ midi: event.midi, when, durationMs: event.durationMs }),
     ),
+    // What a change of speed asks of the voices: notes not yet begun are called
+    // off, and those sounding let go where `at` moves their key-up.
+    cancelPending: vi.fn((_sourceId: string, after: number) => {
+      h.scheduled = h.scheduled.filter((event) => event.when <= after);
+    }),
+    retimeReleases: vi.fn(
+      (_sourceId: string, from: number, at: (releaseTime: number) => number) => {
+        for (const event of h.scheduled) {
+          const releaseTime = event.when + event.durationMs / 1000;
+          if (event.when > from || releaseTime <= from) continue;
+          event.durationMs = (at(releaseTime) - event.when) * 1000;
+        }
+      },
+    ),
     subscribeSchedulerTick: vi.fn(() => () => {}),
     subscribeInput: vi.fn((listener: (event: InputNoteEvent) => void) => {
       h.inputs.add(listener);
@@ -139,6 +153,103 @@ describe('playback speed and looping', () => {
     expect(new Set(midis).size).toBe(midis.length);
     const after = h.scheduled.slice(heard);
     expect(after[1]!.when - after[0]!.when).toBeCloseTo(1, 6);
+  });
+
+  it.each([0.25, 1.5])('plays what was queued at full speed where %s× puts it', (speed) => {
+    transportController.play();
+    while (transportController.getPlayheadMs() < 400) run(0.01);
+    // The note at 500 ms is inside the look-ahead, queued at full speed.
+    expect(h.scheduled.map((event) => event.midi)).toEqual([60, 61]);
+    const now = h.now;
+    const at = transportController.getPlayheadMs();
+    transportController.setSpeed(speed);
+    run(3);
+    // From 500 ms on, every note once, where the new speed puts it and held as
+    // long as it says.
+    const next = h.scheduled.slice(1);
+    expect(next.length).toBeGreaterThan(1);
+    next.forEach((event, i) => {
+      expect(event.midi).toBe(61 + i);
+      expect(event.when).toBeCloseTo(now + (500 * (i + 1) - at) / 1000 / speed, 6);
+      expect(event.durationMs).toBeCloseTo(200 / speed, 6);
+    });
+  });
+
+  it('lets a note sounding at a change of speed go where the new speed puts its end', () => {
+    useTakeStore
+      .getState()
+      .setTake(createEmptyTake({ notes: [note('long', 60, 0, 1000)], durationMs: 2000 }));
+    transportController.play();
+    while (transportController.getPlayheadMs() < 400) run(0.01);
+    const now = h.now;
+    const at = transportController.getPlayheadMs();
+    transportController.setSpeed(0.25);
+    // The 600 ms of it still to play take four times as long.
+    const [long] = h.scheduled;
+    expect(long!.when + long!.durationMs / 1000).toBeCloseTo(now + (1000 - at) / 1000 / 0.25, 6);
+  });
+
+  it('plays the next pass of a loop where a new speed puts it, if it was already queued', () => {
+    transportController.setLoop({ startMs: 1000, endMs: 2000 });
+    transportController.play();
+    while (transportController.getPlayheadMs() < 1900) run(0.01);
+    // The loop's top is inside the look-ahead: the next pass has begun queuing.
+    expect(h.scheduled.map((event) => event.midi)).toEqual([60, 61, 62, 63, 62]);
+    const now = h.now;
+    const at = transportController.getPlayheadMs();
+    transportController.setSpeed(0.5);
+    run(3);
+    // Round and round from the seam on, each note once, at half speed.
+    const next = h.scheduled.slice(4);
+    expect(next.length).toBeGreaterThan(2);
+    next.forEach((event, i) => {
+      expect(event.midi).toBe(i % 2 === 0 ? 62 : 63);
+      expect(event.when).toBeCloseTo(now + (2000 + 500 * i - at) / 1000 / 0.5, 6);
+    });
+  });
+
+  it('holds where it should for training after a change of speed re-queues the way there', () => {
+    const notes = [
+      note('a', 64, 0),
+      note('b', 65, 200),
+      { ...note('c', 48, 250), staff: 'bass' as const },
+    ];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+    useSettingsStore.getState().setPlaybackMode('training-left');
+    transportController.setLoop({ startMs: 0, endMs: 1000 });
+    transportController.play();
+    // The hold is at 250; the note at 200 before it is queued by now.
+    while (transportController.getPlayheadMs() < 100) run(0.01);
+    expect(h.scheduled.map((event) => event.midi)).toEqual([64, 65]);
+    const now = h.now;
+    const at = transportController.getPlayheadMs();
+    transportController.setSpeed(0.5);
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    expect(transportController.getPlayheadMs()).toBe(250);
+    expect(h.scheduled.map((event) => event.midi)).toEqual([64, 65]);
+    expect(h.scheduled[1]!.when).toBeCloseTo(now + (200 - at) / 1000 / 0.5, 6);
+  });
+
+  it('never echoes a note played at a hold, when a change of speed walks back over it', () => {
+    // A hold for 64 at 1960, with the left hand's 48 under it, and the loop
+    // round 40 ms later to the left hand's 43 at its top.
+    const notes = [
+      { ...note('top', 43, 1000), staff: 'bass' as const },
+      { ...note('under', 48, 1960), staff: 'bass' as const },
+      note('held', 64, 1960),
+    ];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 3000 }));
+    useSettingsStore.getState().setPlaybackMode('training-right');
+    transportController.setLoop({ startMs: 1000, endMs: 2000 });
+    transportController.play();
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    h.scheduled = [];
+    // Resumed, the run has queued the 48 under the hold and the next pass's
+    // top, all still to come, when the speed changes.
+    press(64);
+    transportController.setSpeed(0.5);
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    expect(h.scheduled.map((event) => event.midi)).toEqual([48, 43]);
   });
 
   it('repeats a loop, pass after pass, and never plays past its end', () => {

@@ -162,6 +162,8 @@ export class MetronomeEngine {
   private nextBeatIndex = 0;
   /** The latest click already handed to the audio clock. */
   private scheduledUntil = Number.NEGATIVE_INFINITY;
+  /** Clicks handed to the audio clock that have not sounded yet. */
+  private queued: Array<{ when: number; osc: OscillatorNode }> = [];
   private running = false;
 
   attach(context: AudioContext, destination: AudioNode = context.destination): void {
@@ -197,20 +199,40 @@ export class MetronomeEngine {
     this.grid = grid;
     this.running = true;
     this.scheduledUntil = Number.NEGATIVE_INFINITY;
+    this.queued = [];
     this.seekToNow();
     this.scheduleWindow();
     this.timer = setInterval(() => this.scheduleWindow(), LOOKAHEAD_INTERVAL_MS);
   }
 
   /**
-   * Swap the grid without interrupting the click — used when the tempo, the
-   * speed or the loop changes mid-flight. Clicks already inside the scheduling
-   * horizon still sound at their old times, and the new grid picks up after
-   * the last of them, so none sounds twice.
+   * Swap the grid without interrupting the click — used when the tempo is
+   * edited mid-flight, and as a count-in hands over to the take. Clicks already
+   * inside the scheduling horizon still sound at their old times, and the new
+   * grid picks up after the last of them. A change of playback speed goes
+   * through `retime` instead.
    */
   setGrid(grid: ClickGrid): void {
     this.grid = grid;
     if (this.running) this.seekToNow();
+  }
+
+  /**
+   * Swap the grid for one whose clock has changed speed. The clicks already
+   * handed to the audio clock were placed at the old speed, so those not yet
+   * sounded are called off and the new grid places them again.
+   */
+  retime(grid: ClickGrid): void {
+    const context = this.context;
+    if (context) {
+      const now = context.currentTime;
+      for (const click of this.queued) {
+        if (click.when > now) click.osc.stop(now);
+      }
+      this.queued = this.queued.filter((click) => click.when <= now);
+      this.scheduledUntil = Math.min(this.scheduledUntil, now);
+    }
+    this.setGrid(grid);
   }
 
   stop(): void {
@@ -249,11 +271,13 @@ export class MetronomeEngine {
     const grid = this.grid;
     if (!context || !gain || !grid || !this.running) return;
     const horizon = context.currentTime + SCHEDULE_AHEAD_S;
+    this.queued = this.queued.filter((click) => click.when > context.currentTime);
     for (;;) {
       const beatTime = grid.audioTimeAt(this.nextBeatIndex);
       if (!Number.isFinite(beatTime) || beatTime > horizon) break;
       if (beatTime >= context.currentTime - 0.01) {
-        scheduleClick(context, gain, beatTime, grid.isAccent(this.nextBeatIndex));
+        const accent = grid.isAccent(this.nextBeatIndex);
+        this.queued.push({ when: beatTime, osc: scheduleClick(context, gain, beatTime, accent) });
         this.scheduledUntil = Math.max(this.scheduledUntil, beatTime);
       }
       this.nextBeatIndex += 1;
@@ -261,13 +285,16 @@ export class MetronomeEngine {
   }
 }
 
-/** One click voice: short sine burst, higher and louder on the accent. */
+/**
+ * One click voice: short sine burst, higher and louder on the accent. Returns
+ * its oscillator, which can still be stopped before the click sounds.
+ */
 export function scheduleClick(
   context: BaseAudioContext,
   destination: AudioNode,
   when: number,
   accent: boolean,
-): void {
+): OscillatorNode {
   const osc = context.createOscillator();
   const env = context.createGain();
   osc.frequency.value = accent ? ACCENT_FREQ : BEAT_FREQ;
@@ -279,6 +306,7 @@ export function scheduleClick(
   env.connect(destination);
   osc.start(when);
   osc.stop(when + CLICK_DECAY_S + 0.02);
+  return osc;
 }
 
 /**

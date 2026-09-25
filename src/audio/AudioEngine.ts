@@ -393,6 +393,16 @@ export class AudioEngine {
     this.voices.scheduleNote(sample, event.midi, sourceId, audioTime, event.durationMs / 1000);
   }
 
+  /** Call off `sourceId`'s notes that start after `after`; see `VoiceManager`. */
+  cancelPending(sourceId: NoteSourceId, after: number): void {
+    this.voices?.cancelPending(sourceId, after);
+  }
+
+  /** Move the key-ups still to come of `sourceId`'s notes sounding at `from`. */
+  retimeReleases(sourceId: NoteSourceId, from: number, at: (releaseTime: number) => number): void {
+    this.voices?.retimeReleases(sourceId, from, at);
+  }
+
   setMasterVolume(value: number): void {
     this.masterVolume = value;
     this.graph?.setMasterVolume(value);

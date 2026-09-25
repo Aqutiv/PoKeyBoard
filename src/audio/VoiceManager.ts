@@ -1,6 +1,7 @@
 import type { NoteSourceId, SampleSelection } from './audioTypes';
 import {
   holdSampleVoice,
+  moveSampleVoiceRelease,
   releaseSampleVoice,
   startSampleVoice,
   type SampleVoice,
@@ -108,6 +109,33 @@ export class VoiceManager {
   ): void {
     const voice = this.noteOn(sample, midi, sourceId, when, false);
     this.releaseVoice(voice, when + durationS, false);
+  }
+
+  /**
+   * Call off `sourceId`'s notes that start after `after`, before any of them
+   * sounds: each is stopped short of its start and dropped at once, so the
+   * caller can schedule it again. Playback does this when its speed changes.
+   */
+  cancelPending(sourceId: NoteSourceId, after: number): void {
+    for (const voice of this.voices) {
+      if (voice.sourceId !== sourceId || voice.startTime <= after) continue;
+      this.safeStop(voice, this.context.currentTime);
+      this.voices.delete(voice);
+      this.disconnectVoice(voice);
+    }
+  }
+
+  /**
+   * Move the key-ups still to come of `sourceId`'s notes sounding at `from`,
+   * each to the time `at` gives for it, so a note whose playback speed changes
+   * under it lets go where the new speed puts its end.
+   */
+  retimeReleases(sourceId: NoteSourceId, from: number, at: (releaseTime: number) => number): void {
+    for (const voice of this.voices) {
+      if (voice.sourceId !== sourceId || voice.releasing || voice.startTime > from) continue;
+      if (voice.releaseTime === undefined || voice.releaseTime <= from) continue;
+      moveSampleVoiceRelease(voice, Math.max(at(voice.releaseTime), this.context.currentTime));
+    }
   }
 
   setSustain(down: boolean, sourceId: NoteSourceId): void {

@@ -96,6 +96,11 @@ export class TransportController {
   private playLoop: PlaybackLoop | null = null;
   /** Which pass of the loop the scheduler's cursor is in; see `TransportClock`. */
   private schedulePass = 0;
+  /**
+   * The notes handed to the engine that have not begun, in the order they were
+   * walked: where each sits in the walk, and the audio time it starts at.
+   */
+  private queuedNotes: Array<{ pass: number; index: number; audioTime: number }> = [];
 
   // Training playback
   private trainingGate: TrainingGate | null = null;
@@ -581,6 +586,7 @@ export class TransportController {
     this.playNotes = notes;
     this.playCursor = lowerBoundByStart(notes, fromMs);
     this.schedulePass = 0;
+    this.queuedNotes = [];
     // The gate must exist before the first tick. A note at the playhead sits
     // inside the lookahead, so an unarmed tick would queue the very note the
     // hold is about to ask for — the prompt would arrive after the answer.
@@ -619,23 +625,30 @@ export class TransportController {
     );
     const loop = this.playLoop;
     const passMs = loop ? loop.endMs - loop.startMs : 0;
+    // A note that has begun is past calling off.
+    const audioNow = audioEngine.currentTime;
+    this.queuedNotes = this.queuedNotes.filter((queued) => queued.audioTime > audioNow);
     for (;;) {
       const note = this.playNotes[this.playCursor];
       if (note && (!loop || note.startMs < loop.endMs)) {
         const atMs = note.startMs + this.schedulePass * passMs;
         if (atMs > horizonMs) break;
         this.playCursor += 1;
-        if (this.trainingSkipNoteIds?.has(note.id)) continue;
+        // The notes a training hold let through were played once, in the pass
+        // the run resumed in, not forever.
+        if (this.schedulePass === 0 && this.trainingSkipNoteIds?.has(note.id)) continue;
         // A loop lets every key go at its end, as hands leave the keys to
         // start the passage again, rather than ringing on over its top.
         const durationMs = loop
           ? Math.min(note.durationMs, loop.endMs - note.startMs)
           : note.durationMs;
+        const audioTime = this.clock.audioTimeForVirtualMs(atMs);
         audioEngine.scheduleNote(
           { midi: note.midi, velocity: note.velocity, durationMs: durationMs / this.clock.rate },
-          this.clock.audioTimeForVirtualMs(atMs),
+          audioTime,
           'playback',
         );
+        this.queuedNotes.push({ pass: this.schedulePass, index: this.playCursor - 1, audioTime });
         continue;
       }
       // This pass is scheduled; the next starts at the loop's end, once that
@@ -643,8 +656,6 @@ export class TransportController {
       if (!loop || loop.endMs + this.schedulePass * passMs > horizonMs) break;
       this.schedulePass += 1;
       this.playCursor = lowerBoundByStart(this.playNotes, loop.startMs);
-      // The notes a training hold let through were played once, not forever.
-      this.trainingSkipNoteIds = null;
     }
     // Auto-pause at the end applies to normal playback only; an overdub pass
     // keeps recording past the end of the existing take, and a loop never ends.
@@ -828,6 +839,24 @@ export class TransportController {
 
   /** Carry a running playback on from here under a new rate. */
   private retimeRun(run: ClockRun): void {
+    // Notes already handed to the engine were timed at the old rate. Those
+    // still to begin are called off and walked again, for the next tick to
+    // queue on the new clock; those sounding let go where the new rate puts
+    // their end.
+    const now = audioEngine.currentTime;
+    const firstPending = this.queuedNotes.find((queued) => queued.audioTime > now);
+    if (firstPending) {
+      this.schedulePass = firstPending.pass;
+      this.playCursor = firstPending.index;
+    }
+    this.queuedNotes = [];
+    audioEngine.cancelPending('playback', now);
+    const stretch = this.clock.rate / (run.rate ?? this.clock.rate);
+    audioEngine.retimeReleases(
+      'playback',
+      now,
+      (releaseTime) => now + (releaseTime - now) * stretch,
+    );
     // The clock's unwrapped timeline starts again from here, so everything
     // already placed on it by pass keeps its place relative to the playhead:
     // the scheduler may be into the loop's next pass, and so may the next hold.
@@ -840,10 +869,13 @@ export class TransportController {
         : 0;
     this.clock.retime(run);
     this.schedulePass = Math.max(0, this.schedulePass - playheadPass);
+    // The notes a training hold let through belong to the run's first pass,
+    // which is behind the playhead for good once it has gone round.
+    if (playheadPass > 0) this.trainingSkipNoteIds = null;
     if (loop && this.trainingGate) {
       this.trainingGateVirtualMs = this.trainingGate.atMs + (gatePass - playheadPass) * passMs;
     }
-    if (this.metronome.isRunning) this.metronome.setGrid(this.takeGrid());
+    if (this.metronome.isRunning) this.metronome.retime(this.takeGrid());
   }
 
   pause(): void {

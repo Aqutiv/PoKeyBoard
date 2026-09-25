@@ -26,10 +26,10 @@ const MAPPED_TEMPO: TempoSettings = {
 
 /**
  * The bare minimum of the Web Audio surface `scheduleClick` touches, recording
- * what would have been heard.
+ * every click scheduled. One stopped at or before its start is never heard.
  */
 function stubContext(currentTime = 0) {
-  const clicks: Array<{ when: number; freq: number }> = [];
+  const clicks: Array<{ when: number; freq: number; stopAt: number }> = [];
   const param = () => ({
     value: 0,
     setValueAtTime: vi.fn(),
@@ -42,11 +42,18 @@ function stubContext(currentTime = 0) {
     destination: { name: 'destination' },
     createGain: () => ({ gain: param(), connect: vi.fn() }),
     createOscillator: () => {
+      const click = { when: 0, freq: 0, stopAt: Number.POSITIVE_INFINITY };
       const osc = {
         frequency: { value: 0 },
         connect: vi.fn(),
-        start: (when: number) => clicks.push({ when, freq: osc.frequency.value }),
-        stop: vi.fn(),
+        start: (when: number) => {
+          click.when = when;
+          click.freq = osc.frequency.value;
+          clicks.push(click);
+        },
+        stop: (when: number) => {
+          click.stopAt = when;
+        },
       };
       return osc;
     },
@@ -237,6 +244,35 @@ describe('MetronomeEngine', () => {
     engine.topUpSchedule();
     const times = clicks.map((click) => click.when);
     expect(new Set(times).size).toBe(times.length);
+    engine.stop();
+  });
+
+  it('calls off the clicks queued at the old speed when the speed changes', () => {
+    const { context, clicks } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    const tempo = { bpm: 120, timeSignature: FOUR_FOUR };
+    /** A run at `rate` that plays take time `fromMs` at audio time `fromAudio`. */
+    const run = (rate: number, fromAudio: number, fromMs: number) => ({
+      audioTimeForVirtualMs: (ms: number) => fromAudio + (ms - fromMs) / 1000 / rate,
+      virtualMsForAudioTime: (t: number) => fromMs + (t - fromAudio) * 1000 * rate,
+      loop: null,
+    });
+    engine.start(gridForTake(tempo, run(1, 0, 0)));
+    context.currentTime = 0.45;
+    engine.topUpSchedule(); // beat 1, at 0.5 s, is queued
+    // Quarter speed from here: beat 1 is 50 ms of the take away, 200 ms of audio.
+    engine.retime(gridForTake(tempo, run(0.25, 0.45, 450)));
+    for (let t = 0.45; t < 2.7; t += 0.025) {
+      context.currentTime = t;
+      engine.topUpSchedule();
+    }
+    const heard = clicks.filter((click) => click.stopAt > click.when);
+    expect(heard.map((click) => click.when)).toEqual([
+      0,
+      expect.closeTo(0.65, 6),
+      expect.closeTo(2.65, 6),
+    ]);
     engine.stop();
   });
 
