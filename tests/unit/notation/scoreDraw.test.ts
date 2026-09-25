@@ -4,8 +4,11 @@ import { layoutScore, type ScoreLayout } from '@/features/notation/notationLayou
 import {
   computeScoreGeometry,
   drawScore,
+  GAP,
   gutterWidthFor,
+  SCORE_LEAD_IN,
   SCORE_PALETTES,
+  scoreEndMs,
   type ScoreRenderInput,
   type ScoreChrome,
   type ScoreView,
@@ -17,19 +20,48 @@ import {
  * asks the context to do rather than what it paints, which is enough to pin
  * *why* a head is the colour it is — the thing that has no other net.
  */
+interface Point {
+  x: number;
+  y: number;
+}
+
+/** A stroked path: the style and width it was stroked in, and its points. */
+interface StrokedPath {
+  style: string;
+  width: number;
+  points: Point[];
+}
+
 interface Recorder {
   ctx: CanvasRenderingContext2D;
   /** Every fillStyle in force at the moment `fill()` was called. */
   fills: string[];
   strokes: string[];
   texts: string[];
+  /** Every path stroked, in order. Enough to find where a line was drawn. */
+  paths: StrokedPath[];
+  /** Every `fillRect`, with the fillStyle in force — a wash, a rest block. */
+  rects: { style: string; x: number; width: number }[];
+  /**
+   * The centre of every ellipse drawn. Heads are drawn by translating to the
+   * head and then rotating, so the translation alone places them; scale and
+   * rotation are not tracked.
+   */
+  ellipses: Point[];
 }
 
 function recordingContext(): Recorder {
   const fills: string[] = [];
   const strokes: string[] = [];
   const texts: string[] = [];
-  const state = { fillStyle: '#000', strokeStyle: '#000' };
+  const paths: StrokedPath[] = [];
+  const rects: { style: string; x: number; width: number }[] = [];
+  const ellipses: Point[] = [];
+  const state = { fillStyle: '#000', strokeStyle: '#000', lineWidth: 1 };
+  let offset: Point = { x: 0, y: 0 };
+  const saved: Point[] = [];
+  let path: Point[] = [];
+  const at = (x: number, y: number): Point => ({ x: offset.x + x, y: offset.y + y });
 
   const ctx = {
     get fillStyle() {
@@ -44,31 +76,48 @@ function recordingContext(): Recorder {
     set strokeStyle(value: string) {
       state.strokeStyle = value;
     },
-    lineWidth: 1,
+    get lineWidth() {
+      return state.lineWidth;
+    },
+    set lineWidth(value: number) {
+      state.lineWidth = value;
+    },
     font: '',
     textAlign: 'left',
     textBaseline: 'alphabetic',
     globalAlpha: 1,
-    save: () => {},
-    restore: () => {},
-    translate: () => {},
+    save: () => void saved.push(offset),
+    restore: () => {
+      offset = saved.pop() ?? { x: 0, y: 0 };
+    },
+    translate: (x: number, y: number) => {
+      offset = at(x, y);
+    },
     rotate: () => {},
     scale: () => {},
-    setTransform: () => {},
-    beginPath: () => {},
+    setTransform: () => {
+      offset = { x: 0, y: 0 };
+    },
+    beginPath: () => {
+      path = [];
+    },
     closePath: () => {},
-    moveTo: () => {},
-    lineTo: () => {},
+    moveTo: (x: number, y: number) => void path.push(at(x, y)),
+    lineTo: (x: number, y: number) => void path.push(at(x, y)),
     quadraticCurveTo: () => {},
     bezierCurveTo: () => {},
     arc: () => {},
-    ellipse: () => {},
+    ellipse: (x: number, y: number) => void ellipses.push(at(x, y)),
     rect: () => {},
     clearRect: () => {},
-    fillRect: () => {},
+    fillRect: (x: number, _y: number, width: number) =>
+      void rects.push({ style: state.fillStyle, x: offset.x + x, width }),
     strokeRect: () => {},
     fill: () => void fills.push(state.fillStyle),
-    stroke: () => void strokes.push(state.strokeStyle),
+    stroke: () => {
+      strokes.push(state.strokeStyle);
+      paths.push({ style: state.strokeStyle, width: state.lineWidth, points: path });
+    },
     fillText: (text: string) => void texts.push(text),
     // Constant, because the renderer caches its glyph-support probe at module
     // scope — a varying width would make the first suite to run decide for all.
@@ -77,7 +126,7 @@ function recordingContext(): Recorder {
     setLineDash: () => {},
   } as unknown as CanvasRenderingContext2D;
 
-  return { ctx, fills, strokes, texts };
+  return { ctx, fills, strokes, texts, paths, rects, ellipses };
 }
 
 const LAYOUT_OPTS = {
@@ -118,6 +167,23 @@ function bar(beats: readonly number[], midi = 60, staff: NoteStaff = 'treble'): 
   return { ...score, dynamics: [], hairpins: [] };
 }
 
+/** Notes at `[beat, beats, midi]` on one staff, with the rests they leave. */
+function written(
+  entries: readonly (readonly [beat: number, beats: number, midi?: number])[],
+  staff: NoteStaff = 'treble',
+): ScoreLayout {
+  const notes: NoteEvent[] = entries.map(([beat, beats, midi = 60], index) => ({
+    id: `w${index}`,
+    midi,
+    startMs: beat * 1000,
+    durationMs: beats * 1000,
+    velocity: 0.7,
+    staff,
+  }));
+  const score = layoutScore(notes, LAYOUT_OPTS);
+  return { ...score, dynamics: [], hairpins: [] };
+}
+
 /** Two beamed eighths on one beat, as the rhythm chapter's last figure has. */
 function eighths(
   midis: readonly [number, number] = [60, 62],
@@ -141,6 +207,7 @@ function render(
   staves: StaffMode = 'treble',
   /** `null` omits the property entirely, which is what the Play page does. */
   chrome: ScoreChrome | null = 'bare',
+  overrides: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'scrollMs' | 'systemBreakMs'>> = {},
 ): Recorder {
   const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
@@ -156,6 +223,7 @@ function render(
     gutterPx: gutterWidthFor(0),
     staves,
     ...(chrome === null ? {} : { chrome }),
+    ...overrides,
   };
   drawScore(
     recorder.ctx,
@@ -324,16 +392,19 @@ describe('drawScore lesson chrome', () => {
   it('suppresses the empty spill bar, as bare does', () => {
     // A bar that is exactly filled spills a second, empty measure into the
     // layout, and that measure brings a bar line and a whole rest with it. A
-    // lesson draws the music, not the silence after it.
-    //
-    // Counted through the bar line rather than the rest: a whole rest is a
-    // `fillRect`, and the recording context only sees `fill()`.
+    // lesson draws the music, not the silence after it. (Its closing line
+    // stands where the spill bar's opening one would, thick: see below.)
     const filled = bar([0, 1, 2, 3]);
-    const barLines = (drawn: Recorder) =>
-      drawn.strokes.filter((stroke) => stroke === SCORE_PALETTES.dark.barLine).length;
-    expect(barLines(render(filled, {}, 'treble', 'full'))).toBeGreaterThan(
-      barLines(render(filled, {}, 'treble', 'lesson')),
-    );
+    const spill = (drawn: Recorder) => ({
+      lines: drawn.paths.filter(
+        (path) => path.style === SCORE_PALETTES.dark.barLine && path.width === 1,
+      ).length,
+      // A whole rest is a block, drawn with `fillRect`.
+      rests: drawn.rects.filter((rect) => rect.style === rest).length,
+    });
+    const wide = { widthPx: 600 };
+    expect(spill(render(filled, {}, 'treble', 'full', wide))).toEqual({ lines: 1, rests: 1 });
+    expect(spill(render(filled, {}, 'treble', 'lesson', wide))).toEqual({ lines: 0, rests: 0 });
   });
 
   it('treats an unset chrome as full, which is what the Play page passes', () => {
@@ -360,5 +431,366 @@ describe('drawScore beams', () => {
     const grand = render(eighths([48, 50], 'bass'), {}, 'grand');
     const trebleOnly = render(eighths([48, 50], 'bass'), {}, 'treble');
     expect(trebleOnly.fills.length).toBeLessThan(grand.fills.length);
+  });
+});
+
+describe('drawScore bar lines', () => {
+  const { barLine, gutterBg, loopEdge, loopWash, playhead } = SCORE_PALETTES.dark;
+  /** Half a head's width, as the renderer draws it. */
+  const HEAD_RX = GAP * 0.64;
+  /** Three bars of 4/4 across, a beat to 50 px. */
+  const WIDE = { widthPx: 800, pxPerMs: 0.05 };
+
+  /** Where the music at `ms` is drawn, from the top of the take. */
+  const onsetX = (ms: number, pxPerMs = WIDE.pxPerMs): number =>
+    gutterWidthFor(0) + SCORE_LEAD_IN + ms * pxPerMs;
+
+  /** Every bar line's x. The final bar line is the thick one, and left out. */
+  const barLines = (drawn: Recorder): number[] =>
+    drawn.paths
+      .filter((path) => path.style === barLine && path.width === 1)
+      .map((path) => (path.points[0] as Point).x);
+
+  /** The one bar line within half a beat of `ms`. */
+  const lineNear = (drawn: Recorder, ms: number, pxPerMs = WIDE.pxPerMs): number => {
+    const near = barLines(drawn).filter((x) => Math.abs(x - onsetX(ms, pxPerMs)) < 500 * pxPerMs);
+    expect(near).toHaveLength(1);
+    return near[0] as number;
+  };
+
+  const quarters = (bars: number): ScoreLayout =>
+    bar(Array.from({ length: bars * 4 }, (_, beat) => beat));
+
+  it('stands before the downbeat, clear of its head, and leaves the head on its onset', () => {
+    const drawn = render(quarters(2), {}, 'treble', null, WIDE);
+    const downbeat = onsetX(4000);
+    // The note is still drawn at its time: only the line moved.
+    expect(drawn.ellipses.some((head) => Math.abs(head.x - downbeat) < 1e-6)).toBe(true);
+    const line = lineNear(drawn, 4000);
+    expect(line).toBeLessThan(downbeat - HEAD_RX);
+    // About a head's width back, not drifting off into the bar before.
+    expect(downbeat - line).toBeLessThan(GAP * 2);
+  });
+
+  it.each(['full', 'lesson', 'bare'] as const)(
+    'draws no line opening the first bar (%s)',
+    (chrome) => {
+      // The gutter's clef and time signature open the first bar, as they do a
+      // printed system; a line there as well struck through the first note.
+      const drawn = render(quarters(1), {}, 'treble', chrome, WIDE);
+      expect(barLines(drawn).filter((x) => x < onsetX(3000))).toEqual([]);
+    },
+  );
+
+  it('still numbers the first bar on the Play page', () => {
+    expect(render(quarters(1), {}, 'treble', null, WIDE).texts).toContain('1');
+  });
+
+  describe.each([
+    ['quarters', quarters(3)],
+    [
+      'whole and half notes',
+      written([
+        [0, 4],
+        [4, 2],
+        [6, 2],
+        [8, 4],
+      ]),
+    ],
+    [
+      'eighths into the bar',
+      written([
+        [0, 3],
+        [3, 0.5],
+        [3.5, 0.5],
+        [4, 0.5, 64],
+        [4.5, 0.5, 65],
+        [5, 3],
+      ]),
+    ],
+  ] as const)('with %s', (_, layout) => {
+    it.each([null, 'lesson', 'bare'] as const)('runs through no head (chrome %s)', (chrome) => {
+      // Roomy, and with eighths 17.5 px apart — near the 16 px the Play page
+      // packs a take's common onsets to. Any closer and the heads all but
+      // touch, leaving no clear point to find.
+      for (const pxPerMs of [WIDE.pxPerMs, 0.035]) {
+        const drawn = render(layout, {}, 'treble', chrome, { widthPx: 800, pxPerMs });
+        const lines = barLines(drawn);
+        expect(lines.length).toBeGreaterThan(0);
+        for (const x of lines) {
+          for (const head of drawn.ellipses) {
+            // A whole note's head is a quarter as wide again.
+            expect(Math.abs(x - head.x)).toBeGreaterThan(HEAD_RX * 1.25);
+          }
+        }
+      }
+    });
+  });
+
+  it('clears an accidental on the downbeat as well', () => {
+    const at = (midi: number) =>
+      lineNear(
+        render(
+          written([
+            [0, 4],
+            [4, 4, midi],
+          ]),
+          {},
+          'treble',
+          null,
+          WIDE,
+        ),
+        4000,
+      );
+    const plain = at(65);
+    const sharp = at(66);
+    // The sharp is centred past the head's edge and a gap; this is its left side.
+    expect(sharp).toBeLessThan(onsetX(4000) - (HEAD_RX * 1.25 + GAP * 0.7 + GAP * 0.6));
+    expect(sharp).toBeLessThan(plain);
+  });
+
+  it('splits the gap when the music is too packed to clear both sides', () => {
+    // A sixteenth into the downbeat, 16 px apart: as close as the Play page
+    // spaces a take's common onsets at 100%.
+    const pxPerMs = 16 / 250;
+    const packed = written([
+      [0, 3],
+      [3, 0.75],
+      [3.75, 0.25],
+      [4, 1],
+    ]);
+    const drawn = render(packed, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const line = lineNear(drawn, 4000, pxPerMs);
+    expect(line).toBeGreaterThan(onsetX(3750, pxPerMs) + HEAD_RX);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+  });
+
+  it('keeps clear of the downbeat head when a flag swings out over it', () => {
+    // The same sixteenth alone in its beat, so it flags instead of beaming —
+    // and its flag reaches past where the downbeat's head begins. Splitting the
+    // ink's overlap would put the line inside that head; the heads decide.
+    const pxPerMs = 16 / 250;
+    const flagged = written([
+      [0, 1],
+      [1, 1],
+      [2, 1],
+      [3.75, 0.25],
+      [4, 1],
+    ]);
+    const sixteenth = flagged.chords.find((chord) => chord.displayStartMs === 3750);
+    expect(sixteenth?.beamId).toBeNull();
+    expect(sixteenth?.stemDown).toBe(false);
+    const drawn = render(flagged, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const line = lineNear(drawn, 4000, pxPerMs);
+    expect(line).toBeGreaterThan(onsetX(3750, pxPerMs) + HEAD_RX);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+  });
+
+  it('crosses a rest rather than a head when a rest overlaps the downbeat', () => {
+    // A sixteenth rest 10 px before the downbeat overlaps its head, and a
+    // flagged, dotted eighth leaves no gap before the rest either. The note
+    // heads decide, and a rest is not one.
+    const pxPerMs = 10 / 250;
+    const packed = written([
+      [0, 3],
+      [3, 0.75],
+      [4, 1],
+    ]);
+    expect(packed.rests.some((rest) => rest.displayStartMs === 3750)).toBe(true);
+    const drawn = render(packed, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const line = lineNear(drawn, 4000, pxPerMs);
+    expect(line).toBeGreaterThan(onsetX(3000, pxPerMs) + HEAD_RX);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+  });
+
+  it('looks as far as a chord stacks its accidentals', () => {
+    // Four sharps a beat after a blank downbeat stack four columns deep, and
+    // the outermost reaches back past the bar's own time.
+    const stacked = written([
+      [0, 4],
+      [5, 1, 73],
+      [5, 1, 75],
+      [5, 1, 78],
+      [5, 1, 80],
+    ]);
+    const columns = stacked.chords.flatMap((chord) =>
+      chord.notes.map((note) => note.accidentalColumn),
+    );
+    expect(Math.max(...columns)).toBeGreaterThanOrEqual(3);
+    const drawn = render({ ...stacked, rests: [] }, {}, 'treble', 'lesson', WIDE);
+    // The outermost sharp's left edge, before any head displacement.
+    const sharp = onsetX(5000) - (HEAD_RX + GAP * 0.7 + 3 * GAP * 1.4 + GAP * 0.6);
+    expect(lineNear(drawn, 4000)).toBeLessThan(sharp);
+  });
+
+  it('stays on its time when nothing starts on the downbeat', () => {
+    const late = written([
+      [0, 4],
+      [5, 1],
+    ]);
+    const drawn = render({ ...late, rests: [] }, {}, 'treble', 'lesson', WIDE);
+    expect(lineNear(drawn, 4000)).toBe(Math.round(onsetX(4000)) + 0.5);
+  });
+
+  it('stands before a rest on the downbeat', () => {
+    const late = written([
+      [0, 4],
+      [5, 1],
+    ]);
+    const drawn = render(late, {}, 'treble', null, WIDE);
+    expect(lineNear(drawn, 4000)).toBeLessThan(onsetX(4000) - GAP * 0.6);
+  });
+
+  it('runs a loop from bar line to bar line, with the wash between them', () => {
+    const drawn = render(
+      quarters(3),
+      { loop: { startMs: 4000, endMs: 8000 } },
+      'treble',
+      null,
+      WIDE,
+    );
+    const edges = drawn.paths
+      .filter((path) => path.style === loopEdge)
+      .flatMap((path) => path.points.map((point) => point.x));
+    const bars = [lineNear(drawn, 4000), lineNear(drawn, 8000)] as const;
+    expect([...new Set(edges)]).toEqual(bars);
+    const wash = drawn.rects.find((rect) => rect.style === loopWash);
+    expect(wash?.x).toBe(bars[0]);
+    expect(wash?.width).toBe(bars[1] - bars[0]);
+  });
+
+  it('announces a new tempo over the downbeat, where it always stood', () => {
+    // Hung off the line, the mark's note would land on the downbeat's head.
+    const notes: NoteEvent[] = Array.from({ length: 8 }, (_, beat) => ({
+      id: `t${beat}`,
+      midi: 60,
+      startMs: beat * 1000,
+      durationMs: 1000,
+      velocity: 0.7,
+    }));
+    const score = layoutScore(notes, { ...LAYOUT_OPTS, tempoChanges: [{ atMs: 4000, bpm: 90 }] });
+    const drawn = render({ ...score, dynamics: [], hairpins: [] }, {}, 'treble', null, WIDE);
+    expect(drawn.texts).toContain('= 90');
+    const mark = Math.round(onsetX(4000)) + 0.5 + 16;
+    expect(drawn.ellipses.some((ellipse) => Math.abs(ellipse.x - mark) < 1e-6)).toBe(true);
+  });
+
+  it('keeps the tempo mark while its downbeat shows, after the line has scrolled away', () => {
+    // Scrolled so the downbeat stands just inside the gutter's edge: its line,
+    // a head-width further left, has gone under the gutter; the mark has not.
+    const notes: NoteEvent[] = Array.from({ length: 8 }, (_, beat) => ({
+      id: `t${beat}`,
+      midi: 60,
+      startMs: beat * 1000,
+      durationMs: 1000,
+      velocity: 0.7,
+    }));
+    const score = layoutScore(notes, { ...LAYOUT_OPTS, tempoChanges: [{ atMs: 4000, bpm: 90 }] });
+    const scrollMs = 4000 + (SCORE_LEAD_IN + 4) / WIDE.pxPerMs;
+    const drawn = render({ ...score, dynamics: [], hairpins: [] }, {}, 'treble', null, {
+      ...WIDE,
+      scrollMs,
+    });
+    const onset = gutterWidthFor(0) - 4;
+    expect(barLines(drawn).filter((x) => Math.abs(x - onset) < GAP * 3)).toEqual([]);
+    expect(drawn.texts).toContain('= 90');
+  });
+
+  it('keeps the playhead on the onset it is sounding', () => {
+    const drawn = render(quarters(2), { playheadMs: 4000 }, 'treble', null, WIDE);
+    const line = drawn.paths.find((path) => path.style === playhead && path.width === 1.6);
+    expect(line?.points[0]?.x).toBeCloseTo(onsetX(4000));
+  });
+
+  it('announces a clef change just before the bar line, not over it', () => {
+    // The left hand's second bar is written high, under a treble clef.
+    const notes: NoteEvent[] = [
+      { id: 'a', midi: 48, startMs: 0, durationMs: 4000, velocity: 0.7, staff: 'bass' },
+      {
+        id: 'b',
+        midi: 67,
+        startMs: 4000,
+        durationMs: 4000,
+        velocity: 0.7,
+        staff: 'bass',
+        clef: 'treble',
+      },
+    ];
+    const layout = { ...layoutScore(notes, LAYOUT_OPTS), dynamics: [], hairpins: [] };
+    const drawn = render(layout, {}, 'grand', null, WIDE);
+    const line = lineNear(drawn, 4000);
+    // The gutter is washed too; the clef's own wash is the one out in the music.
+    const wash = drawn.rects.find((rect) => rect.style === gutterBg && rect.x > gutterWidthFor(0));
+    expect(wash).toBeDefined();
+    expect((wash?.x ?? 0) + (wash?.width ?? 0)).toBeLessThanOrEqual(line);
+  });
+
+  describe('the closing line', () => {
+    /** Every final bar line's x: the thick ones. */
+    const finalLines = (drawn: Recorder): number[] =>
+      drawn.paths
+        .filter((path) => path.style === barLine && path.width === 2)
+        .map((path) => (path.points[0] as Point).x);
+
+    it.each(['lesson', 'bare'] as const)(
+      'ends a %s view at its last written bar, not after the empty bar it spills',
+      (chrome) => {
+        // A bar of quarters fills its bar, so the layout spills a second one.
+        const filled = quarters(1);
+        expect(filled.totalMs).toBe(8000);
+        const drawn = render(filled, {}, 'treble', chrome, WIDE);
+        expect(finalLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+        expect(barLines(drawn)).toEqual([]);
+      },
+    );
+
+    it('keeps the empty bar on the Play page, where a recording carries on into it', () => {
+      const drawn = render(quarters(1), {}, 'treble', null, WIDE);
+      expect(finalLines(drawn)).toEqual([Math.round(onsetX(8000)) + 0.5]);
+      expect(barLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+    });
+
+    it('closes a system the music runs on from with a plain bar line', () => {
+      const drawn = render(quarters(1), {}, 'treble', 'bare', { ...WIDE, systemBreakMs: 4000 });
+      expect(finalLines(drawn)).toEqual([]);
+      expect(barLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+    });
+
+    it('closes a system at its break under a note held on across it', () => {
+      // A whole note from beat 3 is laid out tied on into the next bar, so the
+      // layout's own music runs a bar past the break. The system still closes
+      // at the break, and only there.
+      const held = written([
+        [0, 1],
+        [1, 1],
+        [2, 1],
+        [3, 4],
+      ]);
+      expect(scoreEndMs(held, 'bare')).toBe(8000);
+      const drawn = render(held, {}, 'treble', 'bare', { ...WIDE, systemBreakMs: 4000 });
+      expect(finalLines(drawn)).toEqual([]);
+      const lines = [...new Set(barLines(drawn))];
+      expect(lines).toHaveLength(1);
+      expect(lines[0]).toBeGreaterThan(onsetX(3000));
+      expect(lines[0]).toBeLessThan(onsetX(4000));
+    });
+
+    it('ends a bar left partly silent at the bar, not at its last note', () => {
+      const drawn = render({ ...bar([0, 1]), rests: [] }, {}, 'treble', 'lesson', WIDE);
+      expect(finalLines(drawn)).toEqual([Math.round(onsetX(4000)) + 0.5]);
+    });
+
+    it('gives a snippet the span its closing line stands at', () => {
+      // `StaffSnippet` fits its width to this, so the line lands at its edge.
+      const filled = quarters(2);
+      expect(scoreEndMs(filled)).toBe(filled.totalMs);
+      expect(scoreEndMs(filled, 'full')).toBe(12000);
+      expect(scoreEndMs(filled, 'lesson')).toBe(8000);
+      expect(scoreEndMs(filled, 'bare')).toBe(8000);
+      // An empty stave still keeps its one bar.
+      const empty = layoutScore([], LAYOUT_OPTS);
+      expect(scoreEndMs(empty, 'lesson')).toBe(empty.totalMs);
+      expect(empty.totalMs).toBeGreaterThan(0);
+    });
   });
 });
