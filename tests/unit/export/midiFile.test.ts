@@ -65,7 +65,7 @@ describe('a take as a MIDI file', () => {
     expect((await metaBytes((await midiFor(declared))!, 0x59))[0]).toBe(2);
   });
 
-  it('declares the mode a score gave it, however few notes there are to read', async () => {
+  it('declares a key the score calls minor, however few notes there are to read', async () => {
     // Four notes are too few to read a mode from, which reads as major; the
     // score says A minor.
     const arpeggio = [
@@ -90,11 +90,14 @@ describe('a take as a MIDI file', () => {
         '</measure></part></score-partwise>',
     );
     expect(await metaBytes((await midiFor(aMinor))!, 0x59)).toEqual([0, 1]); // no sharps, minor
+  });
 
-    // And the other way: the D minor study, declared as F major.
-    const fMajor = dMinor();
-    fMajor.tempo = { ...fMajor.tempo, keySignature: -1, keyMode: 'major' };
-    expect(await metaBytes((await midiFor(fMajor))!, 0x59)).toEqual([0xff, 0]);
+  it('reads the mode from the pitches when a score calls its key major', async () => {
+    // "Major" is often just what the exporting program wrote: the D minor
+    // study, declared as F major, is still in D minor.
+    const declared = dMinor();
+    declared.tempo = { ...declared.tempo, keySignature: -1, keyMode: 'major' };
+    expect(await metaBytes((await midiFor(declared))!, 0x59)).toEqual([0xff, 1]); // one flat, minor
   });
 
   it('asks a sequencer for the electric piano a Wurlitzer take was played on', async () => {

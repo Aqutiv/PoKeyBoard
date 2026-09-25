@@ -11,8 +11,8 @@ import { takeMidiFileName } from '@/utils/filenames';
  * A take as a `.mid` file, from its freshest copy and without disturbing
  * playback. It declares the key the notation writes — the score's own, or the
  * one its pitches read as — so an editor opening it spells its accidentals the
- * same way, major or minor as the score said, or as the pitches read where it
- * never did; and it names the General MIDI program nearest the piano it was
+ * same way, minor where the score says so and otherwise major or minor as the
+ * pitches read; and it names the General MIDI program nearest the piano it was
  * played on. Null for an empty or missing take, which has nothing to write.
  */
 export async function takeMidiFile(
@@ -25,9 +25,12 @@ export async function takeMidiFile(
     take.tempo.keySignature !== undefined
       ? normalizeFifths(take.tempo.keySignature)
       : detectFifths(take.notes);
-  // A reading can only guess at what the score said, and a short piece is too
-  // little to read at all: it would come out major whatever it was.
-  const mode = take.tempo.keyMode ?? detectMode(take.notes, fifths);
+  // A score that calls its key minor meant it, and a short piece has too few
+  // notes to read that from. "Major" is often just what the exporting program
+  // wrote: several of the vendored scores in minor keys carry it. So a minor
+  // is taken at its word, and a major, like no mode at all, is left to the
+  // pitches.
+  const mode = take.tempo.keyMode === 'minor' ? 'minor' : detectMode(take.notes, fifths);
   const bytes = takeToMidi(take, {
     title: take.title,
     key: { fifths, minor: mode === 'minor' },
