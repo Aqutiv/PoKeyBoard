@@ -188,8 +188,9 @@ const CHORD_ONSET_WINDOW_MS = 40;
  * struck a little unevenly, in which case the chord's median onset — so the
  * chord snaps to one column, and to the column its notes are nearest together.
  * An even number of notes has two middle onsets and the median is halfway
- * between them; either one alone would lean the chord early or late. Snapped note by note, a chord that straddles the
- * middle of a grid step splits into two, a column apart.
+ * between them; either one alone would lean the chord early or late. Snapped
+ * note by note, a chord that straddles the middle of a grid step splits into
+ * two, a column apart.
  *
  * Across both staves, because the unevenness is as often one hand behind the
  * other as a roll within one. Never over more than `windowFor` allows — half a
@@ -197,6 +198,12 @@ const CHORD_ONSET_WINDOW_MS = 40;
  * line to straddle and exact onsets are what was asked for — so a fast run is
  * never mistaken for a chord, and a score, whose chords share one onset
  * exactly, is left as it was.
+ *
+ * And only notes held down together. However unevenly a chord is struck, every
+ * note of it is still down when the last one comes; a grace note, or a key
+ * played twice in quick succession, is let go before the next note starts,
+ * and that is two notes in turn. One key is never two notes of a chord,
+ * whatever the timing.
  */
 function chordOnsets(
   notes: readonly NoteEvent[],
@@ -209,11 +216,16 @@ function chordOnsets(
   while (i < order.length) {
     const first = notes[order[i] as number] as NoteEvent;
     const window = windowFor(first);
+    /** The soonest any note of the chord is let go; a later note has to come before it. */
+    let heldTogetherUntil = first.startMs + first.durationMs;
+    const pitches = new Set([first.midi]);
     let j = i + 1;
-    while (
-      j < order.length &&
-      (notes[order[j] as number] as NoteEvent).startMs - first.startMs <= window
-    ) {
+    while (j < order.length) {
+      const next = notes[order[j] as number] as NoteEvent;
+      if (next.startMs - first.startMs > window) break;
+      if (next.startMs >= heldTogetherUntil || pitches.has(next.midi)) break;
+      heldTogetherUntil = Math.min(heldTogetherUntil, next.startMs + next.durationMs);
+      pitches.add(next.midi);
       j += 1;
     }
     if (j - i > 1) {

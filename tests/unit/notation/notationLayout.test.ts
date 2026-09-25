@@ -519,6 +519,47 @@ describe('chords struck a little unevenly', () => {
     );
     expect(layout.chords).toHaveLength(4);
   });
+
+  it('never takes a key struck twice in quick succession for a chord', () => {
+    // On a 1/8 grid at 120 bpm the rounding edge is 125 ms. The key goes down
+    // at 110, up at 130 and down again at 145: two notes, one either side of
+    // the edge, and not one chord at 127.5 ms with the same head twice.
+    const layout = layoutScore(
+      [
+        note({ id: 'first', midi: 72, startMs: 110, durationMs: 20 }),
+        note({ id: 'again', midi: 72, startMs: 145, durationMs: 20 }),
+      ],
+      { ...OPTS, quantization: '1/8' },
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 250]);
+    expect(layout.chords.map((chord) => chord.notes.length)).toEqual([1, 1]);
+  });
+
+  it('never takes a grace note for part of the note it leads into', () => {
+    // Let go at 60 ms, before the main note sounds at 75: played in turn, so
+    // each rounds to its own side of the 62.5 ms edge.
+    const layout = layoutScore(
+      [
+        note({ id: 'grace', midi: 74, startMs: 40, durationMs: 20 }),
+        note({ id: 'main', midi: 72, startMs: 75, durationMs: 425 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
+
+  it('never writes one key twice in a chord, even where its notes overlap', () => {
+    // Struck again before it was let go, as an imported file can have it: the
+    // onsets of the key struck twice above, and still two notes, not a chord.
+    const layout = layoutScore(
+      [
+        note({ id: 'first', midi: 72, startMs: 110, durationMs: 60 }),
+        note({ id: 'again', midi: 72, startMs: 145, durationMs: 60 }),
+      ],
+      { ...OPTS, quantization: '1/8' },
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 250]);
+  });
 });
 
 describe('beam grouping', () => {
