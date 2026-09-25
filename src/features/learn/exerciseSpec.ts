@@ -1,3 +1,6 @@
+import { momentsOf } from './phrase';
+import type { LearnPhrase } from './types';
+
 /**
  * What an exercise asks for, as plain serializable data.
  *
@@ -95,13 +98,50 @@ export type ExerciseSpec =
       /** Omitted means any key: the pulse step, where the point is when, not what. */
       midi?: number;
       toleranceBeats?: number;
+    }
+  /**
+   * A written line, played from the page: pitch and order, and — when timed —
+   * rhythm too. The kind the whole course has been building towards, and the
+   * first that grades *what* and *when* at once.
+   *
+   * It carries the phrase itself rather than a list of notes derived from it,
+   * so the gate, the drawing and the lighting all read one object and cannot
+   * disagree. The phrase is plain data; a spec is still content, not code.
+   *
+   * The line is walked as *moments* — every note that starts on one beat —
+   * so a chord is one step of the line, however it is struck.
+   */
+  | {
+      kind: 'playAlong';
+      phrase: LearnPhrase;
+      /**
+       * Graded against the lesson click, bar-anchored exactly like `rhythm`:
+       * the line may begin on any bar line. Omitted means order only — the
+       * "wait for you" of Play's Training modes.
+       */
+      timed?: { toleranceBeats?: number };
+      /**
+       * A moment's notes must be down together, and nothing else with them.
+       * Omitted means they accumulate in any order, which is what lets one
+       * mouse pointer finish a moment for two hands.
+       */
+      together?: Togetherness;
+      /**
+       * Moment indices a wrong note falls back to. `[0]` by default — the
+       * `sequence` rule. A timed checkpoint must sit on a bar line, since
+       * coming back in means coming in on a downbeat.
+       */
+      checkpoints?: readonly number[];
     };
 
 /**
- * Every kind counted by membership. `sequence` and `rhythm` are counted by
- * position instead — one through the keyboard, the other through the bar.
+ * Every kind counted by membership. `sequence`, `rhythm` and `playAlong` are
+ * counted by position instead — through the keyboard, the bar, or the page.
  */
-export type UnorderedSpec = Exclude<ExerciseSpec, { kind: 'sequence' } | { kind: 'rhythm' }>;
+export type UnorderedSpec = Exclude<
+  ExerciseSpec,
+  { kind: 'sequence' } | { kind: 'rhythm' } | { kind: 'playAlong' }
+>;
 
 /** Denominator of the "{done} of {total}" readout. */
 export function goalTotal(spec: ExerciseSpec): number {
@@ -122,6 +162,8 @@ export function goalTotal(spec: ExerciseSpec): number {
       return spec.pitchClasses.length;
     case 'rhythm':
       return spec.beats.length;
+    case 'playAlong':
+      return momentsOf(spec.phrase).length;
   }
 }
 

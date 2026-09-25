@@ -204,6 +204,8 @@ export const en: Messages = {
       crookedLanternWaltz:
         'An original Halloween waltz in A minor — a high bell above a lopsided oom-pah-pah, a shadowy middle section, and an ending that slows until it vanishes.',
       furElise: 'Beethoven’s beloved bagatelle — the famous opening theme.',
+      odeToJoyFirstSteps:
+        'The first eight bars of Beethoven’s great tune, for the right hand alone — the melody from chapter seven of Learn.',
       gymnopedie1:
         'Satie’s dreamy classic — slow, soft, and spacious. Just listen, or drift along.',
       bluesInC:
@@ -250,6 +252,8 @@ export const en: Messages = {
     diagramLabel: 'Keyboard diagram',
     staffLabel: 'Music notation example',
     tryOnPlay: 'Try it on Play',
+    practiseOnPlay: ({ title }) => `Practise ${title} on Play`,
+    practiseOnPlayHint: 'It opens in Training, so Play waits for you at every note.',
     backToChapters: 'Back to chapters',
     quizPrompt: 'Which key is highlighted?',
     quizCorrect: 'Correct.',

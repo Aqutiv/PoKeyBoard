@@ -1,6 +1,7 @@
 import type { NoteStaff, TimeSignature } from '@/domain/takeTypes';
 import type { TrackEvent } from '@/features/library/trackBuilder';
 import type { ScoreChrome, StaffMode } from '@/features/notation/scoreRenderer';
+import type { PlaybackMode } from '@/features/transport/modes';
 import type { Messages } from '@/i18n/types';
 import type { ExerciseSpec, PitchClass } from './exerciseSpec';
 import type { NoteSpelling } from './noteLabel';
@@ -37,6 +38,15 @@ export interface LearnChapterMeta {
 export interface LearnChapter {
   id: LearnChapterId;
   steps: readonly LearnStep[];
+  /**
+   * Where the closing card sends the user: a Library track opened on Play in
+   * a Training mode, so the piece just learned is waiting there to practise.
+   * Omitted leaves the plain "Try it on Play" onto an empty keyboard.
+   *
+   * The mode is written to the saved Play setting, which is why the button
+   * says it opens in Training rather than switching it behind anyone's back.
+   */
+  handoff?: { trackId: string; mode: Exclude<PlaybackMode, 'simple'> };
 }
 
 export type LearnStep = TheoryStep | ExerciseStep | QuizStep | DrillStep;

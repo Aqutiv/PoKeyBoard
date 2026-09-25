@@ -3,9 +3,12 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { useLiveActiveNotes, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { useRouter } from '@/app/routerContext';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
+import { LIBRARY_TRACKS } from '@/features/library/catalog';
+import { openLibraryTrack } from '@/features/library/libraryService';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { transportController } from '@/features/transport/transportController';
 import { useI18n } from '@/i18n/i18nContext';
+import { useSettingsStore } from '@/state/useSettingsStore';
 import { KeyboardDiagram } from './KeyboardDiagram';
 import { QuizPanel } from './QuizPanel';
 import { StaffSnippet } from './StaffSnippet';
@@ -13,7 +16,13 @@ import { findLearnChapter } from './chapters';
 import { loadChapterProse } from './content';
 import type { ChapterProse } from './content/types';
 import { playPhrase } from './demo';
-import { needsRangeShift, targetMidisFor, type MidiRange } from './exerciseMatcher';
+import {
+  dueNoteId,
+  needsRangeShift,
+  struckNoteIds,
+  targetMidisFor,
+  type MidiRange,
+} from './exerciseMatcher';
 import { chapterStep, withChapterDone, withChapterStep, type LearnProgress } from './progress';
 import type { LearnChapter, LearnChapterId, LearnStep } from './types';
 import { useDrill } from './useDrill';
@@ -28,6 +37,7 @@ const LESSON_TIME_SIGNATURE = { numerator: 4, denominator: 4 } as const;
 /** Enough that the bar line chosen for a demo is never already passing. */
 const LISTEN_LEAD_S = 0.25;
 const EMPTY_TARGETS: ReadonlySet<number> = new Set();
+const NO_WRONG: ReadonlySet<number> = new Set();
 
 interface ChapterRunnerProps {
   chapterId: LearnChapterId;
@@ -111,7 +121,9 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   // Derived, with an override: a rhythm spec can never be authored without its
   // click, while a theory card can still start one early to introduce the pulse
   // before anything is asked of the reader.
-  const wantsClick = step?.click === true || spec?.kind === 'rhythm';
+  // A timed line is judged against the same click a rhythm is.
+  const timedSpec = spec?.kind === 'rhythm' || (spec?.kind === 'playAlong' && !!spec.timed);
+  const wantsClick = step?.click === true || timedSpec;
   const click = useLessonClick(wantsClick && pianoReady, LESSON_BPM, LESSON_TIME_SIGNATURE);
 
   const exercise = useExercise(spec, click.beatsAt);
@@ -148,6 +160,20 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
   const wantsShift = playSpec ? needsRangeShift(playSpec, playing.state, range) : false;
 
+  // A written line lights by *position*: the heads played so far, not every
+  // head of the pitch being held. `litMidis` stays for every other step.
+  const alongSpec = spec?.kind === 'playAlong' ? spec : null;
+  const litNoteIds = useMemo(
+    () => (alongSpec ? struckNoteIds(alongSpec, exercise.state) : undefined),
+    [alongSpec, exercise.state],
+  );
+  const focusNoteId = alongSpec ? dueNoteId(alongSpec, exercise.state) : null;
+  const wrongMidi = alongSpec ? exercise.state.wrongMidi : null;
+  const wrongMidis = useMemo(
+    () => (wrongMidi === null ? NO_WRONG : new Set([wrongMidi])),
+    [wrongMidi],
+  );
+
   const onRangeChange = useCallback((next: MidiRange) => setRange(next), []);
 
   const goTo = useCallback(
@@ -180,6 +206,43 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
     onProgress(withChapterDone(progress, chapterId));
     onClose();
   }, [chapterId, onClose, onProgress, progress]);
+
+  const handoff = chapter?.handoff;
+  const handoffTitle = handoff
+    ? LIBRARY_TRACKS.find((def) => def.trackId === handoff.trackId)?.title
+    : undefined;
+  const setPlaybackMode = useSettingsStore((s) => s.setPlaybackMode);
+  const [handingOff, setHandingOff] = useState(false);
+
+  const onHandoff = useCallback(() => {
+    if (!handoff || handingOff) return;
+    setHandingOff(true);
+    // Opened before the mode is touched: a Training mode switched on with
+    // nothing loaded would be a surprise on the next visit to Play. The chapter
+    // is finished either way — it was — and a track that would not open is
+    // left to be found in the Library by hand rather than on an empty Play.
+    void openLibraryTrack(handoff.trackId).then(
+      (opened) => {
+        setHandingOff(false);
+        finish();
+        if (!opened) {
+          navigate('library');
+          return;
+        }
+        // The same two calls the Modes menu makes, so Play is in exactly the
+        // state it would be had the user chosen Training there.
+        setPlaybackMode(handoff.mode);
+        transportController.refreshTrainingMode();
+        navigate('play');
+      },
+      (error: unknown) => {
+        console.error('Opening the chapter hand-off failed:', error);
+        setHandingOff(false);
+        finish();
+        navigate('library');
+      },
+    );
+  }, [finish, handingOff, handoff, navigate, setPlaybackMode]);
 
   const advance = useCallback(() => {
     if (isLast) finish();
@@ -317,6 +380,8 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
             chrome={step.visual.chrome}
             ariaLabel={m.learn.staffLabel}
             litMidis={heldMidis}
+            litNoteIds={litNoteIds}
+            focusNoteId={focusNoteId}
           />
         ) : null}
 
@@ -356,13 +421,10 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
                     : ''
                 : text?.prompt}
             </p>
-            {/* A rhythm attempt that resets mid-bar would fire this live
+            {/* A timed attempt that resets mid-bar would fire this live
                 region up to four times a second, so the announcement is
                 dropped for those and the text is left to be read visually. */}
-            <p
-              className="learn-exercise__progress"
-              role={spec?.kind === 'rhythm' ? undefined : 'status'}
-            >
+            <p className="learn-exercise__progress" role={timedSpec ? undefined : 'status'}>
               {!pianoReady
                 ? m.learn.loadingPiano
                 : readout.satisfied
@@ -401,18 +463,32 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
         {isLast && steps.length > 0 ? (
           <div className="learn-card__outro">
-            <button
-              type="button"
-              className="btn btn--small"
-              onClick={() => {
-                // Closes as well as completes: the chapter is now finished, so
-                // coming back to Learn should land on the outline.
-                finish();
-                navigate('play');
-              }}
-            >
-              {m.learn.tryOnPlay}
-            </button>
+            {handoff && handoffTitle ? (
+              <>
+                <p className="learn-card__body">{m.learn.practiseOnPlayHint}</p>
+                <button
+                  type="button"
+                  className="btn btn--small"
+                  onClick={onHandoff}
+                  disabled={handingOff}
+                >
+                  {m.learn.practiseOnPlay({ title: handoffTitle })}
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                className="btn btn--small"
+                onClick={() => {
+                  // Closes as well as completes: the chapter is now finished, so
+                  // coming back to Learn should land on the outline.
+                  finish();
+                  navigate('play');
+                }}
+              >
+                {m.learn.tryOnPlay}
+              </button>
+            )}
           </div>
         ) : null}
       </div>
@@ -439,6 +515,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
       <div className="learn-runner__keyboard">
         <PianoKeyboard
           targetMidis={targetMidis}
+          wrongMidis={wrongMidis}
           anchorMidi={anchorMidi}
           onAnchorChange={setAnchorMidi}
           onRangeChange={onRangeChange}

@@ -7,6 +7,7 @@ import {
   type Togetherness,
   type UnorderedSpec,
 } from './exerciseSpec';
+import { momentsOf, type PhraseMoment } from './phrase';
 
 /**
  * Exercise matching, as a pure reducer.
@@ -50,6 +51,19 @@ export interface RhythmRun {
   hits: number;
 }
 
+/** `playAlong` only: how far along the written line the attempt has got. */
+export interface AlongRun {
+  /** The moment due next — which is also how many are done. */
+  index: number;
+  /** Notes of the due moment already down: half a chord, so far. */
+  struck: ReadonlySet<number>;
+  /**
+   * Timed only: grid beat of the bar line the attempt is measured from, or
+   * `null` while waiting to come in at `index`. Always `null` untimed.
+   */
+  origin: number | null;
+}
+
 export interface ExerciseState {
   /** Midis counted toward the goal. Grows monotonically for cumulative specs;
    *  reflects the current gesture for specs that require simultaneity. */
@@ -63,6 +77,15 @@ export interface ExerciseState {
    *  holds only the last press of a pitch — a rhythm on one note would
    *  overwrite itself every time. */
   rhythm: RhythmRun | null;
+  /** `playAlong` only. */
+  along: AlongRun | null;
+  /**
+   * `playAlong` only: the last press that counted for nothing, kept until the
+   * next press. The keyboard marks it, so a wrong note reads as wrong rather
+   * than as silence — held in state rather than on a timer, which keeps the
+   * reducer pure and still leaves a mouse click's mark on screen.
+   */
+  wrongMidi: number | null;
   satisfied: boolean;
 }
 
@@ -78,7 +101,15 @@ export interface MidiRange {
 }
 
 export function initExercise(): ExerciseState {
-  return { credited: new Set(), run: [], onsets: new Map(), rhythm: null, satisfied: false };
+  return {
+    credited: new Set(),
+    run: [],
+    onsets: new Map(),
+    rhythm: null,
+    along: null,
+    wrongMidi: null,
+    satisfied: false,
+  };
 }
 
 /**
@@ -105,6 +136,18 @@ export function reduceExercise(
 
   const onsets = new Map(state.onsets);
   if (input.kind === 'press') onsets.set(input.midi, input.atMs);
+
+  if (spec.kind === 'playAlong') {
+    const { run, wrong } = advanceAlong(spec, state.along ?? AT_START, input, onsets);
+    return {
+      ...state,
+      along: run,
+      onsets,
+      // A release leaves the mark alone; only the next press replaces it.
+      wrongMidi: input.kind === 'press' ? (wrong ? input.midi : null) : state.wrongMidi,
+      satisfied: run.index >= goalTotal(spec),
+    };
+  }
 
   if (spec.kind === 'sequence') {
     // Order is a story about onsets; releasing a key says nothing about where
@@ -191,6 +234,12 @@ export function targetMidisFor(
       if (spec.midi !== undefined && inRange(spec.midi)) out.add(spec.midi);
       return out;
 
+    case 'playAlong':
+      // The moment due, and only what is left of it — `sequence`'s reasoning:
+      // lighting the whole line would read the page for the user.
+      for (const midi of remainingAlong(spec, state)) if (inRange(midi)) out.add(midi);
+      return out;
+
     case 'sequence': {
       // Only the next note is a target: showing the whole line at once would
       // tell the user the answer instead of where they are in it.
@@ -220,7 +269,46 @@ export function needsRangeShift(
   // Open-ended specs have no targets by design; absence is not a hint here.
   if (spec.kind === 'distinctKeys' || spec.kind === 'risingLeap') return false;
   if (spec.kind === 'rhythm' && spec.midi === undefined) return false;
+  if (spec.kind === 'playAlong') {
+    // Any note of the moment off screen, not only all of them: a chord that is
+    // half visible cannot be played, and the visible half would otherwise
+    // silence the hint for the rest.
+    return remainingAlong(spec, state).some(
+      (midi) => midi < range.lowMidi || midi > range.highMidi,
+    );
+  }
   return targetMidisFor(spec, state, range).size === 0;
+}
+
+/**
+ * The written heads an attempt at a `playAlong` line has played so far — what
+ * the stave lights. By position, not by pitch: a tune with six Es would
+ * otherwise light all six at once and say nothing about where the player is.
+ */
+export function struckNoteIds(
+  spec: Extract<ExerciseSpec, { kind: 'playAlong' }>,
+  state: ExerciseState,
+): ReadonlySet<string> {
+  const moments = momentsOf(spec.phrase);
+  const run = state.along ?? AT_START;
+  const out = new Set<string>();
+  moments.forEach((moment, index) => {
+    for (const note of moment.notes) {
+      if (index < run.index || (index === run.index && run.struck.has(note.midi))) {
+        out.add(note.id);
+      }
+    }
+  });
+  return out;
+}
+
+/** The first written head of the moment due next, or `null` once the line is played. */
+export function dueNoteId(
+  spec: Extract<ExerciseSpec, { kind: 'playAlong' }>,
+  state: ExerciseState,
+): string | null {
+  const moment = momentsOf(spec.phrase)[(state.along ?? AT_START).index];
+  return moment?.notes[0]?.id ?? null;
 }
 
 // ---- internals ----------------------------------------------------------
@@ -238,9 +326,195 @@ function doneFor(spec: ExerciseSpec, state: ExerciseState): number {
       return state.run.length;
     case 'rhythm':
       return state.rhythm?.hits ?? 0;
+    case 'playAlong':
+      return state.along?.index ?? 0;
     default:
       return state.credited.size;
   }
+}
+
+// ---- playAlong ----------------------------------------------------------
+
+type PlayAlongSpec = Extract<ExerciseSpec, { kind: 'playAlong' }>;
+
+const NOTHING_STRUCK: ReadonlySet<number> = new Set();
+const AT_START: AlongRun = { index: 0, struck: NOTHING_STRUCK, origin: null };
+
+interface AlongStep {
+  run: AlongRun;
+  /** The press counted for nothing, anywhere. */
+  wrong: boolean;
+}
+
+function remainingAlong(spec: PlayAlongSpec, state: ExerciseState): readonly number[] {
+  const run = state.along ?? AT_START;
+  const moment = momentsOf(spec.phrase)[run.index];
+  return moment ? moment.midis.filter((midi) => !run.struck.has(midi)) : [];
+}
+
+/**
+ * Walk the line on by one input.
+ *
+ * Three ways to play a line, one rule for getting it wrong: a press that is
+ * not one of the due moment's remaining notes — or, timed, not where it was
+ * due — breaks the attempt back to its checkpoint, and is then re-tested
+ * there. That is `sequence`'s restart and `rhythm`'s re-test as a start, and it
+ * is what stops a line being passed by mashing.
+ */
+function advanceAlong(
+  spec: PlayAlongSpec,
+  run: AlongRun,
+  input: ExerciseInput,
+  onsets: ReadonlyMap<number, number>,
+): AlongStep {
+  const moments = momentsOf(spec.phrase);
+  if (spec.timed) {
+    // A release says nothing about where in the bar you are.
+    return input.kind === 'press' ? advanceTimed(spec, moments, run, input) : { run, wrong: false };
+  }
+  if (spec.together) return advanceTogether(spec, moments, run, input, onsets, spec.together);
+  return input.kind === 'press'
+    ? advanceAccumulating(spec, moments, run, input.midi)
+    : { run, wrong: false };
+}
+
+/**
+ * Untimed, notes in any order: the "wait for you" of Play's Training. A moment
+ * is done once every one of its notes has been struck, however far apart —
+ * which is what lets one mouse pointer play a moment meant for two hands.
+ */
+function advanceAccumulating(
+  spec: PlayAlongSpec,
+  moments: readonly PhraseMoment[],
+  run: AlongRun,
+  midi: number,
+): AlongStep {
+  const struck = strike(moments, run, midi);
+  if (struck) return { run: struck, wrong: false };
+  // Striking again a note this moment already has is not a mistake.
+  if (run.struck.has(midi)) return { run, wrong: false };
+  const fallback = fallbackFrom(spec, run.index);
+  const retried = strike(moments, fallback, midi);
+  return retried ? { run: retried, wrong: false } : { run: fallback, wrong: true };
+}
+
+/**
+ * Untimed, a chord at a time: the moment is done when the keys down together
+ * are exactly its notes. Exactly, because "turn a major chord minor by moving
+ * one note" is only moving one if the old note has to come up — and a release
+ * can finish a moment for the same reason.
+ */
+function advanceTogether(
+  spec: PlayAlongSpec,
+  moments: readonly PhraseMoment[],
+  run: AlongRun,
+  input: ExerciseInput,
+  onsets: ReadonlyMap<number, number>,
+  together: Togetherness,
+): AlongStep {
+  const moment = moments[run.index];
+  if (!moment) return { run, wrong: false };
+  if (input.kind === 'press' && !moment.midis.includes(input.midi)) {
+    const fallback = fallbackFrom(spec, run.index);
+    const target = moments[fallback.index];
+    if (!target?.midis.includes(input.midi)) return { run: fallback, wrong: true };
+    return { run: gesture(target, fallback, input, onsets, together), wrong: false };
+  }
+  return { run: gesture(moment, run, input, onsets, together), wrong: false };
+}
+
+function gesture(
+  moment: PhraseMoment,
+  run: AlongRun,
+  input: ExerciseInput,
+  onsets: ReadonlyMap<number, number>,
+  together: Togetherness,
+): AlongRun {
+  const candidate = candidateSet(input, onsets, together);
+  const exact =
+    candidate.size === moment.midis.length && moment.midis.every((midi) => candidate.has(midi));
+  if (exact) return { index: run.index + 1, struck: NOTHING_STRUCK, origin: null };
+  return { ...run, struck: new Set(moment.midis.filter((midi) => candidate.has(midi))) };
+}
+
+/**
+ * Timed: each note of the due moment within tolerance of its beat, measured
+ * from the bar line the attempt came in on. A chord's notes each land in the
+ * window, in any order; the next moment's note before the chord is complete is
+ * a break, since it is then neither in time nor part of what was due.
+ */
+function advanceTimed(
+  spec: PlayAlongSpec,
+  moments: readonly PhraseMoment[],
+  run: AlongRun,
+  input: Extract<ExerciseInput, { kind: 'press' }>,
+): AlongStep {
+  const at = input.atBeats;
+  // No click, nothing to be in time with — the runner never offers a timed
+  // line without one, so this is a guard rather than a state anyone meets.
+  if (at === null) return { run, wrong: false };
+  const tolerance = spec.timed?.toleranceBeats ?? DEFAULT_RHYTHM_TOLERANCE_BEATS;
+
+  if (run.origin !== null) {
+    const moment = moments[run.index];
+    if (moment && Math.abs(at - (run.origin + moment.beat)) <= tolerance) {
+      const struck = strike(moments, run, input.midi);
+      if (struck) return { run: struck, wrong: false };
+    }
+  }
+
+  // Broken, or not yet begun: come in at the moment this attempt falls back to.
+  const waiting = run.origin === null ? run : fallbackFrom(spec, run.index);
+  const entry = moments[waiting.index];
+  const barBeats = spec.phrase.timeSignature.numerator;
+  const origin = entry ? barOriginFor(at, entry.beat, barBeats, tolerance) : null;
+  const entered = origin === null ? null : strike(moments, { ...waiting, origin }, input.midi);
+  return entered ? { run: entered, wrong: false } : { run: waiting, wrong: true };
+}
+
+/** Credit `midi` to the due moment, if it is one of the notes still owed. */
+function strike(moments: readonly PhraseMoment[], run: AlongRun, midi: number): AlongRun | null {
+  const moment = moments[run.index];
+  if (!moment || !moment.midis.includes(midi) || run.struck.has(midi)) return null;
+  const struck = new Set(run.struck).add(midi);
+  return struck.size >= moment.midis.length
+    ? { index: run.index + 1, struck: NOTHING_STRUCK, origin: run.origin }
+    : { ...run, struck };
+}
+
+/** Back to the latest checkpoint at or before `index`, waiting to come in. */
+function fallbackFrom(spec: PlayAlongSpec, index: number): AlongRun {
+  let checkpoint = 0;
+  for (const candidate of spec.checkpoints ?? [0]) {
+    if (candidate <= index && candidate > checkpoint) checkpoint = candidate;
+  }
+  return { index: checkpoint, struck: NOTHING_STRUCK, origin: null };
+}
+
+/**
+ * The bar line a press at `at` would come in from, if it lands on
+ * `entryBeat` of that bar within tolerance — or `null`.
+ *
+ * The grid's beat 0 is a downbeat by construction (`constantClickGrid` accents
+ * `index % numerator === 0`), so bar lines are whole multiples of `barBeats`
+ * and this is arithmetic rather than a search. Shared by `rhythm` and a timed
+ * `playAlong`, whose restart rules are the same rule.
+ */
+function barOriginFor(
+  at: number,
+  entryBeat: number,
+  barBeats: number,
+  tolerance: number,
+): number | null {
+  // Subtract the entry offset *before* snapping. Snapping first would pick the
+  // wrong bar for any press in the first half of one whenever the entry beat
+  // is not itself 0.
+  const origin = Math.round((at - entryBeat) / barBeats) * barBeats;
+  // Guarded on where the note falls, not on the bar line: a checkpoint in bar 5
+  // legitimately measures from a bar line four bars before the click began. A
+  // note before the click's own first beat would be timed against nothing.
+  if (origin + entryBeat < 0) return null;
+  return Math.abs(at - (origin + entryBeat)) <= tolerance ? origin : null;
 }
 
 /**
@@ -275,27 +549,14 @@ function advanceRhythm(
   return startRhythm(spec, at, tolerance);
 }
 
-/**
- * Begin an attempt, if this press lands on a bar line.
- *
- * The grid's beat 0 is a downbeat by construction — `constantClickGrid` accents
- * `index % numerator === 0` — so bar lines are exactly the whole multiples of
- * `barBeats` and this is arithmetic rather than a search.
- */
+/** Begin an attempt, if this press lands where the pattern's first note falls in a bar. */
 function startRhythm(
   spec: Extract<ExerciseSpec, { kind: 'rhythm' }>,
   at: number,
   tolerance: number,
 ): RhythmRun | null {
-  const first = spec.beats[0] as number;
-  // Subtract the first offset *before* snapping. Snapping first would pick the
-  // wrong bar for any press in the first half of one whenever `beats[0]` is not
-  // itself 0.
-  const origin = Math.round((at - first) / spec.barBeats) * spec.barBeats;
-  // A press before the click's own first beat would otherwise be measured
-  // against a bar that never sounded.
-  if (origin < 0) return null;
-  return Math.abs(at - (origin + first)) <= tolerance ? { origin, hits: 1 } : null;
+  const origin = barOriginFor(at, spec.beats[0] as number, spec.barBeats, tolerance);
+  return origin === null ? null : { origin, hits: 1 };
 }
 
 /**
