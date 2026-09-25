@@ -214,15 +214,26 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   const setPlaybackMode = useSettingsStore((s) => s.setPlaybackMode);
   const [handingOff, setHandingOff] = useState(false);
 
+  // The open outlives the runner if the chapter is closed while it is still
+  // in flight — Escape and the close button stay live throughout. Aborted on
+  // unmount, as the Library page does with its own opens: a track that lands
+  // after the user has gone must not finish the chapter and pull them to Play
+  // from wherever they went instead.
+  const handoffAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => handoffAbort.current?.abort(), []);
+
   const onHandoff = useCallback(() => {
     if (!handoff || handingOff) return;
     setHandingOff(true);
+    const controller = new AbortController();
+    handoffAbort.current = controller;
     // Opened before the mode is touched: a Training mode switched on with
     // nothing loaded would be a surprise on the next visit to Play. The chapter
     // is finished either way — it was — and a track that would not open is
     // left to be found in the Library by hand rather than on an empty Play.
-    void openLibraryTrack(handoff.trackId).then(
+    void openLibraryTrack(handoff.trackId, controller.signal).then(
       (opened) => {
+        if (controller.signal.aborted) return;
         setHandingOff(false);
         finish();
         if (!opened) {
@@ -236,6 +247,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
         navigate('play');
       },
       (error: unknown) => {
+        if (controller.signal.aborted) return;
         console.error('Opening the chapter hand-off failed:', error);
         setHandingOff(false);
         finish();
