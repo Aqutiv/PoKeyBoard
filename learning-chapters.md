@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 9     | 1         |
+| Beginner     | 10    | 0         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -40,12 +40,12 @@ _Never touched a piano → a simple piece, hands together._
 
 ### Part 3 — Playing
 
-| #   | Chapter                        | Teaches                                                                                                 | Exercises validate                                                                     |
-| --- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| 7   | **Your First Melody** ✅       | Pitch and rhythm together; phrases; following notation left to right                                    | an 8-bar melody from the page, in tempo → hand off to Play                             |
-| 8   | **The C Major Scale** ✅       | W-W-H-W-W-W-H; why C major is all white keys; the thumb tuck; degrees 1–8                               | the scale up and down, one octave, in order                                            |
-| 9   | **Triads: Major and Minor** ✅ | Stacking thirds; root/third/fifth; C, F, G major and A, D, E minor; the third decides the mood          | named triads as blocks; turn a major triad minor by moving one note                    |
-| 10  | Chords, Pedal & Hands Together | I–V–vi–IV; the sustain pedal and changing it on the harmony; left-hand chords under a right-hand melody | the progression with pedal changes; a short piece hands together → hand off to Library |
+| #   | Chapter                               | Teaches                                                                                                 | Exercises validate                                                                     |
+| --- | ------------------------------------- | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| 7   | **Your First Melody** ✅              | Pitch and rhythm together; phrases; following notation left to right                                    | an 8-bar melody from the page, in tempo → hand off to Play                             |
+| 8   | **The C Major Scale** ✅              | W-W-H-W-W-W-H; why C major is all white keys; the thumb tuck; degrees 1–8                               | the scale up and down, one octave, in order                                            |
+| 9   | **Triads: Major and Minor** ✅        | Stacking thirds; root/third/fifth; C, F, G major and A, D, E minor; the third decides the mood          | named triads as blocks; turn a major triad minor by moving one note                    |
+| 10  | **Chords, Pedal & Hands Together** ✅ | I–V–vi–IV; the sustain pedal and changing it on the harmony; left-hand chords under a right-hand melody | the progression with pedal changes; a short piece hands together → hand off to Library |
 
 ---
 
@@ -337,7 +337,18 @@ retrying it hardest.
 A chapter may end by handing off to a Library track (`LearnChapter.handoff`):
 the outro opens it on Play in a Training mode, which it writes to the saved
 setting — so the button says so. Chapter 7's melody _is_ that track's events,
-imported from `tracks/odeToJoyFirstSteps.ts`.
+imported from `tracks/odeToJoyFirstSteps.ts`; chapter 10 hands off to "A
+Beautiful Day", whose tune runs over the very I–V–vi–IV it teaches.
+
+A line can ask for **the pedal changed with the harmony** (`pedal:
+'changeEach'`): once a moment's notes are in it waits (`AlongRun.pedalOwed`)
+for a fresh press of the pedal, and a key pressed meanwhile breaks the run. The
+press has to come _after_ the notes, so a pedal held straight through a change
+leaves no new press — exactly the blur being taught against. The pedal reaches
+the reducer as one pedal: `useExercise` reads `audioEngine.subscribeSustain`,
+the combined state of the on-screen button, Space and a MIDI pedal, rather than
+the per-source `sustain` input events, which would report a second source going
+down while the first already held the dampers up — no change to the ear.
 
 ---
 
@@ -392,6 +403,14 @@ Learned the hard way; violating any of these produces a silent failure.
   `ComputerKeyboardInput` to `window`, doubling every keypress into two voices
   under one source id. This is why a chapter runs full-screen on its own route
   rather than as a dialog over Play.
+- **Two hands outrun every small input.** About two octaves: more white keys
+  than a portrait phone shows at a playable width, and more than the computer
+  keyboard's octave and a half. A step that needs that is marked `wide`: it is
+  untimed and gathers each moment's notes in any order (Play's Training
+  rules), so a mouse can play it one note at a time; its prose says what to
+  play it with; and a portrait phone is asked to turn sideways. The catalog
+  exempts wide steps from the phone and computer-keyboard reach checks and
+  holds them untimed instead.
 
 ## Known limitations
 
@@ -399,10 +418,11 @@ Learned the hard way; violating any of these produces a silent failure.
   220px once the keyboard, footer and nav have taken theirs, so a quiz's answer
   row sits below the fold and has to be scrolled to. `.piano__keys` has a 130px
   floor, so the key bed cannot give back any more. Fine at 375px and above.
-- **Short landscape has no layout.** `PlayPage` solves the same prose-plus-
-  keyboard squeeze with a segmented Notation/Keyboard switch
-  (`index.css`, `orientation: landscape and max-height: 500px`); the runner
-  should reuse that pattern and does not yet.
+- ~~**Short landscape has no layout.**~~ Answered by chapter 10, which needs a
+  phone turned sideways for two hands. Unlike `PlayPage`'s Notation/Keyboard
+  switch — a play-along has to show both — the runner takes the whole screen
+  in short landscape (the app nav hides while a chapter is open), and an
+  exercise keeps only its heading, stave, readout and keys (`learn.css`).
 - **Lesson prose is English-only.** Chapter titles and blurbs are translated;
   the inside of a chapter falls back per string.
 - **Reading rounds cannot be done by screen reader.** The staff canvas is

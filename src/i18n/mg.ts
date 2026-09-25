@@ -249,6 +249,10 @@ export const mg: Messages = {
     finish: 'Vitao',
     close: 'Akatony ny toko',
     shiftHint: 'Tsy misy intsony eo amin’ny efijery — ampiasao ny ‹ › hanetsehana ny klavie.',
+    pedalPress: 'Tsindrio izao ny pedaly.',
+    pedalChange: 'Ovay izao ny pedaly: esory, dia tsindrio indray.',
+    rotateHint:
+      'Mila kitendry betsaka kokoa noho izay mahazaka mitsangana izy ity — ataovy mitsivalana ny findainao.',
     loadingPiano: 'Mampiditra ny piano…',
     loadingChapter: 'Mampiditra ny toko…',
     diagramLabel: 'Sarin’ny klavie',
