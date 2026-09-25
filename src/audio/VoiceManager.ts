@@ -3,6 +3,7 @@ import {
   dampSampleVoice,
   fadeSampleVoice,
   holdSampleVoice,
+  liftSampleVoiceFade,
   moveSampleVoiceRelease,
   releaseSampleVoice,
   startSampleVoice,
@@ -141,13 +142,27 @@ export class VoiceManager {
    * Call off `sourceId`'s notes that start after `after`, before any of them
    * sounds: each is stopped short of its start and dropped at once, so the
    * caller can schedule it again. Playback does this when its speed changes.
+   *
+   * A strike called off no longer silences the string it was to strike again,
+   * whoever is playing that: the sound goes on as its own key leaves it, and a
+   * strike put back in its place fades it afresh — holding the key for it too,
+   * as a strike of a key still down does; see `restrike`.
    */
   cancelPending(sourceId: NoteSourceId, after: number): void {
+    const calledOff: Voice[] = [];
     for (const voice of this.voices) {
       if (voice.sourceId !== sourceId || voice.startTime <= after) continue;
       this.safeStop(voice, this.context.currentTime);
       this.voices.delete(voice);
       this.disconnectVoice(voice);
+      calledOff.push(voice);
+    }
+    for (const voice of this.voices) {
+      if (voice.fadeTc === undefined) continue;
+      const fadeAt = voice.releaseTime;
+      if (calledOff.some((strike) => strike.midi === voice.midi && strike.startTime === fadeAt)) {
+        liftSampleVoiceFade(voice, after);
+      }
     }
   }
 

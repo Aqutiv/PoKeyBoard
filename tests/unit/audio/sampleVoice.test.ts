@@ -8,6 +8,7 @@ import {
 } from '@/audio/OfflineTakeRenderer';
 import { createEmptyTake } from '@/domain/noteEvents';
 import {
+  dampSampleVoice,
   moveSampleVoiceRelease,
   RELEASE_TC,
   releaseSampleVoice,
@@ -103,6 +104,23 @@ describe('shared sample voice', () => {
     expect(voice.gain.gain.cancelScheduledValues).toHaveBeenNthCalledWith(2, 10);
     expect(voice.gain.gain.linearRampToValueAtTime).toHaveBeenLastCalledWith(0, 20.1);
     expect(voice.source.stop).toHaveBeenLastCalledWith(20.1);
+    expect(voice.stopTime).toBe(20.1);
+  });
+
+  it('moves only a key-up: none on a string without a damper, nor a strike’s fade', () => {
+    const { audio, destination } = setup();
+    const plain: SampleSelection = { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1 };
+    const top = startSampleVoice(audio, destination, { ...plain, undamped: true }, 0);
+    releaseSampleVoice(top, 1); // no damper, so it rings on
+    moveSampleVoiceRelease(top, 2);
+    expect(top.releaseTime).toBeUndefined();
+    expect(top.source.stop).not.toHaveBeenCalled();
+    // A strike's fade goes with its strike, not with a change of speed.
+    const struck = startSampleVoice(audio, destination, plain, 0);
+    dampSampleVoice(struck, 1);
+    moveSampleVoiceRelease(struck, 2);
+    expect(struck.releaseTime).toBe(1);
+    expect(struck.stopTime).toBe(1 + RESTRIKE_TC * 8);
   });
 
   it('retains the acoustic release and non-looping defaults', () => {
@@ -482,5 +500,92 @@ describe('VoiceManager when playback changes speed', () => {
     expect(sources[1]!.stop).toHaveBeenLastCalledWith(9.6);
     expect(sources[2]!.stop).toHaveBeenLastCalledWith(0.6);
     expect(sources[3]!.stop).toHaveBeenLastCalledWith(2.1);
+  });
+
+  describe('a string due to be struck again', () => {
+    const plain: SampleSelection = {
+      buffer: { duration: 10 } as AudioBuffer,
+      playbackRate: 1,
+      gain: 1,
+    };
+    /** Half speed from `now`: what was a second away is two. */
+    const halfSpeed = (now: number) => (t: number) => now + (t - now) * 2;
+
+    it('fades once, at the strike put back, and still holds the key for the note it cut', () => {
+      // A half note on 67 with an eighth struck inside it: the eighth fades it
+      // at 1.5 and keeps the key down for the half note, to 4.
+      const { audio, context, destination, params, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 67, 'playback', 0, 4);
+      voices.scheduleNote(plain, 67, 'playback', 1.5, 1);
+      context.currentTime = 1;
+      params[0]!.setTargetAtTime!.mockClear();
+      const at = halfSpeed(1);
+      voices.cancelPending('playback', 1);
+      voices.retimeReleases('playback', 1, at);
+      voices.scheduleNote(plain, 67, 'playback', at(1.5), 2);
+      // The fade at 1.5 is withdrawn, and the half note fades once, at the
+      // eighth's new start, as a string struck again...
+      expect(params[0]!.cancelScheduledValues).toHaveBeenCalledWith(1.5);
+      const fades = params[0]!.setTargetAtTime!.mock.calls.filter(([, , tc]) => tc === RESTRIKE_TC);
+      expect(fades).toEqual([[0, 2, RESTRIKE_TC]]);
+      expect(sources[0]!.stop).toHaveBeenLastCalledWith(2 + RESTRIKE_TC * 8);
+      // ...and the eighth holds the key down to the half note's end, now at 7.
+      expect(params[2]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 7, RELEASE_TC);
+    });
+
+    it('fades a string let go before its strike from where its damper has it', () => {
+      // Staccato on one key: let go at 0.25, struck again at 0.375.
+      const { audio, context, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(plain, 64, 'playback', 0, 0.25);
+      voices.scheduleNote(plain, 64, 'playback', 0.375, 0.25);
+      context.currentTime = 0.125;
+      const at = halfSpeed(0.125);
+      voices.cancelPending('playback', 0.125);
+      voices.retimeReleases('playback', 0.125, at);
+      voices.scheduleNote(plain, 64, 'playback', at(0.375), 0.5);
+      // Let go at 0.375 now, and faded at 0.625 from its damper's level then,
+      // not lifted back to where it was while held.
+      expect(params[0]!.setTargetAtTime).toHaveBeenCalledWith(0, 0.375, RELEASE_TC);
+      expect(params[0]!.setValueAtTime).toHaveBeenLastCalledWith(
+        Math.exp(-0.25 / RELEASE_TC),
+        0.625,
+      );
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.625, RESTRIKE_TC);
+    });
+
+    it('gives a key held by hand its string back until the strike put back comes', () => {
+      const { audio, context, destination, params, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(plain, 60, 'key');
+      voices.scheduleNote(plain, 60, 'playback', 0.15, 1); // due to fade the key at 0.15
+      context.currentTime = 0.1;
+      params[0]!.cancelScheduledValues!.mockClear();
+      params[0]!.setTargetAtTime!.mockClear();
+      voices.cancelPending('playback', 0.1);
+      expect(params[0]!.cancelScheduledValues).toHaveBeenCalledWith(0.15);
+      voices.scheduleNote(plain, 60, 'playback', 0.2, 2);
+      expect(params[0]!.setTargetAtTime!.mock.calls).toEqual([[0, 0.2, RESTRIKE_TC]]);
+      expect(sources[0]!.stop).toHaveBeenLastCalledWith(0.2 + RESTRIKE_TC * 8);
+      expect(voices.activeMidis().has(60)).toBe(true);
+    });
+
+    it('fades a key let go by hand from where its damper has it', () => {
+      const { audio, context, destination, params } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(plain, 60, 'key');
+      voices.scheduleNote(plain, 60, 'playback', 0.25, 1);
+      context.currentTime = 0.125;
+      voices.noteOff(60, 'key'); // let go before the strike, due at 0.25
+      context.currentTime = 0.1875;
+      voices.cancelPending('playback', 0.1875);
+      voices.scheduleNote(plain, 60, 'playback', 0.3125, 2);
+      expect(params[0]!.setValueAtTime).toHaveBeenLastCalledWith(
+        Math.exp(-0.1875 / RELEASE_TC),
+        0.3125,
+      );
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.3125, RESTRIKE_TC);
+    });
   });
 });

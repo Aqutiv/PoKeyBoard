@@ -51,6 +51,12 @@ export interface SampleVoice {
   fadeTc?: number;
   /** When the source is due to stop, once a stop is scheduled. */
   stopTime?: number;
+  /**
+   * When the key came up, or is due to. A strike's fade laid over the release
+   * takes `releaseTime` for its own but leaves this, so the fade can be lifted
+   * again if the strike is called off.
+   */
+  keyUpTime?: number;
 }
 
 /** The same source, loop coordinates, and envelope for live and offline audio. */
@@ -153,6 +159,7 @@ export function releaseSampleVoice(voice: SampleVoice, when: number): void {
   const level = holdSampleVoice(voice, when);
   voice.releaseTime = when;
   voice.releaseLevel = level;
+  voice.keyUpTime = when;
   if (voice.sample.envelope) {
     voice.stopTime = when + voice.sample.envelope.release;
     voice.gain.gain.linearRampToValueAtTime(0, voice.stopTime);
@@ -201,24 +208,78 @@ export function stillSoundingAt(voice: SampleVoice, when: number): boolean {
 }
 
 /**
- * Move a release that is still to come to `when`. Setting it cut short the
+ * Move a key-up that is still to come to `when`. Setting it cut short the
  * envelope's own ramps, so those are laid down again first, and the voice
- * sounds on to `when` as though the first release had never been set.
+ * sounds on to `when` as though the first key-up had never been set. A string
+ * with no damper has no key-up to move, and a strike's fade goes with its
+ * strike; see `liftSampleVoiceFade`.
  */
 export function moveSampleVoiceRelease(voice: SampleVoice, when: number): void {
   const pending = voice.releaseTime;
-  if (pending === undefined) return;
-  const { gain, sample, startTime } = voice;
-  gain.gain.cancelScheduledValues(pending);
+  if (pending === undefined || voice.fadeTc !== undefined || voice.sample.undamped) return;
+  voice.gain.gain.cancelScheduledValues(pending);
   voice.releaseTime = undefined;
   voice.releaseLevel = undefined;
-  const attackEnd = startTime + (sample.envelope?.attack ?? ATTACK_S);
-  if (pending < attackEnd) gain.gain.linearRampToValueAtTime(sample.gain, attackEnd);
-  if (sample.envelope) {
-    const decayStart = attackEnd + sample.envelope.hold;
-    const decayEnd = decayStart + sample.envelope.decay;
-    if (pending < decayStart) gain.gain.setValueAtTime(sample.gain, decayStart);
-    if (pending < decayEnd) gain.gain.linearRampToValueAtTime(0, decayEnd);
-  }
+  layEnvelopeAfter(voice, pending);
   releaseSampleVoice(voice, when);
+}
+
+/**
+ * Withdraw a strike's fade still to come, the strike having been called off.
+ * The string sounds on as its key leaves it — held still, or let go when it
+ * was — until a strike put back in its place fades it afresh.
+ */
+export function liftSampleVoiceFade(voice: SampleVoice, now: number): void {
+  const fadeAt = voice.releaseTime;
+  if (voice.fadeTc === undefined || fadeAt === undefined || fadeAt <= now) return;
+  const { gain, sample, source, startTime } = voice;
+  const keyUp = voice.keyUpTime;
+  voice.fadeTc = undefined;
+  voice.releaseTime = undefined;
+  voice.releaseLevel = undefined;
+  if (keyUp !== undefined && keyUp <= now) {
+    // Let go already: the damper has been falling since, and falls on.
+    gain.gain.cancelScheduledValues(fadeAt);
+    voice.releaseLevel = sampleVoiceLevel(voice, keyUp);
+    voice.releaseTime = keyUp;
+    if (sample.envelope) {
+      voice.stopTime = keyUp + sample.envelope.release;
+      if (voice.stopTime >= fadeAt) gain.gain.linearRampToValueAtTime(0, voice.stopTime);
+    } else {
+      voice.stopTime = keyUp + Math.max(RELEASE_STOP_AFTER_S, dampingTc(voice) * 8);
+    }
+    source.stop(voice.stopTime);
+    return;
+  }
+  // The fade cut short whatever came after it, and so did a key-up before it.
+  const from = keyUp === undefined ? fadeAt : Math.min(keyUp, fadeAt);
+  gain.gain.cancelScheduledValues(from);
+  layEnvelopeAfter(voice, from);
+  if (keyUp !== undefined) {
+    releaseSampleVoice(voice, keyUp);
+  } else if (sample.envelope) {
+    // Still held: it retires as it first set out to.
+    const { attack, hold, decay } = sample.envelope;
+    voice.stopTime = startTime + attack + hold + decay;
+    source.stop(voice.stopTime);
+  } else {
+    voice.stopTime = undefined;
+    if (!sample.loop) {
+      source.stop(
+        startTime + (sample.buffer.duration - (sample.offset ?? 0)) / sample.playbackRate,
+      );
+    }
+  }
+}
+
+/** Lay the envelope's own ramps down again from `after` on, as `startSampleVoice` did. */
+function layEnvelopeAfter(voice: SampleVoice, after: number): void {
+  const { gain, sample, startTime } = voice;
+  const attackEnd = startTime + (sample.envelope?.attack ?? ATTACK_S);
+  if (after < attackEnd) gain.gain.linearRampToValueAtTime(sample.gain, attackEnd);
+  if (!sample.envelope) return;
+  const decayStart = attackEnd + sample.envelope.hold;
+  const decayEnd = decayStart + sample.envelope.decay;
+  if (after < decayStart) gain.gain.setValueAtTime(sample.gain, decayStart);
+  if (after < decayEnd) gain.gain.linearRampToValueAtTime(0, decayEnd);
 }
