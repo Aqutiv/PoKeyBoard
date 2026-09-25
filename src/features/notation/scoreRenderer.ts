@@ -18,6 +18,7 @@ import {
   type ChordGroup,
   type MeasureInfo,
   type LaidOutNote,
+  type LaidOutRest,
   type ScoreLayout,
 } from './notationLayout';
 import { spellInKey } from './pitchSpelling';
@@ -55,8 +56,39 @@ export function gutterWidthFor(fifths: number): number {
   return count === 0 ? GUTTER : GUTTER + count * KEY_ACCIDENTAL_PX + GAP * 0.6;
 }
 
+/** Half a note head's width; a whole note's is a quarter as wide again. */
+const HEAD_RX = GAP * 0.64;
 /** Horizontal pitch of stacked accidental columns, left of the chord. */
 const ACCIDENTAL_COLUMN_PX = GAP * 1.4;
+/** Half an accidental's width — the double flat's, the widest of them. */
+const ACCIDENTAL_HALF_WIDTH_PX = GAP * 0.62;
+/** An augmentation dot's centre, right of the chord's rightmost head. */
+const DOT_OFFSET_PX = HEAD_RX + 5;
+const DOT_RADIUS_PX = 2;
+/** How far a flag's curve swings out past its stem. */
+const FLAG_REACH_PX = GAP * 0.95;
+/** Half the width of the widest rest glyph. */
+const REST_HALF_WIDTH_PX = GAP * 0.7;
+
+/**
+ * Clear space a bar line keeps before the first ink of the bar it opens: the
+ * downbeat's head, or the accidental in front of it.
+ */
+const BAR_LINE_LEAD_PX = GAP * 0.6;
+/** The least clear space it keeps after the last ink of the bar it closes. */
+const BAR_LINE_TRAIL_PX = GAP * 0.3;
+/**
+ * How far either side of a bar line to look for ink that could reach it: two
+ * columns of accidentals, or a dot and a flag. Only bounds the search — each
+ * chord's own reach is measured.
+ */
+const BAR_LINE_SEARCH_PX = GAP * 5;
+/**
+ * A chord drawn this close to a bar's time belongs to the bar it opens. The
+ * layout rounds a chord's display time to the millisecond; a bar's start,
+ * under a tempo map, need not be a whole one.
+ */
+const ON_THE_BAR_MS = 1;
 
 /**
  * Clear space between the gutter and the music standing at `scrollMs`.
@@ -533,6 +565,90 @@ function xForMs(view: ScoreView, ms: number): number {
   return view.gutterPx + SCORE_LEAD_IN + (ms - view.scrollMs) * view.pxPerMs;
 }
 
+/** Half the width of a chord's heads, a hollow head's stroke included. */
+function headHalfWidth(chord: ChordGroup): number {
+  if (chord.symbol.base === 'whole') return HEAD_RX * 1.25 + 1;
+  return chord.symbol.base === 'half' ? HEAD_RX + 1 : HEAD_RX;
+}
+
+/** Where a note's accidental is centred, left of its chord's leftmost head. */
+function accidentalOffsetPx(note: LaidOutNote): number {
+  return HEAD_RX + GAP * 0.7 + note.accidentalColumn * ACCIDENTAL_COLUMN_PX;
+}
+
+/** How far a chord's ink reaches left of its onset: heads, then accidentals. */
+function chordReachLeft(chord: ChordGroup): number {
+  const leftEdge = Math.min(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX;
+  let reach = headHalfWidth(chord) - leftEdge;
+  for (const note of chord.notes) {
+    if (!note.accidental) continue;
+    reach = Math.max(reach, accidentalOffsetPx(note) + ACCIDENTAL_HALF_WIDTH_PX - leftEdge);
+  }
+  return reach;
+}
+
+/** How far a chord's ink reaches right of its onset: heads, dots, a flag. */
+function chordReachRight(chord: ChordGroup): number {
+  const rightEdge = Math.max(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX;
+  let reach = rightEdge + headHalfWidth(chord);
+  if (chord.symbol.dotted) reach = Math.max(reach, rightEdge + DOT_OFFSET_PX + DOT_RADIUS_PX);
+  if (chord.beamId === null && beamCountFor(chord.symbol.base) > 0) {
+    const stemX = chord.stemDown ? -HEAD_RX + 0.8 : HEAD_RX - 0.8;
+    reach = Math.max(reach, stemX + FLAG_REACH_PX);
+  }
+  return reach;
+}
+
+/**
+ * Where a line standing before the music at `ms` is drawn: a bar line, or the
+ * edge of a loop.
+ *
+ * Printed music sets a bar line before the downbeat, with the downbeat's head
+ * — and any accidental in front of it — clear to its right. This view is
+ * time-proportional, so the downbeat is centred on the bar's own time, and a
+ * line drawn there runs through it. The notes keep their onsets, because the
+ * playhead, beams, ties, scrubbing and zoom all read x as time; the line moves
+ * instead, to the point nearest its time that is clear of the ink on both
+ * sides. Nothing on the downbeat, and that is the time itself. Music packed too
+ * tightly to leave any clear point gets the middle of what gap there is.
+ */
+function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
+  const nominal = xForMs(view, ms);
+  const searchMs = BAR_LINE_SEARCH_PX / view.pxPerMs;
+  const opens = ms - ON_THE_BAR_MS;
+  /** The rightmost ink of what starts before `ms`, and the leftmost of the rest. */
+  let before = Number.NEGATIVE_INFINITY;
+  let after = Number.POSITIVE_INFINITY;
+  const reach = (startMs: number, left: number, right: number): void => {
+    const x = xForMs(view, startMs);
+    if (startMs < opens) before = Math.max(before, x + right);
+    else after = Math.min(after, x - left);
+  };
+
+  const { chords, rests } = layout;
+  for (let i = firstChordIndexAt(chords, ms - searchMs); i < chords.length; i += 1) {
+    const chord = chords[i] as ChordGroup;
+    if (chord.displayStartMs > ms + searchMs) break;
+    if (!drawsStaff(view, chord.staff)) continue;
+    reach(chord.displayStartMs, chordReachLeft(chord), chordReachRight(chord));
+  }
+  for (
+    let i = firstAtOrAfter(rests, ms - searchMs, (rest) => rest.displayStartMs);
+    i < rests.length;
+    i += 1
+  ) {
+    const rest = rests[i] as LaidOutRest;
+    if (rest.displayStartMs > ms + searchMs) break;
+    if (!drawsStaff(view, rest.staff)) continue;
+    reach(rest.displayStartMs, REST_HALF_WIDTH_PX, REST_HALF_WIDTH_PX);
+  }
+
+  const lowest = before + BAR_LINE_TRAIL_PX;
+  const highest = after - BAR_LINE_LEAD_PX;
+  if (lowest <= highest) return Math.min(Math.max(nominal, lowest), highest);
+  return (before + after) / 2;
+}
+
 export function drawScore(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
@@ -540,7 +656,7 @@ export function drawScore(
   palette: ScorePalette,
 ): void {
   ctx.clearRect(0, 0, view.widthPx, view.heightPx);
-  if (input.loop) drawLoop(ctx, view, input.loop, palette);
+  if (input.loop) drawLoop(ctx, view, input.layout, input.loop, palette);
   drawStaffLines(ctx, view, palette);
   drawMeasures(ctx, view, input.layout, palette);
   drawRests(ctx, view, input.layout, palette);
@@ -607,24 +723,31 @@ function drawMeasures(
     // layout — and that measure brings a bar line and a whole rest with it. A
     // bare view draws the music, not the silence around it.
     if (chromeOf(view) !== 'full' && measure.empty) continue;
-    const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
+    const x = Math.round(dividerX(view, layout, measure.startMs)) + 0.5;
     if (x >= view.gutterPx - 8) {
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      for (const top of staffTops(view)) {
-        ctx.moveTo(x, top);
-        ctx.lineTo(x, top + STAFF_H);
+      // The first bar opens on the clef and time signature, as a printed
+      // system does. A line there as well would only stand between them and
+      // the first note.
+      if (measure.index > 0) {
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        for (const top of staffTops(view)) {
+          ctx.moveTo(x, top);
+          ctx.lineTo(x, top + STAFF_H);
+        }
+        ctx.stroke();
       }
-      ctx.stroke();
       // A measure number describes the bar, not the notes — noise when the
       // whole picture is one note being read.
       if (chromeOf(view) === 'full') {
         ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
       }
-      // A new tempo is announced where it takes over, as on paper.
+      // A new tempo is announced where it takes over, as on paper: from the
+      // downbeat, clear of its head — not from the line, which stands off it.
       const previous = layout.measures[measure.index - 1];
       if (previous && previous.bpm !== measure.bpm) {
-        drawTempoMark(ctx, x + 16, view.trebleTop - 20, measure.bpm, palette);
+        const onset = Math.round(xForMs(view, measure.startMs)) + 0.5;
+        drawTempoMark(ctx, onset + 16, view.trebleTop - 20, measure.bpm, palette);
         ctx.strokeStyle = palette.barLine;
       }
     }
@@ -1068,7 +1191,7 @@ function drawChord(
   const x = xForMs(view, chord.displayStartMs);
   if (x < view.gutterPx - 40) return;
 
-  const rx = GAP * 0.64;
+  const rx = HEAD_RX;
   const ry = GAP * 0.5;
   const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
   /** Where a note's head sits, once any collision shift is applied. */
@@ -1125,18 +1248,13 @@ function drawChord(
     if (note.accidental) {
       ctx.fillStyle = color;
       ctx.strokeStyle = color;
-      drawAccidentalGlyph(
-        ctx,
-        note.accidental,
-        leftEdgeX - rx - GAP * 0.7 - note.accidentalColumn * ACCIDENTAL_COLUMN_PX,
-        y,
-        GAP,
-      );
+      drawAccidentalGlyph(ctx, note.accidental, leftEdgeX - accidentalOffsetPx(note), y, GAP);
     }
     if (chord.symbol.dotted) {
       ctx.fillStyle = color;
       ctx.beginPath();
-      ctx.arc(rightEdgeX + rx + 5, y - (note.step % 2 === 0 ? GAP / 2 : 0), 2, 0, Math.PI * 2);
+      const dotY = y - (note.step % 2 === 0 ? GAP / 2 : 0);
+      ctx.arc(rightEdgeX + DOT_OFFSET_PX, dotY, DOT_RADIUS_PX, 0, Math.PI * 2);
       ctx.fill();
     }
   }
@@ -1269,11 +1387,17 @@ function drawGhosts(
 function drawLoop(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
+  layout: ScoreLayout,
   loop: { startMs: number; endMs: number },
   palette: ScorePalette,
 ): void {
-  const left = Math.max(view.gutterPx, xForMs(view, loop.startMs));
-  const right = Math.min(view.widthPx, xForMs(view, loop.endMs));
+  // Each end stands where a bar line would: before the notes that start on it,
+  // so the wash holds exactly the notes the loop plays. A loop from bar to bar
+  // then runs from bar line to bar line, instead of through both downbeats.
+  const startX = Math.round(dividerX(view, layout, loop.startMs)) + 0.5;
+  const endX = Math.round(dividerX(view, layout, loop.endMs)) + 0.5;
+  const left = Math.max(view.gutterPx, startX);
+  const right = Math.min(view.widthPx, endX);
   if (right <= left) return;
   const top = view.trebleTop - 22;
   const bottom = systemBottom(view) + 12;
@@ -1282,8 +1406,7 @@ function drawLoop(
   ctx.strokeStyle = palette.loopEdge;
   ctx.lineWidth = 1;
   ctx.beginPath();
-  for (const ms of [loop.startMs, loop.endMs]) {
-    const x = xForMs(view, ms);
+  for (const x of [startX, endX]) {
     if (x < view.gutterPx || x > view.widthPx) continue;
     ctx.moveTo(x, top);
     ctx.lineTo(x, bottom);
@@ -1338,11 +1461,9 @@ const INLINE_CLEF_PAD = 3;
  * A clef announced mid-score, drawn smaller than the gutter's and seated on
  * the staff it belongs to. Scaling about the staff's centre keeps it there.
  *
- * It sits in the tail of the measure before the bar line rather than after it.
- * On paper the clef follows the bar line, but paper reserves width for it;
- * here the downbeat note is centred on the bar line itself, so anything drawn
- * after it lands on the note head. The tail is the one place in a
- * time-proportional bar that a note never starts.
+ * It sits in the tail of the measure, just before the bar line, which is where
+ * printed music puts a clef that changes on a bar line. Paper widens the bar
+ * to make room for it; a time-proportional bar cannot.
  */
 function drawInlineClef(
   ctx: CanvasRenderingContext2D,
@@ -1384,7 +1505,8 @@ function drawClefChanges(
     if (measure.startMs > toMs) break;
     const previous = measures[measure.index - 1];
     if (!previous) continue;
-    const x = Math.round(xForMs(view, measure.startMs)) + 0.5;
+    if (stavesOf(view).every((staff) => previous.clefs[staff] === measure.clefs[staff])) continue;
+    const x = Math.round(dividerX(view, layout, measure.startMs)) + 0.5;
     if (x < view.gutterPx + INLINE_CLEF_W || x > view.widthPx) continue;
     for (const staff of stavesOf(view)) {
       if (previous.clefs[staff] === measure.clefs[staff]) continue;
