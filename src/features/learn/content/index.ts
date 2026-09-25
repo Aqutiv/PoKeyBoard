@@ -41,6 +41,9 @@ const PROSE: Partial<
   firstMelody: {
     en: () => import('./en/firstMelody').then((m) => m.firstMelodyEn),
   },
+  cMajorScale: {
+    en: () => import('./en/cMajorScale').then((m) => m.cMajorScaleEn),
+  },
 };
 
 /**

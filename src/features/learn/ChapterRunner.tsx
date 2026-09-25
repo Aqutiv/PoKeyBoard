@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useLiveActiveNotes, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
 import { useRouter } from '@/app/routerContext';
+import { whiteKeyCount } from '@/features/keyboard/keyboardGeometry';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { LIBRARY_TRACKS } from '@/features/library/catalog';
 import { openLibraryTrack } from '@/features/library/libraryService';
@@ -175,6 +176,9 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   );
 
   const onRangeChange = useCallback((next: MidiRange) => setRange(next), []);
+
+  // A range the step needs shown whole: the keyboard narrows its keys to fit.
+  const fitWhites = step?.fit ? whiteKeyCount(step.fit.lowMidi, step.fit.highMidi) : undefined;
 
   const goTo = useCallback(
     (next: number) => {
@@ -428,9 +432,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
               {isDrill
                 ? drill.round?.phrase
                   ? m.learn.playWhatYouSee
-                  : drill.round
-                    ? m.learn.playNote({ note: drill.round.label })
-                    : ''
+                  : drill.round?.degree !== undefined
+                    ? m.learn.playDegree({ degree: drill.round.degree })
+                    : drill.round
+                      ? m.learn.playNote({ note: drill.round.label })
+                      : ''
                 : text?.prompt}
             </p>
             {/* A timed attempt that resets mid-bar would fire this live
@@ -531,6 +537,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
           anchorMidi={anchorMidi}
           onAnchorChange={setAnchorMidi}
           onRangeChange={onRangeChange}
+          minVisibleWhites={fitWhites}
         />
       </div>
     </section>

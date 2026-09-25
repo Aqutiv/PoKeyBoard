@@ -211,3 +211,23 @@ describe('useDrill against live input', () => {
     );
   });
 });
+
+describe('drillRoundAt: scale degrees', () => {
+  it('asks for the degree of the scale on its own tonic, any octave', () => {
+    // G major's seventh degree is F sharp: the pattern, not the white keys.
+    const gMajor: DrillPool = { kind: 'scaleDegree', tonic: 7, degrees: [7] };
+    const round = drillRoundAt(gMajor, 0);
+    expect(round?.spec).toEqual({ kind: 'pitchClass', pitchClass: 6 });
+    expect(round?.degree).toBe(7);
+  });
+
+  it('names no note, since the name would be the answer', () => {
+    const cMajor: DrillPool = { kind: 'scaleDegree', tonic: 0, degrees: [1, 5] };
+    expect(drillRoundAt(cMajor, 0)?.label).toBe('');
+    expect(drillRoundAt(cMajor, 0)?.phrase).toBeUndefined();
+  });
+
+  it('asks nothing of an empty pool', () => {
+    expect(drillRoundAt({ kind: 'scaleDegree', tonic: 0, degrees: [] }, 0)).toBeNull();
+  });
+});

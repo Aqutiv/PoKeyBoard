@@ -9,6 +9,7 @@ import {
   layoutKeyboard,
   MAX_VISIBLE_WHITES,
   maxLowMidiFor,
+  MIN_FITTED_WHITE_KEY_PX,
   MIN_VISIBLE_WHITES,
   snapToWhite,
   stepWhites,
@@ -133,6 +134,23 @@ describe('computeVisibleWhites', () => {
     expect(computeVisibleWhites(800)).toBe(21);
     expect(computeVisibleWhites(1180)).toBe(21); // e2e viewport 1280 minus nav and padding
     expect(computeVisibleWhites(1512)).toBe(21);
+  });
+
+  it('shows at least the keys a range asks for, narrowing them to fit', () => {
+    // A 320px phone's key bed shows seven; a scale needs eight.
+    expect(computeVisibleWhites(288)).toBe(7);
+    expect(computeVisibleWhites(288, 8)).toBe(8);
+    expect(computeVisibleWhites(288, 11)).toBe(11);
+  });
+
+  it('never narrows a key below the fitted floor to honour a range', () => {
+    // 288 / 26 is 11 keys at most: past that the keys would stop being
+    // playable, which is worse than asking for a shift.
+    expect(computeVisibleWhites(288, 16)).toBe(Math.floor(288 / MIN_FITTED_WHITE_KEY_PX));
+  });
+
+  it('never shows fewer keys than the width would anyway', () => {
+    expect(computeVisibleWhites(800, 8)).toBe(21);
   });
 
   it('adds keys instead of stretching on wide containers', () => {

@@ -12,6 +12,8 @@ import { TREBLE_STAFF } from '@/features/learn/chapters/trebleStaff';
 import { BASS_AND_GRAND_STAFF } from '@/features/learn/chapters/bassAndGrandStaff';
 import { RHYTHM_AND_BEAT } from '@/features/learn/chapters/rhythmAndBeat';
 import { FIRST_MELODY } from '@/features/learn/chapters/firstMelody';
+import { C_MAJOR_SCALE } from '@/features/learn/chapters/cMajorScale';
+import { MAJOR_SCALE_STEPS } from '@/features/learn/drill';
 import { momentsOf } from '@/features/learn/phrase';
 import type { LearnChapter } from '@/features/learn/types';
 import { LIBRARY_TRACKS } from '@/features/library/catalog';
@@ -20,7 +22,12 @@ import { drillRoundAt } from '@/features/learn/drill';
 import { phraseToNotes } from '@/features/learn/phrase';
 import { layoutScore } from '@/features/notation/notationLayout';
 import { midiToStaffPosition, TREBLE_SPLIT_MIDI } from '@/features/notation/staffMapping';
-import { MIN_VISIBLE_WHITES, stepWhites } from '@/features/keyboard/keyboardGeometry';
+import {
+  MIN_FITTED_WHITE_KEY_PX,
+  MIN_VISIBLE_WHITES,
+  stepWhites,
+  whiteKeyCount,
+} from '@/features/keyboard/keyboardGeometry';
 import { loadChapterProse } from '@/features/learn/content';
 import { DEFAULT_RHYTHM_TOLERANCE_BEATS, goalTotal } from '@/features/learn/exerciseSpec';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
@@ -69,6 +76,7 @@ describe('learn catalog', () => {
       'bassAndGrandStaff',
       'rhythmAndBeat',
       'firstMelody',
+      'cMajorScale',
     ]);
   });
 
@@ -76,6 +84,32 @@ describe('learn catalog', () => {
     expect(findLearnChapter('meetTheKeyboard')?.order).toBe(1);
     expect(findLearnChapter('keySignatures')?.level).toBe('intermediate');
     expect(findLearnChapter('improvising')?.level).toBe('advanced');
+  });
+});
+
+describe('every authored chapter', () => {
+  const AUTHORED = [
+    MEET_THE_KEYBOARD,
+    MUSICAL_ALPHABET,
+    HALF_STEPS_WHOLE_STEPS,
+    TREBLE_STAFF,
+    BASS_AND_GRAND_STAFF,
+    RHYTHM_AND_BEAT,
+    FIRST_MELODY,
+    C_MAJOR_SCALE,
+  ];
+
+  it('keeps the two tints of a diagram apart', () => {
+    // `KeyboardDiagram` checks the first tint first, so a key in both sets
+    // shows the first colour and the second is silently never seen.
+    for (const chapter of AUTHORED) {
+      for (const step of chapter.steps) {
+        if (step.visual?.kind !== 'keyboard') continue;
+        const first = new Set(step.visual.highlight ?? []);
+        const overlap = (step.visual.highlightSecondary ?? []).filter((midi) => first.has(midi));
+        expect(overlap, `${chapter.id}/${step.id}`).toEqual([]);
+      }
+    }
   });
 });
 
@@ -264,8 +298,8 @@ describe('chapter three', () => {
     const drill = HALF_STEPS_WHOLE_STEPS.steps.find((s) => s.kind === 'drill');
     expect(quiz?.question.kind).toBe('nameTheKey');
     expect(quiz?.question.pitchClasses).toEqual([1, 3, 6, 8, 10]);
-    expect(drill?.drill.kind).toBe('namedKey');
-    expect(drill?.drill.pitchClasses).toEqual([1, 3, 6, 8, 10]);
+    if (drill?.drill.kind !== 'namedKey') throw new Error('expected a named-key drill');
+    expect(drill.drill.pitchClasses).toEqual([1, 3, 6, 8, 10]);
     if (quiz?.question.kind === 'nameTheKey') expect(quiz.question.spelling).toBe('sharp');
     if (drill?.drill.kind === 'namedKey') expect(drill.drill.spelling).toBe('flat');
     expect(drill?.rounds).toBeGreaterThan(0);
@@ -329,9 +363,9 @@ describe('chapter four', () => {
     const quiz = TREBLE_STAFF.steps.find((s) => s.kind === 'quiz');
     const drill = TREBLE_STAFF.steps.find((s) => s.kind === 'drill');
     expect(quiz?.question.kind).toBe('readNote');
-    expect(drill?.drill.kind).toBe('readNote');
+    if (drill?.drill.kind !== 'readNote') throw new Error('expected a reading drill');
     expect(quiz?.question.pitchClasses).toEqual([0, 2, 4, 5, 7]);
-    expect(drill?.drill.pitchClasses).toEqual([0, 2, 4, 5, 7]);
+    expect(drill.drill.pitchClasses).toEqual([0, 2, 4, 5, 7]);
   });
 
   it('asks for the exact middle C the stave draws, not any C', () => {
@@ -742,6 +776,8 @@ function sharedChapterChecks(chapter: LearnChapter): void {
   const BAR_BEATS = 4;
   /** The C-snapped computer-keyboard base reaches this far up. */
   const COMPUTER_KEYBOARD_SPAN = 17;
+  /** The key bed of a 320px phone, the narrowest screen the course designs for. */
+  const NARROWEST_KEY_BED_PX = 288;
 
   it('gives every step a unique id', () => {
     const ids = chapter.steps.map((step) => step.id);
@@ -799,7 +835,9 @@ function sharedChapterChecks(chapter: LearnChapter): void {
       if (step.kind !== 'exercise' || step.spec.kind !== 'playAlong') continue;
       const anchor = step.anchorMidi;
       expect(anchor, step.id).toBeDefined();
-      const high = stepWhites(anchor!, MIN_VISIBLE_WHITES, 1);
+      // A step that asks for a range gets that range, narrowed to fit;
+      // otherwise the seven keys a small phone shows from the anchor.
+      const high = step.fit ? step.fit.highMidi : stepWhites(anchor!, MIN_VISIBLE_WHITES, 1);
       const base = Math.floor(anchor! / 12) * 12;
       for (const moment of momentsOf(step.spec.phrase)) {
         for (const midi of moment.midis) {
@@ -808,6 +846,17 @@ function sharedChapterChecks(chapter: LearnChapter): void {
           expect(midi - base, `${step.id}: ${midi}`).toBeLessThanOrEqual(COMPUTER_KEYBOARD_SPAN);
         }
       }
+    }
+  });
+
+  it('asks only for ranges the narrowest phone can show at the fitted key floor', () => {
+    for (const step of chapter.steps) {
+      if (!step.fit) continue;
+      // The keyboard's low edge is the anchor, so a fit starting anywhere else
+      // would show a different range from the one asked for.
+      expect(step.fit.lowMidi, step.id).toBe(step.anchorMidi);
+      const whites = whiteKeyCount(step.fit.lowMidi, step.fit.highMidi);
+      expect(whites * MIN_FITTED_WHITE_KEY_PX, step.id).toBeLessThanOrEqual(NARROWEST_KEY_BED_PX);
     }
   });
 
@@ -911,5 +960,121 @@ describe('chapter seven', () => {
     })) {
       expect(note.midi).toBeGreaterThanOrEqual(TREBLE_SPLIT_MIDI);
     }
+  });
+});
+
+describe('chapter eight', () => {
+  sharedChapterChecks(C_MAJOR_SCALE);
+
+  const step = (id: string) => C_MAJOR_SCALE.steps.find((s) => s.id === id);
+  const lineOf = (id: string): readonly number[] => {
+    const found = step(id);
+    if (found?.kind !== 'exercise' || found.spec.kind !== 'playAlong') {
+      throw new Error(`expected a playAlong line at ${id}`);
+    }
+    return momentsOf(found.spec.phrase).flatMap((moment) => moment.midis);
+  };
+  const stepsBetween = (midis: readonly number[]): number[] =>
+    midis.slice(1).map((midi, i) => midi - (midis[i] as number));
+
+  /** Whole, whole, half, whole, whole, whole, half. */
+  const MAJOR_PATTERN = [2, 2, 1, 2, 2, 2, 1];
+
+  it('plays the scale three ways and drills its degrees, with no quiz', () => {
+    const kinds = C_MAJOR_SCALE.steps.map((s) => s.kind);
+    expect(kinds).toHaveLength(11);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(3);
+    expect(kinds.filter((kind) => kind === 'drill')).toHaveLength(1);
+    expect(kinds.filter((kind) => kind === 'quiz')).toHaveLength(0);
+  });
+
+  it('climbs by the major pattern, and comes down by its mirror', () => {
+    expect(stepsBetween(lineOf('scaleUp'))).toEqual(MAJOR_PATTERN);
+    expect(stepsBetween(lineOf('scaleDown'))).toEqual([...MAJOR_PATTERN].reverse().map((n) => -n));
+    // In time: up the octave and straight back, the top C played once.
+    expect(stepsBetween(lineOf('scaleInTime'))).toEqual([
+      ...MAJOR_PATTERN,
+      ...[...MAJOR_PATTERN].reverse().map((n) => -n),
+    ]);
+    expect(lineOf('scaleUp')[0]).toBe(60);
+  });
+
+  it('grades only the scale in time against the click', () => {
+    const timedIds = C_MAJOR_SCALE.steps
+      .filter((s) => s.kind === 'exercise' && s.spec.kind === 'playAlong' && !!s.spec.timed)
+      .map((s) => s.id);
+    expect(timedIds).toEqual(['scaleInTime']);
+  });
+
+  it('shows the whole octave on every step, so no scale stops for a shift', () => {
+    for (const s of C_MAJOR_SCALE.steps) {
+      expect(s.fit, s.id).toEqual({ lowMidi: 60, highMidi: 72 });
+    }
+    // Eight whites — one more than a 320px phone shows unaided.
+    expect(whiteKeyCount(60, 72)).toBe(MIN_VISIBLE_WHITES + 1);
+  });
+
+  it('asks each degree for its own note of the scale, and never names it', () => {
+    const drill = step('playDegrees');
+    if (drill?.kind !== 'drill' || drill.drill.kind !== 'scaleDegree') {
+      throw new Error('expected a degree drill');
+    }
+    expect(drill.drill.tonic).toBe(0);
+    expect(drill.rounds).toBeLessThanOrEqual(drill.drill.degrees.length);
+    const asked = new Set<number>();
+    for (let round = 0; round < drill.drill.degrees.length; round += 1) {
+      const next = drillRoundAt(drill.drill, round);
+      if (next?.spec.kind !== 'pitchClass' || next.degree === undefined) {
+        throw new Error('expected a pitch-class round with a degree');
+      }
+      expect(next.spec.pitchClass).toBe(MAJOR_SCALE_STEPS[next.degree - 1]);
+      // The name would be the answer.
+      expect(next.label).toBe('');
+      asked.add(next.degree);
+    }
+    // Every degree comes up before any repeats.
+    expect([...asked].sort()).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
+  it('spells the scale from D with sharps, one of each letter', () => {
+    const picture = step('whyAllWhite')?.visual;
+    if (picture?.kind !== 'keyboard') throw new Error('expected a keyboard diagram');
+    expect(picture.spelling).toBe('sharp');
+    // The scale is both tints together: the black keys are the second one.
+    const scale = [...(picture.highlight ?? []), ...(picture.highlightSecondary ?? [])].sort(
+      (a, b) => a - b,
+    );
+    expect(stepsBetween(scale)).toEqual(MAJOR_PATTERN);
+    expect(picture.highlightSecondary).toEqual([66, 73]);
+  });
+
+  it('shows the half steps, the tuck and the crossing in the second tint', () => {
+    const secondOf = (id: string) => {
+      const picture = step(id)?.visual;
+      if (picture?.kind !== 'keyboard') throw new Error(`expected a diagram at ${id}`);
+      return picture.highlightSecondary;
+    };
+    expect(secondOf('thePattern')).toEqual([64, 65, 71, 72]);
+    expect(secondOf('thumbTuck')).toEqual([65]);
+    expect(secondOf('crossingBack')).toEqual([64]);
+  });
+
+  it('numbers the fingers of the thumb tuck the same way up and down', () => {
+    const up = step('thumbTuck')?.visual;
+    const down = step('crossingBack')?.visual;
+    if (up?.kind !== 'keyboard' || down?.kind !== 'keyboard') {
+      throw new Error('expected keyboard diagrams');
+    }
+    expect(up.labelText).toEqual({
+      60: '1',
+      62: '2',
+      64: '3',
+      65: '1',
+      67: '2',
+      69: '3',
+      71: '4',
+      72: '5',
+    });
+    expect(down.labelText).toEqual(up.labelText);
   });
 });

@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 7     | 3         |
+| Beginner     | 8     | 2         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -43,7 +43,7 @@ _Never touched a piano → a simple piece, hands together._
 | #   | Chapter                        | Teaches                                                                                                 | Exercises validate                                                                     |
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | 7   | **Your First Melody** ✅       | Pitch and rhythm together; phrases; following notation left to right                                    | an 8-bar melody from the page, in tempo → hand off to Play                             |
-| 8   | The C Major Scale              | W-W-H-W-W-W-H; why C major is all white keys; the thumb tuck; degrees 1–8                               | the scale up and down, one octave, in order                                            |
+| 8   | **The C Major Scale** ✅       | W-W-H-W-W-W-H; why C major is all white keys; the thumb tuck; degrees 1–8                               | the scale up and down, one octave, in order                                            |
 | 9   | Triads: Major and Minor        | Stacking thirds; root/third/fifth; C, F, G major and A, D, E minor; the third decides the mood          | named triads as blocks; turn a major triad minor by moving one note                    |
 | 10  | Chords, Pedal & Hands Together | I–V–vi–IV; the sustain pedal and changing it on the harmony; left-hand chords under a right-hand melody | the progression with pedal changes; a short piece hands together → hand off to Library |
 
@@ -166,7 +166,9 @@ Four step kinds (`src/features/learn/types.ts`):
   a _sequencer over_ specs: each round hands `useExercise` a fresh
   `ExerciseSpec`, whose new identity is exactly what resets the matcher, so all
   the matching, hints and timers come free. Round order is shared with the quiz
-  (`rounds.ts`). Pool kinds: `namedKey`, `readNote`.
+  (`rounds.ts`). Pool kinds: `namedKey`, `readNote`, `scaleDegree` — the last
+  names a degree of a major scale ("Play degree 5.") and grades its pitch
+  class, so any octave counts and no note name gives the answer away.
 
 A correct answer is **held on screen for 500ms** before the next round replaces
 it (`HOLD_MS` in `useDrill.ts`). Advancing on the same render that satisfied a
@@ -365,7 +367,12 @@ Learned the hard way; violating any of these produces a silent failure.
 - **A phone shows about one octave.** At 375px the keyboard auto-sizes to ~9
   white keys, so anything needing three of the same note requires the range
   shifter. Design that in as content rather than working around it — chapter 1
-  step 8 teaches the shifter for exactly this reason.
+  step 8 teaches the shifter for exactly this reason. A line that cannot pause
+  for a shift — a scale is eight white keys, and a 320px phone shows seven —
+  states `fit` on its step instead: the keyboard narrows its keys until that
+  range is on screen whole, down to `MIN_FITTED_WHITE_KEY_PX` (26px) and no
+  further. A catalog check holds every fit to the 288px key bed of a 320px
+  phone at that floor, which is eleven white keys.
 - **Only one `PianoKeyboard` may be mounted.** Two would each attach a
   `ComputerKeyboardInput` to `window`, doubling every keypress into two voices
   under one source id. This is why a chapter runs full-screen on its own route

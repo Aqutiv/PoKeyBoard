@@ -263,6 +263,7 @@ export const mg: Messages = {
     quizWrong: ({ answer }) => `Io dia ${answer}.`,
     quizAnswerLabel: ({ note }) => `Valio ${note}`,
     playNote: ({ note }) => `Tendreo ${note}.`,
+    playDegree: ({ degree }) => `Tendreo ny ambaratonga ${degree}.`,
     readNotePrompt: 'Naoty inona ity?',
     playWhatYouSee: 'Tendreo ny naoty hita.',
     chapterTitles: {
