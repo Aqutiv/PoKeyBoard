@@ -264,6 +264,13 @@ export const fr: Messages = {
     playDegree: ({ degree }) => `Jouez le degré ${degree}.`,
     readNotePrompt: 'Quelle est cette note ?',
     playWhatYouSee: 'Jouez la note affichée.',
+    chordQuality: { major: 'majeur', minor: 'mineur' },
+    chordQualityAnswer: { major: 'Majeur', minor: 'Mineur' },
+    chordName: ({ note, quality }) => `${note} ${quality}`,
+    playChord: ({ chord }) => `Jouez ${chord}.`,
+    hearIt: 'Écouter',
+    chordQualityPrompt: 'Majeur ou mineur ?',
+    chordQualityWrong: ({ answer }) => `Celui-ci était ${answer}.`,
     chapterTitles: {
       meetTheKeyboard: 'Découvrir le clavier',
       musicalAlphabet: 'L’alphabet musical',

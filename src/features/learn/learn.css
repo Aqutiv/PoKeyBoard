@@ -361,6 +361,12 @@
 
 /* Wraps to two rows on a narrow phone rather than shrinking below the touch
    target — seven letters will not fit on one line at 320px. */
+/* An ear round has nothing to look at, only this: give it the room the
+   diagram or the stave would have taken above the prompt. */
+.learn-quiz__hear {
+  margin: 4px 0 12px;
+}
+
 .learn-quiz__choices {
   display: flex;
   flex-wrap: wrap;

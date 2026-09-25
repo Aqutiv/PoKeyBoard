@@ -74,7 +74,13 @@ export const LEARN_CHAPTERS: readonly LearnChapterMeta[] = [
     part: 'playing',
     load: () => import('./chapters/cMajorScale').then((m) => m.C_MAJOR_SCALE),
   },
-  { id: 'triads', level: 'beginner', order: 9, part: 'playing', load: null },
+  {
+    id: 'triads',
+    level: 'beginner',
+    order: 9,
+    part: 'playing',
+    load: () => import('./chapters/triads').then((m) => m.TRIADS),
+  },
   { id: 'chordsPedalAndHands', level: 'beginner', order: 10, part: 'playing', load: null },
 
   // ---- Intermediate: one piece in C → several keys, real accompaniment ----

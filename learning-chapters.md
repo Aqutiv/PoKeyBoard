@@ -12,7 +12,7 @@ must agree.
 
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
-| Beginner     | 8     | 2         |
+| Beginner     | 9     | 1         |
 | Intermediate | 0     | 10        |
 | Advanced     | 0     | 10        |
 
@@ -44,7 +44,7 @@ _Never touched a piano → a simple piece, hands together._
 | --- | ------------------------------ | ------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
 | 7   | **Your First Melody** ✅       | Pitch and rhythm together; phrases; following notation left to right                                    | an 8-bar melody from the page, in tempo → hand off to Play                             |
 | 8   | **The C Major Scale** ✅       | W-W-H-W-W-W-H; why C major is all white keys; the thumb tuck; degrees 1–8                               | the scale up and down, one octave, in order                                            |
-| 9   | Triads: Major and Minor        | Stacking thirds; root/third/fifth; C, F, G major and A, D, E minor; the third decides the mood          | named triads as blocks; turn a major triad minor by moving one note                    |
+| 9   | **Triads: Major and Minor** ✅ | Stacking thirds; root/third/fifth; C, F, G major and A, D, E minor; the third decides the mood          | named triads as blocks; turn a major triad minor by moving one note                    |
 | 10  | Chords, Pedal & Hands Together | I–V–vi–IV; the sustain pedal and changing it on the harmony; left-hand chords under a right-hand melody | the progression with pedal changes; a short piece hands together → hand off to Library |
 
 ---
@@ -159,7 +159,14 @@ Four step kinds (`src/features/learn/types.ts`):
   demo.
 - `exercise` — carries an `ExerciseSpec`; the user plays it.
 - `quiz` — recognition instead of production; the app shows something and the
-  user names it. Question kinds: `nameTheKey`, `readNote`.
+  user names it. Question kinds: `nameTheKey`, `readNote`, `chordQuality` —
+  the last plays a triad and asks "major or minor?", the one question the
+  course asks of the ear alone. Its chord is **heard, never drawn**: on a
+  staff it could be told apart by counting. A "Hear it" button plays it
+  through the runner's own demo lock (`playDemo`), shared with Listen and
+  "Show me", because a scheduled note cannot be unscheduled. Answers are ids
+  (`QuizChoice`: a pitch class or a quality) and the panel turns them into
+  words.
 - `drill` — the mirror of a quiz: the app names something and the user plays
   it, over several rounds. Not an `ExerciseSpec` kind — rounds cannot live in a
   spec, since the matcher is a pure reducer with no notion of them. A drill is
@@ -169,6 +176,7 @@ Four step kinds (`src/features/learn/types.ts`):
   (`rounds.ts`). Pool kinds: `namedKey`, `readNote`, `scaleDegree` — the last
   names a degree of a major scale ("Play degree 5.") and grades its pitch
   class, so any octave counts and no note name gives the answer away.
+  `namedChord` names a triad ("Play A minor.") and grades it with `chord`.
 
 A correct answer is **held on screen for 500ms** before the next round replaces
 it (`HOLD_MS` in `useDrill.ts`). Advancing on the same render that satisfied a
@@ -249,6 +257,12 @@ Note labels come from `noteLabel(midiOrPitchClass, spelling)`
 spelling tables so a lesson and the engraver can never disagree about whether a
 key is C♯ or D♭.
 
+A written note keeps the spelling its name states. `phraseToNotes` reads "Eb4"
+as E♭ through `writtenSpellingOf` (`src/domain/writtenSpelling.ts`, shared with
+the Library's track builder), so chapter 9's C minor engraves C–E♭–G. Left to
+the context speller, the same key could as well come out D♯. Write the
+accidental wherever the letter matters; a bare letter names only a key.
+
 `ExerciseSpec` kinds (`src/features/learn/exerciseSpec.ts`), and who needs them:
 
 | Kind            | Means                                                      | Used by        |
@@ -262,6 +276,7 @@ key is C♯ or D♭.
 | `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I3 |
 | `rhythm`        | these beat offsets, in time with the click                 | B6, I7, A4     |
 | `playAlong`     | a written line, in order — optionally in time, as chords   | B7–B10, A6     |
+| `chord`         | a named triad, root position, any octave, nothing extra    | B9, I6, A1     |
 
 An `interval` with no `lowerPitchClass` and no `together` reads the cumulative
 candidate set, which makes it "any two keys N semitones apart" rather than one

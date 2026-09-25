@@ -266,6 +266,13 @@ export const mg: Messages = {
     playDegree: ({ degree }) => `Tendreo ny ambaratonga ${degree}.`,
     readNotePrompt: 'Naoty inona ity?',
     playWhatYouSee: 'Tendreo ny naoty hita.',
+    chordQuality: { major: 'majeur', minor: 'mineur' },
+    chordQualityAnswer: { major: 'Majeur', minor: 'Mineur' },
+    chordName: ({ note, quality }) => `${note} ${quality}`,
+    playChord: ({ chord }) => `Tendreo ${chord}.`,
+    hearIt: 'Henoy',
+    chordQualityPrompt: 'Majeur sa mineur?',
+    chordQualityWrong: ({ answer }) => `${answer} ilay teo.`,
     chapterTitles: {
       meetTheKeyboard: 'Fantaro ny klavie',
       musicalAlphabet: 'Ny abidia mozikaly',

@@ -122,7 +122,7 @@ test.describe('learn outline', () => {
 
     for (const level of ['Beginner', 'Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
-      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 8 : 0);
+      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 9 : 0);
       await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
       await page.getByText('Upcoming lessons', { exact: true }).click();
@@ -175,15 +175,16 @@ test.describe('learn outline', () => {
       'Rhythm & the Beat',
       'Your First Melody',
       'The C Major Scale',
+      'Triads: Major and Minor',
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
-    await expect(page.getByText('8 lessons available')).toBeVisible();
+    await expect(page.getByText('9 lessons available')).toBeVisible();
     await page.getByText('Upcoming lessons', { exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'Triads: Major and Minor — coming soon' }),
+      page.getByRole('button', { name: 'Chords, Pedal & Hands Together — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(2);
+    await expect(page.getByText('Coming soon')).toHaveCount(1);
   });
 });
 
@@ -1207,5 +1208,88 @@ test.describe('chapter eight', () => {
       [...UP, ...down].map((code, beat) => [code, beat] as const),
     );
     await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+});
+
+test.describe('chapter nine', () => {
+  const CHAPTER = 'Triads: Major and Minor';
+  const openAt = (page: Page, step: number) => openChapterAt(page, CHAPTER, 'triads', step);
+
+  /** Hold these computer-keyboard keys down together, then let them all go. */
+  async function strike(page: Page, codes: readonly string[]): Promise<void> {
+    for (const code of codes) await page.keyboard.down(code);
+    for (const code of codes) await page.keyboard.up(code);
+  }
+
+  test('asks major or minor by ear, and corrects a wrong answer', async ({ page }) => {
+    await openAt(page, 5);
+    await expect(page.getByRole('heading', { name: 'Happy or sad?' })).toBeVisible();
+    // Heard, never seen: no stave and no diagram for this question.
+    await expect(page.locator('.learn-quiz .learn-staff__canvas')).toHaveCount(0);
+    const hear = page.getByRole('button', { name: 'Hear it' });
+    await expect(hear).toBeEnabled();
+    await hear.click();
+    // Held while the chord sounds, so presses cannot stack copies of it.
+    await expect(hear).toBeDisabled();
+
+    await page.getByRole('button', { name: 'Answer Minor' }).click();
+    await expect(page.getByText('That one was major.')).toBeVisible();
+    await expect(nextButton(page)).toBeDisabled();
+
+    // The stride asks C, E minor, D minor, G, A minor, F.
+    for (const quality of ['Major', 'Minor', 'Minor', 'Major', 'Minor', 'Major']) {
+      await page.getByRole('button', { name: `Answer ${quality}` }).click();
+    }
+    await expect(page.locator('.learn-quiz__status')).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('drills named triads, and refuses one with an extra key down', async ({ page }) => {
+    await openAt(page, 7);
+    await expect(page.getByText('Play C major.')).toBeVisible();
+    await strike(page, ['KeyA', 'KeyD', 'KeyG']);
+    await expect(progressLine(page)).toHaveText('1 of 6');
+    await settleDrillHold(page);
+
+    await expect(page.getByText('Play E minor.')).toBeVisible();
+    // E–G–B with an A under it is not E minor.
+    await strike(page, ['KeyH', 'KeyD', 'KeyG', 'KeyJ']);
+    await expect(progressLine(page)).toHaveText('1 of 6');
+    // Past the onset window, the chord alone is the chord.
+    await page.waitForTimeout(500);
+    await strike(page, ['KeyD', 'KeyG', 'KeyJ']);
+    await expect(progressLine(page)).toHaveText('2 of 6');
+  });
+
+  test('takes a chord rolled with one mouse pointer', async ({ page }) => {
+    await openAt(page, 7);
+    await expect(page.getByText('Play C major.')).toBeVisible();
+    const centres: { x: number; y: number }[] = [];
+    for (const name of ['C4 key', 'E4 key', 'G4 key']) {
+      const box = await page.locator(`.piano__keys [aria-label="${name}"]`).boundingBox();
+      if (!box) throw new Error(`no ${name} on screen`);
+      centres.push({ x: box.x + box.width / 2, y: box.y + box.height * 0.8 });
+    }
+    // Three quick clicks: a mouse cannot hold three keys, so a roll inside the
+    // onset window is how it plays a chord.
+    for (const { x, y } of centres) {
+      await page.mouse.move(x, y);
+      await page.mouse.down();
+      await page.mouse.up();
+    }
+    await expect(progressLine(page)).toHaveText('1 of 6');
+  });
+
+  test('turns C major minor by moving one note', async ({ page }) => {
+    await openAt(page, 9);
+    await expect(page.getByRole('heading', { name: 'Make it minor' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 2');
+    for (const code of ['KeyA', 'KeyD', 'KeyG']) await page.keyboard.down(code);
+    await expect(progressLine(page)).toHaveText('1 of 2');
+    // The E comes up, the E flat goes down; C and G stay held.
+    await page.keyboard.up('KeyD');
+    await page.keyboard.down('KeyE');
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    for (const code of ['KeyA', 'KeyE', 'KeyG']) await page.keyboard.up(code);
   });
 });

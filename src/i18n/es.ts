@@ -263,6 +263,13 @@ export const es: Messages = {
     playDegree: ({ degree }) => `Toca el grado ${degree}.`,
     readNotePrompt: '¿Qué nota es esta?',
     playWhatYouSee: 'Toca la nota que ves.',
+    chordQuality: { major: 'mayor', minor: 'menor' },
+    chordQualityAnswer: { major: 'Mayor', minor: 'Menor' },
+    chordName: ({ note, quality }) => `${note} ${quality}`,
+    playChord: ({ chord }) => `Toca ${chord}.`,
+    hearIt: 'Escúchalo',
+    chordQualityPrompt: '¿Mayor o menor?',
+    chordQualityWrong: ({ answer }) => `Ese era ${answer}.`,
     chapterTitles: {
       meetTheKeyboard: 'Conoce el teclado',
       musicalAlphabet: 'El alfabeto musical',
