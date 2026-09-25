@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { musicXmlToTake } from '@/domain/musicXmlImport';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { Take } from '@/domain/takeTypes';
 
@@ -62,6 +63,38 @@ describe('a take as a MIDI file', () => {
     const declared = dMinor();
     declared.tempo = { ...declared.tempo, keySignature: 2 };
     expect((await metaBytes((await midiFor(declared))!, 0x59))[0]).toBe(2);
+  });
+
+  it('declares the mode a score gave it, however few notes there are to read', async () => {
+    // Four notes are too few to read a mode from, which reads as major; the
+    // score says A minor.
+    const arpeggio = [
+      ['A', 4],
+      ['C', 5],
+      ['E', 5],
+      ['A', 5],
+    ] as const;
+    const aMinor = musicXmlToTake(
+      '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1">' +
+        '<part-list><score-part id="P1"><part-name>P1</part-name></score-part></part-list>' +
+        '<part id="P1"><measure number="1"><attributes><divisions>1</divisions>' +
+        '<key><fifths>0</fifths><mode>minor</mode></key>' +
+        '<time><beats>4</beats><beat-type>4</beat-type></time></attributes>' +
+        arpeggio
+          .map(
+            ([step, octave]) =>
+              `<note><pitch><step>${step}</step><octave>${octave}</octave></pitch>` +
+              '<duration>1</duration></note>',
+          )
+          .join('') +
+        '</measure></part></score-partwise>',
+    );
+    expect(await metaBytes((await midiFor(aMinor))!, 0x59)).toEqual([0, 1]); // no sharps, minor
+
+    // And the other way: the D minor study, declared as F major.
+    const fMajor = dMinor();
+    fMajor.tempo = { ...fMajor.tempo, keySignature: -1, keyMode: 'major' };
+    expect(await metaBytes((await midiFor(fMajor))!, 0x59)).toEqual([0xff, 0]);
   });
 
   it('asks a sequencer for the electric piano a Wurlitzer take was played on', async () => {

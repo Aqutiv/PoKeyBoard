@@ -124,6 +124,8 @@ interface CollectedScore {
   timeSignature: TimeSignature | null;
   /** Fifths from the score's own <key>, or null when it never declared one. */
   keySignature: number | null;
+  /** That <key>'s <mode>, when it names major or minor; null otherwise. */
+  keyMode: 'major' | 'minor' | null;
   title: string | null;
 }
 
@@ -465,6 +467,10 @@ function collectPart(
             const fifths = numberByTag(key, 'fifths');
             if (fifths !== null && Number.isInteger(fifths) && Math.abs(fifths) <= MAX_FIFTHS) {
               out.keySignature = fifths;
+              // Its mode comes with it. A church mode is neither major nor
+              // minor, so it is left for the pitches to decide, like no mode.
+              const mode = textByTag(key, 'mode');
+              if (mode === 'major' || mode === 'minor') out.keyMode = mode;
             }
           }
           const time = childByTag(el, 'time');
@@ -695,6 +701,7 @@ function collectScore(root: Element): CollectedScore {
     nextTupletGroup: 0,
     timeSignature: null,
     keySignature: null,
+    keyMode: null,
     title: null,
   };
   const work = childByTag(root, 'work');
@@ -899,6 +906,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
         countInBars: 1,
         ...(tempoChanges.length > 0 ? { changes: tempoChanges } : {}),
         ...(collected.keySignature !== null ? { keySignature: collected.keySignature } : {}),
+        ...(collected.keyMode !== null ? { keyMode: collected.keyMode } : {}),
       },
       notes,
       pedalEvents,

@@ -69,6 +69,14 @@ export interface TempoSettings {
    * score never said, and the notation reads a key from the pitches instead.
    */
   keySignature?: number;
+  /**
+   * Whether the score called that signature its major key or its relative
+   * minor. Notational like the signature: the MIDI export declares it as the
+   * score gave it, where a reading of the pitches is a guess, and no reading
+   * at all for a short piece. Absent means the score never said, and the
+   * pitches decide.
+   */
+  keyMode?: 'major' | 'minor';
 }
 
 export interface InstrumentSettings {

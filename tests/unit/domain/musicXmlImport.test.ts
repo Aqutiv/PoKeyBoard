@@ -636,11 +636,31 @@ describe('pedal, pitch spelling, and time signatures', () => {
       ),
     );
     expect(musicXmlToTake(eFlat).tempo.keySignature).toBe(-3);
+    expect(musicXmlToTake(eFlat).tempo).not.toHaveProperty('keyMode');
+  });
+
+  it('captures whether the score calls its key major or minor', () => {
+    const keyed = (mode: string) =>
+      musicXmlToTake(
+        scoreWith(
+          measure(
+            1,
+            `<attributes><divisions>1</divisions><key><fifths>-3</fifths><mode>${mode}</mode></key>` +
+              '<time><beats>4</beats><beat-type>4</beat-type></time></attributes>' +
+              note('C', 4, 1),
+          ),
+        ),
+      ).tempo;
+    expect(keyed('minor')).toMatchObject({ keySignature: -3, keyMode: 'minor' });
+    expect(keyed('major')).toMatchObject({ keySignature: -3, keyMode: 'major' });
+    // A church mode names neither, so the pitches decide as if it were unsaid.
+    expect(keyed('dorian')).not.toHaveProperty('keyMode');
   });
 
   it('leaves the key unset when the score never says, so the notes decide', () => {
     const plain = scoreWith(measure(1, DIV1 + note('C', 4, 1)));
     expect(musicXmlToTake(plain).tempo.keySignature).toBeUndefined();
+    expect(musicXmlToTake(plain).tempo).not.toHaveProperty('keyMode');
   });
 
   it('ignores a key signature off the circle of fifths', () => {
