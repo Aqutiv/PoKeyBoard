@@ -124,6 +124,12 @@ describe('chords', () => {
     expect(spell(notes)).toEqual(['E', 'G#', 'B']);
   });
 
+  it('counts a key held down however long ago it was struck', () => {
+    // A C held for ten seconds, and a note 3.1 s in: still C–A♭, not a lone G♯.
+    const notes = [note('c', 60, 0, 10_000), note('a', 68, 3100, 400)];
+    expect(spell(notes)).toEqual(['C', 'Ab']);
+  });
+
   it('spells a doubled note the same in every octave', () => {
     expect(spell(chord([56, 64, 68, 71]))).toEqual(['G#', 'E', 'G#', 'B']);
   });
@@ -241,6 +247,19 @@ describe('context', () => {
     const spelled = spell([...cMajor, bass, ...eMajor]);
     const gSharps = spelled.slice(cMajor.length + 1).filter((_, i) => eMajor[i]!.midi % 12 === 8);
     expect(gSharps.every((s) => s === 'G#')).toBe(true);
+  });
+});
+
+describe('cost', () => {
+  it('stays linear under a pedal that is never let up', () => {
+    // Twenty thousand notes, every one of them still sounding at the end:
+    // spelling each chord against all of them would be quadratic.
+    const notes = Array.from({ length: 20_000 }, (_, i) =>
+      note(`p${i}`, 48 + ((i * 7) % 36), i * 50, 40),
+    );
+    const started = performance.now();
+    spellNotes(notes, C_MAJOR, [{ fromMs: 0, toMs: Number.POSITIVE_INFINITY }]);
+    expect(performance.now() - started).toBeLessThan(2000);
   });
 });
 
