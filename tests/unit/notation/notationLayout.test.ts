@@ -591,6 +591,29 @@ describe('chords struck a little unevenly', () => {
     expect(startOn('bass')).toBe(250);
   });
 
+  it('still groups the notes after one that fits no chord', () => {
+    // A right-hand triplet at 140 ms over a left hand playing straight: on the
+    // beat, a chord struck at 180 and 195, and the last sixteenth. The triplet
+    // and the chord's first note share no grid point, so the triplet stands
+    // alone; the chord is still one, written from 187.5 ms and together at
+    // 250, not split between 125 and 250.
+    const triplet = { actual: 3, normal: 2, unit: 8 };
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 140, durationMs: 150, tuplet: triplet }),
+        note({ id: 'lh0', midi: 43, startMs: 0, durationMs: 125 }),
+        note({ id: 'lh1', midi: 48, startMs: 180, durationMs: 180 }),
+        note({ id: 'lh2', midi: 52, startMs: 195, durationMs: 165 }),
+        note({ id: 'lh3', midi: 50, startMs: 375, durationMs: 125 }),
+      ],
+      OPTS,
+    );
+    const startsOn = (staff: 'treble' | 'bass'): number[] =>
+      layout.chords.filter((chord) => chord.staff === staff).map((chord) => chord.displayStartMs);
+    expect(startsOn('treble')).toEqual([167]);
+    expect(startsOn('bass')).toEqual([0, 250, 375]);
+  });
+
   it('writes a two-note chord from halfway between its notes, not from the later one', () => {
     // 40 ms and 80 ms: halfway is 60, which rounds to the beat (0 ms); the
     // later note alone would round the chord to the next sixteenth.

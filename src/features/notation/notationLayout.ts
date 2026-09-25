@@ -211,8 +211,9 @@ function sourceLine(note: NoteEvent): string | null {
  * exact onsets are what was asked for — so a fast run is never mistaken for a
  * chord, and a score, whose chords share one onset exactly, is left as it
  * was. Where the staves are on different grids, one hand in threes, the chord
- * is written from a point both can draw, or where there is none, not grouped
- * at all; see `sharedOnset`.
+ * is written from a point both can draw; where there is none, its first note
+ * is written as played and the notes after it are grouped afresh. See
+ * `sharedOnset`.
  *
  * And only notes held down together for at least half as long as the
  * shortest of them lasts. However unevenly a chord is struck, its notes are
@@ -269,14 +270,17 @@ function chordTimings(
     if (j - i > 1) {
       const chord = order.slice(i, j).map((index) => notes[index] as NoteEvent);
       const onset = sharedOnset(chord, middleOf(chord.map((note) => note.startMs)), drawnAt);
-      // No onset every note can be drawn at is no chord: each keeps its own
-      // onset and its own release, as if it had never been grouped.
-      if (onset !== null) {
-        const letGo = sharedReleases(chord, window);
-        for (let k = i; k < j; k += 1) {
-          onsets[order[k] as number] = onset;
-          releases[order[k] as number] = letGo[k - i] as number;
-        }
+      if (onset === null) {
+        // No onset every note can be drawn at is no chord. Its first note keeps
+        // its own onset and release, as if never grouped, and the rest are
+        // looked at again without it: they may still be a chord of their own.
+        i += 1;
+        continue;
+      }
+      const letGo = sharedReleases(chord, window);
+      for (let k = i; k < j; k += 1) {
+        onsets[order[k] as number] = onset;
+        releases[order[k] as number] = letGo[k - i] as number;
       }
     }
     i = j;
@@ -332,11 +336,11 @@ function sharedReleases(chord: readonly NoteEvent[], window: number): number[] {
  * the chord is written from whichever of their answers every note of it can be
  * drawn at, which is usually the beat the hands share, and its values are
  * measured from there. Where there is no such answer the notes are two
- * rhythms meeting, three against two, rather than one chord, and each is
- * written from its own onset as if never grouped: drawn where its grid has no
- * place, a note would leave its bar short of rests or push its triplet out of
- * step, and written from the median it could land a column away from where it
- * was played.
+ * rhythms meeting, three against two, rather than one chord: the first of them
+ * is written from its own onset as if never grouped, and the rest are looked
+ * at again without it. Drawn where its grid has no place, a note would leave
+ * its bar short of rests or push its triplet out of step, and written from the
+ * median it could land a column away from where it was played.
  *
  * `drawnAt` is where a note's own staff draws it, written from a given onset.
  */
