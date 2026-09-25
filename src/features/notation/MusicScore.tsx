@@ -251,6 +251,8 @@ export function MusicScore() {
         ghosts.length,
         openNotes.length,
         theme,
+        loopRef.current?.startMs,
+        loopRef.current?.endMs,
       ].join('|');
       const animating = ghosts.length > 0 || openNotes.length > 0;
       if (signature === lastSignatureRef.current && !animating) return;
