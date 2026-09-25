@@ -462,6 +462,7 @@ export const fr: Messages = {
     velocityFixed: 'Fixe',
     fixedVelocity: 'Vélocité fixe',
     noteLabels: 'Étiquettes des notes sur les touches',
+    followPlayback: 'Le clavier suit la lecture',
     scrubAudition: 'Son lors du défilement de la partition',
     backgroundPlayback: 'Continuer la lecture en arrière-plan',
     backgroundPlaybackHint:

@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { subscribeFrame } from '@/app/frameClock';
 import { useMetronomeOn, usePlayheadMs, useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
@@ -13,15 +14,13 @@ const TIME_SIGNATURES: readonly string[] = ['2/2', '2/4', '3/4', '3/8', '4/4', '
 const MIN_BPM = MIN_TEMPO_BPM;
 const MAX_BPM = MAX_TEMPO_BPM;
 
-/** Poll the current beat while clicks are audible; -1 when silent. */
+/**
+ * The current beat while clicks are audible, read on the frame clock; -1 when
+ * silent. React renders only when the beat changes.
+ */
 function useActiveBeat(running: boolean): number {
   const subscribeBeat = useCallback(
-    (onStoreChange: () => void) => {
-      const timer = running ? setInterval(onStoreChange, 60) : null;
-      return () => {
-        if (timer !== null) clearInterval(timer);
-      };
-    },
+    (onStoreChange: () => void) => (running ? subscribeFrame(onStoreChange) : () => {}),
     [running],
   );
   return useSyncExternalStore(subscribeBeat, () => {

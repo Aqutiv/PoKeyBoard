@@ -1,15 +1,40 @@
 import { TooltipButton } from '@/ui/TooltipButton';
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import { subscribeFrame } from '@/app/frameClock';
 import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
 import type { Hand } from '@/domain/hands';
+import type { PedalEvent } from '@/domain/takeTypes';
 import { contributeRange } from '@/audio/playableRange';
+import { scrubController } from '@/features/notation/scrubController';
+import {
+  isPedalDownIn,
+  sustainIntervals,
+  type SustainInterval,
+} from '@/features/transport/sustainPedal';
+import { transportController } from '@/features/transport/transportController';
+import type { TransportState } from '@/features/transport/transportMachine';
+import { useTakeStore } from '@/state/useTakeStore';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { midiToNoteName } from '@/utils/midi';
 import { BASE_SPAN_SEMITONES, BaseOctave } from './baseOctave';
 import { ComputerKeyboardInput, isModalOpen, isTextInput } from './computerKeyboard';
 import { GamepadInput } from './gamepadInput';
+import {
+  FOLLOW_LOOKAHEAD_MS,
+  FOLLOW_MANUAL_HOLD_MS,
+  FOLLOW_MIN_INTERVAL_MS,
+  followAnchor,
+} from './keyboardFollow';
 import {
   anchorToReveal,
   BLACK_KEY_HEIGHT,
@@ -26,17 +51,48 @@ import {
   type KeyboardLayout,
 } from './keyboardGeometry';
 import { KeyboardPointerTracker } from './pointerTracker';
+import { SoundingNotes } from './soundingNotes';
 import { registerMidiKeyboard } from './useMidiInput';
 import './keyboard.css';
 
+/** The transport states whose playhead the key bed lights: moving, or dragged. */
+function cuesMove(state: TransportState): boolean {
+  return state === 'playing' || state === 'recording' || state === 'scrubbing';
+}
+
+const NO_HANDS: ReadonlyMap<number, Hand> = new Map();
+
+/** Set or clear a boolean data attribute, touching the DOM only on a change. */
+function setFlag(element: HTMLElement, name: string, on: boolean): void {
+  if (on === name in element.dataset) return;
+  if (on) element.dataset[name] = '';
+  else delete element.dataset[name];
+}
+
+/**
+ * Mark a key pressed while it is lit, by the player's hand (`is-active`,
+ * rendered) or by the take (`data-playback`, drawn by the frame loop), so a
+ * screen reader is told what the eye is shown. Touches the DOM only on a change.
+ */
+function syncPressed(element: HTMLElement): void {
+  const pressed = String(element.classList.contains('is-active') || 'playback' in element.dataset);
+  if (element.getAttribute('aria-pressed') === pressed) return;
+  element.setAttribute('aria-pressed', pressed);
+}
+
 interface PianoKeyboardProps {
   /**
-   * Extra keys to light up (playback / scrub animation), each mapped to the
-   * hand that plays it so the two are told apart on the key bed.
+   * Light the keys the take plays under the moving playhead — playback, an
+   * overdub's backing, a scrub — each in the shade of the hand that plays it,
+   * and the pedal cue with them. Drawn on the frame clock straight onto the
+   * keys, so a fast run lights every note without rendering React at all.
    */
-  extraActiveHands?: ReadonlyMap<number, Hand>;
-  /** The take's pedal is down under the playhead (playback / scrub cue). */
-  playbackPedalDown?: boolean;
+  playbackCues?: boolean;
+  /**
+   * Slide the key bed to where playback is playing, and mark the edges when
+   * it plays past them; see `followAnchor`. Needs `playbackCues`.
+   */
+  followPlayback?: boolean;
   /** Extra controls rendered between the range shifter and Sustain. */
   controlsExtra?: ReactNode;
   /**
@@ -67,8 +123,8 @@ interface PianoKeyboardProps {
 }
 
 export function PianoKeyboard({
-  extraActiveHands,
-  playbackPedalDown = false,
+  playbackCues = false,
+  followPlayback = false,
   controlsExtra,
   targetMidis,
   wrongMidis,
@@ -213,6 +269,129 @@ export function PianoKeyboard({
   // Never leave sounding keys behind when the layout shifts or we unmount.
   useEffect(() => () => tracker.releaseAll(), [tracker, layout.lowMidi, layout.highMidi]);
 
+  /** Each key on the bed, by pitch, for the cues drawn straight onto it. */
+  const keyElements = useRef(new Map<number, HTMLDivElement>());
+  const sustainRef = useRef<HTMLButtonElement | null>(null);
+  /** When the player last moved the bed themselves; following waits a while after. */
+  const manualShiftAtRef = useRef(Number.NEGATIVE_INFINITY);
+  // What the frame loop reads, kept current without restarting it.
+  const frameInputs = useRef({
+    layout,
+    visibleWhites,
+    followPlayback,
+    setAnchorMidi,
+    liveCount: 0,
+  });
+  useEffect(() => {
+    frameInputs.current = {
+      layout,
+      visibleWhites,
+      followPlayback,
+      setAnchorMidi,
+      liveCount: liveActive.size,
+    };
+  });
+
+  // A key's `aria-pressed` is written, here and by the frame loop, and never
+  // rendered. The take presses keys between renders, where a rendered value
+  // cannot follow; and React, which rewrites a prop only when its own value
+  // changes, would put a key the player lets go of back up while the take
+  // still plays it. A layout effect, so it lands before paint as a prop would.
+  useLayoutEffect(() => {
+    for (const element of keyElements.current.values()) syncPressed(element);
+  });
+
+  useEffect(() => {
+    if (!playbackCues) return;
+    const sounding = new SoundingNotes();
+    let pedalSource: readonly PedalEvent[] | null = null;
+    let pedalIntervals: readonly SustainInterval[] = [];
+    const pedalDownAt = (pedals: readonly PedalEvent[], ms: number): boolean => {
+      if (pedals.length === 0) return false;
+      if (pedals !== pedalSource) {
+        pedalSource = pedals;
+        pedalIntervals = sustainIntervals(pedals);
+      }
+      return isPedalDownIn(pedalIntervals, ms);
+    };
+    let followedAt = Number.NEGATIVE_INFINITY;
+
+    const show = (hands: ReadonlyMap<number, Hand>, pedalDown: boolean) => {
+      for (const [midi, element] of keyElements.current) {
+        const hand = hands.get(midi);
+        if (element.dataset.playback === hand) continue;
+        if (hand) element.dataset.playback = hand;
+        else delete element.dataset.playback;
+        syncPressed(element);
+      }
+      const { lowMidi, highMidi } = frameInputs.current.layout;
+      let below = false;
+      let above = false;
+      for (const midi of hands.keys()) {
+        if (midi < lowMidi) below = true;
+        else if (midi > highMidi) above = true;
+      }
+      if (keysRef.current) {
+        setFlag(keysRef.current, 'offscreenLow', below);
+        setFlag(keysRef.current, 'offscreenHigh', above);
+      }
+      if (sustainRef.current) setFlag(sustainRef.current, 'cue', pedalDown);
+    };
+
+    const onFrame = (now: number) => {
+      const state = transportController.getState();
+      const take = useTakeStore.getState().take;
+      const ms = transportController.getPlayheadMs();
+      if (state === 'scrubbing') {
+        show(scrubController.getActiveHands(), pedalDownAt(take.pedalEvents, ms));
+        return;
+      }
+      sounding.setNotes(take.notes);
+      const hands = sounding.handsAt(ms);
+      show(hands, pedalDownAt(take.pedalEvents, ms));
+
+      const inputs = frameInputs.current;
+      if (
+        state !== 'playing' ||
+        !inputs.followPlayback ||
+        now - followedAt < FOLLOW_MIN_INTERVAL_MS ||
+        now - manualShiftAtRef.current < FOLLOW_MANUAL_HOLD_MS ||
+        // Never slide the keys out from under a hand playing along.
+        inputs.liveCount > 0 ||
+        tracker.activePointerCount > 0
+      ) {
+        return;
+      }
+      const next = followAnchor(
+        { now: [...hands.keys()], soon: sounding.startingWithin(ms, FOLLOW_LOOKAHEAD_MS) },
+        inputs.layout.lowMidi,
+        inputs.visibleWhites,
+      );
+      if (next === null) return;
+      followedAt = now;
+      inputs.setAnchorMidi(next);
+    };
+
+    let stopFrames: (() => void) | null = null;
+    const sync = () => {
+      const moving = cuesMove(transportController.getState());
+      if (moving && !stopFrames) {
+        stopFrames = subscribeFrame(onFrame);
+      } else if (!moving && stopFrames) {
+        stopFrames();
+        stopFrames = null;
+        show(NO_HANDS, false);
+      }
+    };
+    sync();
+    const unsubscribe = transportController.subscribeState(sync);
+    return () => {
+      unsubscribe();
+      stopFrames?.();
+      show(NO_HANDS, false);
+    };
+  }, [playbackCues, tracker]);
+
   // Desktop computer-keyboard input.
   useEffect(() => {
     const input = new ComputerKeyboardInput(baseOctave);
@@ -286,6 +465,7 @@ export function PianoKeyboard({
   const shiftRange = useCallback(
     (direction: 1 | -1, step: 'key' | 'octave') => {
       tracker.releaseAll();
+      manualShiftAtRef.current = performance.now();
       const next =
         step === 'octave'
           ? layout.lowMidi + direction * 12
@@ -330,8 +510,10 @@ export function PianoKeyboard({
           const next = anchorToReveal(midi, layout.lowMidi, visibleWhites);
           if (next === layout.lowMidi) return;
           // The keys are about to move out from under any held pointer,
-          // exactly as they do when the shift buttons are used.
+          // exactly as they do when the shift buttons are used. It is the
+          // player's own move, too: following waits, as it does after those.
           tracker.releaseAll();
+          manualShiftAtRef.current = performance.now();
           setAnchorMidi(next);
         },
         shiftOctave: (direction) => shiftRange(direction, 'octave'),
@@ -345,24 +527,17 @@ export function PianoKeyboard({
     audioEngine.setSustain(!audioEngine.isSustainDown(), 'ui-pedal');
   }, []);
 
-  const isActive = useCallback(
-    (midi: number) => liveActive.has(midi) || (extraActiveHands?.has(midi) ?? false),
-    [liveActive, extraActiveHands],
-  );
-
   /**
-   * The hand shade a lit key wears, or none. Live input wins: a key the user is
-   * actually holding shows the plain active colour, whichever hand the take
-   * would have played it with.
+   * A key the user is holding. Keys the take plays wear `data-playback` instead,
+   * set by the frame loop above; where both apply, the user's own wins — a key
+   * they hold shows the plain active colour, whichever hand the take has.
    */
-  const handClass = useCallback(
-    (midi: number) => {
-      if (liveActive.has(midi)) return '';
-      const hand = extraActiveHands?.get(midi);
-      return hand ? ` is-hand-${hand}` : '';
-    },
-    [liveActive, extraActiveHands],
-  );
+  const isActive = useCallback((midi: number) => liveActive.has(midi), [liveActive]);
+
+  const registerKey = (midi: number) => (element: HTMLDivElement | null) => {
+    if (element) keyElements.current.set(midi, element);
+    else keyElements.current.delete(midi);
+  };
 
   const isTarget = useCallback((midi: number) => targetMidis?.has(midi) ?? false, [targetMidis]);
 
@@ -414,8 +589,9 @@ export function PianoKeyboard({
         </TooltipButton>
         {controlsExtra}
         <button
+          ref={sustainRef}
           type="button"
-          className={`piano__sustain${playbackPedalDown ? ' is-playback' : ''}${pedalDown ? ' is-on' : ''}`}
+          className={`piano__sustain${pedalDown ? ' is-on' : ''}`}
           // Playback lights the button as a cue but never presses it, so it is
           // kept out of this. Holding Space is the user working the pedal for
           // real, so it reports as pressed and reverts on release.
@@ -440,13 +616,13 @@ export function PianoKeyboard({
           .map((key) => (
             <div
               key={key.midi}
+              ref={registerKey(key.midi)}
               role="button"
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
-              aria-pressed={isActive(key.midi)}
-              className={`piano-key piano-key--white${
-                isActive(key.midi) ? ` is-active${handClass(key.midi)}` : ''
-              }${isTarget(key.midi) ? ' is-target' : ''}${isWrong(key.midi) ? ' is-wrong' : ''}`}
+              className={`piano-key piano-key--white${isActive(key.midi) ? ' is-active' : ''}${
+                isTarget(key.midi) ? ' is-target' : ''
+              }${isWrong(key.midi) ? ' is-wrong' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,
@@ -465,13 +641,13 @@ export function PianoKeyboard({
           .map((key) => (
             <div
               key={key.midi}
+              ref={registerKey(key.midi)}
               role="button"
               tabIndex={-1}
               aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
-              aria-pressed={isActive(key.midi)}
-              className={`piano-key piano-key--black${
-                isActive(key.midi) ? ` is-active${handClass(key.midi)}` : ''
-              }${isTarget(key.midi) ? ' is-target' : ''}${isWrong(key.midi) ? ' is-wrong' : ''}`}
+              className={`piano-key piano-key--black${isActive(key.midi) ? ' is-active' : ''}${
+                isTarget(key.midi) ? ' is-target' : ''
+              }${isWrong(key.midi) ? ' is-wrong' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
               style={{
                 left: `${key.x * whiteWidthPercent}%`,

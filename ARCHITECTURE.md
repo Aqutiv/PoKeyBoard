@@ -2,7 +2,7 @@
 
 ## Principles
 
-1. **The audio clock owns time.** `AudioContext.currentTime` is the only timing authority. React never schedules sound; components read clocks in rAF loops or coarse polls.
+1. **The audio clock owns time.** `AudioContext.currentTime` is the only timing authority. React never schedules sound; components read clocks on one shared animation-frame loop (`app/frameClock.ts`), which runs only while something on screen is moving — key lights and the pedal cue are drawn straight onto the keys from it, and React renders only when a readout changes.
 2. **Services are module singletons outside React.** The audio engine, transport controller, metronome, scrub controller, persistence, and lifecycle services are plain objects; React subscribes via `useSyncExternalStore` with referentially stable subscribe functions and stable snapshots.
 3. **One piano, two contexts.** Live playback and offline export share the same sample bank (decoded `AudioBuffer`s), the same graph factory, and the same envelope constants — so exports sound like the performance.
 4. **Structured events are the source of truth.** A take is JSON note/pedal events (see TAKE_FORMAT.md); audio is always derived, never recorded from a microphone.
@@ -128,6 +128,8 @@ that field, a switch invalidates cached exports on its own.
 ## Live/offline engine reuse
 
 `PianoGraphFactory` builds `voices → bus → (dry + convolver send) → master → limiter → destination` for **any** `BaseAudioContext`. `OfflineTakeRenderer` constructs an `OfflineAudioContext`, replays sustain-applied notes through the same factory with the same attack/release constants and the same `SampleBank` buffers, optionally adds scheduled metronome clicks, and rescales only if the peak would clip.
+
+A voice behaves like the string it stands for, the same way live and offline (`sampleVoice.ts`). It starts at its recording's onset rather than the top of the file (`onsetOffsetOf`, found once at decode), which takes the libraries' lead-in silence out of every note. Its damper falls more slowly in the bass than the treble (`releaseTcFor`), and above F6 there is none, so a released key there rings on. Striking a key that still sounds fades the old voice from the new one's start (`VoiceManager.restrike`, `scheduleTakeVoices` for exports) instead of stacking a second copy of one string, which would build up level and comb-filter.
 
 ## Scrubbing
 

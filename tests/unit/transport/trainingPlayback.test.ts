@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { InputNoteEvent } from '@/audio/AudioEngine';
+import { audioEngine, type InputNoteEvent } from '@/audio/AudioEngine';
 import type { SampleLoadPhase } from '@/audio/audioTypes';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
@@ -302,6 +302,19 @@ describe('training playback', () => {
     runTo(400);
     expect(transportController.isWaitingForTraining()).toBe(false);
     expect(h.scheduled).toEqual([48, 64, 67]);
+  });
+
+  it('lets the last notes ring out when the take plays to its end', () => {
+    useSettingsStore.getState().setPlaybackMode('simple');
+    vi.mocked(audioEngine.allNotesOff).mockClear();
+    transportController.play();
+    runTo(900);
+    expect(transportController.getState()).toBe('paused');
+    // Every note has been let go; what still sounds is dying away by itself,
+    // for seconds on a top string with no damper.
+    expect(audioEngine.allNotesOff).not.toHaveBeenCalled();
+    transportController.stop();
+    expect(audioEngine.allNotesOff).toHaveBeenCalledOnce();
   });
 
   it('carries on rather than parking when the mode changes under a hold', () => {

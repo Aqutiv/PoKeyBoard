@@ -11,7 +11,12 @@ import { encodePcmToMp3, type ExportBitrateKbps } from './mp3Encode';
 import { renderTakeToBuffer } from './OfflineTakeRenderer';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 
-export const AUDIO_EXPORTER_VERSION = 2;
+/**
+ * Part of every cached MP3's key: bump it whenever rendering itself changes,
+ * so a cached file made the old way is rendered again. 3: voices start at the
+ * sample's onset, re-struck keys damp their string, the top octaves ring on.
+ */
+export const AUDIO_EXPORTER_VERSION = 3;
 
 export type ExportQuality = 'share' | 'high';
 

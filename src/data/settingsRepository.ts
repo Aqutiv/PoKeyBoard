@@ -17,6 +17,7 @@ const SETTING_SCHEMAS = {
   velocityMode: z.enum(['touch', 'fixed']),
   fixedVelocity: z.number().min(0.2).max(1),
   showNoteLabels: z.boolean(),
+  keyboardFollowsPlayback: z.boolean(),
   scrubAudition: z.boolean(),
   backgroundPlayback: z.boolean(),
   gamepadInput: z.boolean(),
