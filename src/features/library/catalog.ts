@@ -15,6 +15,7 @@ import { FUR_ELISE } from './tracks/furElise';
 import { GOOD_NIGHT } from './tracks/goodNight';
 import { GYMNOPEDIE_1 } from './tracks/gymnopedie1';
 import { MOONLIGHT_SONATA } from './tracks/moonlightSonata';
+import { ODE_TO_JOY_FIRST_STEPS } from './tracks/odeToJoyFirstSteps';
 import { SILVERWOOD_TALE } from './tracks/silverwoodTale';
 import { WHERE_STARLIGHT_LINGERS } from './tracks/whereStarlightLingers';
 
@@ -33,6 +34,7 @@ export const LIBRARY_TRACKS: readonly LibraryTrackDef[] = [
   BLUES_IN_C,
   GOOD_NIGHT,
   MOONLIGHT_SONATA,
+  ODE_TO_JOY_FIRST_STEPS,
   WHERE_STARLIGHT_LINGERS,
   SILVERWOOD_TALE,
 ];

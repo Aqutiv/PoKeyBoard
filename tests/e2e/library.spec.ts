@@ -128,8 +128,8 @@ test.describe('vendored classics', () => {
     // The list renders from the generated manifest; 1.2 MB of scores must not
     // be pulled just to show titles.
     expect(scoreRequests).toEqual([]);
-    // Vendored entries carry no description, so only the authored three do.
-    expect(await page.locator('.library-item__description').count()).toBe(3);
+    // Vendored entries carry no description, so only the authored four do.
+    expect(await page.locator('.library-item__description').count()).toBe(4);
   });
 
   test('files the pack under composer headings, authored tracks on top', async ({ page }) => {
@@ -143,7 +143,7 @@ test.describe('vendored classics', () => {
     await expect(headings.first()).toContainText('Johann Sebastian Bach');
     await expect(headings.first()).toContainText('tracks');
 
-    // The three authored tracks sit above the first heading.
+    // The authored tracks sit above the first heading.
     const firstHeadingTop = (await headings.first().boundingBox())?.y ?? 0;
     const authoredTop =
       (await page.getByRole('button', { name: 'Open Für Elise', exact: true }).boundingBox())?.y ??
