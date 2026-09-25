@@ -199,11 +199,14 @@ const CHORD_ONSET_WINDOW_MS = 40;
  * never mistaken for a chord, and a score, whose chords share one onset
  * exactly, is left as it was.
  *
- * And only notes held down together. However unevenly a chord is struck, every
- * note of it is still down when the last one comes; a grace note, or a key
- * played twice in quick succession, is let go before the next note starts,
- * and that is two notes in turn. One key is never two notes of a chord,
- * whatever the timing.
+ * And only notes held down together for at least half as long as the
+ * shortest of them lasts. However unevenly a chord is struck, its notes are
+ * down together for most of their length — measured by the shortest, because
+ * one hand may let go early while the other holds on. Notes played in turn are
+ * not: a grace note, or a key played twice in quick succession, is let go
+ * before the next note starts, and legato overlaps two notes only briefly,
+ * the earlier key coming up just after the next goes down. One key is never
+ * two notes of a chord, whatever the timing.
  */
 function chordOnsets(
   notes: readonly NoteEvent[],
@@ -216,15 +219,20 @@ function chordOnsets(
   while (i < order.length) {
     const first = notes[order[i] as number] as NoteEvent;
     const window = windowFor(first);
-    /** The soonest any note of the chord is let go; a later note has to come before it. */
+    /** The soonest any note of the chord is let go. */
     let heldTogetherUntil = first.startMs + first.durationMs;
+    /** How long the chord's shortest note is held. */
+    let shortestMs = first.durationMs;
     const pitches = new Set([first.midi]);
     let j = i + 1;
     while (j < order.length) {
       const next = notes[order[j] as number] as NoteEvent;
-      if (next.startMs - first.startMs > window) break;
-      if (next.startMs >= heldTogetherUntil || pitches.has(next.midi)) break;
-      heldTogetherUntil = Math.min(heldTogetherUntil, next.startMs + next.durationMs);
+      if (next.startMs - first.startMs > window || pitches.has(next.midi)) break;
+      const releasedAt = Math.min(heldTogetherUntil, next.startMs + next.durationMs);
+      const shortest = Math.min(shortestMs, next.durationMs);
+      if (releasedAt - next.startMs < shortest / 2) break;
+      heldTogetherUntil = releasedAt;
+      shortestMs = shortest;
       pitches.add(next.midi);
       j += 1;
     }

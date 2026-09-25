@@ -482,6 +482,20 @@ describe('chords struck a little unevenly', () => {
     expect(starts.size).toBe(1);
   });
 
+  it('keeps a chord together when one hand lets go early', () => {
+    // A short right-hand note over a held bass, either side of the 62.5 ms
+    // edge. They are down together for most of the shorter note, which is
+    // what makes a chord, however much longer the other is held.
+    const layout = layoutScore(
+      [
+        note({ id: 'rh', midi: 72, startMs: 50, durationMs: 100 }),
+        note({ id: 'lh', midi: 48, startMs: 70, durationMs: 430 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 0]);
+  });
+
   it('writes a two-note chord from halfway between its notes, not from the later one', () => {
     // 40 ms and 80 ms: halfway is 60, which rounds to the beat (0 ms); the
     // later note alone would round the chord to the next sixteenth.
@@ -542,6 +556,20 @@ describe('chords struck a little unevenly', () => {
       [
         note({ id: 'grace', midi: 74, startMs: 40, durationMs: 20 }),
         note({ id: 'main', midi: 72, startMs: 75, durationMs: 425 }),
+      ],
+      OPTS,
+    );
+    expect(layout.chords.map((chord) => chord.displayStartMs)).toEqual([0, 125]);
+  });
+
+  it('never takes notes played legato for a chord', () => {
+    // Each key comes up just after the next goes down: 55 ms and 85 ms, held
+    // 40 ms each, so down together for only 10 ms of either. Played in turn,
+    // each rounds to its own side of the 62.5 ms edge, not both from 70 ms.
+    const layout = layoutScore(
+      [
+        note({ id: 'first', midi: 72, startMs: 55, durationMs: 40 }),
+        note({ id: 'next', midi: 74, startMs: 85, durationMs: 40 }),
       ],
       OPTS,
     );
