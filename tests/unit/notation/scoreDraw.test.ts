@@ -206,7 +206,7 @@ function render(
   staves: StaffMode = 'treble',
   /** `null` omits the property entirely, which is what the Play page does. */
   chrome: ScoreChrome | null = 'bare',
-  size: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs'>> = {},
+  size: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'scrollMs'>> = {},
 ): Recorder {
   const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
@@ -612,6 +612,27 @@ describe('drawScore bar lines', () => {
     expect(drawn.texts).toContain('= 90');
     const mark = Math.round(onsetX(4000)) + 0.5 + 16;
     expect(drawn.ellipses.some((ellipse) => Math.abs(ellipse.x - mark) < 1e-6)).toBe(true);
+  });
+
+  it('keeps the tempo mark while its downbeat shows, after the line has scrolled away', () => {
+    // Scrolled so the downbeat stands just inside the gutter's edge: its line,
+    // a head-width further left, has gone under the gutter; the mark has not.
+    const notes: NoteEvent[] = Array.from({ length: 8 }, (_, beat) => ({
+      id: `t${beat}`,
+      midi: 60,
+      startMs: beat * 1000,
+      durationMs: 1000,
+      velocity: 0.7,
+    }));
+    const score = layoutScore(notes, { ...LAYOUT_OPTS, tempoChanges: [{ atMs: 4000, bpm: 90 }] });
+    const scrollMs = 4000 + (SCORE_LEAD_IN + 4) / WIDE.pxPerMs;
+    const drawn = render({ ...score, dynamics: [], hairpins: [] }, {}, 'treble', null, {
+      ...WIDE,
+      scrollMs,
+    });
+    const onset = gutterWidthFor(0) - 4;
+    expect(barLines(drawn).filter((x) => Math.abs(x - onset) < GAP * 3)).toEqual([]);
+    expect(drawn.texts).toContain('= 90');
   });
 
   it('keeps the playhead on the onset it is sounding', () => {

@@ -783,14 +783,16 @@ function drawMeasures(
       if (chromeOf(view) === 'full') {
         ctx.fillText(String(measure.index + 1), x + 3, view.trebleTop - 8);
       }
-      // A new tempo is announced where it takes over, as on paper: from the
-      // downbeat, clear of its head — not from the line, which stands off it.
-      const previous = layout.measures[measure.index - 1];
-      if (previous && previous.bpm !== measure.bpm) {
-        const onset = Math.round(xForMs(view, measure.startMs)) + 0.5;
-        drawTempoMark(ctx, onset + 16, view.trebleTop - 20, measure.bpm, palette);
-        ctx.strokeStyle = palette.barLine;
-      }
+    }
+    // A new tempo is announced where it takes over, as on paper: from the
+    // downbeat, clear of its head — not from the line, which stands off it.
+    // So it shows for as long as the downbeat does, even once the line has
+    // gone under the gutter.
+    const previous = layout.measures[measure.index - 1];
+    const onset = Math.round(xForMs(view, measure.startMs)) + 0.5;
+    if (previous && previous.bpm !== measure.bpm && onset >= view.gutterPx - 8) {
+      drawTempoMark(ctx, onset + 16, view.trebleTop - 20, measure.bpm, palette);
+      ctx.strokeStyle = palette.barLine;
     }
     if (measure.empty) {
       const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
