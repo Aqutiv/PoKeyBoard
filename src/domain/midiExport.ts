@@ -120,7 +120,10 @@ function chunk(type: string, body: readonly number[]): number[] {
 }
 
 function track(events: MidiEvent[], endTick: number): number[] {
-  events.push({ tick: endTick, order: ORDER.end, bytes: [0xff, 0x2f, 0x00] });
+  // End of Track has to come last, since a reader may stop there: later than
+  // `endTick` when a tempo change comes after the music has stopped.
+  const end = events.reduce((last, event) => Math.max(last, event.tick), endTick);
+  events.push({ tick: end, order: ORDER.end, bytes: [0xff, 0x2f, 0x00] });
   events.sort((a, b) => a.tick - b.tick || a.order - b.order);
   const body: number[] = [];
   let at = 0;

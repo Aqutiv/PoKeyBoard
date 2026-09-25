@@ -152,6 +152,26 @@ describe('MIDI export', () => {
     ]);
   });
 
+  it('ends the tempo track after a tempo change that comes once the music has stopped', () => {
+    // One quarter, then 60 bpm from the third bar: a reader may stop at End of
+    // Track, so the change has to come before it.
+    const late = take({
+      tempo: {
+        bpm: 120,
+        timeSignature: { numerator: 4, denominator: 4 },
+        countInBars: 0,
+        changes: [{ atMs: 4000, bpm: 60 }],
+      },
+      notes: [note(72, 0, 500)],
+    });
+    const conductor = parseMidi(takeToMidi(late, { title: 't' })).tracks[0]!;
+    expect(metaOf(conductor, 0x51).at(-1)).toEqual({
+      tick: 8 * Q,
+      bytes: [0xff, 0x51, 0x03, 0x0f, 0x42, 0x40],
+    });
+    expect(conductor.at(-1)).toEqual({ tick: 8 * Q, bytes: [0xff, 0x2f, 0x00] });
+  });
+
   it('declares a compound meter and counts its eighths as half quarters', () => {
     const sixEight = take({
       tempo: { bpm: 120, timeSignature: { numerator: 6, denominator: 8 }, countInBars: 0 },
