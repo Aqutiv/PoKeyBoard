@@ -803,3 +803,95 @@ describe('a written sextuplet note tied past its beat', () => {
     ]);
   });
 });
+
+describe('what a written tuplet ties on to after its beat', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+  const tied = (durationMs: number): NoteEvent[] => [
+    {
+      id: 'a',
+      midi: 72,
+      startMs: 0,
+      durationMs: 167,
+      velocity: 0.5,
+      tuplet: { actual: 3, normal: 2, unit: 8, group: 0 },
+    },
+    {
+      id: 'b',
+      midi: 74,
+      startMs: 167,
+      durationMs: 166,
+      velocity: 0.5,
+      tuplet: { actual: 3, normal: 2, unit: 8, group: 0 },
+    },
+    {
+      id: 'c',
+      midi: 76,
+      startMs: 333,
+      durationMs,
+      velocity: 0.5,
+      tuplet: { actual: 3, normal: 2, unit: 8, group: 0 },
+    },
+  ];
+  const after = (layout: ReturnType<typeof layoutScore>) =>
+    layout.chords
+      .filter((chord) => chord.displayStartMs >= 500)
+      .map((chord) => `${chord.symbol.base}${chord.symbol.tuplet ? '(3)' : ''}`);
+
+  it('writes a plain value tied on as a plain value', () => {
+    // A triplet eighth tied into an eighth: half a beat after the line, which
+    // two triplet slots would misstate as a triplet quarter.
+    expect(after(layoutScore(tied(167 + 250), OPTS))).toEqual(['eighth']);
+    expect(after(layoutScore(tied(167 + 500), OPTS))).toEqual(['quarter']);
+  });
+
+  it('keeps a slot tied on in the next beat of threes a triplet value', () => {
+    expect(after(layoutScore(tied(167 + 167), OPTS))).toEqual(['eighth(3)']);
+  });
+});
+
+describe('the numeral a part of a bracket carries', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+  /** A beat of six sextuplet sixteenths bracketed as one, only some of them played here. */
+  function sextupletPart(slots: number[]): NoteEvent[] {
+    return [
+      {
+        id: 'held',
+        midi: 60,
+        startMs: 0,
+        durationMs: 500,
+        velocity: 0.5,
+        voice: 1,
+        staff: 'treble',
+      },
+      ...slots.map((slot) => ({
+        id: `s${slot}`,
+        midi: 72 + slot,
+        startMs: Math.round((slot * 500) / 6),
+        durationMs: 83,
+        velocity: 0.5,
+        voice: 0,
+        staff: 'treble' as const,
+        tuplet: { actual: 6, normal: 4, unit: 16, group: 0 },
+      })),
+    ];
+  }
+
+  it('prints the bracket’s six over a part of it, not the three its values are drawn in', () => {
+    for (const slots of [
+      [4, 5],
+      [2, 3, 4, 5],
+      [1, 2, 3, 4, 5],
+    ]) {
+      const layout = layoutScore(sextupletPart(slots), OPTS);
+      expect(layout.beams.map((beam) => beam.tupletCount)).toEqual([6]);
+    }
+  });
+});
