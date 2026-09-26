@@ -299,6 +299,20 @@ test.describe('output headroom', () => {
         gain.connect(graph.outputDestination);
         tone.start(0);
         const rendered = await context.startRendering();
+        // Held to the end of the render, as AudioEngine holds its graph. The
+        // tone feeds only the click bus, so nothing but `graph` refers to the
+        // piano's side of it, and once V8 has optimized this function, a local
+        // that is not used after an await is not kept alive across it. A
+        // garbage collection during the render could then take the limiter,
+        // disconnecting it. Its output is stereo and the click bus's mono, so
+        // the clipper's input would turn mono, and Chromium starts a
+        // WaveShaperNode's 4x resampling afresh when its channel count changes:
+        // the output drops out for the resampler's latency, 192 frames, and
+        // steps back in ringing, as high as 1.37 at the top level. When a
+        // collection comes is up to the page, so this test used to fail now and
+        // then, and only at its last levels. Live the limiter stays connected,
+        // and the clipper stereo, for as long as the graph plays.
+        graph.dispose();
         let peak = 0;
         for (let channel = 0; channel < rendered.numberOfChannels; channel += 1) {
           const data = rendered.getChannelData(channel);
