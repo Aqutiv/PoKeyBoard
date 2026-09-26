@@ -1,4 +1,5 @@
 import { audioEngine } from '@/audio/AudioEngine';
+import { velocityForCurveDb } from '@/audio/velocityCurve';
 import { noteHand, type Hand } from '@/domain/hands';
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
@@ -18,7 +19,17 @@ const PREVIEW_MIN_MS = 80;
 const PREVIEW_MAX_MS = 320;
 /** How long an auditioned key stays lit on the keyboard (ms). */
 const KEY_FLASH_MS = 260;
-const PREVIEW_VELOCITY_FLOOR = 0.25;
+/**
+ * How loud the softest audition plays, in dB against a note at the computer
+ * keyboard's velocity: where the floor was heard before the grands were
+ * calibrated, when it was velocity 0.25 — 4.5 dB under on Salamander and 3.7
+ * on Headroom, across C3–B5. The calibrated curve spreads velocities about
+ * twice as wide, so 0.25 would now sound 11.5 dB under; the floor keeps its
+ * loudness, not its number.
+ */
+const PREVIEW_FLOOR_DB = -4.1;
+/** The softest velocity an audition plays at: about 0.51. */
+export const PREVIEW_VELOCITY_FLOOR = velocityForCurveDb(PREVIEW_FLOOR_DB);
 
 /**
  * Audible score scrubbing: converts score drag positions into playhead time,

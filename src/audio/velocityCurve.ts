@@ -39,3 +39,14 @@ export function curveDb(velocity: number): number {
   const level = 20 * CURVE_GAMMA * Math.log10(clamped / CURVE_REFERENCE_VELOCITY);
   return Math.max(CURVE_FLOOR_DB, level);
 }
+
+/**
+ * The velocity that plays at `levelDb` on the curve: its inverse, for a level
+ * named in decibels rather than a velocity guessed at. A level at or under the
+ * floor gives the velocity where the curve meets it; one past full velocity's
+ * +3 dB, full velocity.
+ */
+export function velocityForCurveDb(levelDb: number): number {
+  const level = Math.max(CURVE_FLOOR_DB, levelDb);
+  return Math.min(1, CURVE_REFERENCE_VELOCITY * 10 ** (level / (20 * CURVE_GAMMA)));
+}

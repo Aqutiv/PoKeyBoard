@@ -4,6 +4,7 @@ import {
   CURVE_GAMMA,
   CURVE_REFERENCE_VELOCITY,
   curveDb,
+  velocityForCurveDb,
 } from '@/audio/velocityCurve';
 
 describe('curveDb', () => {
@@ -53,5 +54,21 @@ describe('curveDb', () => {
   it('treats anything past full velocity as full', () => {
     expect(curveDb(1.5)).toBe(curveDb(1));
     expect(curveDb(1)).toBeCloseTo(3.0, 2);
+  });
+});
+
+describe('velocityForCurveDb', () => {
+  it('undoes the curve across the levels it spans', () => {
+    expect(velocityForCurveDb(0)).toBe(0.75);
+    for (let level = CURVE_FLOOR_DB + 0.5; level <= curveDb(1); level += 0.5) {
+      expect(curveDb(velocityForCurveDb(level))).toBeCloseTo(level, 10);
+    }
+  });
+
+  it('stops at the floor and at full velocity', () => {
+    const atFloor = velocityForCurveDb(CURVE_FLOOR_DB);
+    expect(atFloor).toBeCloseTo(0.042, 3);
+    expect(velocityForCurveDb(CURVE_FLOOR_DB - 20)).toBe(atFloor);
+    expect(velocityForCurveDb(10)).toBe(1);
   });
 });

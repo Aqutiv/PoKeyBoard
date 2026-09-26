@@ -1,8 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '@/audio/AudioEngine';
+import { curveDb } from '@/audio/velocityCurve';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
-import { scrubController } from '@/features/notation/scrubController';
+import { PREVIEW_VELOCITY_FLOOR, scrubController } from '@/features/notation/scrubController';
 import { transportController } from '@/features/transport/transportController';
 import { useTakeStore } from '@/state/useTakeStore';
 
@@ -53,5 +54,37 @@ describe('scrub key lights', () => {
     // Crossing that note again on the way back auditions nothing.
     expect(audioEngine.scheduleNote).not.toHaveBeenCalled();
     expect(scrubController.getActiveHands().size).toBe(0);
+  });
+});
+
+describe('scrub auditions', () => {
+  it('play a soft note at the floor and a louder one at 85% of its velocity', () => {
+    const take = createEmptyTake({
+      notes: [
+        { id: 'soft', midi: 60, startMs: 100, durationMs: 200, velocity: 0.3 },
+        { id: 'loud', midi: 64, startMs: 400, durationMs: 200, velocity: 0.9 },
+      ],
+      durationMs: 5_000,
+    });
+    useTakeStore.getState().setTake(take);
+    expect(scrubController.begin()).toBe(true);
+    scrubController.update(0);
+    vi.mocked(audioEngine.scheduleNote).mockClear();
+    scrubController.update(600);
+    const auditioned = vi
+      .mocked(audioEngine.scheduleNote)
+      .mock.calls.map(([event]) => [event.midi, event.velocity]);
+    expect(auditioned).toEqual([
+      [60, PREVIEW_VELOCITY_FLOOR],
+      [64, 0.9 * 0.85],
+    ]);
+    scrubController.end();
+  });
+
+  it('keep the floor as loud as it was before the grands were calibrated', () => {
+    // 0.25 then, heard 4.1 dB under the computer keyboard's velocity on the
+    // two grands; on the calibrated curve that takes about 0.51.
+    expect(curveDb(PREVIEW_VELOCITY_FLOOR)).toBeCloseTo(-4.1, 9);
+    expect(PREVIEW_VELOCITY_FLOOR).toBeCloseTo(0.506, 3);
   });
 });
