@@ -258,6 +258,8 @@ export const fr: Messages = {
     tryOnPlay: 'Essayer dans Jouer',
     practiseOnPlay: ({ title }) => `Travailler ${title} dans Jouer`,
     practiseOnPlayHint: 'Il s’ouvre en Entraînement : Jouer vous attend à chaque note.',
+    practiseOnPlayToolsHint: ({ speed }) =>
+      `Il s’ouvre en Entraînement à ${speed} % de la vitesse, en boucle sur les mesures travaillées ici.`,
     backToChapters: 'Retour aux chapitres',
     quizPrompt: 'Quelle touche est mise en évidence ?',
     quizCorrect: 'Correct.',
@@ -335,7 +337,7 @@ export const fr: Messages = {
       chordsPedalAndHands:
         'Main gauche sous la droite, la pédale qui suit l’harmonie : un morceau entier, à deux mains.',
       howToPractise:
-        'Lentement, par morceaux, mains séparées — et les deux outils déjà présents dans l’app.',
+        'Lentement, par morceaux, mains séparées — et les outils déjà présents dans l’app.',
       keySignatures:
         'Pourquoi les altérations sont en tête, et comment nommer la tonalité d’un coup d’œil.',
       scalesBeyondC:

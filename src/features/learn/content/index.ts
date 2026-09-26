@@ -50,6 +50,9 @@ const PROSE: Partial<
   chordsPedalAndHands: {
     en: () => import('./en/chordsPedalAndHands').then((m) => m.chordsPedalAndHandsEn),
   },
+  howToPractise: {
+    en: () => import('./en/howToPractise').then((m) => m.howToPractiseEn),
+  },
 };
 
 /**

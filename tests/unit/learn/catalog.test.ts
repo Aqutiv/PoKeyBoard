@@ -15,6 +15,14 @@ import { FIRST_MELODY } from '@/features/learn/chapters/firstMelody';
 import { C_MAJOR_SCALE } from '@/features/learn/chapters/cMajorScale';
 import { TRIADS } from '@/features/learn/chapters/triads';
 import { CHORDS_PEDAL_AND_HANDS } from '@/features/learn/chapters/chordsPedalAndHands';
+import { HOW_TO_PRACTISE, THEME_TRACK_BEAT } from '@/features/learn/chapters/howToPractise';
+import type { LearnPhrase, LearnStep } from '@/features/learn/types';
+import { buildLibraryTake } from '@/features/library/trackBuilder';
+import { A_BEAUTIFUL_DAY } from '@/features/library/tracks/aBeautifulDay';
+import { PLAYBACK_SPEEDS } from '@/features/transport/modes';
+import { noteHand } from '@/domain/hands';
+import { createTakeTempoMap } from '@/domain/tempoMap';
+import { barDurationMs } from '@/utils/timing';
 import { MAJOR_SCALE_STEPS } from '@/features/learn/drill';
 import { momentsOf } from '@/features/learn/phrase';
 import type { LearnChapter } from '@/features/learn/types';
@@ -89,6 +97,7 @@ describe('learn catalog', () => {
       'cMajorScale',
       'triads',
       'chordsPedalAndHands',
+      'howToPractise',
     ]);
   });
 
@@ -111,6 +120,7 @@ describe('every authored chapter', () => {
     C_MAJOR_SCALE,
     TRIADS,
     CHORDS_PEDAL_AND_HANDS,
+    HOW_TO_PRACTISE,
   ];
 
   it('keeps the two tints of a diagram apart', () => {
@@ -785,9 +795,19 @@ describe('chapter six', () => {
  * its gate, a note no phone or computer keyboard can reach, a Listen button
  * that frees up while the tail still rings.
  */
+/** How long one bar of this phrase lasts, at its own tempo. */
+const barMsOf = (phrase: LearnPhrase): number => barDurationMs(phrase.bpm, phrase.timeSignature);
+
+/** Whether the lesson click runs through this step. See `ChapterRunner`. */
+function clicks(step: LearnStep): boolean {
+  if (step.click === true) return true;
+  if (step.kind !== 'exercise') return false;
+  return step.spec.kind === 'rhythm' || (step.spec.kind === 'playAlong' && !!step.spec.timed);
+}
+
 function sharedChapterChecks(chapter: LearnChapter): void {
-  /** Every lesson is clicked at 60bpm in 4/4. */
-  const BEAT_MS = 1000;
+  /** Every lesson clicks in 4/4 — at 60bpm unless its step says otherwise. */
+  const DEFAULT_TEMPO = 60;
   const BAR_BEATS = 4;
   /** The C-snapped computer-keyboard base reaches this far up. */
   const COMPUTER_KEYBOARD_SPAN = 17;
@@ -817,11 +837,13 @@ function sharedChapterChecks(chapter: LearnChapter): void {
     }
   });
 
-  it('clicks every timed line at the lesson tempo, with room between its moments', () => {
+  it('clicks every timed line at its step’s tempo, with room between its moments', () => {
     for (const step of chapter.steps) {
       if (step.kind !== 'exercise' || step.spec.kind !== 'playAlong' || !step.spec.timed) continue;
       const { phrase, timed } = step.spec;
-      expect(phrase.bpm, step.id).toBe(60);
+      // The grid is built at the step's tempo; a line written at another would
+      // be graded against beats that fall somewhere its notes do not.
+      expect(phrase.bpm, step.id).toBe(step.tempo ?? DEFAULT_TEMPO);
       expect(phrase.timeSignature, step.id).toEqual({ numerator: BAR_BEATS, denominator: 4 });
       const tolerance = timed.toleranceBeats ?? DEFAULT_RHYTHM_TOLERANCE_BEATS;
       const moments = momentsOf(phrase);
@@ -841,7 +863,23 @@ function sharedChapterChecks(chapter: LearnChapter): void {
       if (!step.listen) continue;
       const notes = phraseToNotes(step.listen);
       const end = Math.max(...notes.map((note) => note.startMs + note.durationMs));
-      expect(end % (BAR_BEATS * BEAT_MS), step.id).toBe(0);
+      expect(end % barMsOf(step.listen), step.id).toBe(0);
+    }
+  });
+
+  it('writes a clicking step’s Listen phrase at the tempo it clicks at', () => {
+    // A demo starts on the running click's next bar line: at another tempo it
+    // would drift against the very beat it is demonstrating.
+    for (const step of chapter.steps) {
+      if (!step.listen || !clicks(step)) continue;
+      expect(step.listen.bpm, step.id).toBe(step.tempo ?? DEFAULT_TEMPO);
+    }
+  });
+
+  it('states a tempo only on a step with a click to set it for', () => {
+    for (const step of chapter.steps) {
+      if (step.tempo === undefined) continue;
+      expect(clicks(step), step.id).toBe(true);
     }
   });
 
@@ -926,9 +964,9 @@ function sharedChapterChecks(chapter: LearnChapter): void {
   });
 
   it('never carries a note across a bar line', () => {
-    const barMs = BAR_BEATS * BEAT_MS;
     for (const step of chapter.steps) {
       if (step.visual?.kind !== 'staff') continue;
+      const barMs = barMsOf(step.visual.phrase);
       for (const note of phraseToNotes(step.visual.phrase)) {
         const startBar = Math.floor(note.startMs / barMs);
         const endBar = Math.ceil((note.startMs + note.durationMs) / barMs) - 1;
@@ -947,10 +985,44 @@ function sharedChapterChecks(chapter: LearnChapter): void {
     }
   });
 
-  it('hands off only to a Library track that exists', () => {
-    if (!chapter.handoff) return;
-    const trackId = chapter.handoff.trackId;
-    expect(LIBRARY_TRACKS.some((def) => def.trackId === trackId)).toBe(true);
+  it('hands off only to a Library track that exists, set up as Play could be by hand', () => {
+    const { handoff } = chapter;
+    if (!handoff) return;
+    const def = LIBRARY_TRACKS.find((track) => track.trackId === handoff.trackId);
+    expect(def).toBeDefined();
+    // One-hand Training decides a note's hand by its staff, and falls back on
+    // the split at middle C — which puts any left-hand note above it in the
+    // right hand. A track opened for one hand must say which hand plays what.
+    if (def && (handoff.mode === 'training-left' || handoff.mode === 'training-right')) {
+      const notes = buildLibraryTake(def).notes;
+      for (const note of notes) {
+        expect(note.staff, `${def.trackId} ${note.id}`).toBeDefined();
+      }
+      // Nor may the two hands strike one key at one moment: Training accepts
+      // the player's note, then the accompaniment plays the same key again.
+      const struck = new Map<string, string>();
+      for (const note of notes) {
+        const key = `${note.midi}@${note.startMs}`;
+        const hand = noteHand(note);
+        const other = struck.get(key);
+        expect(other === undefined || other === hand, `${def.trackId} ${key}`).toBe(true);
+        struck.set(key, hand);
+      }
+    }
+    // One of the speed menu's own choices, so the menu shows it as chosen.
+    if (handoff.speed !== undefined) {
+      expect(PLAYBACK_SPEEDS as readonly number[]).toContain(handoff.speed);
+    }
+    if (handoff.loopBeats && def) {
+      const [from, to] = handoff.loopBeats;
+      const beatsPerBar = def.timeSignature.numerator;
+      expect(from % beatsPerBar, 'loop starts on a bar line').toBe(0);
+      expect(to % beatsPerBar, 'loop ends on a bar line').toBe(0);
+      expect(to).toBeGreaterThan(from);
+      const take = buildLibraryTake(def);
+      const endMs = createTakeTempoMap(take.tempo).msAtBeat(to);
+      expect(endMs, 'loop inside the track').toBeLessThanOrEqual(take.durationMs);
+    }
   });
 }
 
@@ -1356,6 +1428,93 @@ describe('chapter ten', () => {
     expect(CHORDS_PEDAL_AND_HANDS.handoff).toEqual({
       trackId: 'a-beautiful-day',
       mode: 'training-both',
+    });
+  });
+});
+
+describe('intermediate chapter one', () => {
+  sharedChapterChecks(HOW_TO_PRACTISE);
+
+  const step = (id: string) => HOW_TO_PRACTISE.steps.find((s) => s.id === id);
+  const lineOf = (id: string) => {
+    const found = step(id);
+    if (found?.kind !== 'exercise' || found.spec.kind !== 'playAlong') {
+      throw new Error(`expected a playAlong line at ${id}`);
+    }
+    return found.spec;
+  };
+  /** [midi, beat] per note: what a line asks for, whatever its tempo. */
+  const shape = (phrase: LearnPhrase) =>
+    momentsOf(phrase).flatMap((moment) => moment.midis.map((midi) => [midi, moment.beat]));
+
+  it('grades only the chunks and the three tempos, with no quiz or drill', () => {
+    const kinds = HOW_TO_PRACTISE.steps.map((s) => s.kind);
+    expect(kinds).toHaveLength(13);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(5);
+    expect(kinds.filter((kind) => kind === 'quiz' || kind === 'drill')).toHaveLength(0);
+  });
+
+  it('plays the same passage at 60, then 80, then 100', () => {
+    const tempos = ['atSixty', 'atEighty', 'atHundred'].map((id) => {
+      const spec = lineOf(id);
+      expect(spec.timed, id).toBeDefined();
+      return spec.phrase.bpm;
+    });
+    expect(tempos).toEqual([60, 80, 100]);
+    const first = shape(lineOf('atSixty').phrase);
+    expect(shape(lineOf('atEighty').phrase)).toEqual(first);
+    expect(shape(lineOf('atHundred').phrase)).toEqual(first);
+    // The click steps up with it.
+    expect(step('atEighty')?.tempo).toBe(80);
+    expect(step('atHundred')?.tempo).toBe(100);
+  });
+
+  it('splits the passage into two chunks that join up to exactly the whole', () => {
+    const one = shape(lineOf('chunkOne').phrase);
+    const two = shape(lineOf('chunkTwo').phrase).map(([midi, beat]) => [
+      midi,
+      (beat as number) + 8,
+    ]);
+    expect([...one, ...two]).toEqual(shape(lineOf('atSixty').phrase));
+    expect(lineOf('chunkOne').timed).toBeUndefined();
+    expect(lineOf('chunkTwo').timed).toBeUndefined();
+  });
+
+  it('practises A Beautiful Day’s own tune, note for note', () => {
+    // Its left hand's broken chords touch E4 as well, so the tune cannot be
+    // picked out by pitch: every note of the passage must instead be found in
+    // the track at the same pitch and beat, eight beats in.
+    const take = buildLibraryTake(A_BEAUTIFUL_DAY);
+    const map = createTakeTempoMap(take.tempo);
+    for (const [midi, beat] of shape(lineOf('atSixty').phrase)) {
+      const atMs = Math.round(map.msAtBeat((beat as number) + THEME_TRACK_BEAT));
+      const found = take.notes.some(
+        (note) => note.midi === midi && Math.abs(note.startMs - atMs) <= 1,
+      );
+      expect(found, `${midi} at beat ${beat}`).toBe(true);
+    }
+  });
+
+  it('leaves right-hand Training exactly the tune it practised, and nothing of the accompaniment', () => {
+    // The left hand's broken chords reach E4 and C4 in these bars; split at
+    // middle C they would be waited for as right-hand notes.
+    const take = buildLibraryTake(A_BEAUTIFUL_DAY);
+    const map = createTakeTempoMap(take.tempo);
+    const from = map.msAtBeat(THEME_TRACK_BEAT);
+    const to = map.msAtBeat(THEME_TRACK_BEAT + 16);
+    const rightHand = take.notes
+      .filter((note) => note.startMs >= from - 1 && note.startMs < to - 1)
+      .filter((note) => noteHand(note) === 'right')
+      .map((note) => [note.midi, Math.round(map.beatAtMs(note.startMs)) - THEME_TRACK_BEAT]);
+    expect(rightHand).toEqual(shape(lineOf('atSixty').phrase));
+  });
+
+  it('hands off to that tune slowed down and looping, right hand in Training', () => {
+    expect(HOW_TO_PRACTISE.handoff).toEqual({
+      trackId: 'a-beautiful-day',
+      mode: 'training-right',
+      speed: 0.6,
+      loopBeats: [THEME_TRACK_BEAT, THEME_TRACK_BEAT + 16],
     });
   });
 });

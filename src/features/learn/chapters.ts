@@ -90,7 +90,13 @@ export const LEARN_CHAPTERS: readonly LearnChapterMeta[] = [
   },
 
   // ---- Intermediate: one piece in C → several keys, real accompaniment ----
-  { id: 'howToPractise', level: 'intermediate', order: 1, part: 'gettingSerious', load: null },
+  {
+    id: 'howToPractise',
+    level: 'intermediate',
+    order: 1,
+    part: 'gettingSerious',
+    load: () => import('./chapters/howToPractise').then((m) => m.HOW_TO_PRACTISE),
+  },
   { id: 'keySignatures', level: 'intermediate', order: 2, part: 'gettingSerious', load: null },
   { id: 'scalesBeyondC', level: 'intermediate', order: 3, part: 'gettingSerious', load: null },
   { id: 'minorKeys', level: 'intermediate', order: 4, part: 'harmonyBuildingBlocks', load: null },

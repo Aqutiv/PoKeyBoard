@@ -13,7 +13,7 @@ must agree.
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
 | Beginner     | 10    | 0         |
-| Intermediate | 0     | 10        |
+| Intermediate | 1     | 9         |
 | Advanced     | 0     | 10        |
 
 ---
@@ -55,11 +55,11 @@ _One piece in C → several keys, with real accompaniment._
 
 ### Part 1 — Getting serious
 
-| #   | Chapter                               | Teaches                                                                                                  | Exercises validate                                       |
-| --- | ------------------------------------- | -------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 1   | How to Practise                       | Slow practice, hands separate, chunking, spaced repetition; the metronome and the record button as tools | the same passage at 60, 80 and 100 bpm against the click |
-| 2   | Key Signatures & the Circle of Fifths | Why sharps/flats sit at the clef; their order; finding the tonic; the circle                             | name the key from a signature; play its tonic and scale  |
-| 3   | Scales Beyond C                       | G, F and D major; where the black keys land; why the fingering shifts                                    | each scale, one octave, with the right shape             |
+| #   | Chapter                               | Teaches                                                                                                                                | Exercises validate                                       |
+| --- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 1   | **How to Practise** ✅                | Slow practice, hands separate, chunking, spaced repetition; the metronome, the record button, the speed menu and the A–B loop as tools | the same passage at 60, 80 and 100 bpm against the click |
+| 2   | Key Signatures & the Circle of Fifths | Why sharps/flats sit at the clef; their order; finding the tonic; the circle                                                           | name the key from a signature; play its tonic and scale  |
+| 3   | Scales Beyond C                       | G, F and D major; where the black keys land; why the fingering shifts                                                                  | each scale, one octave, with the right shape             |
 
 ### Part 2 — Harmony's building blocks
 
@@ -334,11 +334,21 @@ when `done` reaches a new high. Resetting on any change meant a timed line,
 where every slip sends the readout to zero, never offered Skip to the person
 retrying it hardest.
 
+A step clicks at its own **tempo** (`tempo`, 60 unless stated) — the practice
+chapter steps one passage up from 60 to 100. The click, the demo and the
+grading keep one beat: a timed line and a clicking step's Listen phrase are
+written at the step's tempo, and a catalog check holds them to it. The timed
+matcher and its tolerance were already in beats, so nothing else moved.
+
 A chapter may end by handing off to a Library track (`LearnChapter.handoff`):
 the outro opens it on Play in a Training mode, which it writes to the saved
 setting — so the button says so. Chapter 7's melody _is_ that track's events,
 imported from `tracks/odeToJoyFirstSteps.ts`; chapter 10 hands off to "A
-Beautiful Day", whose tune runs over the very I–V–vi–IV it teaches.
+Beautiful Day", whose tune runs over the very I–V–vi–IV it teaches. A hand-off
+can also set Play up to practise (`speed`, `loopBeats`): Intermediate chapter 1
+opens that same tune at 60% speed, looping the bars it practised. They are
+applied through the calls Play's own speed menu and loop button make, so the
+result is indistinguishable from marking them by hand (`handoff.ts`).
 
 A line can ask for **the pedal changed with the harmony** (`pedal:
 'changeEach'`): once a moment's notes are in it waits (`AlongRun.pedalOwed`)
