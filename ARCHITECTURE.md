@@ -139,7 +139,7 @@ script writes into its manifest; the Wurlitzer keeps its own region gains.
 The timbre then follows the touch too, rather than stepping where the layers
 meet: a harder blow brings the upper partials out, and on their own the
 recordings jump in brightness at every switch, by 350 to 900 cents of spectral
-centroid on middle C. So each medium and loud voice of a grand plays through a
+centroid around middle C. So each medium and loud voice of a grand plays through a
 lowpass (`toneCalibration.ts`, from `tests/tools/generateToneCalibration.ts`,
 keyed by pack version the same way): at its layer's bottom, the cutoff that
 brings its recording down to the brightness of the layer below at the same

@@ -9,11 +9,11 @@ import { ATTACK_S, TONE_FILTER_Q_DB } from './sampleVoice';
  * A grand pack is three recordings of every third key — soft, medium and loud
  * — and the velocity calibration plays each at the loudness its velocity asks
  * for (velocityCalibrationMath.ts). Loudness is not all a harder blow changes,
- * though: it brings the upper partials out, and on its own the recordings step
- * in brightness wherever one layer hands over to the next, by 350 to 900 cents
- * of spectral centroid on middle C. So every voice of the medium and loud
- * layers plays through a lowpass whose cutoff follows its velocity across its
- * layer:
+ * though: it brings the upper partials out, and on their own the recordings
+ * step in brightness wherever one layer hands over to the next, by 350 to 900
+ * cents of spectral centroid around middle C. So every voice of the medium and
+ * loud layers plays through a lowpass whose cutoff follows its velocity across
+ * its layer:
  *
  *   at the layer's bottom, the cutoff that brings its recording down to the
  *   brightness of the layer below's, at the same root (the generator searches
@@ -36,10 +36,10 @@ import { ATTACK_S, TONE_FILTER_Q_DB } from './sampleVoice';
  * The cutoffs are per root, not per layer: they climb with pitch from about
  * half a kilohertz in the bass to several at the top, and move smoothly from one
  * root to the next. At the very top, though, a match can fall at or under the
- * note's own fundamental — the top octave's recordings differ in their hammer
- * noise more than in any partials — and a filter there takes the note itself,
- * with 4–4.5 dB to give back. So no ramp starts below `FUNDAMENTAL_GUARD` times
- * its root's fundamental, and those keys keep a smaller correction.
+ * note's own fundamental: up there the measure sits close to the fundamental,
+ * and only taking the note itself down moves it, with up to 4.5 dB to give
+ * back. So no ramp starts below `FUNDAMENTAL_GUARD` times its root's
+ * fundamental, and those keys keep a smaller correction.
  */
 
 /** Where every ramp opens out to: a lowpass this high leaves all a piano plays alone. */
