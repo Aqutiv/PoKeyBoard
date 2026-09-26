@@ -500,6 +500,13 @@ export const mg: Messages = {
     pianoSwitching: 'Mampiditra ny piano vaovao…',
     pianoVolume: 'Feon’ny piano',
     reverb: 'Reverb',
+    reverbRoom: 'Efitra ho an’ny reverb',
+    reverbRooms: {
+      studio: 'Studio',
+      room: 'Efitra',
+      hall: 'Efitrano fampisehoana',
+      cathedral: 'Katedraly',
+    },
     velocity: 'Hafainganam-pandeha',
     velocityTouch: 'Araka ny toeran’ny fikasihana amin’ny kitendry',
     velocityFixed: 'Raikitra',
@@ -684,6 +691,8 @@ export const mg: Messages = {
     countInClamped: 'Nohitsina ny halavan’ny fanisana mialoha.',
     tempoChangesRepaired: 'Nodiovina ny fiovan’ny tempo.',
     instrumentDefaulted: 'Nampiasaina fandrindrana zavamaneno mahazatra noho ny tsy fisiany.',
+    reverbRoomDropped:
+      'Nesorina ny efitra reverb tsy fantatra; ao amin’ny “Efitra” no hanenoan’ny rakitra.',
     noteTimingRounded: 'Naboribory ho milisegondra feno ny fotoanan’ny naoty ampahany.',
     noteIdsAssigned: ({ count }) => `Nomena id ny naoty ${count}.`,
     displayReset: 'Naverina ny fandrindrana seho tsy manan-kery.',

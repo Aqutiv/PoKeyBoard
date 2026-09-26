@@ -1,7 +1,12 @@
 import { create } from 'zustand';
 import { audioEngine } from '@/audio/AudioEngine';
 import { DEFAULT_PIANO_INSTRUMENT_ID, type PianoInstrumentId } from '@/audio/instruments';
-import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX } from '@/domain/takeTypes';
+import {
+  DEFAULT_MASTER_VOLUME,
+  DEFAULT_REVERB_MIX,
+  DEFAULT_REVERB_ROOM,
+  type ReverbRoom,
+} from '@/domain/takeTypes';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
 import type {
   MidiVelocityCurve,
@@ -26,6 +31,8 @@ export interface SettingsState {
   pianoInstrument: PianoInstrumentId;
   masterVolume: number;
   reverbMix: number;
+  /** The room the reverb models; see src/audio/reverbImpulse.ts. */
+  reverbRoom: ReverbRoom;
   velocityMode: VelocityMode;
   fixedVelocity: number;
   /** How far down a key a touch has to land to play loud; see velocityResponse.ts. */
@@ -62,6 +69,7 @@ export interface SettingsState {
   setPianoInstrument(id: PianoInstrumentId): void;
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
+  setReverbRoom(room: ReverbRoom): void;
   setVelocityMode(mode: VelocityMode): void;
   setFixedVelocity(value: number): void;
   setTouchSensitivity(sensitivity: TouchSensitivity): void;
@@ -89,6 +97,7 @@ export const SETTINGS_DEFAULTS = {
   pianoInstrument: DEFAULT_PIANO_INSTRUMENT_ID as PianoInstrumentId,
   masterVolume: DEFAULT_MASTER_VOLUME,
   reverbMix: DEFAULT_REVERB_MIX,
+  reverbRoom: DEFAULT_REVERB_ROOM,
   velocityMode: 'touch' as VelocityMode,
   fixedVelocity: 0.75,
   touchSensitivity: 'normal' as TouchSensitivity,
@@ -112,9 +121,9 @@ export const SETTINGS_DEFAULTS = {
 /**
  * App settings. Persistence to Dexie is layered on by the data slice; the
  * store itself stays synchronous for render use. Nothing here talks to the
- * audio engine for the levels — src/data/persistence.ts subscribes and pushes
- * them, so a restored backup (which writes the store with setState) is carried
- * over too.
+ * audio engine for the levels or the room — src/data/persistence.ts subscribes
+ * and pushes them, so a restored backup (which writes the store with setState)
+ * is carried over too.
  */
 export const useSettingsStore = create<SettingsState>()((set) => ({
   ...SETTINGS_DEFAULTS,
@@ -127,6 +136,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   },
   setMasterVolume: (masterVolume) => set({ masterVolume }),
   setReverbMix: (reverbMix) => set({ reverbMix }),
+  setReverbRoom: (reverbRoom) => set({ reverbRoom }),
   setVelocityMode: (velocityMode) => set({ velocityMode }),
   setFixedVelocity: (fixedVelocity) => set({ fixedVelocity }),
   setTouchSensitivity: (touchSensitivity) => set({ touchSensitivity }),

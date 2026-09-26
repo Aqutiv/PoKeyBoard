@@ -17,7 +17,12 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
     "countInBars": 1,
     "changes": [{ "atMs": 60000, "bpm": 104 }]
   },
-  "instrument": { "id": "grand-piano", "masterVolume": 0.85, "reverbMix": 0.18 },
+  "instrument": {
+    "id": "grand-piano",
+    "masterVolume": 0.85,
+    "reverbMix": 0.18,
+    "reverbRoom": "room"
+  },
   "notes": [
     { "id": "uuid", "midi": 60, "startMs": 0, "durationMs": 420, "velocity": 0.78 },
     { "id": "uuid", "midi": 48, "startMs": 0, "durationMs": 420, "velocity": 0.7, "staff": "bass" },
@@ -77,6 +82,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   played. A tied note is hidden only if every link of it was. Only an import sets it, and only ever
   to `true`; `false` reads as printed. Takes imported before it existed draw their hidden notes
   until the score is imported again.
+- `instrument.reverbRoom` (`studio | room | hall | cathedral`) is **optional**, and audible: the room the reverb models, which the export renders in and hashes (see AUDIO_EXPORT.md, Reverb). Absent means `room` — every take saved before there was a choice was heard there, through a reverb Room is calibrated to match — and new takes always carry it. A room this build does not know is dropped on import with a repair notice, and the take plays in `room`. Added without a schema bump, like `tempo.changes`: older takes parse untouched, and an older build drops the field and plays every take in its one room.
 - `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v3`, `headroom-grand-v2`, `bitklavier-grand-v1`, `wurlitzer-ep203w-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 
@@ -85,7 +91,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 `migrate → repair → validate → normalize`:
 
 1. **Migrate:** `schemaVersion` above the app's is rejected with an "update PoKeyBoard" message; older versions run registered migrations (registry in `takeMigrations.ts`; empty at v1). Missing version is treated as v1.
-2. **Repair (only clearly recoverable):** round fractional ms; bump zero durations to 1 ms; clamp float-precision drift on 0–1 fields; generate missing ids; default missing title/timestamps/display/pedalEvents; clamp out-of-range bpm/count-in; sort, round, clamp and de-duplicate tempo changes (dropping unsalvageable ones). Every repair is reported in the import preview.
+2. **Repair (only clearly recoverable):** round fractional ms; bump zero durations to 1 ms; clamp float-precision drift on 0–1 fields; generate missing ids; default missing title/timestamps/display/pedalEvents; clamp out-of-range bpm/count-in; sort, round, clamp and de-duplicate tempo changes (dropping unsalvageable ones); drop a reverb room this build does not know. Every repair is reported in the import preview.
 3. **Validate:** Zod schema; failures list human-readable `path: message` issues.
 4. **Normalize:** notes sorted by `(startMs, midi, id)` — a score import numbers its notes in the order the score is read, so two copies of one key at one moment keep the score's order — pedals by time, `durationMs` recomputed from note ends, playhead clamped.
 

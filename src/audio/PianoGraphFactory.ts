@@ -1,3 +1,4 @@
+import { DEFAULT_REVERB_ROOM, type ReverbRoom } from '@/domain/takeTypes';
 import {
   LIMITER_ATTACK_S,
   LIMITER_KNEE_DB,
@@ -9,19 +10,23 @@ import {
   LIMITER_WARMUP_S,
   LIVE_OUTPUT_GAIN_DB,
 } from './gainStaging';
+import { reverbImpulse } from './reverbImpulse';
 
 /**
  * Builds the piano output graph shared by live playback and offline
  * rendering:
  *
- *   voices → voiceBus ─┬→ dry ──────────────────────→ master ┐
- *                      └→ send(gain=mix) → convolver ────────┤
- *                                                            ↓
- *                                   limiter ← outputGain ←───┘
- *                                      ↓
- *     out ← softClip ← softClipInput ←─┤
- *                                      ↑
- *     metronome → clickBus → lookAhead ┘
+ *   voices → voiceBus ─┬→ dry ─────────────────────────────────→ master ┐
+ *                      └→ send(gain=mix) → convolver(room) → return ────┤
+ *                                                                       ↓
+ *                                              limiter ← outputGain ←───┘
+ *                                                 ↓
+ *                out ← softClip ← softClipInput ←─┤
+ *                                                 ↑
+ *                metronome → clickBus → lookAhead ┘
+ *
+ * The convolver holds the impulse of one room (reverbImpulse.ts); the return
+ * is where switching to another ducks it (`REVERB_SWITCH_S`).
  *
  * The piano is set to its live level by the output gain and the limiter's
  * makeup, and held by the limiter; `gainStaging.ts` has the levels, and why.
@@ -36,6 +41,8 @@ import {
 export interface PianoGraphOptions {
   masterVolume: number;
   reverbMix: number;
+  /** The room the reverb models; Room unless said otherwise. */
+  reverbRoom?: ReverbRoom;
   /**
    * Whether the graph guards its own peaks, with the limiter and soft clipper
    * above; on unless said otherwise. Live playback has to, since it cannot see
@@ -60,56 +67,78 @@ export interface PianoGraph {
   outputDestination: AudioNode;
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
+  /** Move the reverb to another room; see `REVERB_SWITCH_S`. */
+  setReverbRoom(room: ReverbRoom): void;
   getMasterVolume(): number;
   getReverbMix(): number;
+  /** The room asked for last, even while the switch to it is still under way. */
+  getReverbRoom(): ReverbRoom;
   dispose(): void;
 }
 
 /**
- * Procedural room impulse: exponentially decaying noise, lightly low-pass
- * smoothed for warmth, independent per channel. Generated locally — no
- * licensed IR asset required.
- *
- * The per-channel decorrelation used to be the *only* source of stereo width,
- * back when the samples were mono; now that they carry a real recorded image it
- * widens the room rather than manufacturing the instrument's own width.
+ * A room's impulse as a buffer at the context's own sample rate, which a
+ * ConvolverNode insists on. The samples are made once per room and rate
+ * (`reverbImpulse`) and copied in; they arrive already normalised, so the
+ * convolver they go to must have `normalize` off. The per-channel
+ * decorrelation widens the room, not the instrument: the samples carry their
+ * own recorded stereo image.
  */
-export function generateReverbImpulse(
-  context: BaseAudioContext,
-  seconds = 2.2,
-  decayPower = 2.8,
-): AudioBuffer {
-  const rate = context.sampleRate;
-  const length = Math.max(1, Math.floor(seconds * rate));
-  const buffer = context.createBuffer(2, length, rate);
-  let seed = (0x9e3779b9 ^ rate ^ length) >>> 0;
-  const random = () => {
-    seed ^= seed << 13;
-    seed ^= seed >>> 17;
-    seed ^= seed << 5;
-    return (seed >>> 0) / 0x1_0000_0000;
-  };
-  for (let channel = 0; channel < 2; channel += 1) {
-    const data = buffer.getChannelData(channel);
-    let smoothed = 0;
-    let peak = 0;
-    for (let i = 0; i < length; i += 1) {
-      const envelope = Math.pow(1 - i / length, decayPower);
-      const noise = (random() * 2 - 1) * envelope;
-      smoothed += 0.35 * (noise - smoothed);
-      data[i] = smoothed;
-      const magnitude = Math.abs(smoothed);
-      if (magnitude > peak) peak = magnitude;
-    }
-    if (peak > 0) {
-      const scale = 0.5 / peak;
-      for (let i = 0; i < length; i += 1) {
-        (data as Float32Array)[i] = (data[i] as number) * scale;
-      }
-    }
-  }
+export function generateReverbImpulse(context: BaseAudioContext, room: ReverbRoom): AudioBuffer {
+  const channels = reverbImpulse(room, context.sampleRate);
+  const buffer = context.createBuffer(
+    channels.length,
+    (channels[0] as Float32Array).length,
+    context.sampleRate,
+  );
+  channels.forEach((data, channel) => buffer.getChannelData(channel).set(data));
   return buffer;
 }
+
+/**
+ * A convolver holding a room's impulse. `normalize` goes off before the
+ * impulse goes in, since the browser normalises as the buffer is set, and the
+ * impulse is normalised already, the spec's way with its room's trim on top
+ * (reverbImpulse.ts).
+ */
+function convolverFor(context: BaseAudioContext, room: ReverbRoom): ConvolverNode {
+  const convolver = context.createConvolver();
+  convolver.normalize = false;
+  convolver.buffer = generateReverbImpulse(context, room);
+  return convolver;
+}
+
+/**
+ * How long a room switch takes to duck the reverb out, and then to bring it
+ * back in the new room.
+ *
+ * A switch builds a convolver for the new room first, while the old one plays
+ * on: making the impulse and handing it over — the browser works out the
+ * convolution's FFTs as it takes it — is up to 40 ms of main-thread work for
+ * the Cathedral, and done while the reverb was ducked it would leave a hole
+ * that long. Only then is the reverb ducked, the new convolver put in the old
+ * one's place, and the reverb brought back. The old room fades rather than
+ * stopping dead mid-sound, and the new one builds from what is played next;
+ * the dry piano is untouched throughout.
+ *
+ * This rather than crossfading the two: a crossfade would run both at once for
+ * as long as it lasted — and a quick run of switches more than two — and a
+ * phone may not keep up with two long convolutions. It would also hear little
+ * better: a new convolver has heard none of what came before either way, so
+ * the old room's tail goes within the fade whichever way the two are joined.
+ */
+export const REVERB_SWITCH_S = 0.02;
+
+/**
+ * How far ahead of the audio clock a switch's ramps begin. The page reads the
+ * clock and then changes the return's automation in several calls, and the
+ * audio goes on rendering meanwhile — a quantum or so where the page reads the
+ * clock the moment it moves, more where the page's reading lags it — so a
+ * change made right at the reading could have part of it played before the
+ * rest is in. Begun this far ahead, whatever renders meanwhile is still on the
+ * ramp it was already on.
+ */
+export const REVERB_SWITCH_LOOKAHEAD_S = 0.02;
 
 const RAMP_TC = 0.03;
 
@@ -237,8 +266,11 @@ export function createPianoGraph(
   dryGain.gain.value = dryGainFor(clamp01(options.reverbMix));
   const reverbSend = context.createGain();
   reverbSend.gain.value = clamp01(options.reverbMix);
-  const convolver = context.createConvolver();
-  convolver.buffer = generateReverbImpulse(context);
+  // The room asked for last, and the room of the convolver in place.
+  let reverbRoom = options.reverbRoom ?? DEFAULT_REVERB_ROOM;
+  let convolver = convolverFor(context, reverbRoom);
+  let convolverRoom = reverbRoom;
+  // Where a room switch ducks the reverb; at rest it is unity.
   const reverbReturn = context.createGain();
   reverbReturn.gain.value = 1;
 
@@ -278,6 +310,81 @@ export function createPianoGraph(
   let masterVolume = clamp01(options.masterVolume);
   let reverbMix = clamp01(options.reverbMix);
 
+  // A room switch in progress: the convolver built for the room asked for last,
+  // unless that is the room already in place; the timer that puts it in once
+  // the duck is over; and when, on the audio clock, it is over.
+  let next: ConvolverNode | null = null;
+  let swapTimer: ReturnType<typeof setTimeout> | null = null;
+  let swapAtS = 0;
+
+  // The return's last ramp, from where to where and when. A switch that comes
+  // while the return is coming back up has to duck from where it has got to,
+  // and its AudioParam cannot say: mid-ramp, `value` is the intrinsic value in
+  // some browsers and the last render quantum's in others, and started from
+  // either the return would jump. Firefox has no `cancelAndHoldAtTime`, and a
+  // straight line is known exactly anyway, so the graph keeps its own account.
+  let returnRamp = { fromS: 0, from: 1, toS: 0, to: 1 };
+  let returnRamped = false;
+  const returnAt = (timeS: number): number => {
+    const { fromS, from, toS, to } = returnRamp;
+    if (timeS >= toS) return to;
+    if (timeS <= fromS) return from;
+    return from + ((to - from) * (timeS - fromS)) / (toS - fromS);
+  };
+  // Take the return to `to` over a switch's length, from where it will stand a
+  // lookahead from now (`REVERB_SWITCH_LOOKAHEAD_S`). In an order that leaves
+  // everything before then as it was at every step, since that may render
+  // while these calls are made: the ramp under way is first split there along
+  // its own line, which changes nothing it plays; then all that came after the
+  // split is cancelled; then the new ramp goes on. It is carried on to the
+  // split rather than restarted there with a set, because cancelling a ramp
+  // leaves the return at its start until the next event, and a browser that
+  // places an event a frame late — Chromium rounds its time up to a frame —
+  // would play that frame from there: a dip of a sample. The first ramp has
+  // none before it to carry on, so it starts with a set.
+  const rampReturn = (to: number) => {
+    const at = context.currentTime + REVERB_SWITCH_LOOKAHEAD_S;
+    const from = returnAt(at);
+    if (returnRamped) reverbReturn.gain.linearRampToValueAtTime(from, at);
+    else reverbReturn.gain.setValueAtTime(from, at);
+    // Half a frame on, so the split itself stays.
+    reverbReturn.gain.cancelScheduledValues(at + 0.5 / context.sampleRate);
+    reverbReturn.gain.linearRampToValueAtTime(to, at + REVERB_SWITCH_S);
+    returnRamp = { fromS: at, from, toS: at + REVERB_SWITCH_S, to };
+    returnRamped = true;
+  };
+  // The page's timer for the swap, due when the duck is over by the audio's
+  // clock; see `swapWhenDucked`.
+  const armSwap = () => {
+    swapTimer = setTimeout(swapWhenDucked, Math.max(1, (swapAtS - context.currentTime) * 1000));
+  };
+
+  const putInPlace = (replacement: ConvolverNode) => {
+    reverbSend.disconnect(convolver);
+    convolver.disconnect();
+    reverbSend.connect(replacement);
+    replacement.connect(reverbReturn);
+    convolver = replacement;
+    convolverRoom = reverbRoom;
+    next = null;
+  };
+
+  // Timers run on the page's clock and the duck on the audio's, which can lag
+  // it, so the swap waits for the audio to be past the duck — unless the audio
+  // has stopped, when nothing is sounding to be cut off. Only the room asked
+  // for last goes in, so a quick run of switches swaps once.
+  const swapWhenDucked = () => {
+    swapTimer = null;
+    if (context.state === 'running' && context.currentTime < swapAtS) {
+      armSwap();
+      return;
+    }
+    if (next) putInPlace(next);
+    // Up from nothing, once the duck is over; from wherever it stopped, if the
+    // audio stopped first.
+    rampReturn(1);
+  };
+
   return {
     context,
     voiceDestination: voiceBus,
@@ -291,9 +398,40 @@ export function createPianoGraph(
       reverbSend.gain.setTargetAtTime(reverbMix, context.currentTime, RAMP_TC);
       dryGain.gain.setTargetAtTime(dryGainFor(reverbMix), context.currentTime, RAMP_TC);
     },
+    setReverbRoom(room: ReverbRoom): void {
+      if (room === reverbRoom) return;
+      reverbRoom = room;
+      // The costly part, done while the old room still plays; nothing to build
+      // on the way back to the room already in place.
+      next = room === convolverRoom ? null : convolverFor(context, room);
+      if (context.state !== 'running') {
+        // Nothing is sounding, so there is nothing to duck: swap now, and bring
+        // back a return some earlier switch left partway down, once the audio
+        // runs again.
+        if (swapTimer !== null) {
+          clearTimeout(swapTimer);
+          swapTimer = null;
+          rampReturn(1);
+        }
+        if (next) putInPlace(next);
+        return;
+      }
+      // Already ducking, or waiting to swap: the swap to come puts this room in
+      // instead.
+      if (swapTimer !== null) return;
+      // From wherever the return will stand as the duck begins: full, or
+      // partway back up if the last switch is still bringing it in.
+      rampReturn(0);
+      swapAtS = returnRamp.toS;
+      armSwap();
+    },
     getMasterVolume: () => masterVolume,
     getReverbMix: () => reverbMix,
+    getReverbRoom: () => reverbRoom,
     dispose(): void {
+      if (swapTimer !== null) clearTimeout(swapTimer);
+      swapTimer = null;
+      next = null;
       for (const node of [
         voiceBus,
         dryGain,

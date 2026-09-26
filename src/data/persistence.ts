@@ -1,7 +1,7 @@
 import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { createEmptyTake } from '@/domain/noteEvents';
-import type { Take } from '@/domain/takeTypes';
+import { reverbRoomOf, type Take } from '@/domain/takeTypes';
 import { resolveLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
 import { applySystemLanguageIfUnpinned } from '@/i18n/languagePreference';
@@ -67,6 +67,7 @@ class PersistenceService {
       const settings = useSettingsStore.getState();
       audioEngine.setMasterVolume(settings.masterVolume);
       audioEngine.setReverbMix(settings.reverbMix);
+      audioEngine.setReverbRoom(settings.reverbRoom);
       void audioEngine.setInstrument(settings.pianoInstrument);
       // Default to the OS language unless the user has pinned one. Runs before
       // the autosave subscription below so an unpinned language isn't written
@@ -92,16 +93,19 @@ class PersistenceService {
         if (take) {
           useTakeStore.getState().setTake(take);
           transportController.restorePlayhead(take.display.playheadMs);
-          // The take's own levels win over the stored settings row, so mirror
-          // them into the store — it is the value every later slider move is
-          // compared against. The subscription is not registered yet, so the
-          // engine still has to be told by hand.
+          // The take's own levels and room win over the stored settings row, so
+          // mirror them into the store — it is the value every later slider
+          // move is compared against. The subscription is not registered yet,
+          // so the engine still has to be told by hand.
+          const reverbRoom = reverbRoomOf(take.instrument);
           useSettingsStore.setState({
             masterVolume: take.instrument.masterVolume,
             reverbMix: take.instrument.reverbMix,
+            reverbRoom,
           });
           audioEngine.setMasterVolume(take.instrument.masterVolume);
           audioEngine.setReverbMix(take.instrument.reverbMix);
+          audioEngine.setReverbRoom(reverbRoom);
           this.lastSavedContentRevisionByTake.set(take.id, useTakeStore.getState().contentRevision);
           restoredTake = true;
         }
@@ -117,6 +121,7 @@ class PersistenceService {
           id: useTakeStore.getState().take.instrument.id,
           masterVolume: settings.masterVolume,
           reverbMix: settings.reverbMix,
+          reverbRoom: settings.reverbRoom,
         },
       });
       useTakeStore.getState().setTake(take);
@@ -138,26 +143,33 @@ class PersistenceService {
         // where the take names a piano that is not the one playing.
         useTakeStore.getState().stampActiveInstrument();
       }
-      // The levels are owned here for the same reason: a restored backup moves
-      // the sliders with setState, so the setters never run and the piano would
-      // keep playing at the old levels until the next launch.
-      if (state.masterVolume !== previous.masterVolume || state.reverbMix !== previous.reverbMix) {
+      // The levels and the room are owned here for the same reason: a restored
+      // backup moves the sliders with setState, so the setters never run and
+      // the piano would keep playing at the old levels until the next launch.
+      if (
+        state.masterVolume !== previous.masterVolume ||
+        state.reverbMix !== previous.reverbMix ||
+        state.reverbRoom !== previous.reverbRoom
+      ) {
         audioEngine.setMasterVolume(state.masterVolume);
         audioEngine.setReverbMix(state.reverbMix);
-        // The take carries its own copy — opening it again restores both, and
+        audioEngine.setReverbRoom(state.reverbRoom);
+        // The take carries its own copy — opening it again restores them, and
         // the export renders its reverb — so it has to follow what is actually
-        // being heard. Opening a take gets here with the two already in
+        // being heard. Opening a take gets here with them already in
         // agreement; writing anyway would dirty a freshly opened take and
         // queue a pointless save.
         const { take, setInstrumentSettings } = useTakeStore.getState();
         if (
           take.instrument.masterVolume !== state.masterVolume ||
-          take.instrument.reverbMix !== state.reverbMix
+          take.instrument.reverbMix !== state.reverbMix ||
+          reverbRoomOf(take.instrument) !== state.reverbRoom
         ) {
           setInstrumentSettings({
             ...take.instrument,
             masterVolume: state.masterVolume,
             reverbMix: state.reverbMix,
+            reverbRoom: state.reverbRoom,
           });
         }
       }

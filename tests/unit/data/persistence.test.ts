@@ -60,6 +60,22 @@ describe('settingsRepository', () => {
     expect(loaded.pianoInstrument).toBeUndefined();
   });
 
+  it('keeps the reverb room, Room unless one was chosen, and drops one that does not exist', async () => {
+    expect(SETTINGS_DEFAULTS.reverbRoom).toBe('room');
+    // Stored right after the mix it goes with.
+    const keys = Object.keys(SETTINGS_DEFAULTS);
+    expect(keys.indexOf('reverbRoom')).toBe(keys.indexOf('reverbMix') + 1);
+
+    useSettingsStore.getState().setReverbRoom('cathedral');
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).reverbRoom).toBe('cathedral');
+
+    await db.settings.put({ key: 'reverbRoom', value: 'bathroom' });
+    expect((await loadSettings()).reverbRoom).toBeUndefined();
+    await restoreSettingsFromBackup({ reverbRoom: 'hall' });
+    expect((await loadSettings()).reverbRoom).toBe('hall');
+  });
+
   it('restores only known keys from a backup blob', async () => {
     await restoreSettingsFromBackup({ fixedVelocity: 0.9, metronomeVolume: -1, evil: 'x' });
     const loaded = await loadSettings();

@@ -121,5 +121,5 @@ Attribution and source/license links are also shown in the app's About view.
 
 ## Reverb impulse response
 
-The room reverb impulse response is generated procedurally at runtime
-(`src/audio/PianoGraphFactory.ts`); no third-party audio is used.
+The reverb's room impulse responses are generated procedurally at runtime
+(`src/audio/reverbImpulse.ts`); no third-party audio is used.
