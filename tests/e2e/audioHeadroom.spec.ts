@@ -435,4 +435,124 @@ test.describe('output headroom', () => {
     });
     expect(Math.abs(liveOverExportDb - liveMakeupDb)).toBeLessThanOrEqual(0.3);
   });
+
+  test('plays the first note of a session as loud as any other', async ({ page }) => {
+    // A newly made DynamicsCompressorNode starts out ducking hard, and live
+    // the first notes of a session are played the moment the audio starts —
+    // the gesture that starts it plays one. A struck tone at a playing level,
+    // at the very start of a fresh graph and again a second and a half in, has
+    // to sound the same from its onset on.
+    const windowsDb = await page.evaluate(async () => {
+      const { PianoGraph } = window as unknown as Modules;
+      const sampleRate = 48000;
+      const windowsS = [0.05, 0.1, 0.25];
+      const strike = async (atS: number) => {
+        const context = new OfflineAudioContext({
+          numberOfChannels: 2,
+          length: Math.round(sampleRate * (atS + 0.5)),
+          sampleRate,
+        });
+        const graph = PianoGraph.createPianoGraph(context, {
+          masterVolume: 0.85,
+          reverbMix: 0.18,
+        });
+        // Decaying like a struck string, well under the limiter's threshold.
+        const note = context.createBuffer(2, sampleRate / 2, sampleRate);
+        for (let channel = 0; channel < 2; channel += 1) {
+          const data = note.getChannelData(channel);
+          for (let i = 0; i < data.length; i += 1) {
+            data[i] = 0.5 * Math.sin((2 * Math.PI * 262 * i) / sampleRate) * Math.exp(-i / 4000);
+          }
+        }
+        const source = context.createBufferSource();
+        source.buffer = note;
+        source.connect(graph.voiceDestination);
+        source.start(atS);
+        const rendered = await context.startRendering();
+        // RMS over the first `lengthS` from the onset.
+        return windowsS.map((lengthS) => {
+          let energy = 0;
+          let count = 0;
+          for (let channel = 0; channel < rendered.numberOfChannels; channel += 1) {
+            const data = rendered.getChannelData(channel);
+            const from = Math.round(atS * sampleRate);
+            for (let i = from; i < from + Math.round(lengthS * sampleRate); i += 1) {
+              energy += (data[i] as number) ** 2;
+              count += 1;
+            }
+          }
+          return Math.sqrt(energy / count);
+        });
+      };
+      const [cold, warm] = await Promise.all([strike(0), strike(1.5)]);
+      return cold.map((level, i) => 20 * Math.log10(level / (warm[i] as number)));
+    });
+    test.info().annotations.push({
+      type: 'first note against a later one, over 50 / 100 / 250 ms',
+      description: windowsDb.map((db) => `${db.toFixed(3)} dB`).join(' '),
+    });
+    for (const db of windowsDb) expect(Math.abs(db)).toBeLessThanOrEqual(0.3);
+  });
+
+  test('moves onto the limiter once it has settled without a bump', async ({ page }) => {
+    // Until the limiter has settled the piano goes round it, delayed as much
+    // and made up as much as the limiter will; then it crossfades across. If
+    // the two ways differed in level, or in time — a fraction of a frame, at
+    // 44.1 kHz, is enough to dull the top octave — a held tone would show it.
+    // Windows are whole cycles of each tone, so every one reads the same.
+    const cases = await page.evaluate(async () => {
+      const { PianoGraph } = window as unknown as Modules;
+      const out: Array<{ rate: number; frequency: number; worstDb: number }> = [];
+      for (const sampleRate of [44100, 48000]) {
+        for (const frequency of [250, 9000]) {
+          const context = new OfflineAudioContext({
+            numberOfChannels: 2,
+            length: Math.round(sampleRate * 1.25),
+            sampleRate,
+          });
+          // Dry, so nothing builds up in the room while the tone holds.
+          const graph = PianoGraph.createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0 });
+          const tone = context.createOscillator();
+          tone.frequency.value = frequency;
+          const level = context.createGain();
+          level.gain.value = 0.3;
+          tone.connect(level);
+          level.connect(graph.voiceDestination);
+          tone.start(0);
+          const rendered = await context.startRendering();
+          const rms = (fromS: number, toS: number) => {
+            let energy = 0;
+            let count = 0;
+            for (let channel = 0; channel < rendered.numberOfChannels; channel += 1) {
+              const data = rendered.getChannelData(channel);
+              for (
+                let i = Math.round(fromS * sampleRate);
+                i < Math.round(toS * sampleRate);
+                i += 1
+              ) {
+                energy += (data[i] as number) ** 2;
+                count += 1;
+              }
+            }
+            return Math.sqrt(energy / count);
+          };
+          const settled = rms(1, 1.2);
+          let worstDb = 0;
+          for (let from = 0.04; from < 0.8; from += 0.02) {
+            const db = 20 * Math.log10(rms(from, from + 0.02) / settled);
+            if (Math.abs(db) > Math.abs(worstDb)) worstDb = db;
+          }
+          out.push({ rate: sampleRate, frequency, worstDb });
+        }
+      }
+      return out;
+    });
+    test.info().annotations.push({
+      type: 'worst 20 ms window against settled',
+      description: cases
+        .map((c) => `${c.frequency} Hz @ ${c.rate}: ${c.worstDb.toFixed(3)} dB`)
+        .join('; '),
+    });
+    for (const { worstDb } of cases) expect(Math.abs(worstDb)).toBeLessThanOrEqual(0.1);
+  });
 });

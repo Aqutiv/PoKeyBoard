@@ -2,9 +2,12 @@ import {
   LIMITER_ATTACK_S,
   LIMITER_KNEE_DB,
   LIMITER_LOOKAHEAD_S,
+  LIMITER_MAKEUP_DB,
   LIMITER_RATIO,
   LIMITER_RELEASE_S,
   LIMITER_THRESHOLD_DB,
+  LIMITER_WARMUP_FADE_S,
+  LIMITER_WARMUP_S,
   LIVE_OUTPUT_GAIN_DB,
 } from './gainStaging';
 
@@ -15,17 +18,20 @@ import {
  *   voices → voiceBus ─┬→ dry ──────────────────────→ master ┐
  *                      └→ send(gain=mix) → convolver ────────┤
  *                                                            ↓
- *                                   limiter ← outputGain ←───┘
- *                                      ↓
- *     out ← softClip ← softClipInput ←─┤
- *                                      ↑
- *     metronome → clickBus → lookAhead ┘
+ *              ┌─ limiterGain ← limiter ←─────────── outputGain
+ *              │                                         ↓
+ *              ├─ bypassGain ← bypassDelay ←─────────────┘
+ *              ↓
+ *     out ← softClip ← softClipInput ← lookAhead ← clickBus ← metronome
  *
  * The piano is turned up by the live output gain and held by the limiter;
- * `gainStaging.ts` has the levels, and why. Non-piano sources (the metronome)
- * join at `clickBus`, past master volume, reverb and the limiter: a click is
- * independent of the piano's volume, never turns the piano down, and is still
- * covered by the soft clipper.
+ * `gainStaging.ts` has the levels, and why. For its first moments a newly
+ * made limiter ducks everything, so the piano goes round it until it has
+ * settled — through `bypassDelay` and `bypassGain`, which match the limiter's
+ * delay and makeup — and then crossfades onto it (`LIMITER_WARMUP_S`).
+ * Non-piano sources (the metronome) join at `clickBus`, past master volume,
+ * reverb and the limiter: a click is independent of the piano's volume, never
+ * turns the piano down, and is still covered by the soft clipper.
  */
 export interface PianoGraphOptions {
   masterVolume: number;
@@ -207,10 +213,23 @@ export function createPianoGraph(
   limiter.attack.value = LIMITER_ATTACK_S;
   limiter.release.value = LIMITER_RELEASE_S;
 
-  // The limiter delays the piano by its look-ahead; the clicks, which skip it,
-  // are held back as long, so a click still lands with the note it is on.
+  // The limiter delays the piano by its look-ahead, in whole frames; the
+  // clicks, which skip it, are held back as long, so a click still lands with
+  // the note it is on. (A DelayNode asked for a fraction of a frame would
+  // interpolate between two, and dull the top octave.)
+  const lookAheadS = Math.floor(LIMITER_LOOKAHEAD_S * context.sampleRate) / context.sampleRate;
   const lookAhead = context.createDelay(LIMITER_LOOKAHEAD_S);
-  lookAhead.delayTime.value = LIMITER_LOOKAHEAD_S;
+  lookAhead.delayTime.value = lookAheadS;
+
+  // The way round the limiter while it settles (`LIMITER_WARMUP_S`): as late
+  // as the limiter makes the piano, and as loud as the settled limiter passes
+  // it, so the crossfade from one to the other cannot be heard. Meanwhile only
+  // the soft clipper guards the peaks — for well under a second, at the start
+  // of a session.
+  const limiterGain = context.createGain();
+  const bypassDelay = context.createDelay(LIMITER_LOOKAHEAD_S);
+  bypassDelay.delayTime.value = lookAheadS;
+  const bypassGain = context.createGain();
 
   // Scales the shaper's [-1, 1] curve domain up to cover the whole range a
   // transient can reach; the curve bakes the inverse back in, so the pair is
@@ -240,8 +259,24 @@ export function createPianoGraph(
   reverbReturn.connect(master);
   master.connect(outputGain);
   if (peakGuard) {
+    // Round the limiter until it has settled, then across onto it. Counted on
+    // the audio clock, which stands still until the context first runs.
+    const makeup = 10 ** (LIMITER_MAKEUP_DB / 20);
+    const settled = context.currentTime + LIMITER_WARMUP_S;
+    const crossed = settled + LIMITER_WARMUP_FADE_S;
+    limiterGain.gain.value = 0;
+    limiterGain.gain.setValueAtTime(0, settled);
+    limiterGain.gain.linearRampToValueAtTime(1, crossed);
+    bypassGain.gain.value = makeup;
+    bypassGain.gain.setValueAtTime(makeup, settled);
+    bypassGain.gain.linearRampToValueAtTime(0, crossed);
+
     outputGain.connect(limiter);
-    limiter.connect(softClipInput);
+    limiter.connect(limiterGain);
+    limiterGain.connect(softClipInput);
+    outputGain.connect(bypassDelay);
+    bypassDelay.connect(bypassGain);
+    bypassGain.connect(softClipInput);
     clickBus.connect(lookAhead);
     lookAhead.connect(softClipInput);
     softClipInput.connect(softClip);
@@ -277,6 +312,9 @@ export function createPianoGraph(
         outputGain,
         clickBus,
         limiter,
+        limiterGain,
+        bypassDelay,
+        bypassGain,
         lookAhead,
         softClipInput,
         softClip,

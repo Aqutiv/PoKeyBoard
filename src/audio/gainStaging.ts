@@ -55,6 +55,21 @@ export const LIMITER_RELEASE_S = 0.3;
 export const LIMITER_LOOKAHEAD_S = 0.006;
 
 /**
+ * How long the piano goes round a newly made limiter. A DynamicsCompressorNode
+ * starts out as if it had just caught a peak and ducks everything while it
+ * recovers, for as long as its release says: 21 dB down at first, and within
+ * 0.1 dB of settled only 0.28 s in (Chromium, at 44.1 and 48 kHz alike). Live,
+ * those are the first notes of a session, since the gesture that starts the
+ * audio plays one. So until then the piano takes a way round, as late and as
+ * loud as the settled limiter would pass it, then crossfades onto the limiter.
+ * Counted on the audio clock, which stands still until the context first runs.
+ */
+export const LIMITER_WARMUP_S = 0.35;
+
+/** How long the piano takes to cross from the way round onto the limiter. */
+export const LIMITER_WARMUP_FADE_S = 0.05;
+
+/**
  * The gain a DynamicsCompressorNode gives everything it passes, whatever its
  * level, on top of its compression: the Web Audio spec has it run a full-scale
  * input through its compression curve and make up the gain that loses, to the
