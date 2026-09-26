@@ -12,7 +12,7 @@ const WURLITZER = /^Wurlitzer/;
 
 const SALAMANDER = /^Salamander/;
 const HEADROOM = /^Headroom/;
-const BITKLAVIER = /^bitKlavier/;
+const STEINWAY = /^Steinway/;
 
 function pianoRadio(page: Page, name: RegExp) {
   return page.getByRole('radiogroup', { name: 'Piano' }).getByRole('radio', { name });
@@ -156,7 +156,7 @@ test.describe('choosing a piano', () => {
     await expect(pianoRadio(page, HEADROOM)).toBeChecked();
   });
 
-  test('plays the bitKlavier Steinway once it is chosen, and remembers it', async ({ page }) => {
+  test('plays the Steinway once it is chosen, and remembers it', async ({ page }) => {
     // Every sample voice starts an AudioBufferSourceNode on a decoded
     // recording; the one-frame buffer that unlocks iOS audio is not one.
     await page.addInitScript(() => {
@@ -181,9 +181,11 @@ test.describe('choosing a piano', () => {
 
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Settings' }).click();
-    await pianoRadio(page, BITKLAVIER).check();
-    await expect(pianoRadio(page, BITKLAVIER)).toBeChecked();
-    await expect(page.getByText('Steinway D concert grand, rich and even')).toBeVisible();
+    await pianoRadio(page, STEINWAY).check();
+    await expect(pianoRadio(page, STEINWAY)).toBeChecked();
+    await expect(
+      page.getByText('bitKlavier’s D concert grand, recorded at Princeton — rich and even'),
+    ).toBeVisible();
 
     // The switch decodes the new pack through the real loadManifest →
     // loadCorePack → decodeAudioData path, over its own recordings.
@@ -199,7 +201,7 @@ test.describe('choosing a piano', () => {
     await page.reload();
     await readyKeyboard(page).waitFor({ timeout: 30_000 });
     await nav(page).getByRole('button', { name: 'Settings' }).click();
-    await expect(pianoRadio(page, BITKLAVIER)).toBeChecked();
+    await expect(pianoRadio(page, STEINWAY)).toBeChecked();
   });
 
   test('resetting settings returns to the default piano and re-stamps the take', async ({
@@ -231,7 +233,7 @@ test.describe('choosing a piano', () => {
     // One card per piano: the download button names the piano and is sized from
     // that piano's own manifest.
     await expect(group.getByRole('radio')).toHaveCount(4);
-    for (const name of ['Salamander', 'Headroom', 'bitKlavier', 'Wurlitzer']) {
+    for (const name of ['Salamander', 'Headroom', 'Steinway', 'Wurlitzer']) {
       await expect(group.getByRole('radio', { name: new RegExp(`^${name}`) })).toHaveCount(1);
       await expect(
         group.getByRole('button', { name: new RegExp(`^Download ${name} \\(\\d`) }),
@@ -241,7 +243,9 @@ test.describe('choosing a piano', () => {
     // The description belongs to the choice, so no second row repeats it.
     await expect(page.getByText('Yamaha C5 concert grand, bright and close')).toHaveCount(1);
     await expect(page.getByText('Yamaha C3 grand, warm and intimate')).toHaveCount(1);
-    await expect(page.getByText('Steinway D concert grand, rich and even')).toHaveCount(1);
+    await expect(
+      page.getByText('bitKlavier’s D concert grand, recorded at Princeton — rich and even'),
+    ).toHaveCount(1);
   });
 });
 

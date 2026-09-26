@@ -52,7 +52,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 
 1. `npm run build && npm run preview -- --host` and open `http://<your-ip>:4173` **only for quick layout checks** (no SW on plain http), or deploy to an HTTPS host for the full experience.
 2. First visit online; the app shell caches automatically.
-3. Settings → **Piano** → **Download Salamander** (or **Download Headroom** / **Download bitKlavier** / **Download Wurlitzer**) to pin a full sample pack — each piano card downloads on its own.
+3. Settings → **Piano** → **Download Salamander** (or **Download Headroom** / **Download Steinway** / **Download Wurlitzer**) to pin a full sample pack — each piano card downloads on its own.
 
 ## Installing
 

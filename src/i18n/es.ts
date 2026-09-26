@@ -489,7 +489,8 @@ export const es: Messages = {
       'Los pianos se cargan mientras tocas. Descarga uno para que todas las teclas se puedan tocar sin conexión: cada piano se descarga y se elimina por separado, y tus tomas nunca se ven afectadas.',
     pianoSalamanderDesc: 'Piano de concierto Yamaha C5, brillante y cercano',
     pianoHeadroomDesc: 'Piano de cola Yamaha C3, cálido e íntimo',
-    pianoBitklavierDesc: 'Piano de concierto Steinway D, rico y homogéneo',
+    pianoBitklavierDesc:
+      'Piano de concierto D de bitKlavier, grabado en Princeton: rico y homogéneo',
     pianoWurlitzerDesc: 'piano eléctrico EP203W',
     pianoSwitching: 'Cargando el piano nuevo…',
     pianoVolume: 'Volumen del piano',

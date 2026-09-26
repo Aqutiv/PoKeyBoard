@@ -28,7 +28,7 @@ describe('the piano registry', () => {
     expect(DEFAULT_PIANO_INSTRUMENT_ID).toBe('salamander-grand');
     expect(pianoInstrument('bitklavier-grand')).toMatchObject({
       packVersion: 'bitklavier-grand-v1',
-      name: 'bitKlavier',
+      name: 'Steinway',
       midiProgram: 0,
     });
   });

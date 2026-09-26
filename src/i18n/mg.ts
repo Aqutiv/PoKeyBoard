@@ -495,7 +495,8 @@ export const mg: Messages = {
       'Alaina miadana ny piano rehefa mitendry ianao. Alaivo ny iray mba hahafahana mitendry ny kitendry rehetra tsy an-tserasera — samy alaina sy fafana manokana ny piano tsirairay, ary tsy voakasika mihitsy ny rakitrao.',
     pianoSalamanderDesc: 'Piano fanao an-tsehatra Yamaha C5, mazava sy akaiky',
     pianoHeadroomDesc: 'Piano Yamaha C3, malefaka sy mafana',
-    pianoBitklavierDesc: 'Piano fanao an-tsehatra Steinway D, feno sy mirindra',
+    pianoBitklavierDesc:
+      'Piano fanao an-tsehatra D an’ny bitKlavier, noraketina tao Princeton — feno sy mirindra',
     pianoWurlitzerDesc: 'piano elektrika EP203W',
     pianoSwitching: 'Mampiditra ny piano vaovao…',
     pianoVolume: 'Feon’ny piano',

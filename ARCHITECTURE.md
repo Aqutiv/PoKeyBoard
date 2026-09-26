@@ -101,8 +101,9 @@ scheduler and must never stop to ask for a note.
 
 `audio/instruments.ts` lists the selectable pianos, each one a versioned sample
 pack directory under `public/piano/`: three grands (Salamander, a Yamaha C5, the
-default; Headroom, a Yamaha C3; bitKlavier, a Steinway D) and the Wurlitzer
-electric piano. The engine keeps a `SampleBank` per
+default; Headroom, a Yamaha C3; Steinway, the bitKlavier Grand's Steinway D,
+whose id and pack keep the library's name) and the Wurlitzer electric piano.
+The engine keeps a `SampleBank` per
 instrument but lets only the active one hold decoded buffers — a full pack of
 stereo float32 PCM is ~312 MB, so two resident packs is not an option on a phone.
 
@@ -123,7 +124,7 @@ persistence layer to apply the stored instrument, so a user on the second piano
 never decodes 5.7 MB of the first one first.
 
 Packs are mastered at different levels — Headroom sits ~15 dB below Salamander,
-and bitKlavier 5–7 dB below, though its build raises each layer toward
+and the Steinway's source 5–7 dB below, though its build raises each layer toward
 Salamander before the 16-bit quantisation so its dither floor stays put —
 and within a pack each recording at its own, note by note. So a grand plays by a
 velocity calibration: every one of its recordings is measured once

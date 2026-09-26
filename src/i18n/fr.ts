@@ -491,7 +491,8 @@ export const fr: Messages = {
       'Les pianos se chargent au fil du jeu. Téléchargez-en un pour garder chaque touche jouable hors ligne — chaque piano se télécharge et se supprime séparément, sans jamais toucher à vos prises.',
     pianoSalamanderDesc: 'Piano de concert Yamaha C5, brillant et proche',
     pianoHeadroomDesc: 'Piano à queue Yamaha C3, chaleureux et intime',
-    pianoBitklavierDesc: 'Piano de concert Steinway D, riche et homogène',
+    pianoBitklavierDesc:
+      'Piano de concert D de bitKlavier, enregistré à Princeton — riche et homogène',
     pianoWurlitzerDesc: 'piano électrique EP203W',
     pianoSwitching: 'Chargement du nouveau piano…',
     pianoVolume: 'Volume du piano',

@@ -48,10 +48,11 @@ export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
     midiProgram: 0, // Acoustic Grand Piano
   },
   {
-    // A Steinway D; named, like the others, after the sample library.
+    // The bitKlavier Grand's Steinway D, shown by the piano's name; the id and
+    // the pack keep the library's, since takes and settings store them.
     id: 'bitklavier-grand',
     packVersion: 'bitklavier-grand-v1',
-    name: 'bitKlavier',
+    name: 'Steinway',
     path: 'piano/bitklavier-grand-v1/',
     midiProgram: 0, // Acoustic Grand Piano
   },

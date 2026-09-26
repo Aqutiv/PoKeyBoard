@@ -30,7 +30,7 @@ describe('settingsRepository', () => {
     expect(loaded.backgroundPlayback).toBe(true);
   });
 
-  it('keeps every piano the app offers as it was chosen, Headroom and bitKlavier alike', async () => {
+  it('keeps every piano the app offers as it was chosen, Headroom and the Steinway alike', async () => {
     for (const pianoInstrument of PIANO_INSTRUMENT_IDS) {
       await db.settings.put({ key: 'pianoInstrument', value: pianoInstrument });
       expect((await loadSettings()).pianoInstrument).toBe(pianoInstrument);

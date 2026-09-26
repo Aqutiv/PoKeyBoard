@@ -492,7 +492,7 @@ export const en: Messages = {
       'Pianos stream as you play. Download one to keep every key playable offline — each downloads and deletes on its own, and your takes are never affected.',
     pianoSalamanderDesc: 'Yamaha C5 concert grand, bright and close',
     pianoHeadroomDesc: 'Yamaha C3 grand, warm and intimate',
-    pianoBitklavierDesc: 'Steinway D concert grand, rich and even',
+    pianoBitklavierDesc: 'bitKlavier’s D concert grand, recorded at Princeton — rich and even',
     pianoWurlitzerDesc: 'EP203W electric piano',
     pianoSwitching: 'Loading the new piano…',
     pianoVolume: 'Piano volume',

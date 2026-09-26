@@ -7,7 +7,7 @@ test.describe('MP3 export', () => {
   // assertions below fail on a silent or empty render.
   test.use({ samplePack: 'real' });
 
-  for (const piano of ['Salamander', 'bitKlavier', 'Wurlitzer'])
+  for (const piano of ['Salamander', 'Steinway', 'Wurlitzer'])
     test(`renders a ${piano} take to a real MP3 and downloads it`, async ({ page }) => {
       await gotoAppReady(page);
       if (piano !== 'Salamander') {
