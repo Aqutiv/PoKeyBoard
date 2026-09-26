@@ -110,11 +110,14 @@ export function MusicScore() {
   const [lastNoteName, setLastNoteName] = useState<string | null>(null);
 
   // An imported score says which key it is in; a recording never does, so the
-  // notes are read for one. Both views spell from the same answer, so the
-  // score on screen and the printed page never disagree about a flat.
+  // notes are read for one — the written ones, as the page shows them. Both
+  // views spell from the same answer, so the score on screen and the printed
+  // page never disagree about a flat.
   const keySignature = useMemo(
     () =>
-      tempo.keySignature !== undefined ? normalizeFifths(tempo.keySignature) : detectFifths(notes),
+      tempo.keySignature !== undefined
+        ? normalizeFifths(tempo.keySignature)
+        : detectFifths(writtenNotes(notes)),
     [tempo.keySignature, notes],
   );
 
