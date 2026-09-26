@@ -176,7 +176,9 @@ because two mounted `PianoKeyboard`s would each attach a `ComputerKeyboardInput`
 to `window` — doubling every keypress into two voices under one source id — and
 the second unmount would clear the first one's sustain. The runner keeps its own
 keyboard anchor (`anchorMidi` / `onAnchorChange`) so a lesson never relocates the
-Play keyboard, and `targetMidis` lights the keys a step is asking for, styled
+Play keyboard, and re-parks the computer keyboard's octave on every step
+(`parkId`), so a Z/X shift ends with the step it was made in. `targetMidis`
+lights the keys a step is asking for, styled
 apart from the keys the user is holding. Simultaneity specs always allow a short
 onset window as well as a true overlap: a mouse is one pointer and physically
 cannot hold two keys.
