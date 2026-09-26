@@ -98,4 +98,27 @@ describe('the audio export progress bar', () => {
     expect(fill()).not.toBe(rendering);
     expect(mock.sendExportEvent).toHaveBeenCalledWith('RENDER_DONE');
   });
+
+  it('holds a finished render’s full bar a moment before compressing takes over', async () => {
+    await startExport();
+    vi.useFakeTimers();
+    try {
+      progress('rendering', 0.65);
+      // The export says the render is done and compressing has begun in one go.
+      progress('rendering', 1);
+      progress('encoding', 0);
+      progress('encoding', 0.05);
+      const stage = () => document.querySelector('.export-stage')?.textContent;
+      expect(stage()).toBe(`${en.exportDialog.stageRendering} 100%`);
+      // Only the bar waits: the transport moves on at once.
+      expect(mock.sendExportEvent).toHaveBeenCalledWith('RENDER_DONE');
+      act(() => vi.advanceTimersByTime(249));
+      expect(stage()).toBe(`${en.exportDialog.stageRendering} 100%`);
+      act(() => vi.advanceTimersByTime(1));
+      // Then straight to where compressing has got by now.
+      expect(stage()).toBe(`${en.exportDialog.stageEncoding} 5%`);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

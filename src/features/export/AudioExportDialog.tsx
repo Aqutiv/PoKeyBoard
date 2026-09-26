@@ -31,6 +31,15 @@ type Phase =
   | { kind: 'ready'; take: Take; result: ExportResult; deliveredHow: string | null }
   | { kind: 'error'; take: Take | null; message: string };
 
+/**
+ * How long a finished render's full bar stays up before compressing takes the
+ * dialog over. The export reports the render done and compressing begun in one
+ * breath, and React draws the two as one, so the render's bar would go from
+ * wherever its last pause left it straight to an empty one; this lets its fill
+ * ease to the end first.
+ */
+const FINISHED_RENDER_MS = 250;
+
 function formatBytes(bytes: number): string {
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(1)} MB`;
   return `${Math.max(1, Math.round(bytes / 1000))} KB`;
@@ -60,6 +69,17 @@ export function AudioExportDialog() {
   const [includeMetronome, setIncludeMetronome] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  // A finished render's full bar, held up for `FINISHED_RENDER_MS`: progress
+  // arriving meanwhile waits, and only the latest of it is shown.
+  const heldRender = useRef<{
+    timer: ReturnType<typeof setTimeout>;
+    next: ExportProgress | null;
+  } | null>(null);
+  const releaseHeldRender = useCallback(() => {
+    if (heldRender.current) clearTimeout(heldRender.current.timer);
+    heldRender.current = null;
+  }, []);
+  useEffect(() => releaseHeldRender, [releaseHeldRender]);
 
   // Adjust-during-render: reset the dialog whenever the request changes.
   if (requestedTakeId !== lastRequestedId) {
@@ -135,20 +155,40 @@ export function AudioExportDialog() {
         setPhase({ kind: 'error', take, message: m.exportDialog.errorStopPlayback });
         return;
       }
+      releaseHeldRender();
       setPhase({ kind: 'working', take, progress: { stage: 'saving', fraction: -1 } });
+      const show = (progress: ExportProgress) =>
+        setPhase((current) => (current?.kind === 'working' ? { ...current, progress } : current));
       audioExportService
         .exportTake(take, { quality, includeMetronome, metronomeVolume, loudness }, (progress) => {
           if (progress.stage === 'encoding') {
             transportController.sendExportEvent('RENDER_DONE');
           }
-          setPhase((current) => (current?.kind === 'working' ? { ...current, progress } : current));
+          const held = heldRender.current;
+          if (held) {
+            held.next = progress;
+            return;
+          }
+          show(progress);
+          if (progress.stage === 'rendering' && progress.fraction === 1) {
+            const hold = {
+              next: null as ExportProgress | null,
+              timer: setTimeout(() => {
+                heldRender.current = null;
+                if (hold.next) show(hold.next);
+              }, FINISHED_RENDER_MS),
+            };
+            heldRender.current = hold;
+          }
         })
         .then((result) => {
+          releaseHeldRender();
           if (result.fromCache) transportController.sendExportEvent('RENDER_DONE');
           transportController.sendExportEvent('ENCODE_DONE');
           setPhase({ kind: 'ready', take, result, deliveredHow: null });
         })
         .catch((error: unknown) => {
+          releaseHeldRender();
           transportController.sendExportEvent('EXPORT_CANCEL');
           if (error instanceof ExportCancelledError) {
             setPhase({ kind: 'options', take });
@@ -157,7 +197,7 @@ export function AudioExportDialog() {
           }
         });
     },
-    [quality, includeMetronome, metronomeVolume, loudness, m],
+    [quality, includeMetronome, metronomeVolume, loudness, m, releaseHeldRender],
   );
 
   const cancelRender = useCallback(() => {
