@@ -54,10 +54,11 @@ async function loadService(stored: Take | null) {
     scrubController: { isActive: false, end: vi.fn() },
   }));
 
-  const [service, { useTakeStore }] = await Promise.all([
-    import('@/features/takes/takesService'),
-    import('@/state/useTakeStore'),
-  ]);
+  // One import at a time: imports started together race over the queued
+  // doMock/doUnmock calls, and a late replay of the previous test's doUnmock
+  // could bind the service to the real transport controller.
+  const service = await import('@/features/takes/takesService');
+  const { useTakeStore } = await import('@/state/useTakeStore');
   return { service, useTakeStore, getTake, saveTake, handleInterruption, allNotesOff };
 }
 
