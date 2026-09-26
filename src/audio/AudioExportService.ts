@@ -160,13 +160,22 @@ class AudioExportService {
           (fraction) => report({ stage: 'rendering', fraction }),
         ),
       );
+      // The render's last pause can fall up to a stretch short of its end, and a
+      // render that cannot pause says nothing at all: done is done.
+      report({ stage: 'rendering', fraction: 1 });
 
       report({ stage: 'encoding', fraction: 0 });
+      // One bar however many tries it takes: where the worker fails, the main
+      // thread masters over again, and its first percents must not pull the bar
+      // back from where the worker left it.
+      let compressed = 0;
       const mp3 = await this.awaitJob(
         job,
-        this.encode(job, rendered, options.loudness, bitrateKbps, (fraction) =>
-          report({ stage: 'encoding', fraction }),
-        ),
+        this.encode(job, rendered, options.loudness, bitrateKbps, (fraction) => {
+          if (fraction <= compressed) return;
+          compressed = fraction;
+          report({ stage: 'encoding', fraction });
+        }),
       );
 
       const bare = new Blob([mp3], { type: 'audio/mpeg' });
