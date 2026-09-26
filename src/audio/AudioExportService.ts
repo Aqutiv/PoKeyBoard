@@ -21,9 +21,10 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  * graph's compressor. 5: voices made as the render reaches them rather than
  * all before it starts — the same voices, rendered in seconds, not minutes.
  * 6: every recording of the grands calibrated to one velocity curve, so notes
- * play at new levels.
+ * play at new levels. 7: of two copies of a key struck together the louder is
+ * heard, whatever order they were stored in, and a velocity-0 note is silent.
  */
-export const AUDIO_EXPORTER_VERSION = 6;
+export const AUDIO_EXPORTER_VERSION = 7;
 
 export type ExportQuality = 'share' | 'high';
 

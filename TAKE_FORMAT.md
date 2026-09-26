@@ -40,7 +40,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 
 ## Validation rules (src/domain/takeSchema.ts)
 
-- `midi` 0–127 integer; `velocity` 0–1; `startMs ≥ 0`; `durationMs ≥ 1` (≤ 2 min per note); take timeline capped at 6 h; ≤ 50 000 notes. `NaN`/`Infinity` anywhere is rejected.
+- `midi` 0–127 integer; `velocity` 0–1, where 0 means written but not played (a score's `dynamics="0"`: engraved, and asked for in practice, but never sounded); `startMs ≥ 0`; `durationMs ≥ 1` (≤ 2 min per note); take timeline capped at 6 h; ≤ 50 000 notes. `NaN`/`Infinity` anywhere is rejected.
 - `bpm` 20–240; `countInBars` 0|1|2; denominator 2|4|8|16. An import clamps the score’s marked tempo into this range **before** converting anything to milliseconds, so the tempo a take carries and the timing it stores always agree.
 - `tempo.changes` is **optional** (absent means one tempo throughout): sorted, `atMs ≥ 1`, `bpm` 20–240, ≤ 1024 entries. Note timing is always absolute ms, so a tempo map never moves a note — it tells the notation where bar lines fall and which note values to draw. Added without a schema bump: older takes parse untouched, and an older build drops the field.
 - `tempo.keySignature` (sharps positive, flats negative, −7…7) and `tempo.keyMode` (`major | minor`) are **optional** and never audible: the key an imported score declares in its first `<key>` — its `<fifths>`, and its `<mode>` when that names major or minor. The signature decides how pitches are spelled. A MIDI export declares a minor mode as the score gave it, but reads a major one from the pitches again, since "major" is often just what the exporting program wrote. Absent means the score never said, and each is read from the pitches instead. Added the same way `tempo.changes` was.
@@ -78,7 +78,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
 1. **Migrate:** `schemaVersion` above the app's is rejected with an "update PoKeyBoard" message; older versions run registered migrations (registry in `takeMigrations.ts`; empty at v1). Missing version is treated as v1.
 2. **Repair (only clearly recoverable):** round fractional ms; bump zero durations to 1 ms; clamp float-precision drift on 0–1 fields; generate missing ids; default missing title/timestamps/display/pedalEvents; clamp out-of-range bpm/count-in; sort, round, clamp and de-duplicate tempo changes (dropping unsalvageable ones). Every repair is reported in the import preview.
 3. **Validate:** Zod schema; failures list human-readable `path: message` issues.
-4. **Normalize:** notes sorted by `(startMs, midi, id)`, pedals by time, `durationMs` recomputed from note ends, playhead clamped.
+4. **Normalize:** notes sorted by `(startMs, midi, id)` — a score import numbers its notes in the order the score is read, so two copies of one key at one moment keep the score's order — pedals by time, `durationMs` recomputed from note ends, playhead clamped.
 
 Every entry point — the file pickers, a dropped file, a dropped link, and a pasted link — converges on this one pipeline and the same preview dialog. A dropped link is read from `text/uri-list`, falling back to plain text only when it carries an explicit `http(s)` scheme, so dragging ordinary selected text never starts a download. A downloaded link is classified by its file name first, then `Content-Type`, then a byte sniff, because hosts routinely mislabel MusicXML as `text/plain`.
 

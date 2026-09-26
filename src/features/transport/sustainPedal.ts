@@ -1,3 +1,4 @@
+import { isSilentNote } from '@/domain/noteEvents';
 import type { NoteEvent, PedalEvent, Take } from '@/domain/takeTypes';
 import { MAX_NOTE_DURATION_MS } from '@/domain/takeTypes';
 
@@ -93,10 +94,15 @@ export function applySustainToNotes(
   });
 }
 
-/** Audible end of a take, including sustain tails while preserving v1 duration. */
+/**
+ * Audible end of a take, including sustain tails while preserving v1 duration.
+ * A note written but not played (`isSilentNote`) keeps its written length, in
+ * `take.durationMs`, but the pedal has no sound of its own to hold on.
+ */
 export function effectivePlaybackDurationMs(take: Take): number {
   let durationMs = take.durationMs;
   for (const note of applySustainToNotes(take.notes, take.pedalEvents)) {
+    if (isSilentNote(note)) continue;
     durationMs = Math.max(durationMs, note.startMs + note.durationMs);
   }
   return durationMs;
