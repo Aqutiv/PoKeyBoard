@@ -662,3 +662,144 @@ describe('tuplet lengths a symbol cannot state', () => {
     expect(units(held!.symbol)).toBeLessThanOrEqual(5 * slot);
   });
 });
+
+describe('a written triplet that ties past its beat', () => {
+  const OPTS = {
+    bpm: 120,
+    timeSignature: { numerator: 4, denominator: 4 },
+    quantization: '1/16' as const,
+  };
+  const TRIPLET_EIGHTH = { actual: 3, normal: 2, unit: 8 };
+
+  /**
+   * Debussy's first Arabesque, bar 3, left hand: a half note on the beat that
+   * the triplet's first eighth shares, then two triplet eighths, the second
+   * tied into a quarter — which an import stores as one note, 4/3 beats long.
+   */
+  function sharedFirstSlot(declared: boolean): NoteEvent[] {
+    const tuplet = declared ? { tuplet: { ...TRIPLET_EIGHTH, group: 0 } } : {};
+    return [
+      {
+        id: 'held',
+        midi: 54,
+        startMs: 0,
+        durationMs: 1000,
+        velocity: 0.5,
+        staff: 'bass',
+        voice: 1,
+      },
+      {
+        id: 'a',
+        midi: 57,
+        startMs: 167,
+        durationMs: 166,
+        velocity: 0.5,
+        staff: 'bass',
+        voice: 0,
+        ...tuplet,
+      },
+      {
+        id: 'c',
+        midi: 61,
+        startMs: 333,
+        durationMs: 667,
+        velocity: 0.5,
+        staff: 'bass',
+        voice: 0,
+        ...tuplet,
+      },
+    ];
+  }
+
+  const written = (chords: ReturnType<typeof layoutScore>['chords']) =>
+    chords
+      .filter((chord) => chord.voice === 0)
+      .map((chord) => [
+        chord.displayStartMs,
+        `${chord.symbol.base}${chord.symbol.tuplet ? '(3)' : ''}`,
+        chord.notes[0]!.tiedFromPrev,
+        chord.notes[0]!.tiedToNext,
+      ]);
+
+  it('writes the tuplet value up to the beat line, tied to a plain value after it', () => {
+    const layout = layoutScore(sharedFirstSlot(true), OPTS);
+    expect(written(layout.chords)).toEqual([
+      [167, 'eighth(3)', false, false],
+      [333, 'eighth(3)', false, true],
+      [500, 'quarter', true, false],
+    ]);
+  });
+
+  it('numbers the part of a written triplet a beam can carry', () => {
+    // Two of the three slots beamed, the first shared with the half note: still
+    // the score's triplet, so it takes the triplet's own numeral.
+    const layout = layoutScore(sharedFirstSlot(true), OPTS);
+    expect(layout.beams.map((beam) => [beam.members.length, beam.tupletCount])).toEqual([[2, 3]]);
+    const sheet = layoutSheet(layout, {
+      paper: 'a4',
+      timeSignature: OPTS.timeSignature,
+      bpm: 120,
+      title: 'T',
+      subtitle: '',
+      credit: 'C',
+    });
+    const beams = sheet.pages[0]!.systems.flatMap((system) =>
+      system.measures.flatMap((m) => m.beams),
+    );
+    expect(beams.map((beam) => beam.tupletCount)).toEqual([3]);
+  });
+
+  it('leaves an undeclared reading whole and unnumbered, as before', () => {
+    // The same notes with nothing declared: a reading of the onsets, which is
+    // not reason enough to cut a note or name a fragment.
+    const layout = layoutScore(sharedFirstSlot(false), OPTS);
+    expect(layout.chords.filter((chord) => chord.voice === 0)).toHaveLength(2);
+    expect(layout.beams.every((beam) => beam.tupletCount === null)).toBe(true);
+  });
+
+  it('never cuts a note that starts on the beat', () => {
+    // A declared triplet note on the beat line held on past it is written from
+    // the line in whole slots, as it always was — here a half note.
+    const notes: NoteEvent[] = [
+      { id: 'on', midi: 72, startMs: 0, durationMs: 1000, velocity: 0.5, tuplet: TRIPLET_EIGHTH },
+      { id: 'x', midi: 74, startMs: 1000, durationMs: 167, velocity: 0.5, tuplet: TRIPLET_EIGHTH },
+    ];
+    const layout = layoutScore(notes, OPTS);
+    const on = layout.chords.find((chord) => chord.notes[0]!.id === 'on')!;
+    expect(on.symbol.base).toBe('half');
+    expect(on.notes[0]!.tiedToNext).toBe(false);
+  });
+});
+
+describe('a written sextuplet note tied past its beat', () => {
+  it('writes the half beat before the line as a plain eighth, cut nowhere else', () => {
+    // Six sixteenths in the time of four: a note on the fourth slot is on the
+    // half beat, and its first piece is a plain eighth, whatever follows.
+    const notes: NoteEvent[] = [
+      {
+        id: 'six',
+        midi: 72,
+        startMs: 250,
+        durationMs: 750,
+        velocity: 0.5,
+        tuplet: { actual: 6, normal: 4, unit: 16, group: 0 },
+      },
+    ];
+    const layout = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+    });
+    expect(
+      layout.chords.map((chord) => [
+        chord.displayStartMs,
+        chord.symbol.base,
+        chord.notes[0]!.tiedFromPrev,
+        chord.notes[0]!.tiedToNext,
+      ]),
+    ).toEqual([
+      [250, 'eighth', false, true],
+      [500, 'quarter', true, false],
+    ]);
+  });
+});

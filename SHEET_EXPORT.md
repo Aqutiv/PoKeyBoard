@@ -164,12 +164,19 @@ takes seconds and never touches the audio engine.
   beat to tell takes the other hand's answer, and where neither can speak the
   two are pooled; a hand with enough notes keeps its own reading, which is what
   preserves a real three-against-two. Only whole tuplets are numbered: "2" over
-  two thirds of a triplet would name a duplet, a different rhythm.
+  two thirds of a triplet would name a duplet, a different rhythm. Where the
+  score bracketed the figure, a beamed part of it takes the tuplet's own
+  numeral — its first note shared with another voice, or split onto the other
+  staff — since it is still that triplet.
   Two differences follow from where the answer came from. An inferred division
   reads the whole beat, since the beat's onsets are all the evidence there is; a
   declared one is made note by note, so a plain sixteenth written beside a
   sextuplet group keeps the ordinary grid instead of being dragged onto sixths.
   And a tuplet slot never chooses the display grid, because it is not on it.
+  A declared tuplet note that starts inside its beat and holds past it — a
+  triplet eighth tied into the next beat, which an import stores as one note —
+  is written as the tuplet value up to the beat line, tied to plain values
+  after it, rather than as one tuplet value too long for a beam to carry.
 - A tuplet with no beam — a quarter-note triplet — carries no numeral, because
   the numeral is drawn on the beam and there is nowhere else to hang it.
   `<tuplet show-number="none">` is not honoured either.
@@ -180,10 +187,11 @@ takes seconds and never touches the audio engine.
   ledger lines they save.
 - Articulations, slurs, ornaments and repeats are still not drawn.
 - A tuplet split between the hands — an arpeggio crossing the middle of the
-  keyboard — is written with the right values on both staves and no numeral on
-  either, because neither holds a whole one. The figure would need to be
-  assigned to a single staff for that, which is the same middle-C limitation
-  noted below.
+  keyboard — is written with the right values on both staves. A recorded one
+  carries no numeral on either, because neither holds a whole one; one the
+  score bracketed numbers each beamed part. A single numeral for the whole
+  figure would need it assigned to a single staff, which is the same middle-C
+  limitation noted below.
 - A dynamic mark sits at a fixed height in the inter-staff gap and nothing
   moves it, so a bass note stemming up into that gap can crowd one. It stays
   legible; engraving software nudges marks per-collision, and this does not.

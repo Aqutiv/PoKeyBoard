@@ -716,8 +716,10 @@ function tieAcrossBarLines(laidOut: readonly LaidOutNote[], context: TieContext)
         // sounding note, so it lights up as one under the playhead.
         displayStartMs: i === 0 ? note.displayStartMs : msAtUnits(piece.startUnits),
         symbol: piece.symbol,
-        tiedFromPrev: i > 0,
-        tiedToNext: i < pieces.length - 1,
+        // A piece carries on a tie the note arrived with, which is where a
+        // tuplet value handed its remainder on at a beat line.
+        tiedFromPrev: i > 0 || note.tiedFromPrev,
+        tiedToNext: i < pieces.length - 1 || note.tiedToNext,
       });
     }
   }
@@ -879,9 +881,19 @@ function buildBeamGroups(
         // is whole tuplets. A figure split between the hands leaves a fragment
         // on each staff, and "2" over two thirds of a triplet does not mean a
         // shorter triplet, it means a duplet: a different rhythm altogether.
-        // Better to say nothing and let the beam speak.
-        const ratio = (run[0] as ChordGroup).symbol.tuplet;
-        const tupletCount = ratio && run.length % ratio.actual === 0 ? run.length : null;
+        // Where the score bracketed the figure, though, a run that is only
+        // part of it is still that tuplet — its first note shared with another
+        // voice, or a rest — and takes the tuplet's own numeral, as the score
+        // prints it. Undeclared, a fragment says nothing and lets the beam speak.
+        const first = run[0] as ChordGroup;
+        const ratio = first.symbol.tuplet;
+        const tupletCount = !ratio
+          ? null
+          : run.length % ratio.actual === 0
+            ? run.length
+            : first.tupletGroup !== undefined && run.length < ratio.actual
+              ? ratio.actual
+              : null;
         const counts = run.map((chord) => beamCountFor(chord.symbol.base) || 1);
         beams.push({
           staff,
@@ -1515,7 +1527,7 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     { fifths, mode: keyMode },
     pedalSpans(options.pedals ?? [], Number.POSITIVE_INFINITY),
   );
-  const laidOut: LaidOutNote[] = notes.map((note, index) => {
+  const laidOut: LaidOutNote[] = notes.flatMap((note, index) => {
     const onset = onsets[index] as number;
     const release = releases[index] as number;
     const written =
@@ -1530,12 +1542,13 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
       spellings[index],
     );
     const division = divisionFor(written);
+    const displayStartMs = snapToGrid(onset, division);
     const out: LaidOutNote = {
       id: note.id,
       midi: note.midi,
       startMs: note.startMs,
       durationMs: note.durationMs,
-      displayStartMs: snapToGrid(onset, division),
+      displayStartMs,
       staff: position.staff,
       clef: position.clef,
       ...(note.voice !== undefined ? { voice: note.voice } : {}),
@@ -1551,7 +1564,58 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
       tiedToNext: false,
     };
     if (written !== note) writtenBeats.set(out, beatsHeld(written));
-    return out;
+    // A tuplet value lives inside its beat, and one that runs on past the beat
+    // line is written the way a score writes it: the tuplet value up to the
+    // line, tied to what is left from it. An import stores such a tie as one
+    // note — the triplet eighth that ends a figure and holds into the next
+    // beat — and read whole it came out as a lone triplet half, which no beam
+    // can carry, so the figure lost its numeral.
+    //
+    // Only a tuplet the score declared: an inferred one is a reading of the
+    // onsets, and where that reading is wrong, cutting notes at its beat lines
+    // only piles the pieces onto the notes that follow.
+    if (
+      division === null ||
+      note.tuplet === undefined ||
+      declaredDivisionOf(note.tuplet, denominator) !== division
+    ) {
+      return [out];
+    }
+    // Only a note that starts inside its beat. One on the beat line reads in
+    // whole slots from there, and a long note over a triplet accompaniment —
+    // a half note on the beat — is a half note, not a quarter tied to one.
+    // Counted in slots, as the onset was snapped to one: a few milliseconds
+    // either side of a line — a ritardando's rounding — is still on it.
+    const startBeat = tempoMap.beatAtMs(displayStartMs);
+    const beatStart = Math.floor(startBeat + BEAT_EPSILON);
+    const slotInBeat = Math.round((startBeat - beatStart) * division);
+    if (slotInBeat < 1 || slotInBeat >= division) return [out];
+    const beatLine = beatStart + 1;
+    const endBeat = startBeat + beatsHeld(written);
+    if (endBeat - beatLine < 1 / division / 2) return [out];
+    const lineMs = Math.round(tempoMap.msAtBeat(beatLine));
+    const endMs = Math.round(tempoMap.msAtBeat(endBeat));
+    out.symbol = symbolFor(
+      { ...written, startMs: displayStartMs, durationMs: lineMs - displayStartMs },
+      division,
+    );
+    out.tiedToNext = true;
+    // Measured to the line, should that value come out plain — half a beat of
+    // sextuplets is an eighth — and be cut at bar lines like any other.
+    writtenBeats.set(out, beatLine - startBeat);
+    // What is left starts on a beat line, so it is read in whole slots of the
+    // same division, and a whole number of beats comes out a plain value. It
+    // belongs to no written bracket: the tuplet ended at the line.
+    const rest: LaidOutNote = {
+      ...out,
+      displayStartMs: lineMs,
+      symbol: symbolFor({ ...written, startMs: lineMs, durationMs: endMs - lineMs }, division),
+      tiedFromPrev: true,
+      tiedToNext: false,
+    };
+    delete rest.tupletGroup;
+    writtenBeats.set(rest, endBeat - beatLine);
+    return [out, rest];
   });
 
   const tied = tieAcrossBarLines(laidOut, {
