@@ -232,6 +232,37 @@ describe('staves and voices', () => {
     ]);
   });
 
+  it('keeps two voices sharing a key in the order the score wrote them, every time', () => {
+    // Voice 1 holds C5 and voice 2 strikes it too — as loudly, more softly or
+    // harder, and for less time: the unison a MuseScore piano score is full of.
+    const unison = (dynamics: number): string =>
+      scoreWith(
+        measure(
+          1,
+          GRAND_DIV1 +
+            note('C', 5, 4, '<voice>1</voice><staff>1</staff>') +
+            '<backup><duration>4</duration></backup>' +
+            `<note dynamics="${dynamics}"><pitch><step>C</step><octave>5</octave></pitch>` +
+            '<duration>1</duration><voice>2</voice><staff>1</staff></note>',
+        ),
+      );
+    for (const dynamics of [100, 50, 150]) {
+      for (let run = 0; run < 12; run += 1) {
+        expect(musicXmlToTake(unison(dynamics)).notes.map((n) => n.voice)).toEqual([0, 1]);
+      }
+    }
+  });
+
+  it('numbers an import’s notes under a stem of its own', () => {
+    const text = scoreWith(measure(1, DIV1 + note('C', 4, 1) + note('D', 4, 1) + note('E', 4, 1)));
+    const stem = (id: string): string => id.slice(0, id.lastIndexOf('-'));
+    const first = musicXmlToTake(text).notes.map((n) => n.id);
+    const second = musicXmlToTake(text).notes.map((n) => n.id);
+    expect(new Set(first).size).toBe(3);
+    expect(new Set(first.map(stem)).size).toBe(1);
+    expect(stem(first[0]!)).not.toBe(stem(second[0]!));
+  });
+
   it('records a clef only where it is not the staff’s own', () => {
     // Mozart K. 545 gives its lower staff a G clef where the left hand climbs.
     const gClefOnStaff2 =

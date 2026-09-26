@@ -3,6 +3,7 @@ import type { SampleSelection } from '@/audio/audioTypes';
 import {
   cappedRenderSeconds,
   MAX_RENDER_MINUTES,
+  notesToRender,
   scheduleTakeVoices,
   scheduleVoicesAhead,
   undampedRingOutSeconds,
@@ -541,6 +542,28 @@ describe('shared sample voice', () => {
     const sampleFor = (midi: number) => (midi >= UNDAMPED_FROM_MIDI ? ringing : null);
     expect(undampedRingOutSeconds(notes, sampleFor)).toBeCloseTo(15.79, 5);
     expect(undampedRingOutSeconds(notes.slice(0, 1), sampleFor)).toBe(0);
+  });
+
+  it('renders the louder of two copies of a key last, and no note written but not played', () => {
+    const take = createEmptyTake({
+      notes: [
+        // Stored loud copy first: its id sorts ahead of the soft one's.
+        { id: 'a', midi: 60, velocity: 0.8, startMs: 0, durationMs: 500 },
+        { id: 'b', midi: 60, velocity: 0.3, startMs: 0, durationMs: 1000 },
+        { id: 'c', midi: 64, velocity: 0, startMs: 0, durationMs: 1000 },
+        { id: 'd', midi: 67, velocity: 0.5, startMs: 250, durationMs: 250 },
+      ],
+      pedalEvents: [
+        { atMs: 0, down: true },
+        { atMs: 2000, down: false },
+      ],
+    });
+    // The pedal still holds every note it catches until it lifts.
+    expect(notesToRender(take).map((n) => [n.id, n.startMs + n.durationMs])).toEqual([
+      ['b', 2000],
+      ['a', 2000],
+      ['d', 2000],
+    ]);
   });
 
   it('keeps the ring-out inside the render cap', () => {

@@ -850,12 +850,19 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
   );
   const msAt = (q: number): number => tempoMap.msAtBeat(q);
   const firstBpm = tempoMap.baseBpm;
+  // One random stem per import, and a counter in the order the score was read:
+  // ids as unique as ever, but `normalizeTake` breaks a tie by id, so two
+  // copies of one key at one moment — two voices sharing a note — come out in
+  // the order the score wrote them, and the notation stems them, gives one the
+  // accidental and ties them the same way on every import, not as ids fall.
+  const idStem = newId();
+  const idDigits = String(MAX_NOTE_COUNT).length;
   // Rounding endpoints (not durations) keeps adjacent notes seamless.
-  const notes: NoteEvent[] = collected.notes.map((note) => {
+  const notes: NoteEvent[] = collected.notes.map((note, index) => {
     const startMs = Math.round(msAt(note.onsetQ));
     const endMs = Math.round(msAt(note.onsetQ + note.durQ));
     return {
-      id: newId(),
+      id: `${idStem}-${String(index).padStart(idDigits, '0')}`,
       midi: note.midi,
       startMs,
       durationMs: clamp(endMs - startMs, 1, MAX_NOTE_DURATION_MS),

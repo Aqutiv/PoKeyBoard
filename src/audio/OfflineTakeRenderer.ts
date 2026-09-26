@@ -1,5 +1,5 @@
-import { sortNotes } from '@/domain/noteEvents';
-import { DEFAULT_MASTER_VOLUME, type Take } from '@/domain/takeTypes';
+import { isSilentNote, sortStrikes } from '@/domain/noteEvents';
+import { DEFAULT_MASTER_VOLUME, type NoteEvent, type Take } from '@/domain/takeTypes';
 import {
   applySustainToNotes,
   effectivePlaybackDurationMs,
@@ -143,6 +143,17 @@ export function scheduleVoicesAhead(
 }
 
 /**
+ * A take's notes as an export strikes them. One written but not played
+ * (`isSilentNote`) is left out, so it can neither sound nor damp its key nor
+ * lengthen the ring-out; the pedal is applied; and they come in strike order,
+ * so of two copies of a key struck together the louder is the one heard.
+ */
+export function notesToRender(take: Pick<Take, 'notes' | 'pedalEvents'>): NoteEvent[] {
+  const played = take.notes.filter((note) => !isSilentNote(note));
+  return sortStrikes(applySustainToNotes(played, take.pedalEvents));
+}
+
+/**
  * When the last string with no damper falls quiet on its own, in seconds. Up
  * there a key rings until its recording ends, however soon it was let go, so a
  * take ending on one sounds for longer than its last key-up says.
@@ -228,7 +239,7 @@ export async function renderTakeForExport(
   }
   await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
 
-  const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
+  const effectiveNotes = notesToRender(take);
   const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
   // Every sample is chosen before the render starts, though most voices are
   // made during it: the piano a render begins with is the one it ends with.
