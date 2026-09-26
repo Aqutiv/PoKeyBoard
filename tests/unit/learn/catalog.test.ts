@@ -20,6 +20,7 @@ import type { LearnPhrase, LearnStep } from '@/features/learn/types';
 import { buildLibraryTake } from '@/features/library/trackBuilder';
 import { A_BEAUTIFUL_DAY } from '@/features/library/tracks/aBeautifulDay';
 import { PLAYBACK_SPEEDS } from '@/features/transport/modes';
+import { noteHand } from '@/domain/hands';
 import { createTakeTempoMap } from '@/domain/tempoMap';
 import { barDurationMs } from '@/utils/timing';
 import { MAJOR_SCALE_STEPS } from '@/features/learn/drill';
@@ -989,6 +990,14 @@ function sharedChapterChecks(chapter: LearnChapter): void {
     if (!handoff) return;
     const def = LIBRARY_TRACKS.find((track) => track.trackId === handoff.trackId);
     expect(def).toBeDefined();
+    // One-hand Training decides a note's hand by its staff, and falls back on
+    // the split at middle C — which puts any left-hand note above it in the
+    // right hand. A track opened for one hand must say which hand plays what.
+    if (def && (handoff.mode === 'training-left' || handoff.mode === 'training-right')) {
+      for (const note of buildLibraryTake(def).notes) {
+        expect(note.staff, `${def.trackId} ${note.id}`).toBeDefined();
+      }
+    }
     // One of the speed menu's own choices, so the menu shows it as chosen.
     if (handoff.speed !== undefined) {
       expect(PLAYBACK_SPEEDS as readonly number[]).toContain(handoff.speed);
@@ -1473,6 +1482,20 @@ describe('intermediate chapter one', () => {
       );
       expect(found, `${midi} at beat ${beat}`).toBe(true);
     }
+  });
+
+  it('leaves right-hand Training exactly the tune it practised, and nothing of the accompaniment', () => {
+    // The left hand's broken chords reach E4 and C4 in these bars; split at
+    // middle C they would be waited for as right-hand notes.
+    const take = buildLibraryTake(A_BEAUTIFUL_DAY);
+    const map = createTakeTempoMap(take.tempo);
+    const from = map.msAtBeat(THEME_TRACK_BEAT);
+    const to = map.msAtBeat(THEME_TRACK_BEAT + 16);
+    const rightHand = take.notes
+      .filter((note) => note.startMs >= from - 1 && note.startMs < to - 1)
+      .filter((note) => noteHand(note) === 'right')
+      .map((note) => [note.midi, Math.round(map.beatAtMs(note.startMs)) - THEME_TRACK_BEAT]);
+    expect(rightHand).toEqual(shape(lineOf('atSixty').phrase));
   });
 
   it('hands off to that tune slowed down and looping, right hand in Training', () => {
