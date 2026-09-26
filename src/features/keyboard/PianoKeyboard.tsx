@@ -147,6 +147,7 @@ export function PianoKeyboard({
   const liveActive = useLiveActiveNotes();
   const velocityMode = useSettingsStore((s) => s.velocityMode);
   const fixedVelocity = useSettingsStore((s) => s.fixedVelocity);
+  const touchSensitivity = useSettingsStore((s) => s.touchSensitivity);
   const showNoteLabels = useSettingsStore((s) => s.showNoteLabels);
   const gamepadEnabled = useSettingsStore((s) => s.gamepadInput);
   // Both selectors run unconditionally; the override is chosen afterwards.
@@ -437,9 +438,9 @@ export function PianoKeyboard({
       if (midi === null) return { midi: null, velocity: 0 };
       if (velocityMode === 'fixed') return { midi, velocity: fixedVelocity };
       const withinKey = isWhiteKey(midi) ? yFraction : yFraction / BLACK_KEY_HEIGHT;
-      return { midi, velocity: touchVelocity(withinKey) };
+      return { midi, velocity: touchVelocity(withinKey, touchSensitivity) };
     },
-    [layout, velocityMode, fixedVelocity],
+    [layout, velocityMode, fixedVelocity, touchSensitivity],
   );
 
   const onPointerDown = useCallback(

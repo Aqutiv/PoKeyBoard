@@ -1,12 +1,29 @@
-import { useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import {
   ensureAccess,
   getSnapshot,
   subscribe,
   type MidiAccessSnapshot,
 } from '@/features/keyboard/midiAccess';
+import { registerRawVelocityListener } from '@/features/keyboard/midiInput';
+import { MIDI_VELOCITY_CURVES, type MidiVelocityCurve } from '@/features/keyboard/velocityResponse';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
+import {
+  CALIBRATION_IDLE,
+  calibrationReducer,
+  type CalibrationAction,
+  type CalibrationState,
+} from './midiCalibration';
+
+const CURVE_LABELS: Record<
+  MidiVelocityCurve,
+  'midiCurveLight' | 'midiCurveNormal' | 'midiCurveHeavy'
+> = {
+  light: 'midiCurveLight',
+  normal: 'midiCurveNormal',
+  heavy: 'midiCurveHeavy',
+};
 
 /**
  * The MIDI toggle and its device list. Listing the connected ports is what
@@ -21,6 +38,9 @@ export function MidiSection() {
   const m = useMessages();
   const enabled = useSettingsStore((s) => s.midiInput);
   const setMidiInput = useSettingsStore((s) => s.setMidiInput);
+  // A fixed velocity replaces the device's own, so the curve and calibration
+  // would have nothing to shape.
+  const deviceVelocity = useSettingsStore((s) => s.velocityMode === 'touch');
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
 
   if (snapshot.kind === 'unsupported') {
@@ -50,6 +70,9 @@ export function MidiSection() {
       </label>
       <p className="settings__hint">{m.settings.midiHint}</p>
       {enabled ? <MidiStatus snapshot={snapshot} /> : null}
+      {enabled && deviceVelocity ? (
+        <MidiVelocity connected={snapshot.kind === 'ready' && snapshot.inputs.length > 0} />
+      ) : null}
     </>
   );
 }
@@ -97,4 +120,109 @@ function MidiStatus({ snapshot }: { snapshot: MidiAccessSnapshot }) {
       // 'idle' and 'unsupported' — the toggle above owns both.
       return null;
   }
+}
+
+/**
+ * How the keyboard's own velocity is read: a curve for its feel, and a range
+ * calibrated to the player's touch. The calibration runs inline rather than in
+ * a dialog because an open dialog silences MIDI input, and the notes it asks
+ * for would never arrive.
+ */
+function MidiVelocity({ connected }: { connected: boolean }) {
+  const m = useMessages();
+  const curve = useSettingsStore((s) => s.midiVelocityCurve);
+  const setCurve = useSettingsStore((s) => s.setMidiVelocityCurve);
+  const range = useSettingsStore((s) => s.midiVelocityRange);
+  const setRange = useSettingsStore((s) => s.setMidiVelocityRange);
+
+  const [calibration, setCalibration] = useState<CalibrationState>(CALIBRATION_IDLE);
+  // Each MIDI message is its own task and can land before React renders the
+  // last one, so steps are taken against this rather than a rendered value.
+  const calibrationRef = useRef(calibration);
+
+  const dispatch = useCallback(
+    (action: CalibrationAction) => {
+      const next = calibrationReducer(calibrationRef.current, action);
+      if (next === calibrationRef.current) return;
+      calibrationRef.current = next;
+      setCalibration(next);
+      if (next.step === 'idle' && next.outcome?.kind === 'saved') setRange(next.outcome.range);
+    },
+    [setRange],
+  );
+
+  const listening = calibration.step !== 'idle';
+  useEffect(() => {
+    if (!listening) return;
+    return registerRawVelocityListener((raw) =>
+      dispatch({ type: 'note', raw, atMs: performance.now() }),
+    );
+  }, [listening, dispatch]);
+
+  let status: string;
+  if (calibration.step === 'softest') status = m.settings.midiCalibrateSoftest;
+  else if (calibration.step === 'loudest') {
+    status = m.settings.midiCalibrateLoudest({ softest: calibration.softest });
+  } else if (range) status = m.settings.midiRangeSet(range);
+  else status = m.settings.midiRangeNone;
+
+  return (
+    <>
+      <div
+        className="setting-row setting-row--stack"
+        role="radiogroup"
+        aria-label={m.settings.midiVelocityCurve}
+      >
+        <span>{m.settings.midiVelocityCurve}</span>
+        {MIDI_VELOCITY_CURVES.map((option) => (
+          <label key={option}>
+            <input
+              type="radio"
+              name="midi-velocity-curve"
+              checked={curve === option}
+              onChange={() => setCurve(option)}
+            />
+            {m.settings[CURVE_LABELS[option]]}
+          </label>
+        ))}
+      </div>
+      <p className="settings__hint">{m.settings.midiCurveHint}</p>
+
+      <div className="setting-row">
+        <span>{m.settings.midiVelocityRange}</span>
+        <span className="setting-row__actions">
+          {/* One button, relabelled, so focus stays on it as a calibration
+              starts and ends. */}
+          <button
+            type="button"
+            className="btn btn--small"
+            disabled={!listening && !connected}
+            onClick={() => dispatch({ type: listening ? 'cancel' : 'start' })}
+          >
+            {listening ? m.settings.midiCalibrateCancel : m.settings.midiCalibrate}
+          </button>
+          {range && !listening ? (
+            <button
+              type="button"
+              className="btn btn--small"
+              onClick={() => {
+                setRange(null);
+                dispatch({ type: 'cancel' });
+              }}
+            >
+              {m.settings.midiCalibrateReset}
+            </button>
+          ) : null}
+        </span>
+      </div>
+      <p className={`settings__hint${listening ? ' settings__prompt' : ''}`} role="status">
+        {status}
+      </p>
+      {calibration.step === 'idle' && calibration.outcome?.kind === 'rejected' ? (
+        <p role="alert" className="settings__error">
+          {m.settings.midiCalibrateRejected}
+        </p>
+      ) : null}
+    </>
+  );
 }

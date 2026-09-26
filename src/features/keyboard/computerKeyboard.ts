@@ -1,10 +1,11 @@
 import { BaseOctave } from './baseOctave';
+import { accentVelocity } from './velocityResponse';
 
 /**
  * Desktop computer-keyboard input: two rows map to a piano octave and a
  * half starting at the movable base note (default C4). Space is sustain,
- * Z/X shift the base an octave. Auto-repeat is ignored; window blur
- * releases everything.
+ * Z/X shift the base an octave, and a key struck with Shift held plays
+ * accented. Auto-repeat is ignored; window blur releases everything.
  */
 export interface ComputerKeyboardCallbacks {
   noteOn(midi: number, velocity: number): void;
@@ -69,7 +70,9 @@ export class ComputerKeyboardInput {
     const midi = this.base.get() + semitone;
     if (midi < 0 || midi > 127) return;
     this.downCodes.set(event.code, midi);
-    this.callbacks.noteOn(midi, this.velocity);
+    // Shift is free for this: the rows are read by `code`, which Shift does
+    // not change, and the other modifiers belong to the browser's shortcuts.
+    this.callbacks.noteOn(midi, event.shiftKey ? accentVelocity(this.velocity) : this.velocity);
   };
 
   private readonly onKeyUp = (event: KeyboardEvent) => {

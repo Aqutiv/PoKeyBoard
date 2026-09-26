@@ -245,9 +245,9 @@ describe('helpers', () => {
   });
 
   it('produces soft-to-strong touch velocity', () => {
-    expect(touchVelocity(0)).toBeCloseTo(0.25);
-    expect(touchVelocity(1)).toBeCloseTo(1);
-    expect(touchVelocity(0.5)).toBeGreaterThan(0.25);
-    expect(touchVelocity(0.5)).toBeLessThan(1);
+    expect(touchVelocity(0, 'normal')).toBeCloseTo(0.25);
+    expect(touchVelocity(1, 'normal')).toBeCloseTo(1);
+    expect(touchVelocity(0.5, 'normal')).toBeGreaterThan(0.25);
+    expect(touchVelocity(0.5, 'normal')).toBeLessThan(1);
   });
 });

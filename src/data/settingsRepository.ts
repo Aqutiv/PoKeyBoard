@@ -1,5 +1,10 @@
 import { z } from 'zod';
 import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
+import {
+  MIDI_VELOCITY_CURVES,
+  MIN_MIDI_RANGE_SPAN,
+  TOUCH_SENSITIVITIES,
+} from '@/features/keyboard/velocityResponse';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { PLAYBACK_MODES, RECORD_MODES } from '@/features/transport/modes';
@@ -8,6 +13,10 @@ import { db } from './db';
 
 type PersistableSettings = typeof SETTINGS_DEFAULTS;
 const SETTING_KEYS = Object.keys(SETTINGS_DEFAULTS) as Array<keyof PersistableSettings>;
+
+/** A note-on velocity: 0 is a release, never a strike. */
+const STRIKE_VELOCITY = z.number().int().min(1).max(127);
+
 const SETTING_SCHEMAS = {
   language: z.enum(['en', 'es', 'fr', 'mg']),
   theme: z.enum(['dark', 'light', 'system']),
@@ -16,6 +25,14 @@ const SETTING_SCHEMAS = {
   reverbMix: z.number().min(0).max(1),
   velocityMode: z.enum(['touch', 'fixed']),
   fixedVelocity: z.number().min(0.2).max(1),
+  touchSensitivity: z.enum(TOUCH_SENSITIVITIES),
+  midiVelocityCurve: z.enum(MIDI_VELOCITY_CURVES),
+  // The span calibration insists on, so a stored range it would have turned
+  // down loads as uncalibrated rather than as one too narrow to stretch.
+  midiVelocityRange: z
+    .object({ min: STRIKE_VELOCITY, max: STRIKE_VELOCITY })
+    .refine(({ min, max }) => max - min >= MIN_MIDI_RANGE_SPAN)
+    .nullable(),
   showNoteLabels: z.boolean(),
   keyboardFollowsPlayback: z.boolean(),
   scrubAudition: z.boolean(),

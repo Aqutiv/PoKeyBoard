@@ -25,9 +25,10 @@ src/
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
-    keyboard/   geometry, per-pointer tracker, computer keyboard, game
-                controller, Web MIDI (shared access service, input, and the
-                shell-level useMidiInput), PianoKeyboard
+    keyboard/   geometry, velocityResponse (every input's velocity curve),
+                per-pointer tracker, computer keyboard, game controller, Web
+                MIDI (shared access service, input, and the shell-level
+                useMidiInput), PianoKeyboard
     learn/      chapter catalog, pure exercise spec + matcher, useExercise,
                 LearnPage (outline), ChapterRunner, KeyboardDiagram,
                 StaffSnippet, per-locale lesson content
