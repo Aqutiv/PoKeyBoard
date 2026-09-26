@@ -142,15 +142,19 @@ export function scheduleVoicesAhead(
   return Promise.all(pauses).then(() => undefined);
 }
 
+/** A take's notes that sound: all but those written and not played (`isSilentNote`). */
+function playedNotesOf(take: Pick<Take, 'notes'>): NoteEvent[] {
+  return take.notes.filter((note) => !isSilentNote(note));
+}
+
 /**
- * A take's notes as an export strikes them. One written but not played
- * (`isSilentNote`) is left out, so it can neither sound nor damp its key nor
- * lengthen the ring-out; the pedal is applied; and they come in strike order,
- * so of two copies of a key struck together the louder is the one heard.
+ * A take's notes as an export strikes them. One written but not played is left
+ * out (`playedNotesOf`), so it can neither sound nor damp its key nor lengthen
+ * the ring-out; the pedal is applied; and they come in strike order, so of two
+ * copies of a key struck together the louder is the one heard.
  */
 export function notesToRender(take: Pick<Take, 'notes' | 'pedalEvents'>): NoteEvent[] {
-  const played = take.notes.filter((note) => !isSilentNote(note));
-  return sortStrikes(applySustainToNotes(played, take.pedalEvents));
+  return sortStrikes(applySustainToNotes(playedNotesOf(take), take.pedalEvents));
 }
 
 /**
@@ -175,12 +179,12 @@ export function undampedRingOutSeconds(
 
 /**
  * How long an export renders, in seconds: past the take's last key-up by the
- * tail, or until its top strings fall quiet if they ring on longer. Reads the
- * samples decoded so far.
+ * tail, or until its top strings fall quiet if they ring on longer — those it
+ * plays, as `notesToRender` has them. Reads the samples decoded so far.
  */
 export function estimateRenderSeconds(take: Take): number {
   const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
-  return renderSeconds(take, undampedRingOutSeconds(take.notes, sampleFor));
+  return renderSeconds(take, undampedRingOutSeconds(playedNotesOf(take), sampleFor));
 }
 
 function renderSeconds(take: Take, ringOutS: number): number {

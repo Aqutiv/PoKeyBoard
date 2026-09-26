@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SampleSelection } from '@/audio/audioTypes';
-import { renderTakeForExport } from '@/audio/OfflineTakeRenderer';
+import { estimateRenderSeconds, renderTakeForExport } from '@/audio/OfflineTakeRenderer';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 
@@ -15,11 +15,11 @@ vi.mock('@/audio/AudioEngine', () => ({
   audioEngine: {
     ensurePlayableRange: h.ensurePlayableRange,
     bank: {
-      getSample: (): SampleSelection => ({
-        buffer: { duration: 3 } as AudioBuffer,
-        playbackRate: 1,
-        gain: 1,
-      }),
+      // The top strings have no damper: theirs ring 20 s, whenever let go.
+      getSample: (midi: number): SampleSelection =>
+        midi >= 100
+          ? { buffer: { duration: 20 } as AudioBuffer, playbackRate: 1, gain: 1, undamped: true }
+          : { buffer: { duration: 3 } as AudioBuffer, playbackRate: 1, gain: 1 },
     },
   },
 }));
@@ -84,5 +84,14 @@ describe('an export render', () => {
     const take = createEmptyTake({ notes: [note('silent', 60, 0)], durationMs: 500 });
     await renderTakeForExport(take, OPTIONS);
     expect(h.ensurePlayableRange).not.toHaveBeenCalled();
+  });
+
+  it('estimates the length of what it plays, not a silent top string ringing out', () => {
+    const played = note('played', 60, 0.6);
+    const top = { ...note('top', 105, 0.6), startMs: 400 };
+    const estimate = (notes: NoteEvent[]) =>
+      estimateRenderSeconds(createEmptyTake({ notes, durationMs: 900 }));
+    expect(estimate([played, top])).toBeGreaterThan(20);
+    expect(estimate([played, { ...top, velocity: 0 }])).toBe(estimate([played]));
   });
 });
