@@ -12,6 +12,7 @@ import {
 import {
   createPianoGraph,
   createSoftClipCurve,
+  REVERB_SWITCH_LOOKAHEAD_S,
   REVERB_SWITCH_S,
   SOFT_CLIP_CEILING,
   SOFT_CLIP_INPUT_RANGE,
@@ -191,6 +192,59 @@ function activeConvolver(created: StubNode[]): StubConvolver {
 /** The gain the reverb comes back through, which a room switch ducks. */
 function reverbReturn(created: StubNode[]): StubNode & { gain: StubParam } {
   return activeConvolver(created).outputs[0] as StubNode & { gain: StubParam };
+}
+
+/**
+ * The value a stub param's automation gives at `timeS`, read the way the Web
+ * Audio spec reads its event list: each event goes in after any at the same
+ * time, a cancel drops every event at or after its time, a set holds from its
+ * time, and a linear ramp runs from the event before it to its own value at
+ * its own time. `value` plays no part, as it plays none in what is rendered.
+ */
+function automatedValue(param: StubParam, timeS: number, intrinsic = 1): number {
+  const timeline: StubParam['events'] = [];
+  for (const event of param.events) {
+    if (event.type === 'cancelScheduledValues') {
+      for (let i = timeline.length - 1; i >= 0; i -= 1) {
+        if ((timeline[i] as { time: number }).time >= event.time) timeline.splice(i, 1);
+      }
+      continue;
+    }
+    let at = timeline.length;
+    while (at > 0 && (timeline[at - 1] as { time: number }).time > event.time) at -= 1;
+    timeline.splice(at, 0, event);
+  }
+  let value = intrinsic;
+  let since = Number.NEGATIVE_INFINITY;
+  for (const event of timeline) {
+    if (event.time <= timeS) {
+      value = event.value;
+      since = event.time;
+    } else if (event.type === 'linearRampToValueAtTime' && since > Number.NEGATIVE_INFINITY) {
+      return value + ((event.value - value) * (timeS - since)) / (event.time - since);
+    } else {
+      return value;
+    }
+  }
+  return value;
+}
+
+/**
+ * How steeply a param's automation moves at its steepest over [fromS, toS],
+ * sampled every tenth of a millisecond, against a switch's own ramp: full scale
+ * over `REVERB_SWITCH_S`. More than 1 is a jump.
+ */
+function steepest(param: StubParam, fromS: number, toS: number): number {
+  const stepS = 0.0001;
+  const steps = Math.round((toS - fromS) / stepS);
+  let most = 0;
+  let previous = automatedValue(param, fromS);
+  for (let i = 1; i <= steps; i += 1) {
+    const value = automatedValue(param, fromS + i * stepS);
+    most = Math.max(most, (Math.abs(value - previous) * REVERB_SWITCH_S) / stepS);
+    previous = value;
+  }
+  return most;
 }
 
 /** Whether a stub buffer holds exactly the room's impulse at the context's rate. */
@@ -565,43 +619,39 @@ describe('reverb rooms', () => {
     expect(holdsImpulse(hall.buffer, 'hall', 48000)).toBe(true);
     expect(hall.normalizeAtEachBuffer).toEqual([false]);
     expect(hall.outputs).toEqual([]);
-    // …then the reverb is taken from where it stands down to nothing, while
-    // the old room goes on sounding under it.
+    // …then the reverb is taken down to nothing over a switch's length, begun a
+    // lookahead after the audio clock, while the old room goes on sounding
+    // under it.
     expect(REVERB_SWITCH_S).toBe(0.02);
-    expect(back.gain.events).toContainEqual({ type: 'setValueAtTime', value: 1, time: 2 });
-    expect(back.gain.events.at(-1)).toEqual({
-      type: 'linearRampToValueAtTime',
-      value: 0,
-      time: expect.closeTo(2 + REVERB_SWITCH_S, 10),
-    });
+    expect(REVERB_SWITCH_LOOKAHEAD_S).toBe(0.02);
+    expect(automatedValue(back.gain, 2.02)).toBeCloseTo(1, 10);
+    expect(automatedValue(back.gain, 2.03)).toBeCloseTo(0.5, 10);
+    expect(automatedValue(back.gain, 2.04)).toBeCloseTo(0, 10);
     expect(activeConvolver(created)).toBe(old);
 
-    raw.currentTime = 2.025;
+    raw.currentTime = 2.045;
     vi.advanceTimersByTime(100);
     expect(activeConvolver(created)).toBe(hall);
     expect(hall.outputs).toEqual([back]);
     expect(old.disconnected).toBe(true);
-    expect(back.gain.events.slice(-2)).toEqual([
-      { type: 'setValueAtTime', value: 0, time: 2.025 },
-      {
-        type: 'linearRampToValueAtTime',
-        value: 1,
-        time: expect.closeTo(2.025 + REVERB_SWITCH_S, 10),
-      },
-    ]);
+    // Back up over a switch's length, begun a lookahead after the swap.
+    expect(automatedValue(back.gain, 2.065)).toBeCloseTo(0, 10);
+    expect(automatedValue(back.gain, 2.075)).toBeCloseTo(0.5, 10);
+    expect(automatedValue(back.gain, 2.085)).toBeCloseTo(1, 10);
+    expect(steepest(back.gain, 2, 2.2)).toBeLessThanOrEqual(1 + 1e-6);
   });
 
   it('swaps only once the audio clock is past the duck, however soon the page gets there', () => {
     vi.useFakeTimers();
     const { context, created, raw } = createStubContext({ currentTime: 5 });
     const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
-    graph.setReverbRoom('studio');
+    graph.setReverbRoom('studio'); // down by 5.04
 
-    raw.currentTime = 5.01;
+    raw.currentTime = 5.03;
     vi.advanceTimersByTime(200);
     expect(holdsImpulse(activeConvolver(created).buffer, 'room', 48000)).toBe(true);
 
-    raw.currentTime = 5.03;
+    raw.currentTime = 5.05;
     vi.advanceTimersByTime(200);
     expect(holdsImpulse(activeConvolver(created).buffer, 'studio', 48000)).toBe(true);
   });
@@ -676,5 +726,150 @@ describe('reverb rooms', () => {
     expect(vi.getTimerCount()).toBe(0);
     expect(room.disconnected).toBe(true);
     expect((convolvers(created)[1] as StubConvolver).outputs).toEqual([]);
+  });
+
+  /**
+   * Where a switch finds the return, it has to start from, and nothing already
+   * under way may be changed before the switch's own ramp begins: whatever
+   * renders before then has to go on as it was. An AudioParam's `value` is no
+   * guide to where a ramp stands — some browsers give its intrinsic value,
+   * others the last render quantum's — so each of these sets the stub's
+   * `value` somewhere else, and a duck that read it would start there. Each
+   * checks the automation itself, and that it never moves faster than a
+   * switch's ramp: a jump anywhere is a click.
+   */
+  describe('switching again while a switch is under way', () => {
+    it('keeps ducking when a switch comes during the duck, and swaps once', () => {
+      vi.useFakeTimers();
+      const { context, created, raw } = createStubContext({ currentTime: 1 });
+      const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+      const back = reverbReturn(created);
+      graph.setReverbRoom('hall'); // down from 1.02 to 1.04
+      const ducking = back.gain.events.length;
+
+      raw.currentTime = 1.03; // halfway down
+      back.gain.value = 0.9;
+      graph.setReverbRoom('cathedral');
+      // The duck under way carries on as it was.
+      expect(back.gain.events).toHaveLength(ducking);
+
+      raw.currentTime = 1.045;
+      vi.advanceTimersByTime(100);
+      expect(holdsImpulse(activeConvolver(created).buffer, 'cathedral', 48000)).toBe(true);
+      // The Hall was built but never played through, and the return went down
+      // once and came back up once, from 1.065 to 1.085.
+      expect((convolvers(created)[1] as StubConvolver).outputs).toEqual([]);
+      expect(automatedValue(back.gain, 1.03)).toBeCloseTo(0.5, 10);
+      expect(automatedValue(back.gain, 1.065)).toBeCloseTo(0, 10);
+      expect(automatedValue(back.gain, 1.075)).toBeCloseTo(0.5, 10);
+      expect(automatedValue(back.gain, 1.085)).toBeCloseTo(1, 10);
+      expect(steepest(back.gain, 1, 1.2)).toBeLessThanOrEqual(1 + 1e-6);
+    });
+
+    it('keeps waiting when a switch comes while the swap waits for the audio clock', () => {
+      vi.useFakeTimers();
+      const { context, created, raw } = createStubContext({ currentTime: 1 });
+      const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+      const back = reverbReturn(created);
+      graph.setReverbRoom('hall'); // down by 1.04
+      const ducking = back.gain.events.length;
+
+      // The page's timer comes due while the audio is still ducking.
+      raw.currentTime = 1.035;
+      vi.advanceTimersByTime(45);
+      expect(holdsImpulse(activeConvolver(created).buffer, 'room', 48000)).toBe(true);
+      back.gain.value = 0.9;
+      graph.setReverbRoom('studio');
+      expect(back.gain.events).toHaveLength(ducking);
+
+      raw.currentTime = 1.041;
+      vi.advanceTimersByTime(25);
+      expect(holdsImpulse(activeConvolver(created).buffer, 'studio', 48000)).toBe(true);
+      expect(convolvers(created)).toHaveLength(3);
+      expect(automatedValue(back.gain, 1.061)).toBeCloseTo(0, 10);
+      expect(automatedValue(back.gain, 1.081)).toBeCloseTo(1, 10);
+      expect(steepest(back.gain, 1, 1.2)).toBeLessThanOrEqual(1 + 1e-6);
+    });
+
+    it('ducks a switch made during the fade-in from where the fade-in has got to', () => {
+      vi.useFakeTimers();
+      const { context, created, raw } = createStubContext({ currentTime: 2 });
+      const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+      const back = reverbReturn(created);
+      graph.setReverbRoom('hall');
+      raw.currentTime = 2.045;
+      vi.advanceTimersByTime(100); // swapped at 2.045, back up from 2.065 to 2.085
+
+      // The next switch's duck begins a lookahead on, at 2.07: a quarter of the
+      // way back up.
+      raw.currentTime = 2.05;
+      back.gain.value = 0.7;
+      graph.setReverbRoom('cathedral');
+      expect(automatedValue(back.gain, 2.07)).toBeCloseTo(0.25, 10);
+      expect(automatedValue(back.gain, 2.08)).toBeCloseTo(0.125, 10);
+      expect(automatedValue(back.gain, 2.09)).toBeCloseTo(0, 10);
+      // Up to then, the fade-in goes on as it was.
+      expect(automatedValue(back.gain, 2.065)).toBeCloseTo(0, 10);
+      expect(automatedValue(back.gain, 2.0675)).toBeCloseTo(0.125, 10);
+      expect(steepest(back.gain, 2, 2.1)).toBeLessThanOrEqual(1 + 1e-6);
+
+      // Swapped once that duck is over, and brought back up from nothing.
+      raw.currentTime = 2.095;
+      vi.advanceTimersByTime(100);
+      expect(holdsImpulse(activeConvolver(created).buffer, 'cathedral', 48000)).toBe(true);
+      expect(automatedValue(back.gain, 2.115)).toBeCloseTo(0, 10);
+      expect(automatedValue(back.gain, 2.125)).toBeCloseTo(0.5, 10);
+      expect(automatedValue(back.gain, 2.135)).toBeCloseTo(1, 10);
+      expect(steepest(back.gain, 2, 2.2)).toBeLessThanOrEqual(1 + 1e-6);
+    });
+
+    it('ducks from full at rest, and from full again once the fade-in is over', () => {
+      vi.useFakeTimers();
+      const { context, created, raw } = createStubContext({ currentTime: 1 });
+      const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+      const back = reverbReturn(created);
+      back.gain.value = 0.4;
+      graph.setReverbRoom('hall');
+      expect(automatedValue(back.gain, 1.02)).toBeCloseTo(1, 10);
+      expect(automatedValue(back.gain, 1.03)).toBeCloseTo(0.5, 10);
+
+      raw.currentTime = 1.045;
+      vi.advanceTimersByTime(100); // back up from 1.065, full at 1.085
+      expect(automatedValue(back.gain, 1.085)).toBeCloseTo(1, 10);
+      expect(automatedValue(back.gain, 1.3)).toBe(1);
+
+      raw.currentTime = 1.5;
+      back.gain.value = 0.2;
+      graph.setReverbRoom('studio');
+      expect(automatedValue(back.gain, 1.3)).toBe(1);
+      expect(automatedValue(back.gain, 1.52)).toBeCloseTo(1, 10);
+      expect(automatedValue(back.gain, 1.53)).toBeCloseTo(0.5, 10);
+      expect(automatedValue(back.gain, 1.54)).toBeCloseTo(0, 10);
+      expect(steepest(back.gain, 1, 1.6)).toBeLessThanOrEqual(1 + 1e-6);
+    });
+
+    it('brings the return back up, never jumping, when a switch finds the audio stopped', () => {
+      vi.useFakeTimers();
+      const { context, created, raw } = createStubContext({ currentTime: 1 });
+      const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+      const back = reverbReturn(created);
+      graph.setReverbRoom('hall'); // down from 1.02 to 1.04
+
+      // Halfway down the audio stops — the page is hidden, say — and a switch
+      // comes: the new room goes straight in, with nothing sounding to duck.
+      raw.currentTime = 1.03;
+      raw.state = 'suspended';
+      back.gain.value = 0.9;
+      graph.setReverbRoom('cathedral');
+      expect(holdsImpulse(activeConvolver(created).buffer, 'cathedral', 48000)).toBe(true);
+      expect(vi.getTimerCount()).toBe(0);
+      // Once the audio runs again the duck goes on to its end, and the return
+      // comes back up from there rather than jumping to full.
+      expect(automatedValue(back.gain, 1.03)).toBeCloseTo(0.5, 10);
+      expect(automatedValue(back.gain, 1.05)).toBeCloseTo(0, 10);
+      expect(automatedValue(back.gain, 1.06)).toBeCloseTo(0.5, 10);
+      expect(automatedValue(back.gain, 1.07)).toBeCloseTo(1, 10);
+      expect(steepest(back.gain, 1, 1.1)).toBeLessThanOrEqual(1 + 1e-6);
+    });
   });
 });

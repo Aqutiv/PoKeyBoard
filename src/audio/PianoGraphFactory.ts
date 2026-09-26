@@ -129,6 +129,17 @@ function convolverFor(context: BaseAudioContext, room: ReverbRoom): ConvolverNod
  */
 export const REVERB_SWITCH_S = 0.02;
 
+/**
+ * How far ahead of the audio clock a switch's ramps begin. The page reads the
+ * clock and then changes the return's automation in several calls, and the
+ * audio goes on rendering meanwhile — a quantum or so where the page reads the
+ * clock the moment it moves, more where the page's reading lags it — so a
+ * change made right at the reading could have part of it played before the
+ * rest is in. Begun this far ahead, whatever renders meanwhile is still on the
+ * ramp it was already on.
+ */
+export const REVERB_SWITCH_LOOKAHEAD_S = 0.02;
+
 const RAMP_TC = 0.03;
 
 /**
@@ -306,6 +317,48 @@ export function createPianoGraph(
   let swapTimer: ReturnType<typeof setTimeout> | null = null;
   let swapAtS = 0;
 
+  // The return's last ramp, from where to where and when. A switch that comes
+  // while the return is coming back up has to duck from where it has got to,
+  // and its AudioParam cannot say: mid-ramp, `value` is the intrinsic value in
+  // some browsers and the last render quantum's in others, and started from
+  // either the return would jump. Firefox has no `cancelAndHoldAtTime`, and a
+  // straight line is known exactly anyway, so the graph keeps its own account.
+  let returnRamp = { fromS: 0, from: 1, toS: 0, to: 1 };
+  let returnRamped = false;
+  const returnAt = (timeS: number): number => {
+    const { fromS, from, toS, to } = returnRamp;
+    if (timeS >= toS) return to;
+    if (timeS <= fromS) return from;
+    return from + ((to - from) * (timeS - fromS)) / (toS - fromS);
+  };
+  // Take the return to `to` over a switch's length, from where it will stand a
+  // lookahead from now (`REVERB_SWITCH_LOOKAHEAD_S`). In an order that leaves
+  // everything before then as it was at every step, since that may render
+  // while these calls are made: the ramp under way is first split there along
+  // its own line, which changes nothing it plays; then all that came after the
+  // split is cancelled; then the new ramp goes on. It is carried on to the
+  // split rather than restarted there with a set, because cancelling a ramp
+  // leaves the return at its start until the next event, and a browser that
+  // places an event a frame late — Chromium rounds its time up to a frame —
+  // would play that frame from there: a dip of a sample. The first ramp has
+  // none before it to carry on, so it starts with a set.
+  const rampReturn = (to: number) => {
+    const at = context.currentTime + REVERB_SWITCH_LOOKAHEAD_S;
+    const from = returnAt(at);
+    if (returnRamped) reverbReturn.gain.linearRampToValueAtTime(from, at);
+    else reverbReturn.gain.setValueAtTime(from, at);
+    // Half a frame on, so the split itself stays.
+    reverbReturn.gain.cancelScheduledValues(at + 0.5 / context.sampleRate);
+    reverbReturn.gain.linearRampToValueAtTime(to, at + REVERB_SWITCH_S);
+    returnRamp = { fromS: at, from, toS: at + REVERB_SWITCH_S, to };
+    returnRamped = true;
+  };
+  // The page's timer for the swap, due when the duck is over by the audio's
+  // clock; see `swapWhenDucked`.
+  const armSwap = () => {
+    swapTimer = setTimeout(swapWhenDucked, Math.max(1, (swapAtS - context.currentTime) * 1000));
+  };
+
   const putInPlace = (replacement: ConvolverNode) => {
     reverbSend.disconnect(convolver);
     convolver.disconnect();
@@ -323,14 +376,13 @@ export function createPianoGraph(
   const swapWhenDucked = () => {
     swapTimer = null;
     if (context.state === 'running' && context.currentTime < swapAtS) {
-      swapTimer = setTimeout(swapWhenDucked, Math.max(1, (swapAtS - context.currentTime) * 1000));
+      armSwap();
       return;
     }
     if (next) putInPlace(next);
-    const now = context.currentTime;
-    reverbReturn.gain.cancelScheduledValues(now);
-    reverbReturn.gain.setValueAtTime(0, now);
-    reverbReturn.gain.linearRampToValueAtTime(1, now + REVERB_SWITCH_S);
+    // Up from nothing, once the duck is over; from wherever it stopped, if the
+    // audio stopped first.
+    rampReturn(1);
   };
 
   return {
@@ -352,28 +404,26 @@ export function createPianoGraph(
       // The costly part, done while the old room still plays; nothing to build
       // on the way back to the room already in place.
       next = room === convolverRoom ? null : convolverFor(context, room);
-      const now = context.currentTime;
       if (context.state !== 'running') {
-        // Nothing is sounding, so there is nothing to duck: swap now, and put
-        // back a return some earlier switch may have left ducked.
+        // Nothing is sounding, so there is nothing to duck: swap now, and bring
+        // back a return some earlier switch left partway down, once the audio
+        // runs again.
         if (swapTimer !== null) {
           clearTimeout(swapTimer);
           swapTimer = null;
-          reverbReturn.gain.cancelScheduledValues(now);
-          reverbReturn.gain.setValueAtTime(1, now);
+          rampReturn(1);
         }
         if (next) putInPlace(next);
         return;
       }
-      // Already ducking: the swap to come puts this room in instead.
+      // Already ducking, or waiting to swap: the swap to come puts this room in
+      // instead.
       if (swapTimer !== null) return;
-      // From wherever the return stands, which is short of unity if the last
-      // switch is still bringing it back.
-      reverbReturn.gain.cancelScheduledValues(now);
-      reverbReturn.gain.setValueAtTime(reverbReturn.gain.value, now);
-      reverbReturn.gain.linearRampToValueAtTime(0, now + REVERB_SWITCH_S);
-      swapAtS = now + REVERB_SWITCH_S;
-      swapTimer = setTimeout(swapWhenDucked, REVERB_SWITCH_S * 1000);
+      // From wherever the return will stand as the duck begins: full, or
+      // partway back up if the last switch is still bringing it in.
+      rampReturn(0);
+      swapAtS = returnRamp.toS;
+      armSwap();
     },
     getMasterVolume: () => masterVolume,
     getReverbMix: () => reverbMix,
