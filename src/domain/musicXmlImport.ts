@@ -80,6 +80,8 @@ interface QNote {
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
   spelling: NoteSpelling | undefined;
+  /** Where the note's start was read, counted across the whole score. */
+  seq: number;
 }
 
 interface QPedal {
@@ -103,6 +105,7 @@ interface PendingTie {
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
   spelling: NoteSpelling | undefined;
+  seq: number;
 }
 
 interface CollectedScore {
@@ -121,6 +124,12 @@ interface CollectedScore {
   shortestDeclared: Map<string, { tuplet: NoteTuplet; durQ: number }>;
   /** Ids for written tuplet brackets, handed out across the whole score. */
   nextTupletGroup: number;
+  /**
+   * The next note's place in reading order, across the whole score. A tied
+   * note is only complete once its tie closes, so `notes` holds it where it
+   * ended; this keeps the place where it began.
+   */
+  nextSeq: number;
   timeSignature: TimeSignature | null;
   /** Fifths from the score's own <key>, or null when it never declared one. */
   keySignature: number | null;
@@ -171,6 +180,7 @@ function pendingToNote(pending: PendingTie): QNote {
     clef: pending.clef,
     tuplet: pending.tuplet,
     spelling: pending.spelling,
+    seq: pending.seq,
   };
 }
 
@@ -600,6 +610,7 @@ function collectPart(
                 clef,
                 tuplet,
                 spelling,
+                seq: out.nextSeq++,
               });
             } else {
               // orphan stop
@@ -613,6 +624,7 @@ function collectPart(
                 clef,
                 tuplet,
                 spelling,
+                seq: out.nextSeq++,
               });
             }
           } else if (hasStart) {
@@ -628,9 +640,21 @@ function collectPart(
               clef,
               tuplet,
               spelling,
+              seq: out.nextSeq++,
             });
           } else {
-            out.notes.push({ midi, onsetQ, durQ, velocity, staff, voice, clef, tuplet, spelling });
+            out.notes.push({
+              midi,
+              onsetQ,
+              durQ,
+              velocity,
+              staff,
+              voice,
+              clef,
+              tuplet,
+              spelling,
+              seq: out.nextSeq++,
+            });
           }
           break;
         }
@@ -699,6 +723,7 @@ function collectScore(root: Element): CollectedScore {
     shortestPlainQ: null,
     shortestDeclared: new Map(),
     nextTupletGroup: 0,
+    nextSeq: 0,
     timeSignature: null,
     keySignature: null,
     keyMode: null,
@@ -850,12 +875,20 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
   );
   const msAt = (q: number): number => tempoMap.msAtBeat(q);
   const firstBpm = tempoMap.baseBpm;
+  // One random stem per import, and each note's place in reading order (where
+  // it began, tied or not): ids as unique as ever, but `normalizeTake` breaks a
+  // tie by id, so two copies of one key at one moment — two voices sharing a
+  // note — come out in the order the score wrote them, and the notation stems
+  // them, gives one the accidental and ties them the same way on every import,
+  // not as random ids fall.
+  const idStem = newId();
+  const idDigits = String(collected.nextSeq).length;
   // Rounding endpoints (not durations) keeps adjacent notes seamless.
   const notes: NoteEvent[] = collected.notes.map((note) => {
     const startMs = Math.round(msAt(note.onsetQ));
     const endMs = Math.round(msAt(note.onsetQ + note.durQ));
     return {
-      id: newId(),
+      id: `${idStem}-${String(note.seq).padStart(idDigits, '0')}`,
       midi: note.midi,
       startMs,
       durationMs: clamp(endMs - startMs, 1, MAX_NOTE_DURATION_MS),

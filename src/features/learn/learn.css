@@ -376,6 +376,13 @@
     height: 96px;
     min-height: 96px;
   }
+
+  /* A circle walk is played from the keys, not the picture: kept to about a
+     stave's height, so its prompt and readout stay on the card beside it. */
+  .learn-runner[data-step-kind='exercise'] .learn-circle {
+    width: min(100%, 24vh);
+    margin-block: 0 4px;
+  }
 }
 
 /* -------------------------------- */
@@ -564,6 +571,70 @@
 .learn-staff__canvas {
   display: block;
   width: 100%;
+}
+
+/* The circle of fifths. Square, so its height is its width: 240px at most,
+   and no more than 40% of a short screen — a phone turned sideways keeps an
+   exercise's picture, and the keys still need the rest. */
+.learn-circle {
+  width: min(100%, 240px, 40vh);
+  margin: 4px auto 12px;
+}
+
+.learn-circle svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.learn-circle__ring {
+  fill: none;
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+
+.learn-circle__key circle {
+  fill: var(--surface-2);
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+/* The same two marks as the keyboard diagram: painted for what the step is
+   naming, ringed for a second group. */
+.learn-circle__key.is-circle-mark circle {
+  fill: var(--accent);
+  stroke: var(--accent);
+}
+
+.learn-circle__key.is-circle-mark-2 circle {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+}
+
+/* Sizes are in the drawing's own units, so the text scales with the ring. */
+.learn-circle__name,
+.learn-circle__count {
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.learn-circle__name {
+  fill: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.learn-circle__name--pair {
+  font-size: 8.5px;
+}
+
+.learn-circle__key.is-circle-mark .learn-circle__name {
+  fill: var(--accent-contrast);
+}
+
+.learn-circle__count {
+  fill: var(--text-dim);
+  font-size: 9px;
 }
 
 .learn-upcoming {

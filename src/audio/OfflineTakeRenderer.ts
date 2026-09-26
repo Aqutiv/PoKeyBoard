@@ -1,5 +1,5 @@
-import { sortNotes } from '@/domain/noteEvents';
-import { DEFAULT_MASTER_VOLUME, type Take } from '@/domain/takeTypes';
+import { isSilentNote, sortStrikes } from '@/domain/noteEvents';
+import { DEFAULT_MASTER_VOLUME, type NoteEvent, type Take } from '@/domain/takeTypes';
 import {
   applySustainToNotes,
   effectivePlaybackDurationMs,
@@ -107,6 +107,10 @@ export function scheduleTakeVoices(
  * as all of them made up front. Where an offline context cannot pause (Firefox
  * has no `suspend`), they are all made up front, as they always were.
  *
+ * Every pause is also a sure measure of how far the render has got, which it
+ * hands `onProgress` as a fraction of the whole once the render is on its way
+ * again. A render that cannot pause has nothing to tell it.
+ *
  * Resolves once the render is past its last pause, and rejects if a voice could
  * not be made. Either way the render is let go on, so it never waits on a pause
  * that nothing will lift.
@@ -114,6 +118,7 @@ export function scheduleTakeVoices(
 export function scheduleVoicesAhead(
   context: OfflineAudioContext,
   scheduleUntil: (untilS: number) => void,
+  onProgress?: (fraction: number) => void,
 ): Promise<void> {
   scheduleUntil(2 * SCHEDULE_AHEAD_S);
   if (typeof context.suspend !== 'function') {
@@ -132,6 +137,7 @@ export function scheduleVoicesAhead(
           } finally {
             void context.resume();
           }
+          onProgress?.(at / seconds);
         },
         // Refused as it was asked for, long before the render gets there: make
         // every voice still to come now instead.
@@ -140,6 +146,21 @@ export function scheduleVoicesAhead(
     );
   }
   return Promise.all(pauses).then(() => undefined);
+}
+
+/** A take's notes that sound: all but those written and not played (`isSilentNote`). */
+function playedNotesOf(take: Pick<Take, 'notes'>): NoteEvent[] {
+  return take.notes.filter((note) => !isSilentNote(note));
+}
+
+/**
+ * A take's notes as an export strikes them. One written but not played is left
+ * out (`playedNotesOf`), so it can neither sound nor damp its key nor lengthen
+ * the ring-out; the pedal is applied; and they come in strike order, so of two
+ * copies of a key struck together the louder is the one heard.
+ */
+export function notesToRender(take: Pick<Take, 'notes' | 'pedalEvents'>): NoteEvent[] {
+  return sortStrikes(applySustainToNotes(playedNotesOf(take), take.pedalEvents));
 }
 
 /**
@@ -164,12 +185,12 @@ export function undampedRingOutSeconds(
 
 /**
  * How long an export renders, in seconds: past the take's last key-up by the
- * tail, or until its top strings fall quiet if they ring on longer. Reads the
- * samples decoded so far.
+ * tail, or until its top strings fall quiet if they ring on longer — those it
+ * plays, as `notesToRender` has them. Reads the samples decoded so far.
  */
 export function estimateRenderSeconds(take: Take): number {
   const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
-  return renderSeconds(take, undampedRingOutSeconds(take.notes, sampleFor));
+  return renderSeconds(take, undampedRingOutSeconds(playedNotesOf(take), sampleFor));
 }
 
 function renderSeconds(take: Take, ringOutS: number): number {
@@ -197,10 +218,14 @@ export function estimateRenderMemoryMB(take: Take): number {
  * plays at the default volume rather than wherever the volume slider was left
  * — that slider is for the room, not the file — and without the graph's live
  * peak guard, which a limiter that can look ahead replaces afterwards.
+ *
+ * `onProgress` hears how far the render has got, from 0 to 1, each time it
+ * pauses; see `scheduleVoicesAhead`.
  */
 export async function renderTakeForExport(
   take: Take,
   options: OfflineRenderOptions,
+  onProgress?: (fraction: number) => void,
 ): Promise<RenderedTake> {
   // The take itself has to fit; how long its top strings ring is capped below.
   const seconds = renderSeconds(take, 0);
@@ -219,16 +244,18 @@ export async function renderTakeForExport(
     );
   }
 
-  // Make sure every root the take needs is decoded (range shifts etc.).
-  let minMidi = 127;
-  let maxMidi = 0;
-  for (const note of take.notes) {
-    if (note.midi < minMidi) minMidi = note.midi;
-    if (note.midi > maxMidi) maxMidi = note.midi;
+  const effectiveNotes = notesToRender(take);
+  // Make sure every root the played notes need is decoded (range shifts etc.).
+  // A note written but not played needs none, so it cannot widen the range.
+  if (effectiveNotes.length > 0) {
+    let minMidi = 127;
+    let maxMidi = 0;
+    for (const note of effectiveNotes) {
+      if (note.midi < minMidi) minMidi = note.midi;
+      if (note.midi > maxMidi) maxMidi = note.midi;
+    }
+    await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
   }
-  await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
-
-  const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
   const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
   // Every sample is chosen before the render starts, though most voices are
   // made during it: the piano a render begins with is the one it ends with.
@@ -257,6 +284,7 @@ export async function renderTakeForExport(
   const scheduling = scheduleVoicesAhead(
     context,
     scheduleTakeVoices(context, graph.voiceDestination, effectiveNotes, samples),
+    onProgress,
   );
 
   const [piano, clicks] = await Promise.all([

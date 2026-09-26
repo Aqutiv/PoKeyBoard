@@ -238,6 +238,22 @@ describe('MIDI export', () => {
     ]);
   });
 
+  it('leaves out a note written but not played, even where it shares a key', () => {
+    const written = take({
+      notes: [
+        // A trill's written note, silent, over the first note that plays it…
+        { ...note(72, 0, 2000), id: 'a', velocity: 0 },
+        { ...note(72, 0, 250), id: 'b', velocity: 0.8 },
+        // …and one standing alone.
+        { ...note(74, 1000, 500), id: 'c', velocity: 0 },
+      ],
+    });
+    const { tracks } = parseMidi(takeToMidi(written, { title: 't' }));
+    expect(notesOf(tracks[1]!)).toEqual([
+      { midi: 72, channel: 0, velocity: 102, start: 0, end: Q / 2 },
+    ]);
+  });
+
   it('lets a key go before striking it again on the same tick', () => {
     const { tracks } = parseMidi(
       takeToMidi(take({ notes: [note(72, 0, 500), note(72, 500, 500)] }), { title: 't' }),

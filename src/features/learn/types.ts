@@ -161,6 +161,16 @@ export type DrillPool =
     }
   | {
       /**
+       * The round draws a key signature and nothing else, and the user plays
+       * the home note of its major key, in any octave. Nothing is named: the
+       * signature is the question, and reading it is the skill.
+       */
+      kind: 'keyTonic';
+      /** Signatures in fifths — sharps positive, flats negative. */
+      signatures: readonly number[];
+    }
+  | {
+      /**
        * The round names a degree of a major scale — "play degree 5" — and the
        * user plays it, in any octave. Knowing a scale is knowing where each of
        * its steps lives, not only reciting them in order.
@@ -205,6 +215,20 @@ export type QuizQuestion =
       kind: 'chordQuality';
       /** Drawn from in the shared stride order. */
       chords: readonly NamedChord[];
+    }
+  | {
+      /**
+       * A key signature is drawn on its own, and the answer is its major key.
+       * The answer buttons name each key's home note, in circle order — flats
+       * to sharps, as the sheet export's key chooser lists them — whatever
+       * order the pool is written in; the pool's order is the order asked.
+       */
+      kind: 'keySignature';
+      /**
+       * Signatures in fifths — sharps positive, flats negative. No two may
+       * share a home note: F♯ and G♭ major would be one button.
+       */
+      signatures: readonly number[];
     }
   | {
       kind: 'nameTheKey';
@@ -259,6 +283,19 @@ export type LearnVisual =
       rests?: boolean;
       /** Bar furniture; 'bare' unless the lesson is about the bar itself. */
       chrome?: ScoreChrome;
+    }
+  | {
+      /**
+       * The circle of fifths: the twelve major keys in a ring, one more sharp
+       * at each step clockwise from C and one more flat anticlockwise. Keys are
+       * named by their signature in fifths, as `circleOfFifths.ts` lays them
+       * out.
+       */
+      kind: 'circle';
+      /** Filled with the accent colour. */
+      highlight?: readonly number[];
+      /** Ringed, for showing one group apart from another. */
+      highlightSecondary?: readonly number[];
     };
 
 /**
@@ -269,4 +306,14 @@ export interface LearnPhrase {
   bpm: number;
   timeSignature: TimeSignature;
   events: readonly TrackEvent[];
+  /**
+   * The key signature it is written in, in fifths — sharps positive, flats
+   * negative. C major when omitted.
+   *
+   * Notes are still named at the pitch they sound: "F#4" under two sharps is
+   * drawn bare, because the signature already says sharp, while a bare "F4"
+   * would be F natural and drawn with a natural sign. Only the picture reads
+   * this; a demo sounds the same either way.
+   */
+  keySignature?: number;
 }

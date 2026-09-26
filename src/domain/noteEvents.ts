@@ -22,6 +22,37 @@ export function sortNotes(notes: readonly NoteEvent[]): NoteEvent[] {
 }
 
 /**
+ * The order the piano strikes notes in: `compareNoteEvents`, except that of two
+ * copies of one key at one moment the quieter comes first. A key struck again
+ * gives way to the new strike (`VoiceManager.restrike`, `scheduleTakeVoices`),
+ * so the copy struck last is the only one heard, and this makes it the louder —
+ * as a pianist plays a note two voices share — rather than whichever the
+ * stored order happens to put second. The stored order is left alone: the
+ * notation reads it, and wants a score's first voice first.
+ */
+export function compareStrikes(a: NoteEvent, b: NoteEvent): number {
+  if (a.startMs !== b.startMs) return a.startMs - b.startMs;
+  if (a.midi !== b.midi) return a.midi - b.midi;
+  if (a.velocity !== b.velocity) return a.velocity - b.velocity;
+  return compareNoteEvents(a, b);
+}
+
+export function sortStrikes(notes: readonly NoteEvent[]): NoteEvent[] {
+  return [...notes].sort(compareStrikes);
+}
+
+/**
+ * Whether a note is written but not played. A score marks one with velocity 0 —
+ * MuseScore's `dynamics="0"`, on a trill's written note whose trill a hidden
+ * voice plays out, or on the silent twin of a note two voices share — so
+ * playback, scrubbing and export leave it out, while the notation still draws
+ * it and practice still asks for its key.
+ */
+export function isSilentNote(note: Pick<NoteEvent, 'velocity'>): boolean {
+  return note.velocity <= 0;
+}
+
+/**
  * First index whose startMs is >= t, over notes sorted by startMs. Anything
  * that walks a take forward from a time — scrubbing, the training gate —
  * starts here rather than scanning a take that may hold tens of thousands of

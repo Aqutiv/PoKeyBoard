@@ -1,7 +1,7 @@
 import { audioEngine } from '@/audio/AudioEngine';
 import { velocityForCurveDb } from '@/audio/velocityCurve';
 import { noteHand, type Hand } from '@/domain/hands';
-import { sortNotes } from '@/domain/noteEvents';
+import { isSilentNote, sortStrikes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
@@ -73,7 +73,7 @@ class ScrubController {
   begin(): boolean {
     if (!transportController.beginScrub()) return false;
     const take = useTakeStore.getState().take;
-    this.sortedNotes = sortNotes(take.notes);
+    this.sortedNotes = sortStrikes(take.notes);
     this.currentTimeMs = transportController.getPlayheadMs();
     this.active = true;
     return true;
@@ -100,7 +100,9 @@ class ScrubController {
     const now = performance.now();
     for (const note of crossed) {
       this.flashes.set(note.midi, { expiry: now + KEY_FLASH_MS, hand: noteHand(note) });
-      if (audition) {
+      // A note written but not played flashes its key, as the score shows it,
+      // but is not heard: the audition floor would otherwise lift it.
+      if (audition && !isSilentNote(note)) {
         audioEngine.scheduleNote(
           {
             midi: note.midi,

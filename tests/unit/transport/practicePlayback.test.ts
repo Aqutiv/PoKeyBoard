@@ -12,7 +12,7 @@ import { useTakeStore } from '@/state/useTakeStore';
  */
 const h = vi.hoisted(() => ({
   now: 0,
-  scheduled: [] as Array<{ midi: number; when: number; durationMs: number }>,
+  scheduled: [] as Array<{ midi: number; velocity: number; when: number; durationMs: number }>,
   inputs: new Set<(event: InputNoteEvent) => void>(),
 }));
 
@@ -25,8 +25,14 @@ vi.mock('@/audio/AudioEngine', () => ({
     getLoadProgress: vi.fn(() => ({ phase: 'core-ready' })),
     bank: { isCoreReady: () => true },
     setInstrument: vi.fn(() => Promise.resolve()),
-    scheduleNote: vi.fn((event: { midi: number; durationMs: number }, when: number) =>
-      h.scheduled.push({ midi: event.midi, when, durationMs: event.durationMs }),
+    scheduleNote: vi.fn(
+      (event: { midi: number; velocity: number; durationMs: number }, when: number) =>
+        h.scheduled.push({
+          midi: event.midi,
+          velocity: event.velocity,
+          when,
+          durationMs: event.durationMs,
+        }),
     ),
     // What a change of speed asks of the voices: notes not yet begun are called
     // off, and those sounding let go where `at` moves their key-up.
@@ -386,5 +392,62 @@ describe('playback speed and looping', () => {
     const midis = h.scheduled.map((event) => event.midi);
     expect(midis.slice(0, 4)).toEqual([60, 61, 62, 63]);
     expect(h.scheduled[1]!.when - h.scheduled[0]!.when).toBeCloseTo(0.5, 6);
+  });
+});
+
+describe('what playback strikes', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    h.now = 0;
+    h.scheduled = [];
+    h.inputs.clear();
+    useSettingsStore.getState().setPlaybackMode('simple');
+    transportController.seek(0);
+  });
+
+  afterEach(() => {
+    transportController.stop();
+    useSettingsStore.getState().setPlaybackMode('simple');
+    vi.useRealTimers();
+  });
+
+  it('strikes the louder of two copies of a key last, however they are stored', () => {
+    // The copy struck last is the one heard, so it has to be the louder one
+    // whichever copy the ids happen to put first.
+    for (const [softId, loudId] of [
+      ['a', 'b'],
+      ['b', 'a'],
+    ] as const) {
+      h.scheduled = [];
+      const notes = [
+        { ...note(softId, 60, 0), velocity: 0.3 },
+        { ...note(loudId, 60, 0), velocity: 0.8 },
+      ];
+      useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+      transportController.seek(0);
+      transportController.play();
+      run(0.3);
+      transportController.stop();
+      expect(h.scheduled.map((event) => event.velocity)).toEqual([0.3, 0.8]);
+    }
+  });
+
+  it('never sounds a note written but not played', () => {
+    const notes = [{ ...note('silent', 64, 0), velocity: 0 }, note('after', 65, 500)];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+    transportController.play();
+    run(1.2);
+    expect(h.scheduled.map((event) => event.midi)).toEqual([65]);
+  });
+
+  it('still asks for a silent note’s key at a training hold', () => {
+    const notes = [{ ...note('silent', 64, 0), velocity: 0 }, note('after', 65, 500)];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+    useSettingsStore.getState().setPlaybackMode('training-right');
+    transportController.play();
+    expect(playThroughHolds(2)).toEqual([
+      { atMs: 0, midis: [64] },
+      { atMs: 500, midis: [65] },
+    ]);
   });
 });

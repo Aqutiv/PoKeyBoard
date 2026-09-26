@@ -1,10 +1,11 @@
+import { majorTonicName } from '@/features/notation/keySignature';
 import { useMessages } from '@/i18n/i18nContext';
 import type { Messages } from '@/i18n/types';
 import { KeyboardDiagram } from './KeyboardDiagram';
 import { StaffSnippet } from './StaffSnippet';
-import { noteLabel, type NoteSpelling } from './noteLabel';
+import { noteLabel } from './noteLabel';
 import type { LearnPhrase } from './types';
-import { QUIZ_HIGH_MIDI, QUIZ_LOW_MIDI, type QuizChoice, type QuizSession } from './useQuiz';
+import { QUIZ_HIGH_MIDI, QUIZ_LOW_MIDI, type QuizSession } from './useQuiz';
 
 interface QuizPanelProps {
   session: QuizSession;
@@ -18,11 +19,58 @@ interface QuizPanelProps {
   hearing: boolean;
 }
 
-/** An answer button's words: a note's name, or a chord's quality. */
-function choiceLabel(choice: QuizChoice, spelling: NoteSpelling, m: Messages): string {
-  return typeof choice === 'number'
-    ? noteLabel(choice, spelling)
-    : m.learn.chordQualityAnswer[choice];
+/*
+ * Each of these switches over the question's kind, like the runner's
+ * `canAdvance`: a new kind of question is a compile error here rather than a
+ * round quietly asked in another kind's words.
+ */
+
+/** What the round asks, in words. */
+function promptFor(session: QuizSession, m: Messages): string {
+  switch (session.kind) {
+    case 'nameTheKey':
+      return m.learn.quizPrompt;
+    case 'readNote':
+      return m.learn.readNotePrompt;
+    case 'chordQuality':
+      return m.learn.chordQualityPrompt;
+    case 'keySignature':
+      return m.learn.keySignaturePrompt;
+  }
+}
+
+/** Answer button `index`'s words: a note's name, a key's, or a chord's quality. */
+function choiceLabel(session: QuizSession, index: number, m: Messages): string {
+  const choice = session.choices[index] ?? 0;
+  switch (session.kind) {
+    case 'keySignature':
+      // By the key, not the home note: F♯ major and G♭ major share one.
+      return majorTonicName(session.keys?.[index] ?? 0);
+    case 'nameTheKey':
+    case 'readNote':
+    case 'chordQuality':
+      return typeof choice === 'number'
+        ? noteLabel(choice, session.spelling)
+        : m.learn.chordQualityAnswer[choice];
+  }
+}
+
+/** What a wrong answer is corrected to. */
+function correctionFor(session: QuizSession, m: Messages): string {
+  switch (session.kind) {
+    case 'keySignature':
+      // The round's own key, never a note built from `midi`: a signature
+      // round draws no key to build one from.
+      return m.learn.keySignatureWrong({
+        key: m.learn.majorKey({ note: majorTonicName(session.signature ?? 0) }),
+      });
+    case 'nameTheKey':
+    case 'readNote':
+    case 'chordQuality':
+      return typeof session.correct === 'number'
+        ? m.learn.quizWrong({ answer: noteLabel(session.midi, session.spelling) })
+        : m.learn.chordQualityWrong({ answer: m.learn.chordQuality[session.correct] });
+  }
 }
 
 /**
@@ -37,17 +85,6 @@ function choiceLabel(choice: QuizChoice, spelling: NoteSpelling, m: Messages): s
 export function QuizPanel({ session, onHear, hearing }: QuizPanelProps) {
   const m = useMessages();
   const byEar = session.kind === 'chordQuality';
-
-  const prompt = byEar
-    ? m.learn.chordQualityPrompt
-    : session.kind === 'readNote'
-      ? m.learn.readNotePrompt
-      : m.learn.quizPrompt;
-
-  const correction =
-    typeof session.correct === 'number'
-      ? m.learn.quizWrong({ answer: noteLabel(session.midi, session.spelling) })
-      : m.learn.chordQualityWrong({ answer: m.learn.chordQuality[session.correct] });
 
   return (
     <div className="learn-quiz">
@@ -72,14 +109,20 @@ export function QuizPanel({ session, onHear, hearing }: QuizPanelProps) {
           {m.learn.hearIt}
         </button>
       ) : session.phrase ? (
-        // A reading round: the staff is the question. The label stays generic
-        // on purpose — naming the note here would announce the answer, and for
-        // the same reason no `litMidis` is passed: lighting the head when the
-        // matching key is pressed would let the quiz be brute-forced.
+        // The staff is the question. For a note, the label stays generic on
+        // purpose — naming the note would announce the answer, and for the
+        // same reason no `litMidis` is passed: lighting the head when the
+        // matching key is pressed would let the quiz be brute-forced. A
+        // signature is different: saying "two sharps" is saying what is drawn,
+        // and leaves the key to be worked out, so it is said.
         <StaffSnippet
           phrase={session.phrase}
           staves={session.staves}
-          ariaLabel={m.learn.staffLabel}
+          ariaLabel={
+            session.signature !== null
+              ? m.learn.keySignatureLabel({ fifths: session.signature })
+              : m.learn.staffLabel
+          }
         />
       ) : (
         <KeyboardDiagram
@@ -90,10 +133,10 @@ export function QuizPanel({ session, onHear, hearing }: QuizPanelProps) {
           ariaLabel={m.learn.diagramLabel}
         />
       )}
-      <p className="learn-quiz__prompt">{prompt}</p>
+      <p className="learn-quiz__prompt">{promptFor(session, m)}</p>
       <div className="learn-quiz__choices">
-        {session.choices.map((choice) => {
-          const label = choiceLabel(choice, session.spelling, m);
+        {session.choices.map((choice, index) => {
+          const label = choiceLabel(session, index, m);
           return (
             <button
               key={String(choice)}
@@ -112,7 +155,7 @@ export function QuizPanel({ session, onHear, hearing }: QuizPanelProps) {
         {session.satisfied
           ? m.learn.exerciseDone
           : session.wrong !== null
-            ? correction
+            ? correctionFor(session, m)
             : m.learn.progress({ done: session.done, total: session.total })}
       </p>
     </div>

@@ -3,6 +3,7 @@ import type { SampleSelection } from '@/audio/audioTypes';
 import {
   cappedRenderSeconds,
   MAX_RENDER_MINUTES,
+  notesToRender,
   scheduleTakeVoices,
   scheduleVoicesAhead,
   undampedRingOutSeconds,
@@ -545,6 +546,38 @@ describe('shared sample voice', () => {
       await expect(done).rejects.toBe(failure);
       await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(pauses.length));
     });
+
+    it('says how far the render has got at every pause, once it is on its way again', async () => {
+      const { context, pauses, resume } = offline(9);
+      const onProgress = vi.fn();
+      const done = scheduleVoicesAhead(context, () => undefined, onProgress);
+      expect(onProgress).not.toHaveBeenCalled();
+      pauses[0]!.resolve();
+      await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
+      expect(resume).toHaveBeenCalledBefore(onProgress);
+      for (const pause of pauses.slice(1)) pause.resolve();
+      await done;
+      expect(onProgress.mock.calls.map(([fraction]) => fraction)).toEqual([
+        2 / 9,
+        4 / 9,
+        6 / 9,
+        8 / 9,
+      ]);
+    });
+
+    it('says nothing of a render that cannot pause, nor of a pause refused', async () => {
+      const unpaused = offline(9, false);
+      const onProgress = vi.fn();
+      await scheduleVoicesAhead(unpaused.context, () => undefined, onProgress);
+      expect(onProgress).not.toHaveBeenCalled();
+
+      const { context, pauses } = offline(9);
+      const done = scheduleVoicesAhead(context, () => undefined, onProgress);
+      pauses[0]!.reject(new Error('refused'));
+      for (const pause of pauses.slice(1)) pause.resolve();
+      await done;
+      expect(onProgress.mock.calls.map(([fraction]) => fraction)).toEqual([4 / 9, 6 / 9, 8 / 9]);
+    });
   });
 
   it('makes room in an export for the top strings to ring out', () => {
@@ -563,6 +596,28 @@ describe('shared sample voice', () => {
     const sampleFor = (midi: number) => (midi >= UNDAMPED_FROM_MIDI ? ringing : null);
     expect(undampedRingOutSeconds(notes, sampleFor)).toBeCloseTo(15.79, 5);
     expect(undampedRingOutSeconds(notes.slice(0, 1), sampleFor)).toBe(0);
+  });
+
+  it('renders the louder of two copies of a key last, and no note written but not played', () => {
+    const take = createEmptyTake({
+      notes: [
+        // Stored loud copy first: its id sorts ahead of the soft one's.
+        { id: 'a', midi: 60, velocity: 0.8, startMs: 0, durationMs: 500 },
+        { id: 'b', midi: 60, velocity: 0.3, startMs: 0, durationMs: 1000 },
+        { id: 'c', midi: 64, velocity: 0, startMs: 0, durationMs: 1000 },
+        { id: 'd', midi: 67, velocity: 0.5, startMs: 250, durationMs: 250 },
+      ],
+      pedalEvents: [
+        { atMs: 0, down: true },
+        { atMs: 2000, down: false },
+      ],
+    });
+    // The pedal still holds every note it catches until it lifts.
+    expect(notesToRender(take).map((n) => [n.id, n.startMs + n.durationMs])).toEqual([
+      ['b', 2000],
+      ['a', 2000],
+      ['d', 2000],
+    ]);
   });
 
   it('keeps the ring-out inside the render cap', () => {

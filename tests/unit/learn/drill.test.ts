@@ -257,3 +257,30 @@ describe('drillRoundAt: named chords', () => {
     expect(round?.phrase).toBeUndefined();
   });
 });
+
+describe('drillRoundAt: key home notes', () => {
+  // Two sharps and three flats: D major and E flat major.
+  const keys: DrillPool = { kind: 'keyTonic', signatures: [2, -3] };
+
+  it('asks for the home note of the key the signature names, in any octave', () => {
+    expect(drillRoundAt(keys, 0)?.spec).toEqual({ kind: 'pitchClass', pitchClass: 2 });
+    expect(drillRoundAt(keys, 1)?.spec).toEqual({ kind: 'pitchClass', pitchClass: 3 });
+  });
+
+  it('draws the signature alone and names nothing: reading it is the question', () => {
+    const round = drillRoundAt(keys, 1);
+    expect(round?.kind).toBe('keyTonic');
+    expect(round?.signature).toBe(-3);
+    expect(round?.label).toBe('');
+    expect(round?.staves).toBe('treble');
+    expect(round?.phrase).toMatchObject({ keySignature: -3, events: [] });
+  });
+
+  it('keeps each round’s picture the same object, so the staff is not redrawn per key press', () => {
+    expect(drillRoundAt(keys, 0)?.phrase).toBe(drillRoundAt(keys, 0)?.phrase);
+  });
+
+  it('asks nothing of an empty pool', () => {
+    expect(drillRoundAt({ kind: 'keyTonic', signatures: [] }, 0)).toBeNull();
+  });
+});

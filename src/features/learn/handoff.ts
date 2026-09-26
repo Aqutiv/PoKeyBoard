@@ -1,11 +1,43 @@
+import { libraryTakeId } from '@/domain/libraryTakes';
 import { createTakeTempoMap } from '@/domain/tempoMap';
 import type { PlaybackLoop, Take } from '@/domain/takeTypes';
+import { libraryTrackSummary } from '@/features/library/catalog';
 import { openLibraryTrack } from '@/features/library/libraryService';
+import { rememberLibraryQuery, rememberLibraryScroll } from '@/features/library/scrollMemory';
 import { loopBetween } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import type { LearnHandoff } from './types';
+
+/**
+ * The title of the track a hand-off opens — an authored Library track and a
+ * vendored Classics score alike — or undefined for one the Library does not
+ * have, which leaves the closing card with its plain "Try it on Play".
+ */
+export function handoffTitle(trackId: string): string | undefined {
+  return libraryTrackSummary(libraryTakeId(trackId))?.title;
+}
+
+/**
+ * Open the Library on a hand-off's track, for when the track would not open —
+ * a Classics score is fetched the first time it is opened, so offline it
+ * cannot be. The player lands on the piece that was promised, not somewhere
+ * near it.
+ *
+ * Its folder alone is not enough: the Library restores whatever search was
+ * last typed in a folder, and one that misses this track would hide it
+ * entirely, while an empty one leaves it somewhere down a long list. So the
+ * folder is searched for the track itself, from the top — in the filter box,
+ * where it reads as a search and clears like any other.
+ */
+export function revealHandoffInLibrary(trackId: string): void {
+  const summary = libraryTrackSummary(libraryTakeId(trackId));
+  if (!summary) return;
+  useSettingsStore.getState().setLibraryFolder(summary.folder);
+  rememberLibraryQuery(summary.folder, summary.title);
+  rememberLibraryScroll(summary.folder, 0);
+}
 
 /**
  * The loop a hand-off asks for, on the take it opened: its beats turned into

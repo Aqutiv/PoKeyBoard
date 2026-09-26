@@ -149,6 +149,60 @@ describe('useQuiz reading rounds', () => {
   });
 });
 
+describe('useQuiz: a key signature', () => {
+  /** Two sharps, one flat and none: asked D, C, F by the stride of two. */
+  const keys: QuizStep = {
+    id: 'nameTheKey',
+    kind: 'quiz',
+    rounds: 3,
+    question: { kind: 'keySignature', signatures: [2, -1, 0] },
+  };
+
+  it('answers with each key’s home note, laid out in circle order', () => {
+    const { result } = renderHook(() => useQuiz(keys));
+    // Flats to sharps, whatever order the pool asks them in: F, C, D.
+    expect(result.current.keys).toEqual([-1, 0, 2]);
+    expect(result.current.choices).toEqual([5, 0, 2]);
+  });
+
+  it('draws the round’s signature alone, and asks for its key', () => {
+    const { result } = renderHook(() => useQuiz(keys));
+    expect(result.current.kind).toBe('keySignature');
+    expect(result.current.signature).toBe(2);
+    expect(result.current.correct).toBe(2);
+    expect(result.current.phrase).toMatchObject({ keySignature: 2, events: [] });
+    expect(result.current.hear).toBeNull();
+    expect(result.current.needsHearing).toBe(false);
+  });
+
+  it('holds the round on a wrong key, and moves on with the right one', () => {
+    const { result } = renderHook(() => useQuiz(keys));
+    act(() => result.current.answer(5));
+    expect(result.current.wrong).toBe(5);
+    expect(result.current.done).toBe(0);
+    act(() => result.current.answer(2));
+    expect(result.current.done).toBe(1);
+    expect(result.current.wrong).toBeNull();
+    expect(result.current.signature).toBe(0);
+  });
+
+  it('keeps the picture and the buttons the same objects for as long as the round lasts', () => {
+    const { result, rerender } = renderHook(() => useQuiz(keys));
+    const { phrase, keys: laidOut } = result.current;
+    rerender();
+    expect(result.current.phrase).toBe(phrase);
+    expect(result.current.keys).toBe(laidOut);
+  });
+
+  it('asks nothing of a key quiz with no keys', () => {
+    const none: QuizStep = { ...keys, question: { kind: 'keySignature', signatures: [] } };
+    const { result } = renderHook(() => useQuiz(none));
+    expect(result.current.choices).toEqual([]);
+    expect(result.current.phrase).toBeNull();
+    expect(result.current.signature).toBeNull();
+  });
+});
+
 describe('useQuiz: major or minor, by ear', () => {
   const EAR: QuizStep = {
     id: 'hearTheMood',
