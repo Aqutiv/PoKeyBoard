@@ -276,6 +276,17 @@ export const fr: Messages = {
     hearIt: 'Écouter',
     chordQualityPrompt: 'Majeur ou mineur ?',
     chordQualityWrong: ({ answer }) => `Celui-ci était ${answer}.`,
+    keySignaturePrompt: 'Quelle tonalité majeure porte cette armure ?',
+    majorKey: ({ note }) => `${note} majeur`,
+    keySignatureWrong: ({ key }) => `Cette armure est celle de ${key}.`,
+    keySignatureLabel: ({ fifths }) => {
+      const count = Math.abs(fifths);
+      if (count === 0) return 'Armure : ni dièse ni bémol';
+      const sign = fifths > 0 ? 'dièse' : 'bémol';
+      return `Armure : ${count} ${sign}${count === 1 ? '' : 's'}`;
+    },
+    playTonic: 'Jouez la tonique de cette tonalité.',
+    circleLabel: 'Cycle des quintes',
     chapterTitles: {
       meetTheKeyboard: 'Découvrir le clavier',
       musicalAlphabet: 'L’alphabet musical',

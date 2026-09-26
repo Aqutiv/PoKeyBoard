@@ -523,6 +523,38 @@ describe('shared sample voice', () => {
       await expect(done).rejects.toBe(failure);
       await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(pauses.length));
     });
+
+    it('says how far the render has got at every pause, once it is on its way again', async () => {
+      const { context, pauses, resume } = offline(9);
+      const onProgress = vi.fn();
+      const done = scheduleVoicesAhead(context, () => undefined, onProgress);
+      expect(onProgress).not.toHaveBeenCalled();
+      pauses[0]!.resolve();
+      await vi.waitFor(() => expect(onProgress).toHaveBeenCalledTimes(1));
+      expect(resume).toHaveBeenCalledBefore(onProgress);
+      for (const pause of pauses.slice(1)) pause.resolve();
+      await done;
+      expect(onProgress.mock.calls.map(([fraction]) => fraction)).toEqual([
+        2 / 9,
+        4 / 9,
+        6 / 9,
+        8 / 9,
+      ]);
+    });
+
+    it('says nothing of a render that cannot pause, nor of a pause refused', async () => {
+      const unpaused = offline(9, false);
+      const onProgress = vi.fn();
+      await scheduleVoicesAhead(unpaused.context, () => undefined, onProgress);
+      expect(onProgress).not.toHaveBeenCalled();
+
+      const { context, pauses } = offline(9);
+      const done = scheduleVoicesAhead(context, () => undefined, onProgress);
+      pauses[0]!.reject(new Error('refused'));
+      for (const pause of pauses.slice(1)) pause.resolve();
+      await done;
+      expect(onProgress.mock.calls.map(([fraction]) => fraction)).toEqual([4 / 9, 6 / 9, 8 / 9]);
+    });
   });
 
   it('makes room in an export for the top strings to ring out', () => {

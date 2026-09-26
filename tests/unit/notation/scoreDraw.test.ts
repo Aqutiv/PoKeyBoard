@@ -216,7 +216,9 @@ function render(
   staves: StaffMode = 'treble',
   /** `null` omits the property entirely, which is what the Play page does. */
   chrome: ScoreChrome | null = 'bare',
-  overrides: Partial<Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'scrollMs' | 'systemBreakMs'>> = {},
+  overrides: Partial<
+    Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'scrollMs' | 'systemBreakMs' | 'gutterPx'>
+  > = {},
 ): Recorder {
   const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
@@ -423,6 +425,79 @@ describe('drawScore lesson chrome', () => {
     const drawn = render(bar([0, 2, 3]), {}, 'treble', null);
     expect(drawn.texts).toContain('4');
     expect(drawn.fills).toContain(rest);
+  });
+});
+
+describe('drawScore gutter', () => {
+  const { staffLine, gutterBg, barLine, noteDim, rest } = SCORE_PALETTES.dark;
+
+  /**
+   * Paths stroked after the gutter's fill went down: the only ones it cannot
+   * hide. Strokes are recorded in order in both `ops` and `paths`, so the
+   * fill's place among the ops says where to start in the paths.
+   */
+  const strokedOverGutter = (drawn: Recorder): StrokedPath[] => {
+    let strokes = 0;
+    let afterFill = -1;
+    for (const op of drawn.ops) {
+      if (op === `rect:${gutterBg}`) afterFill = strokes;
+      if (op.startsWith('stroke:')) strokes += 1;
+    }
+    return afterFill < 0 ? [] : drawn.paths.slice(afterFill);
+  };
+  const staffLinesIn = (paths: readonly StrokedPath[]) =>
+    paths.filter(
+      (path) =>
+        path.style === staffLine &&
+        path.points.length === 2 &&
+        path.points[0]?.y === path.points[1]?.y,
+    );
+
+  it('runs a lesson’s staff lines through its gutter, under the clef and signature', () => {
+    // Which line a sharp sits on is all a signature says, and the gutter's
+    // fill used to leave it floating on blank ground.
+    const gutterPx = gutterWidthFor(2);
+    const drawn = render(oneNote(67), { keySignature: 2 }, 'treble', 'lesson', { gutterPx });
+    const lines = staffLinesIn(strokedOverGutter(drawn));
+    expect(lines).toHaveLength(5);
+    for (const line of lines) {
+      // From the system's edge, not the canvas's, to the end of the gutter.
+      expect(line.points[0]?.x).toBeGreaterThan(0);
+      expect(line.points[1]?.x).toBe(gutterPx);
+    }
+  });
+
+  it('does the same under bare chrome, and for both staves of a grand view', () => {
+    expect(staffLinesIn(strokedOverGutter(render(oneNote(67), {}, 'treble', 'bare')))).toHaveLength(
+      5,
+    );
+    const grand = render(oneNote(60, 'treble'), {}, 'grand', 'lesson');
+    expect(staffLinesIn(strokedOverGutter(grand))).toHaveLength(10);
+  });
+
+  it('leaves Play’s gutter covering its lines, since the music scrolls beneath it', () => {
+    expect(staffLinesIn(strokedOverGutter(render(oneNote(67), {}, 'treble', null)))).toEqual([]);
+    expect(staffLinesIn(strokedOverGutter(render(oneNote(67), {}, 'treble', 'full')))).toEqual([]);
+  });
+
+  it('draws a signature on an empty stave, with no bar of music after it', () => {
+    // A key quiz's picture: two sharps and nothing else.
+    const empty = (fifths: number): ScoreLayout => ({
+      ...layoutScore([], { ...LAYOUT_OPTS, keySignature: fifths }),
+      dynamics: [],
+      hairpins: [],
+      rests: [],
+    });
+    const ink = (drawn: Recorder) => drawn.fills.filter((fill) => fill === noteDim).length;
+    const plain = render(empty(0), {}, 'treble', 'bare');
+    const signed = render(empty(2), { keySignature: 2 }, 'treble', 'bare', {
+      gutterPx: gutterWidthFor(2),
+    });
+    expect(ink(plain)).toBe(0);
+    expect(ink(signed)).toBeGreaterThan(0);
+    // No bar line inside it and no rest: the stave just closes where its bar ends.
+    expect(signed.paths.filter((path) => path.style === barLine && path.width === 1)).toEqual([]);
+    expect(signed.rects.filter((rect) => rect.style === rest)).toEqual([]);
   });
 });
 

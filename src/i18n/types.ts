@@ -396,6 +396,22 @@ export interface Messages {
     hearIt: string;
     chordQualityPrompt: string;
     chordQualityWrong: (p: { answer: string }) => string;
+    /** Key-signature rounds: a signature is drawn and the user names its major key. */
+    keySignaturePrompt: string;
+    /**
+     * A major key by its home note, in the words the locale uses for a key —
+     * not always the ones it uses for a chord.
+     */
+    majorKey: (p: { note: string }) => string;
+    keySignatureWrong: (p: { key: string }) => string;
+    /**
+     * What a signature drawn alone shows, for a screen reader: sharps positive,
+     * flats negative. Saying "two sharps" states the question, not its answer.
+     */
+    keySignatureLabel: (p: { fifths: number }) => string;
+    /** A drill round that draws a signature and asks for its key's home note. */
+    playTonic: string;
+    circleLabel: string;
     chapterTitles: LearnChapterMessages;
     chapterBlurbs: LearnChapterMessages;
     partTitles: LearnPartMessages;

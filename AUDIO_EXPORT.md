@@ -10,6 +10,10 @@ Goal: a rendered take must be sendable through WhatsApp and similar apps and pla
 4. **Master and encode** in `mp3Encoder.worker`: channel copies are **transferred** (no clones), `masterExport` sets the level and holds the peaks in place, LAME encodes in ~2 s chunks with progress messages, and the finished buffer transfers back. Where the worker cannot run, the same mastering and encoder run on the main thread a slice at a time — about 25 ms of work, then a turn for the page — so a long take never freezes it and Cancel is taken between slices; the file comes out the same either way.
 5. **Validate** (non-empty, plausible size for duration·bitrate), **cache** the bare MP3 in `audioCache` keyed by take id + hash, and present the ready panel with the file **tagged** (below).
 
+## Progress
+
+The dialog fills one bar per stage. **Rendering piano…** counts up from the render's pauses, each an exact measure of how far it has got, and fills once the render is done — its last pause can fall up to 2 s short of the end; until the first pause, while any missing samples decode, the bar slides instead, as it does throughout in Firefox, where an offline render cannot pause. **Compressing audio…** is mastering and then encoding on one bar: mastering fills its first 15%, about its share of the time, by counting its steps against a plan of the steps its passes will take, and the encoder fills the rest, chunk by chunk. The worker reports whole percents, and only as they rise; where it fails and the main thread masters over again, the bar holds where the worker left it until the new attempt passes it. Progress from an export that has been cancelled, or has finished, is dropped, since a cancelled render runs on to its end.
+
 ## Level (src/audio/loudness.ts)
 
 Loudness is measured the way broadcasters and streaming services measure it, ITU-R BS.1770-4: K-weighted, in 400 ms blocks every 100 ms, gated at −70 LUFS and at 10 LU below the rest, so pauses and the reverb tail do not pull the figure down. The export dialog offers two levels:

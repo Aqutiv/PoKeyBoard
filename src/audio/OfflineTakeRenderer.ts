@@ -115,6 +115,10 @@ export function scheduleTakeVoices(
  * as all of them made up front. Where an offline context cannot pause (Firefox
  * has no `suspend`), they are all made up front, as they always were.
  *
+ * Every pause is also a sure measure of how far the render has got, which it
+ * hands `onProgress` as a fraction of the whole once the render is on its way
+ * again. A render that cannot pause has nothing to tell it.
+ *
  * Resolves once the render is past its last pause, and rejects if a voice could
  * not be made. Either way the render is let go on, so it never waits on a pause
  * that nothing will lift.
@@ -122,6 +126,7 @@ export function scheduleTakeVoices(
 export function scheduleVoicesAhead(
   context: OfflineAudioContext,
   scheduleUntil: (untilS: number) => void,
+  onProgress?: (fraction: number) => void,
 ): Promise<void> {
   scheduleUntil(2 * SCHEDULE_AHEAD_S);
   if (typeof context.suspend !== 'function') {
@@ -140,6 +145,7 @@ export function scheduleVoicesAhead(
           } finally {
             void context.resume();
           }
+          onProgress?.(at / seconds);
         },
         // Refused as it was asked for, long before the render gets there: make
         // every voice still to come now instead.
@@ -218,10 +224,14 @@ export function estimateRenderMemoryMB(take: Take): number {
  * wherever the volume slider was left — that slider is for the listener's
  * room, not the file — and without the graph's live peak guard, which a
  * limiter that can look ahead replaces afterwards.
+ *
+ * `onProgress` hears how far the render has got, from 0 to 1, each time it
+ * pauses; see `scheduleVoicesAhead`.
  */
 export async function renderTakeForExport(
   take: Take,
   options: OfflineRenderOptions,
+  onProgress?: (fraction: number) => void,
 ): Promise<RenderedTake> {
   // The take itself has to fit; how long its top strings ring is capped below.
   const seconds = renderSeconds(take, 0);
@@ -279,6 +289,7 @@ export async function renderTakeForExport(
   const scheduling = scheduleVoicesAhead(
     context,
     scheduleTakeVoices(context, graph.voiceDestination, effectiveNotes, samples),
+    onProgress,
   );
 
   const [piano, clicks] = await Promise.all([

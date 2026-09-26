@@ -1,4 +1,5 @@
 import { MAX_FIFTHS, type NoteEvent } from '@/domain/takeTypes';
+import { majorTonicPitchClass } from './keySignature';
 import type { KeyMode } from './pitchSpelling';
 
 /**
@@ -71,7 +72,7 @@ function pearson(weights: readonly number[], profile: readonly number[], tonic: 
 export function detectMode(notes: readonly NoteEvent[], fifths: number): KeyMode {
   if (notes.length < MIN_NOTES_TO_DETECT) return 'major';
   const weights = pitchClassWeights(notes);
-  const majorTonic = (((fifths * 7) % 12) + 12) % 12;
+  const majorTonic = majorTonicPitchClass(fifths);
   const minorTonic = (majorTonic + 9) % 12;
   return pearson(weights, MINOR_PROFILE, minorTonic) > pearson(weights, MAJOR_PROFILE, majorTonic)
     ? 'minor'

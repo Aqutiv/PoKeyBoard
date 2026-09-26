@@ -34,7 +34,7 @@ src/
                 useMidiInput), PianoKeyboard
     learn/      chapter catalog, pure exercise spec + matcher, useExercise,
                 LearnPage (outline), ChapterRunner, KeyboardDiagram,
-                StaffSnippet, per-locale lesson content
+                StaffSnippet, CircleOfFifths, per-locale lesson content
     notation/   staffMapping, pitchSpelling (letters in context), keyDetection
                 (key and mode), quantization, notationLayout, scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
@@ -156,7 +156,8 @@ A voice behaves like the string it stands for, the same way live and offline (`s
 ## Learn
 
 A chapter is data, not code: an ordered list of steps, each either theory (prose
-plus an optional keyboard diagram, staff snippet, or Listen demo) or an exercise
+plus an optional keyboard diagram, staff snippet, circle of fifths, or Listen
+demo) or an exercise
 carrying an `ExerciseSpec`. `exerciseMatcher.ts` is a pure reducer over that spec
 — no React, no `AudioContext` — so the whole matching suite runs headless;
 `useExercise` adds only the `subscribeInput` subscription, the held-note
@@ -201,7 +202,7 @@ Two named themes share one token vocabulary in `src/themes.css`: Conservatory (d
 
 ## MP3 encoding
 
-The export service copies the rendered buffer's channels, **transfers** them to a Worker running LAME (wasm-media-encoders), streams progress per ~2 s chunk, validates plausibility (size vs duration·bitrate), stores the blob in `audioCache`, and hands the UI a `File` for `navigator.share` — called only from a fresh click, with download as the universal fallback.
+The export service copies the rendered buffer's channels, **transfers** them to a Worker running LAME (wasm-media-encoders), streams progress (mastering's steps, then each ~2 s chunk; the render's own progress comes from its pauses), validates plausibility (size vs duration·bitrate), stores the blob in `audioCache`, and hands the UI a `File` for `navigator.share` — called only from a fresh click, with download as the universal fallback.
 
 ## PWA
 

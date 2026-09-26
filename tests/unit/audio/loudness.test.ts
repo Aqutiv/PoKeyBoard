@@ -246,33 +246,33 @@ describe('mastering an export', () => {
   });
 });
 
+/**
+ * A quiet tone with a loud burst every five seconds, and a metronome over it,
+ * so every pass has work to do: the level to set, peaks to find and limit, and
+ * clicks to mix.
+ */
+function longTake(seconds: number) {
+  const parts: Float32Array[] = [];
+  for (let at = 0; at < seconds; at += 5) parts.push(sine(440, -24, 4.8), sine(440, 0, 0.2));
+  const [left, right] = stereo(faded(joined(...parts)));
+  const beats = seconds * 2;
+  const clicks: ClickTrack = {
+    atS: Float64Array.from({ length: beats }, (_, i) => i / 2),
+    accent: Uint8Array.from({ length: beats }, (_, i) => (i % 4 === 0 ? 1 : 0)),
+    accentSound: sine(1000, -6, 0.065),
+    beatSound: sine(800, -12, 0.065),
+  };
+  return { left: left!, right: right!, clicks };
+}
+
+/** Whether two buffers hold the very same bits, sample for sample. */
+function sameBits(a: Float32Array, b: Float32Array): boolean {
+  const x = new Uint32Array(a.buffer, a.byteOffset, a.length);
+  const y = new Uint32Array(b.buffer, b.byteOffset, b.length);
+  return x.length === y.length && x.every((bits, i) => bits === y[i]);
+}
+
 describe('mastering on the main thread', () => {
-  /**
-   * A quiet tone with a loud burst every five seconds, and a metronome over it,
-   * so every pass has work to do: the level to set, peaks to find and limit,
-   * and clicks to mix.
-   */
-  function longTake(seconds: number) {
-    const parts: Float32Array[] = [];
-    for (let at = 0; at < seconds; at += 5) parts.push(sine(440, -24, 4.8), sine(440, 0, 0.2));
-    const [left, right] = stereo(faded(joined(...parts)));
-    const beats = seconds * 2;
-    const clicks: ClickTrack = {
-      atS: Float64Array.from({ length: beats }, (_, i) => i / 2),
-      accent: Uint8Array.from({ length: beats }, (_, i) => (i % 4 === 0 ? 1 : 0)),
-      accentSound: sine(1000, -6, 0.065),
-      beatSound: sine(800, -12, 0.065),
-    };
-    return { left: left!, right: right!, clicks };
-  }
-
-  /** Whether two buffers hold the very same bits, sample for sample. */
-  function sameBits(a: Float32Array, b: Float32Array): boolean {
-    const x = new Uint32Array(a.buffer, a.byteOffset, a.length);
-    const y = new Uint32Array(b.buffer, b.byteOffset, b.length);
-    return x.length === y.length && x.every((bits, i) => bits === y[i]);
-  }
-
   it('masters in slices exactly as it does in one go', async () => {
     for (const mode of ['normalized', 'asPlayed'] as const) {
       const whole = longTake(20);
@@ -322,5 +322,66 @@ describe('mastering on the main thread', () => {
     // has been touched.
     expect(pause).toHaveBeenCalledTimes(3);
     expect(sameBits(left, before)).toBe(true);
+  });
+});
+
+describe('how far mastering has got', () => {
+  function heard(
+    take: { left: Float32Array; right: Float32Array },
+    clicks: ClickTrack | null,
+    mode: 'normalized' | 'asPlayed',
+  ): number[] {
+    const fractions: number[] = [];
+    masterExport(take.left, take.right, clicks, mode, RATE, (fraction) => fractions.push(fraction));
+    return fractions;
+  }
+
+  function rising(fractions: number[]): boolean {
+    return fractions.every((fraction, i) => i === 0 || fraction > fractions[i - 1]!);
+  }
+
+  it('climbs a step at a time to exactly 1, however long the take', () => {
+    const whole = longTake(20);
+    // A length no step size divides, so every pass ends on a short step.
+    const ragged = { left: whole.left.slice(0, -1234), right: whole.right.slice(0, -1234) };
+    const runs = [
+      heard(longTake(20), longTake(20).clicks, 'normalized'),
+      heard(longTake(20), null, 'asPlayed'),
+      heard(ragged, null, 'normalized'),
+    ];
+    for (const fractions of runs) {
+      expect(rising(fractions)).toBe(true);
+      expect(fractions.at(-1)).toBe(1);
+      // One report a step, each the same share: the plan counted exactly the
+      // steps the passes took, neither more nor fewer.
+      expect(fractions).toHaveLength(Math.round(1 / fractions[0]!));
+    }
+  });
+
+  it('counts the peak search a take too short to measure never needs as done', () => {
+    const [left, right] = stereo(sine(440, -12, 0.3));
+    const fractions = heard({ left: left!, right: right! }, null, 'normalized');
+    expect(rising(fractions)).toBe(true);
+    expect(fractions.at(-1)).toBe(1);
+    // Most of a sliver's steps are the search it skips, so the first report
+    // already holds them.
+    expect(fractions[0]).toBeGreaterThan(0.5);
+  });
+
+  it('says the same in slices as in one go, and leaves the samples as they were', async () => {
+    const plain = longTake(20);
+    masterExport(plain.left, plain.right, plain.clicks, 'normalized', RATE);
+    const whole = longTake(20);
+    const inOneGo = heard(whole, whole.clicks, 'normalized');
+    const sliced = longTake(20);
+    const inSlices: number[] = [];
+    await masterExportInSlices(sliced.left, sliced.right, sliced.clicks, 'normalized', RATE, {
+      pause: async () => undefined,
+      sliceMs: 0,
+      onProgress: (fraction) => inSlices.push(fraction),
+    });
+    expect(inSlices).toEqual(inOneGo);
+    expect(sameBits(whole.left, plain.left)).toBe(true);
+    expect(sameBits(sliced.right, plain.right)).toBe(true);
   });
 });

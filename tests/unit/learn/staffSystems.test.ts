@@ -25,6 +25,22 @@ describe('barsPerSystemFor', () => {
     expect(8 % bars).toBe(0);
   });
 
+  it('leaves fewer bars to a line under a key signature, which every system repeats', () => {
+    // Seven sharps widen the prefix by over sixty pixels; somewhere a width
+    // that held four bars in C holds only two under them.
+    const narrowed = [...Array(40).keys()]
+      .map((i) => 360 + i * 10)
+      .some((width) => barsPerSystemFor(8, 4, width, 7) < barsPerSystemFor(8, 4, width));
+    expect(narrowed).toBe(true);
+    for (let width = 200; width <= 1200; width += 25) {
+      expect(barsPerSystemFor(8, 4, width, 7), `${width}px`).toBeLessThanOrEqual(
+        barsPerSystemFor(8, 4, width),
+      );
+    }
+    // Omitted is C major, exactly as before.
+    expect(barsPerSystemFor(8, 4, 500, 0)).toBe(barsPerSystemFor(8, 4, 500));
+  });
+
   it('never splits a line into uneven systems', () => {
     // Room for three bars of an eight-bar line still breaks 2+2+2+2, so no
     // phrase ends partway along a system.

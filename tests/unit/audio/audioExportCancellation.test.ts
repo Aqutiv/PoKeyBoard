@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ExportProgress } from '@/audio/AudioExportService';
 import { createEmptyTake } from '@/domain/noteEvents';
 
 afterEach(() => {
@@ -7,11 +8,18 @@ afterEach(() => {
   vi.doUnmock('@/audio/OfflineTakeRenderer');
   vi.doUnmock('wasm-media-encoders');
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   vi.resetModules();
 });
 
 /** The export service over stub storage, with `render` standing in for the offline render. */
-async function exportService(render: () => Promise<unknown>) {
+async function exportService(
+  render: (
+    take: unknown,
+    options: unknown,
+    onProgress?: (fraction: number) => void,
+  ) => Promise<unknown>,
+) {
   vi.resetModules();
   vi.doMock('@/data/audioCacheRepository', () => ({
     getCachedAudio: vi.fn(async () => null),
@@ -89,5 +97,116 @@ describe('audio export cancellation', () => {
 
     await expect(pending).rejects.toBeInstanceOf(ExportCancelledError);
     expect(createMp3Encoder).not.toHaveBeenCalled();
+  });
+
+  it('hears a render out while its export lasts, and never after', async () => {
+    let renderProgress: ((fraction: number) => void) | undefined;
+    const { audioExportService, ExportCancelledError } = await exportService(
+      (_take, _options, onProgress) => {
+        renderProgress = onProgress;
+        return new Promise<never>(() => undefined);
+      },
+    );
+    const heard: ExportProgress[] = [];
+    const first = audioExportService.exportTake(take, options, (progress) => heard.push(progress));
+    await vi.waitFor(() => expect(renderProgress).toBeDefined());
+    const cancelledRender = renderProgress!;
+    cancelledRender(0.25);
+    expect(heard.at(-1)).toEqual({ stage: 'rendering', fraction: 0.25 });
+
+    // A cancelled render runs on to its end, still pausing and reporting.
+    audioExportService.cancel();
+    await expect(first).rejects.toBeInstanceOf(ExportCancelledError);
+    const heardBefore = heard.length;
+    cancelledRender(0.5);
+    expect(heard).toHaveLength(heardBefore);
+
+    // Nor does it reach the bar of the export that comes next.
+    const next: ExportProgress[] = [];
+    const second = audioExportService.exportTake(take, options, (progress) => next.push(progress));
+    await vi.waitFor(() => expect(renderProgress).not.toBe(cancelledRender));
+    cancelledRender(0.75);
+    renderProgress!(0.1);
+    expect(next.filter((progress) => progress.fraction >= 0)).toEqual([
+      { stage: 'rendering', fraction: 0.1 },
+    ]);
+    audioExportService.cancel();
+    await expect(second).rejects.toBeInstanceOf(ExportCancelledError);
+  });
+});
+
+describe('audio export progress', () => {
+  /** What a render hands the encoder: `seconds` of a quiet tone. */
+  function renderedTone(seconds: number) {
+    const length = 48_000 * seconds;
+    const tone = Float32Array.from({ length }, (_, i) => 0.1 * Math.sin(i / 7));
+    return {
+      piano: {
+        length,
+        sampleRate: 48_000,
+        numberOfChannels: 2,
+        duration: seconds,
+        copyFromChannel: (destination: Float32Array) => destination.set(tone),
+      },
+      clicks: null,
+    };
+  }
+
+  /** An encoder that says nothing until it hands over a plausibly sized file. */
+  function stubEncoder() {
+    vi.doMock('wasm-media-encoders', () => ({
+      createMp3Encoder: async () => ({
+        configure: vi.fn(),
+        encode: vi.fn(() => new Uint8Array(0)),
+        finalize: vi.fn(() => new Uint8Array(20_000)),
+      }),
+    }));
+    // The main thread, falling back from the worker, says so.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+  }
+
+  const fractionsOf = (heard: ExportProgress[], stage: ExportProgress['stage']) =>
+    heard.filter((progress) => progress.stage === stage).map((progress) => progress.fraction);
+
+  it('fills the render’s bar before compressing starts, however short of it the last pause fell', async () => {
+    stubEncoder();
+    const { audioExportService } = await exportService(async (_take, _options, onProgress) => {
+      onProgress?.(0.4);
+      return renderedTone(2);
+    });
+    const heard: ExportProgress[] = [];
+    await audioExportService.exportTake(take, options, (progress) => heard.push(progress));
+    expect(fractionsOf(heard, 'rendering')).toEqual([-1, 0.4, 1]);
+    const lastOfRender = heard.findIndex((p) => p.stage === 'rendering' && p.fraction === 1);
+    expect(heard[lastOfRender + 1]).toEqual({ stage: 'encoding', fraction: 0 });
+    expect(fractionsOf(heard, 'encoding').at(-1)).toBe(1);
+  });
+
+  it('holds the compress bar where the worker left it while the main thread starts over', async () => {
+    stubEncoder();
+    // A worker that masters, says how far it got, and dies before encoding.
+    vi.stubGlobal(
+      'Worker',
+      class {
+        onmessage: ((event: { data: unknown }) => void) | null = null;
+        onerror: ((event: { message: string }) => void) | null = null;
+        postMessage() {
+          queueMicrotask(() => {
+            this.onmessage?.({ data: { type: 'progress', fraction: 0.15 } });
+            this.onerror?.({ message: 'worker died' });
+          });
+        }
+        terminate() {}
+      },
+    );
+    const { audioExportService } = await exportService(async () => renderedTone(2));
+    const heard: ExportProgress[] = [];
+    await audioExportService.exportTake(take, options, (progress) => heard.push(progress));
+    const compressing = fractionsOf(heard, 'encoding');
+    expect(compressing.slice(0, 2)).toEqual([0, 0.15]);
+    expect(compressing.every((fraction, i) => i === 0 || fraction > compressing[i - 1]!)).toBe(
+      true,
+    );
+    expect(compressing.at(-1)).toBe(1);
   });
 });

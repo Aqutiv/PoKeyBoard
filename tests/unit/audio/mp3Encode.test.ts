@@ -1,6 +1,12 @@
 // @vitest-environment node
 import { describe, expect, it } from 'vitest';
-import { encodePcmToMp3 } from '@/audio/mp3Encode';
+import {
+  encodePcmToMp3,
+  finishMp3,
+  finishMp3OnMainThread,
+  MASTERING_SHARE,
+  type ExportPcm,
+} from '@/audio/mp3Encode';
 
 /** A short synthetic stereo sine, the same shape the renderer produces. */
 function makeStereoSine(seconds: number, sampleRate = 48_000) {
@@ -46,5 +52,38 @@ describe('encodePcmToMp3', () => {
     const low = await encodePcmToMp3(sampleRate, 128, left, right);
     const high = await encodePcmToMp3(sampleRate, 192, left, right);
     expect(high.length).toBeGreaterThan(low.length);
+  });
+});
+
+describe('compressing a render', () => {
+  function pcm(seconds: number): ExportPcm {
+    return { ...makeStereoSine(seconds), clicks: null, loudness: 'normalized' };
+  }
+
+  it('fills the bar in whole percents, mastering its first share, to exactly 1', async () => {
+    const fractions: number[] = [];
+    await finishMp3(pcm(3), 128, (fraction) => fractions.push(fraction));
+    const percents = fractions.map((fraction) => Math.round(fraction * 100));
+    expect(fractions.every((fraction, i) => fraction === percents[i]! / 100)).toBe(true);
+    expect(percents.every((percent, i) => i === 0 || percent > percents[i - 1]!)).toBe(true);
+    // Mastering on its own, a percent at a time, before the encoder says a word.
+    const masteringPercents = Math.round(MASTERING_SHARE * 100);
+    expect(percents.filter((percent) => percent <= masteringPercents)).toEqual(
+      Array.from({ length: masteringPercents }, (_, i) => i + 1),
+    );
+    expect(fractions.at(-1)).toBe(1);
+  });
+
+  it('says the same on the main thread as in the worker', async () => {
+    const inWorker: number[] = [];
+    await finishMp3(pcm(3), 128, (fraction) => inWorker.push(fraction));
+    const onMainThread: number[] = [];
+    await finishMp3OnMainThread(
+      pcm(3),
+      128,
+      (fraction) => onMainThread.push(fraction),
+      new AbortController().signal,
+    );
+    expect(onMainThread).toEqual(inWorker);
   });
 });

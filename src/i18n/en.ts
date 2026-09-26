@@ -275,6 +275,17 @@ export const en: Messages = {
     hearIt: 'Hear it',
     chordQualityPrompt: 'Major or minor?',
     chordQualityWrong: ({ answer }) => `That one was ${answer}.`,
+    keySignaturePrompt: 'Which major key has this signature?',
+    majorKey: ({ note }) => `${note} major`,
+    keySignatureWrong: ({ key }) => `That signature is ${key}.`,
+    keySignatureLabel: ({ fifths }) => {
+      const count = Math.abs(fifths);
+      if (count === 0) return 'Key signature: no sharps or flats';
+      const sign = fifths > 0 ? 'sharp' : 'flat';
+      return `Key signature: ${count} ${sign}${count === 1 ? '' : 's'}`;
+    },
+    playTonic: 'Play the home note of this key.',
+    circleLabel: 'Circle of fifths',
     chapterTitles: {
       meetTheKeyboard: 'Meet the Keyboard',
       musicalAlphabet: 'The Musical Alphabet',
