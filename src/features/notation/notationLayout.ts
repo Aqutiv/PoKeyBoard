@@ -1529,6 +1529,14 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
    * lights when it actually sounds.
    */
   const writtenBeats = new Map<LaidOutNote, number>();
+  /** Where each written bracket's last note starts, in beats; see the split below. */
+  const bracketLastBeat = new Map<number, number>();
+  for (const note of notes) {
+    const group = note.tuplet?.group;
+    if (group === undefined) continue;
+    const beat = tempoMap.beatAtMs(note.startMs);
+    bracketLastBeat.set(group, Math.max(bracketLastBeat.get(group) ?? beat, beat));
+  }
 
   const fifths = normalizeFifths(options.keySignature ?? 0);
   // Spelled all at once: a note's letter depends on the chord it sounds in and
@@ -1607,6 +1615,14 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     const beatLine = beatStart + 1;
     const endBeat = startBeat + beatsHeld(written);
     if (endBeat - beatLine < 1 / division / 2) return [out];
+    // Nor inside a bracket that carries on past the line — six in the time of
+    // four across two beats, or three starting on the half beat. There a note
+    // over the line is part of the figure, written whole as the bracket has
+    // it; cutting it would leave its far half outside the bracket's beam.
+    const group = note.tuplet.group;
+    if (group !== undefined && (bracketLastBeat.get(group) ?? 0) > beatLine - 1 / division / 2) {
+      return [out];
+    }
     // And only where one value states the span up to the line. Five sextuplet
     // slots are no single value, and rounding them down would leave a slot of
     // silence the score never wrote; such a note stays whole, as it was.

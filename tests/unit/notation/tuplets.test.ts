@@ -1028,3 +1028,27 @@ describe('a written triplet whose remainder crosses a bar line', () => {
     ]);
   });
 });
+
+describe('a written tuplet note over a beat line inside its bracket', () => {
+  it('stays whole where the bracket carries on past the line', () => {
+    // Six triplet eighths in the time of four across two beats, the third a
+    // triplet quarter over the beat line: part of the figure, not a tie out of it.
+    const tuplet = { actual: 6, normal: 4, unit: 8, group: 0 };
+    const at = (slot: number) => Math.round((slot * 500) / 3);
+    const notes: NoteEvent[] = [
+      { id: 's0', midi: 72, startMs: at(0), durationMs: 166, velocity: 0.5, tuplet },
+      { id: 's1', midi: 74, startMs: at(1), durationMs: 166, velocity: 0.5, tuplet },
+      { id: 's2', midi: 76, startMs: at(2), durationMs: 333, velocity: 0.5, tuplet },
+      { id: 's4', midi: 77, startMs: at(4), durationMs: 166, velocity: 0.5, tuplet },
+      { id: 's5', midi: 79, startMs: at(5), durationMs: 166, velocity: 0.5, tuplet },
+    ];
+    const layout = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+    });
+    expect(layout.chords).toHaveLength(5);
+    expect(layout.chords.every((chord) => !chord.notes[0]!.tiedToNext)).toBe(true);
+    expect(layout.chords.every((chord) => chord.tupletGroup === 0)).toBe(true);
+  });
+});
