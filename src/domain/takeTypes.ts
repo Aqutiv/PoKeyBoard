@@ -7,6 +7,22 @@ export const DEFAULT_INSTRUMENT_ID = 'grand-piano';
 export const DEFAULT_MASTER_VOLUME = 0.85;
 export const DEFAULT_REVERB_MIX = 0.18;
 
+/**
+ * The rooms the reverb can put the piano in, smallest first. Each is an
+ * impulse with its own size and decay (`src/audio/reverbImpulse.ts`); the mix
+ * says how much of it is heard, whichever room it is.
+ */
+export const REVERB_ROOMS = ['studio', 'room', 'hall', 'cathedral'] as const;
+
+export type ReverbRoom = (typeof REVERB_ROOMS)[number];
+
+/**
+ * The room every take was heard in before there was a choice: its impulse
+ * carries the same amount of reverb as the one it replaced, so a take without
+ * a room keeps sounding the way it did.
+ */
+export const DEFAULT_REVERB_ROOM: ReverbRoom = 'room';
+
 /** Upper bound for any timeline position; guards absurd imports (6 hours). */
 export const MAX_TAKE_MS = 6 * 60 * 60 * 1000;
 /** Upper bound for a single held note (2 minutes). */
@@ -83,6 +99,16 @@ export interface InstrumentSettings {
   id: string;
   masterVolume: number;
   reverbMix: number;
+  /** The room the reverb models; absent means `DEFAULT_REVERB_ROOM`. See `reverbRoomOf`. */
+  reverbRoom?: ReverbRoom;
+}
+
+/**
+ * The room a take is heard in. Takes saved before there was a choice carry
+ * none, and they were all heard in Room.
+ */
+export function reverbRoomOf(instrument: Pick<InstrumentSettings, 'reverbRoom'>): ReverbRoom {
+  return instrument.reverbRoom ?? DEFAULT_REVERB_ROOM;
 }
 
 /** The two staffs of the grand staff, in the order they are drawn. */
@@ -183,6 +209,16 @@ export interface NoteEvent {
    * takes, which are spelled from their key and context instead.
    */
   spelling?: NoteSpelling;
+  /**
+   * Played but not written: the source kept this note off the page
+   * (`print-object="no"`, or a note with no head). That is how MuseScore writes
+   * out a trill or a turn for playback beside the note that carries its sign,
+   * or completes a voice with a copy of a note another voice already holds. It
+   * sounds like any other note; the notation never draws it, and practice never
+   * stops to ask for it. The mirror of a velocity-0 note (`isSilentNote`), which
+   * is written but not played. Only an import sets it, and only ever to `true`.
+   */
+  hidden?: boolean;
 }
 
 export interface PedalEvent {

@@ -1,3 +1,4 @@
+import { writtenNotes } from '@/domain/noteEvents';
 import type { Take } from '@/domain/takeTypes';
 import { detectFifths } from '@/features/notation/keyDetection';
 import { normalizeFifths } from '@/features/notation/keySignature';
@@ -69,12 +70,13 @@ export class SheetTooManyPagesError extends SheetExportError {
 
 /**
  * The key a take is engraved in unless the player says otherwise: what the
- * source score declared, or what its own pitches read as.
+ * source score declared, or what its own written pitches read as — a hidden
+ * note is no more part of the page's key than of its spelling.
  */
 export function defaultKeySignatureFor(take: Take): number {
   return take.tempo.keySignature !== undefined
     ? normalizeFifths(take.tempo.keySignature)
-    : detectFifths(take.notes);
+    : detectFifths(writtenNotes(take.notes));
 }
 
 /** Sheet layout for a take — shared by the dialog preview and the export. */

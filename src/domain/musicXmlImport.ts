@@ -80,6 +80,8 @@ interface QNote {
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
   spelling: NoteSpelling | undefined;
+  /** Kept off the page by the score; see `NoteEvent.hidden`. */
+  hidden: boolean;
   /** Where the note's start was read, counted across the whole score. */
   seq: number;
 }
@@ -105,6 +107,8 @@ interface PendingTie {
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
   spelling: NoteSpelling | undefined;
+  /** Whether every link so far was kept off the page. */
+  hidden: boolean;
   seq: number;
 }
 
@@ -180,6 +184,7 @@ function pendingToNote(pending: PendingTie): QNote {
     clef: pending.clef,
     tuplet: pending.tuplet,
     spelling: pending.spelling,
+    hidden: pending.hidden,
     seq: pending.seq,
   };
 }
@@ -514,6 +519,12 @@ function collectPart(
           // write the silences too, and a cue note is not engraved at all.
           // Read before the rest early-out: a rest can carry a tuplet and a
           // bracket, and its length counts towards the grid like any other.
+          //
+          // A hidden note or rest counts as well, though it is never engraved
+          // either. The grid is chosen from the shortest value alone, which
+          // cannot see everything the printed values need, and the fine values
+          // a score hides are what keep the runs La Campanella and Chopin's
+          // Waltz Op. 64 No. 2 print on a grid fine enough to write them.
           const declared = tupletOf(el);
           if (durQ > 0 && !isCue) {
             if (out.shortestQ === null || durQ < out.shortestQ) out.shortestQ = durQ;
@@ -574,6 +585,11 @@ function collectPart(
 
           const percent = attrNumber(el, 'dynamics') ?? dynamicsPercent ?? DEFAULT_DYNAMICS_PERCENT;
           const velocity = clamp((percent / 100) * (FORTE_MIDI_VELOCITY / 127), 0, 1);
+          // Played but not written: the score keeps this note off the page,
+          // outright or by giving it no head. It is what the score plays, so it
+          // is kept like any other, and the notation leaves it out.
+          const hidden =
+            el.getAttribute('print-object') === 'no' || textByTag(el, 'notehead') === 'none';
           const staffNumber = Math.round(numberByTag(el, 'staff') ?? 1);
           const staff = staffOf(el);
           const voice = voiceOf(el, staff);
@@ -596,6 +612,10 @@ function collectPart(
               const [foundKey, pending] = found;
               pendingTies.delete(foundKey);
               pending.endQ = endQ;
+              // One note, drawn from where it starts: hidden only if every
+              // link was, or the printed note a hidden one is tied into would
+              // vanish with it.
+              pending.hidden &&= hidden;
               if (hasStart)
                 pendingTies.set(key, pending); // middle of a chain
               else out.notes.push(pendingToNote(pending));
@@ -610,6 +630,7 @@ function collectPart(
                 clef,
                 tuplet,
                 spelling,
+                hidden,
                 seq: out.nextSeq++,
               });
             } else {
@@ -624,6 +645,7 @@ function collectPart(
                 clef,
                 tuplet,
                 spelling,
+                hidden,
                 seq: out.nextSeq++,
               });
             }
@@ -640,6 +662,7 @@ function collectPart(
               clef,
               tuplet,
               spelling,
+              hidden,
               seq: out.nextSeq++,
             });
           } else {
@@ -653,6 +676,7 @@ function collectPart(
               clef,
               tuplet,
               spelling,
+              hidden,
               seq: out.nextSeq++,
             });
           }
@@ -900,6 +924,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       ...(note.clef !== undefined ? { clef: note.clef } : {}),
       ...(note.tuplet !== undefined ? { tuplet: note.tuplet } : {}),
       ...(note.spelling !== undefined ? { spelling: note.spelling } : {}),
+      ...(note.hidden ? { hidden: true } : {}),
     };
   });
   let maxEndMs = 0;

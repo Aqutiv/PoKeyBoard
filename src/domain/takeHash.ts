@@ -1,4 +1,4 @@
-import type { NoteEvent, Take } from './takeTypes';
+import { reverbRoomOf, type NoteEvent, type Take } from './takeTypes';
 
 /**
  * Deterministic JSON: object keys sorted recursively, arrays kept in order.
@@ -63,6 +63,9 @@ export function canonicalAudioContent(take: Take): Record<string, unknown> {
     instrument: {
       id: take.instrument.id,
       reverbMix: take.instrument.reverbMix,
+      // Resolved, so a take from before rooms and the same take naming Room
+      // are one export.
+      reverbRoom: reverbRoomOf(take.instrument),
     },
     notes: canonicalNotes(take.notes),
     pedalEvents: [...take.pedalEvents].sort(

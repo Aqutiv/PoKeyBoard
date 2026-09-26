@@ -46,6 +46,7 @@ export type RepairCode =
   | 'countInClamped'
   | 'tempoChangesRepaired'
   | 'instrumentDefaulted'
+  | 'reverbRoomDropped'
   | 'noteTimingRounded'
   | 'noteIdsAssigned'
   | 'displayReset';
@@ -380,6 +381,8 @@ export interface Messages {
     playNote: (p: { note: string }) => string;
     /** A drill round that names a scale degree rather than a note. */
     playDegree: (p: { degree: number }) => string;
+    /** The same, in a key the round names: `key` is already words, from `majorKey`. */
+    playDegreeInKey: (p: { key: string; degree: number }) => string;
     /** Reading rounds, where the question is a staff rather than a name. */
     readNotePrompt: string;
     playWhatYouSee: string;
@@ -524,6 +527,14 @@ export interface Messages {
     pianoSwitching: string;
     pianoVolume: string;
     reverb: string;
+    /** The room the reverb models, and its choices, smallest first. */
+    reverbRoom: string;
+    reverbRooms: {
+      studio: string;
+      room: string;
+      hall: string;
+      cathedral: string;
+    };
     velocity: string;
     velocityTouch: string;
     velocityFixed: string;
@@ -639,6 +650,7 @@ export interface Messages {
     countInClamped: string;
     tempoChangesRepaired: string;
     instrumentDefaulted: string;
+    reverbRoomDropped: string;
     noteTimingRounded: string;
     noteIdsAssigned: (p: { count: number }) => string;
     displayReset: string;

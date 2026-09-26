@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
+import { REVERB_ROOMS, reverbRoomOf, type ReverbRoom } from '@/domain/takeTypes';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -246,6 +247,20 @@ export function PianoSection() {
           value={instrument.reverbMix}
           onChange={(e) => settings.setReverbMix(Number(e.target.value))}
         />
+      </label>
+      <label className="setting-row">
+        <span>{m.settings.reverbRoom}</span>
+        <select
+          value={reverbRoomOf(instrument)}
+          onChange={(e) => settings.setReverbRoom(e.target.value as ReverbRoom)}
+          aria-label={m.settings.reverbRoom}
+        >
+          {REVERB_ROOMS.map((room) => (
+            <option key={room} value={room}>
+              {m.settings.reverbRooms[room]}
+            </option>
+          ))}
+        </select>
       </label>
     </>
   );

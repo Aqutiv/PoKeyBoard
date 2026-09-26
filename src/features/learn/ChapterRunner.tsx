@@ -9,6 +9,7 @@ import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useRouter } from '@/app/routerContext';
 import { whiteKeyCount } from '@/features/keyboard/keyboardGeometry';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
+import { majorTonicName } from '@/features/notation/keySignature';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { transportController } from '@/features/transport/transportController';
 import { useI18n } from '@/i18n/i18nContext';
@@ -68,6 +69,11 @@ function drillPrompt(round: DrillRound | null, m: Messages): string {
     }
     case 'scaleDegree':
       return m.learn.playDegree({ degree: round.degree ?? 1 });
+    case 'keyDegree':
+      return m.learn.playDegreeInKey({
+        key: m.learn.majorKey({ note: majorTonicName(round.key ?? 0) }),
+        degree: round.degree ?? 1,
+      });
     case 'namedKey':
       return m.learn.playNote({ note: round.label });
   }
@@ -626,6 +632,9 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
           wrongMidis={wrongMidis}
           anchorMidi={anchorMidi}
           onAnchorChange={setAnchorMidi}
+          // Every step starts its letter rows where it is written: an octave
+          // moved with Z/X ends with the step it was moved in.
+          parkId={step?.id}
           onRangeChange={onRangeChange}
           minVisibleWhites={fitWhites}
         />

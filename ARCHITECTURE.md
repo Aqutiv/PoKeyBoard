@@ -15,7 +15,8 @@ src/
                 registry), SampleBank (+ velocityCurve, and the generated
                 velocityCalibration and toneCalibration, each with its
                 maths), sampleVoice, VoiceManager,
-                PianoGraphFactory (+ procedural reverb IR), MetronomeEngine,
+                PianoGraphFactory, reverbImpulse (the reverb's procedural
+                rooms), MetronomeEngine,
                 OfflineTakeRenderer, AudioExportService, loudness (BS.1770
                 loudness, true peak, look-ahead limiter), id3,
                 audioCapabilities, iosAudioSession
@@ -163,7 +164,7 @@ that field, a switch invalidates cached exports on its own.
 
 `PianoGraphFactory` builds `voices → bus → (dry + convolver send) → master → output gain → limiter → soft clip → destination`, the live metronome joining after the limiter, which starts out with a fast release to be over its first moments' duck at once, for **any** `BaseAudioContext`. `OfflineTakeRenderer` constructs an `OfflineAudioContext` and replays sustain-applied notes through the same factory with the same attack/release constants and the same `SampleBank` buffers. Two things differ, both about level: the piano plays at the default volume (the volume slider is for the room, not the file), and without the graph's live peak guard (`peakGuard: false`) — a compressor has to react to peaks it cannot see coming, while an export can look ahead. The metronome travels as a click track: its two click sounds, rendered once, and where every beat falls. The encoder worker then masters the render (`loudness.masterExport`: BS.1770 loudness to −16 LUFS, or the played level, then a true-peak look-ahead limiter at −1 dBTP) before encoding; see AUDIO_EXPORT.md.
 
-A voice behaves like the string it stands for, the same way live and offline (`sampleVoice.ts`). It starts at its recording's onset rather than the top of the file (`onsetOffsetOf`, found once at decode), which takes the libraries' lead-in silence out of every note. Its damper falls more slowly in the bass than the treble (`releaseTcFor`), and above F6 there is none, so a released key there rings on. Striking a key that still sounds fades the old voice from the new one's start (`VoiceManager.restrike`, `scheduleTakeVoices` for exports) instead of stacking a second copy of one string, which would build up level and comb-filter. So of two copies of one key struck at one moment — two voices sharing a note — only the one struck last is heard, and playback, scrubbing and exports strike in `sortStrikes` order, quieter copy first, so it is always the louder; the stored order, which the notation reads, is left alone. A note with velocity 0 is written but not played (`isSilentNote`, a score's `dynamics="0"`): none of them sounds it, though the score still draws it. A voice whose selection carries a tone cutoff runs source → lowpass → envelope, the envelope holding its gain plus the make-up; any other has no filter node at all. However a live voice ends — let go, struck again, stolen, called off, stopped — `disconnectSampleVoice` takes it out of the graph, filter and all.
+A voice behaves like the string it stands for, the same way live and offline (`sampleVoice.ts`). It starts at its recording's onset rather than the top of the file (`onsetOffsetOf`, found once at decode), which takes the libraries' lead-in silence out of every note. Its damper falls more slowly in the bass than the treble (`releaseTcFor`), and above F6 there is none, so a released key there rings on. Striking a key that still sounds fades the old voice from the new one's start (`VoiceManager.restrike`, `scheduleTakeVoices` for exports) instead of stacking a second copy of one string, which would build up level and comb-filter. So of two copies of one key struck at one moment — two voices sharing a note — only the one struck last is heard, and playback, scrubbing and exports strike in `sortStrikes` order, quieter copy first, so it is always the louder; the stored order, which the notation reads, is left alone. A note with velocity 0 is written but not played (`isSilentNote`, a score's `dynamics="0"`): none of them sounds it, though the score still draws it. A hidden note is the reverse, played but not written (`isHiddenNote`, a score's `print-object="no"`): all of them sound it, and the notation, which lays out only `writtenNotes`, never draws it. A voice whose selection carries a tone cutoff runs source → lowpass → envelope, the envelope holding its gain plus the make-up; any other has no filter node at all. However a live voice ends — let go, struck again, stolen, called off, stopped — `disconnectSampleVoice` takes it out of the graph, filter and all.
 
 ## Scrubbing
 
@@ -195,7 +196,9 @@ because two mounted `PianoKeyboard`s would each attach a `ComputerKeyboardInput`
 to `window` — doubling every keypress into two voices under one source id — and
 the second unmount would clear the first one's sustain. The runner keeps its own
 keyboard anchor (`anchorMidi` / `onAnchorChange`) so a lesson never relocates the
-Play keyboard, and `targetMidis` lights the keys a step is asking for, styled
+Play keyboard, and re-parks the computer keyboard's octave on every step
+(`parkId`), so a Z/X shift ends with the step it was made in. `targetMidis`
+lights the keys a step is asking for, styled
 apart from the keys the user is holding. Simultaneity specs always allow a short
 onset window as well as a true overlap: a mouse is one pointer and physically
 cannot hold two keys.
@@ -212,7 +215,7 @@ read and therefore device-local rather than part of the settings backup.
 
 Dexie v1: `takes` (denormalized summary columns + full JSON — lists never parse takes), `audioCache` (MP3 blobs in a separate table so lists never load audio), `settings`, `metadata`. Schema versions are the migration mechanism. The persistence service debounces autosaves (800 ms), forces saves on recording stop / page hide / before export, restores the last take + playhead, and requests persistent storage after the first meaningful save.
 
-Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/reverb/pack + bitrate + metronome + loudness + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
+Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/reverb mix and room/pack + bitrate + metronome + loudness + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
 
 ## Theming
 

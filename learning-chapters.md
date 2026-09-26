@@ -13,7 +13,7 @@ must agree.
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
 | Beginner     | 10    | 0         |
-| Intermediate | 2     | 8         |
+| Intermediate | 3     | 7         |
 | Advanced     | 0     | 10        |
 
 ---
@@ -59,7 +59,7 @@ _One piece in C → several keys, with real accompaniment._
 | --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | 1   | **How to Practise** ✅                       | Slow practice, hands separate, chunking, spaced repetition; the metronome, the record button, the speed menu and the A–B loop as tools | the same passage at 60, 80 and 100 bpm against the click |
 | 2   | **Key Signatures & the Circle of Fifths** ✅ | Why sharps/flats sit at the clef; their order; finding the tonic; the circle                                                           | name the key from a signature; play its tonic and scale  |
-| 3   | Scales Beyond C                              | G, F and D major; where the black keys land; why the fingering shifts                                                                  | each scale, one octave, with the right shape             |
+| 3   | **Scales Beyond C** ✅                       | G, F and D major; where the black keys land; why the fingering shifts                                                                  | each scale, one octave, with the right shape             |
 
 ### Part 2 — Harmony's building blocks
 
@@ -182,8 +182,11 @@ Four step kinds (`src/features/learn/types.ts`):
   class, so any octave counts and no note name gives the answer away.
   `namedChord` names a triad ("Play A minor.") and grades it with `chord`.
   `keyTonic` draws a key signature and asks for its home note, graded as a
-  pitch class in any octave. A round carries its pool's `kind`, which the
-  runner's prompt switches on.
+  pitch class in any octave. `keyDegree` names a key and a degree of it ("In D
+  major, play degree 3."), for knowing where a scale's black keys land without
+  walking up from home; unlike `scaleDegree` it moves between keys, so it has
+  to name them, and it never asks degree 1, whose answer the name gives away.
+  A round carries its pool's `kind`, which the runner's prompt switches on.
 
 A correct answer is **held on screen for 500ms** before the next round replaces
 it (`HOLD_MS` in `useDrill.ts`). Advancing on the same render that satisfied a
@@ -292,13 +295,13 @@ them apart the same way.
 | --------------- | ---------------------------------------------------------- | ------------------ |
 | `distinctKeys`  | any N different keys                                       | B1                 |
 | `risingLeap`    | a note, then one at least N semitones higher               | B1                 |
-| `pitchClass`    | one named pitch class, optionally in N octaves             | B1, B2, B3, I2     |
+| `pitchClass`    | one named pitch class, optionally in N octaves             | B1, B2, B3, I2, I3 |
 | `blackKeyGroup` | a whole group of 2 or 3 black keys                         | B1                 |
 | `interval`      | two notes N semitones apart, optionally pitch-class pinned | B1, B3, I5         |
 | `exactKeys`     | exactly these midis                                        | B5, B9, A1         |
-| `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I2, I3 |
+| `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, I2, I3     |
 | `rhythm`        | these beat offsets, in time with the click                 | B6, I7, A4         |
-| `playAlong`     | a written line, in order — optionally in time, as chords   | B7–B10, I1, I2, A6 |
+| `playAlong`     | a written line, in order — optionally in time, as chords   | B7–B10, I1–I3, A6  |
 | `chord`         | a named triad, root position, any octave, nothing extra    | B9, I6, A1         |
 
 An `interval` with no `lowerPitchClass` and no `together` reads the cumulative
@@ -373,8 +376,8 @@ opens that same tune at 60% speed, looping the bars it practised. They are
 applied through the calls Play's own speed menu and loop button make, so the
 result is indistinguishable from marking them by hand (`handoff.ts`). The
 track may be a Classics score as well as an authored one: Intermediate
-chapter 2 opens Petzold's Minuet in G, named through `libraryTrackSummary`
-like any Library entry. A score is fetched the first time it is opened, so
+chapters 2 and 3 open Petzold's Minuet in G and Pachelbel's Canon in D, named
+through `libraryTrackSummary` like any Library entry. A score is fetched the first time it is opened, so
 offline the hand-off cannot load it — it lands on the Library instead of an
 empty Play, in the piece's folder and searched for it. The folder alone would
 not do: the Library restores the last search typed there, which could hide
@@ -420,7 +423,12 @@ Learned the hard way; violating any of these produces a silent failure.
   moves the base with an externally-driven anchor. Snapped down to a C, because
   `KEY_TO_SEMITONE` is chromatic from the base with the black keys on the upper
   row: a base that is not a C puts the black row on white keys. A step anchored
-  at E4 therefore keeps the base at C4, exactly as before.
+  at E4 therefore keeps the base at C4, exactly as before. The base is
+  re-parked on every **step** too (`parkId`, the step id), not only when the
+  anchor moves, so an octave shifted with Z/X lasts for the step it was
+  shifted in. That matters because the rows reach from a C to the F an octave
+  and a half above, and an octave from G, A or B never fits: Intermediate
+  chapter 3's G major tells a computer-keyboard player to press X after the E.
 - **A rhythm lesson is unwinnable by ear at `metronomeVolume: 0`.** The setting
   is persisted and user-editable, and the lesson honours it as it stands: the
   click still runs and the exercise still grades, but there is nothing to hear.

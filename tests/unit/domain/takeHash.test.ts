@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTake } from '@/domain/noteEvents';
-import { computeExportHash, sha256Hex, stableStringify } from '@/domain/takeHash';
+import {
+  canonicalAudioContent,
+  computeExportHash,
+  sha256Hex,
+  stableStringify,
+} from '@/domain/takeHash';
 import type { Take } from '@/domain/takeTypes';
 
 function takeWithNotes(): Take {
@@ -83,6 +88,16 @@ describe('computeExportHash', () => {
     );
   });
 
+  it('ignores whether a note is hidden, since it sounds the same either way', async () => {
+    // A hidden note leaves the page, not the recording: a cached MP3 of a score
+    // imported before hidden notes were read is still the same sound.
+    const base = takeWithNotes();
+    const hidden: Take = { ...base, notes: base.notes.map((n) => ({ ...n, hidden: true })) };
+    expect(await computeExportHash({ ...baseInput, take: hidden })).toBe(
+      await computeExportHash({ ...baseInput, take: base }),
+    );
+  });
+
   it('changes when a note changes', async () => {
     const base = takeWithNotes();
     const edited: Take = {
@@ -103,6 +118,33 @@ describe('computeExportHash', () => {
     expect(await computeExportHash({ ...baseInput, take, exporterVersion: 2 })).not.toBe(base);
     const wetter: Take = { ...take, instrument: { ...take.instrument, reverbMix: 0.5 } };
     expect(await computeExportHash({ ...baseInput, take: wetter })).not.toBe(base);
+  });
+
+  it('hears the room, and a take without one as Room', async () => {
+    const take = takeWithNotes();
+    const beforeRooms = { id: 'grand-piano', masterVolume: 0.85, reverbMix: 0.18 };
+    const older: Take = { ...take, instrument: beforeRooms };
+    const inRoom: Take = { ...take, instrument: { ...beforeRooms, reverbRoom: 'room' } };
+    const inHall: Take = { ...take, instrument: { ...beforeRooms, reverbRoom: 'hall' } };
+
+    expect(canonicalAudioContent(older).instrument).toEqual({
+      id: 'grand-piano',
+      reverbMix: 0.18,
+      reverbRoom: 'room',
+    });
+    expect(canonicalAudioContent(inHall).instrument).toEqual({
+      id: 'grand-piano',
+      reverbMix: 0.18,
+      reverbRoom: 'hall',
+    });
+    // Naming the room a take already played in changes nothing it renders…
+    expect(await computeExportHash({ ...baseInput, take: older })).toBe(
+      await computeExportHash({ ...baseInput, take: inRoom }),
+    );
+    // …and another room is another export.
+    expect(await computeExportHash({ ...baseInput, take: inHall })).not.toBe(
+      await computeExportHash({ ...baseInput, take: older }),
+    );
   });
 
   it('ignores the volume slider, which the export renders without', async () => {

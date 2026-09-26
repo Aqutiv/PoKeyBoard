@@ -4,6 +4,7 @@ import {
   DEFAULT_INSTRUMENT_ID,
   DEFAULT_MASTER_VOLUME,
   DEFAULT_REVERB_MIX,
+  DEFAULT_REVERB_ROOM,
   DEFAULT_SAMPLE_PACK_VERSION,
   type NoteEvent,
   type PedalEvent,
@@ -50,6 +51,26 @@ export function sortStrikes(notes: readonly NoteEvent[]): NoteEvent[] {
  */
 export function isSilentNote(note: Pick<NoteEvent, 'velocity'>): boolean {
   return note.velocity <= 0;
+}
+
+/**
+ * Whether a note is played but not written — the mirror of `isSilentNote`. A
+ * score hides one (`print-object="no"`, or a note with no head) to play what it
+ * writes some other way: a trill or a turn written out beside the note that
+ * carries its sign, or a copy of a note one voice shares with another. So
+ * playback, scrubbing, export and the keyboard sound it like any other, while
+ * the notation never draws it and practice never stops to ask for it.
+ */
+export function isHiddenNote(note: Pick<NoteEvent, 'hidden'>): boolean {
+  return note.hidden === true;
+}
+
+/**
+ * The notes a score draws: every one but the hidden. The array itself when
+ * none is hidden, as in every recorded take.
+ */
+export function writtenNotes(notes: readonly NoteEvent[]): readonly NoteEvent[] {
+  return notes.some(isHiddenNote) ? notes.filter((note) => !isHiddenNote(note)) : notes;
 }
 
 /**
@@ -116,6 +137,7 @@ export function createEmptyTake(overrides: Partial<Take> = {}): Take {
       id: DEFAULT_INSTRUMENT_ID,
       masterVolume: DEFAULT_MASTER_VOLUME,
       reverbMix: DEFAULT_REVERB_MIX,
+      reverbRoom: DEFAULT_REVERB_ROOM,
     },
     notes: [],
     pedalEvents: [],

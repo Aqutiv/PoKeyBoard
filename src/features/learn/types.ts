@@ -171,6 +171,21 @@ export type DrillPool =
     }
   | {
       /**
+       * The round names a major key and a degree of it — "In D major, play
+       * degree 3." — and the user plays that note, in any octave. Knowing a
+       * scale is knowing where its black keys land without walking up from
+       * home to find them. Where `scaleDegree` keeps to one key and never names
+       * it, this moves between keys, so it has to.
+       */
+      kind: 'keyDegree';
+      /**
+       * Keys in fifths, degrees 2–7, asked in the shared stride order. Never
+       * degree 1: the key's name is its answer.
+       */
+      questions: readonly { key: number; degree: number }[];
+    }
+  | {
+      /**
        * The round names a degree of a major scale — "play degree 5" — and the
        * user plays it, in any octave. Knowing a scale is knowing where each of
        * its steps lives, not only reciting them in order.
