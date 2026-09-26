@@ -12,6 +12,41 @@
 /** Work that pauses every so often and finishes with a `T`. */
 export type Steps<T> = Generator<void, T, void>;
 
+/** How far work is through the steps it was planned to take; see `stepProgress`. */
+export interface StepProgress {
+  /** The same work, telling how far along it is after each of its steps. */
+  count<T>(steps: Steps<T>): Steps<T>;
+  /** Count as done steps the plan held but the work turned out not to need. */
+  skip(steps: number): void;
+}
+
+/**
+ * Count work's steps against the `total` it was planned to take, and report
+ * after each one how far along it is: `done / total`, which reaches exactly 1
+ * on the plan's last step. It adds no pauses of its own, so the work runs just
+ * as it would without it, straight through or a slice at a time.
+ */
+export function stepProgress(total: number, onProgress?: (fraction: number) => void): StepProgress {
+  let done = 0;
+  const report = () => onProgress?.(total > 0 ? done / total : 1);
+  return {
+    *count<T>(steps: Steps<T>): Steps<T> {
+      for (;;) {
+        const step = steps.next();
+        if (step.done) return step.value;
+        done += 1;
+        report();
+        yield;
+      }
+    },
+    skip(steps: number): void {
+      if (steps <= 0) return;
+      done += steps;
+      report();
+    },
+  };
+}
+
 /** Run the work straight through, as a plain function would. */
 export function runToEnd<T>(steps: Steps<T>): T {
   for (;;) {

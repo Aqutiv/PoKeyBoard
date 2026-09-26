@@ -43,7 +43,11 @@ export type ExportStage = 'saving' | 'rendering' | 'encoding';
 
 export interface ExportProgress {
   stage: ExportStage;
-  /** 0..1, or -1 for indeterminate stages. */
+  /**
+   * 0..1, or -1 while the stage cannot tell how far it has got: saving, and
+   * rendering until its first pause (throughout, where an offline render cannot
+   * pause; see `scheduleVoicesAhead`).
+   */
   fraction: number;
 }
 
@@ -95,6 +99,12 @@ class AudioExportService {
     }
     const job = this.createJob();
     this.activeJob = job;
+    // Heard only while this export is the one under way: a cancelled render
+    // still runs to its end, and its pauses would go on reporting onto the bar
+    // of whatever export comes next.
+    const report = (progress: ExportProgress) => {
+      if (!job.cancelled && this.activeJob === job) onProgress(progress);
+    };
     try {
       const bitrateKbps = QUALITY_BITRATE[options.quality];
       const hash = await this.awaitJob(
@@ -135,24 +145,37 @@ class AudioExportService {
         };
       }
 
-      onProgress({ stage: 'saving', fraction: -1 });
+      report({ stage: 'saving', fraction: -1 });
       await this.awaitJob(job, persistenceService.flushSaveOrThrow());
 
-      onProgress({ stage: 'rendering', fraction: -1 });
+      report({ stage: 'rendering', fraction: -1 });
       const rendered = await this.awaitJob(
         job,
-        renderTakeForExport(take, {
-          includeMetronome: options.includeMetronome,
-          metronomeVolume: options.metronomeVolume,
-        }),
+        renderTakeForExport(
+          take,
+          {
+            includeMetronome: options.includeMetronome,
+            metronomeVolume: options.metronomeVolume,
+          },
+          (fraction) => report({ stage: 'rendering', fraction }),
+        ),
       );
+      // The render's last pause can fall up to a stretch short of its end, and a
+      // render that cannot pause says nothing at all: done is done.
+      report({ stage: 'rendering', fraction: 1 });
 
-      onProgress({ stage: 'encoding', fraction: 0 });
+      report({ stage: 'encoding', fraction: 0 });
+      // One bar however many tries it takes: where the worker fails, the main
+      // thread masters over again, and its first percents must not pull the bar
+      // back from where the worker left it.
+      let compressed = 0;
       const mp3 = await this.awaitJob(
         job,
-        this.encode(job, rendered, options.loudness, bitrateKbps, (fraction) =>
-          onProgress({ stage: 'encoding', fraction }),
-        ),
+        this.encode(job, rendered, options.loudness, bitrateKbps, (fraction) => {
+          if (fraction <= compressed) return;
+          compressed = fraction;
+          report({ stage: 'encoding', fraction });
+        }),
       );
 
       const bare = new Blob([mp3], { type: 'audio/mpeg' });
