@@ -1,4 +1,5 @@
 import { runInSlices, runToEnd, type SliceOptions, type Steps } from '@/utils/steps';
+import { LIMITER_MAKEUP_DB, LIVE_OUTPUT_GAIN_DB } from './gainStaging';
 
 /**
  * How loud an export is, and how it is kept from clipping.
@@ -378,13 +379,13 @@ export const CEILING_DBTP = -1;
 export const MAX_LIMITING_DB = 5;
 
 /**
- * What `asPlayed` lifts the render by: the gain live playback's compressor adds
- * to everything under its threshold — its automatic makeup gain — which an
- * export leaves out along with the compressor (`peakGuard`). With it, a take
+ * What `asPlayed` lifts the render by: all the gain live playback gives the
+ * piano under its limiter's threshold — the output gain ahead of the limiter
+ * and the limiter's own automatic makeup (`gainStaging.ts`) — which an export
+ * leaves out along with the rest of that stage (`peakGuard`). With it, a take
  * kept at its played level is as loud as the app sounds at the default volume.
- * Measured on the library's tracks: 2.9 dB, within a tenth on every one.
  */
-const LIVE_MAKEUP_DB = 2.9;
+export const LIVE_MAKEUP_DB = LIVE_OUTPUT_GAIN_DB + LIMITER_MAKEUP_DB;
 
 /**
  * How far the metronome sits under the level it clicks at live. An accented

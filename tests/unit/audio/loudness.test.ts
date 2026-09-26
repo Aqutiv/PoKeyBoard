@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
+import { LIMITER_MAKEUP_DB, LIVE_OUTPUT_GAIN_DB } from '@/audio/gainStaging';
 import {
   CEILING_DBTP,
   integratedLoudness,
   kWeighting,
   limitTruePeak,
+  LIVE_MAKEUP_DB,
   masterExport,
   masterExportInSlices,
   MAX_LIMITING_DB,
@@ -206,10 +208,13 @@ describe('mastering an export', () => {
   });
 
   it('keeps a take as played as loud as the app sounds live', () => {
+    // All the live stage gives the piano under its limiter's threshold: its
+    // output gain and the limiter's own makeup.
+    expect(LIVE_MAKEUP_DB).toBe(LIVE_OUTPUT_GAIN_DB + LIMITER_MAKEUP_DB);
     const [left, right] = stereo(faded(sine(1000, -30, 10)));
     const result = masterExport(left!, right!, null, 'asPlayed', RATE);
-    expect(result.gainDb).toBeCloseTo(2.9, 5);
-    expect(integratedLoudness([left!, right!], RATE)).toBeCloseTo(-27.1, 1);
+    expect(result.gainDb).toBeCloseTo(LIVE_MAKEUP_DB, 5);
+    expect(integratedLoudness([left!, right!], RATE)).toBeCloseTo(-30 + LIVE_MAKEUP_DB, 1);
   });
 
   it('mixes the metronome in without letting it count toward the level', () => {
@@ -236,7 +241,7 @@ describe('mastering an export', () => {
     const [left, right] = stereo(new Float32Array(RATE * 2));
     const result = masterExport(left!, right!, null, 'normalized', RATE);
     expect(result.renderedLufs).toBe(-Infinity);
-    expect(result.gainDb).toBeCloseTo(2.9, 5);
+    expect(result.gainDb).toBeCloseTo(LIVE_MAKEUP_DB, 5);
     expect(left!.every((sample) => sample === 0)).toBe(true);
   });
 });

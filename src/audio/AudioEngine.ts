@@ -470,7 +470,8 @@ export class AudioEngine {
 
   /**
    * Where non-piano sources (the metronome) should connect: past master volume
-   * and reverb, but still inside the graph's clip protection.
+   * and reverb, and past the limiter, so a click never turns the piano down,
+   * but still inside the graph's soft clipper.
    */
   getOutputDestination(): AudioNode | null {
     return this.graph?.outputDestination ?? null;
