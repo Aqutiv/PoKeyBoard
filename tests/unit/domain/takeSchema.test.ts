@@ -78,6 +78,17 @@ describe('parseTakeJson', () => {
     expect(take.notes[1]).not.toHaveProperty('spelling');
   });
 
+  it('keeps a hidden note hidden, and reads false as printed', () => {
+    const raw = specExampleTake();
+    const notes = raw.notes as Record<string, unknown>[];
+    notes[0]!.hidden = true;
+    notes[1]!.hidden = false;
+    const { take, repairs } = parseTakeJson(raw);
+    expect(repairs).toEqual([]);
+    expect(take.notes[0]!.hidden).toBe(true);
+    expect(take.notes[1]!.hidden).toBe(false);
+  });
+
   it('round-trips a declared tuplet, and rejects one that was never written', () => {
     const raw = specExampleTake();
     const notes = raw.notes as Record<string, unknown>[];

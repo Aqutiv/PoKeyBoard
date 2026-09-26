@@ -83,6 +83,16 @@ describe('computeExportHash', () => {
     );
   });
 
+  it('ignores whether a note is hidden, since it sounds the same either way', async () => {
+    // A hidden note leaves the page, not the recording: a cached MP3 of a score
+    // imported before hidden notes were read is still the same sound.
+    const base = takeWithNotes();
+    const hidden: Take = { ...base, notes: base.notes.map((n) => ({ ...n, hidden: true })) };
+    expect(await computeExportHash({ ...baseInput, take: hidden })).toBe(
+      await computeExportHash({ ...baseInput, take: base }),
+    );
+  });
+
   it('changes when a note changes', async () => {
     const base = takeWithNotes();
     const edited: Take = {
