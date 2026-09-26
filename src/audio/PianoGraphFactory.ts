@@ -24,14 +24,15 @@ import {
  *              ↓
  *     out ← softClip ← softClipInput ← lookAhead ← clickBus ← metronome
  *
- * The piano is turned up by the live output gain and held by the limiter;
- * `gainStaging.ts` has the levels, and why. For its first moments a newly
- * made limiter ducks everything, so the piano goes round it until it has
- * settled — through `bypassDelay` and `bypassGain`, which match the limiter's
- * delay and makeup — and then crossfades onto it (`LIMITER_WARMUP_S`).
- * Non-piano sources (the metronome) join at `clickBus`, past master volume,
- * reverb and the limiter: a click is independent of the piano's volume, never
- * turns the piano down, and is still covered by the soft clipper.
+ * The piano is set to its live level by the output gain and the limiter's
+ * makeup, and held by the limiter; `gainStaging.ts` has the levels, and why.
+ * For its first moments a newly made limiter ducks everything, so the piano
+ * goes round it until it has settled — through `bypassDelay` and `bypassGain`,
+ * which match the limiter's delay and makeup — and then crossfades onto it
+ * (`LIMITER_WARMUP_S`). Non-piano sources (the metronome) join at `clickBus`,
+ * past master volume, reverb and the limiter: a click is independent of the
+ * piano's volume, never turns the piano down, and is still covered by the
+ * soft clipper.
  */
 export interface PianoGraphOptions {
   masterVolume: number;
@@ -124,9 +125,9 @@ export const VOICE_BUS_HEADROOM = 0.7;
 
 /**
  * Below this input magnitude the soft clipper is exactly unity gain. Just under
- * the ceiling, and over what the limiter lets out until it is holding back 8 dB
- * or more: what it bends is what gets past the limiter — the first moments of a
- * dense onset, a click on a loud chord.
+ * the ceiling, and over what the limiter lets out of even the densest chords:
+ * what it bends is only what gets past the limiter — a click on a loud chord,
+ * or a chord in the moment before the limiter has settled.
  */
 export const SOFT_CLIP_KNEE = 0.95;
 
@@ -203,9 +204,9 @@ export function createPianoGraph(
   const clickBus = context.createGain();
   clickBus.gain.value = 1;
 
-  // Safety limiter for dense chords, not a loudness effect: a note on its own
-  // stays under it. Its automatic makeup gain still lifts everything it
-  // passes, which `LIMITER_MAKEUP_DB` accounts for.
+  // Safety limiter for dense chords, not a loudness effect: most notes on
+  // their own stay under it. Its automatic makeup gain still lifts everything
+  // it passes, which `LIMITER_MAKEUP_DB` accounts for.
   const limiter = context.createDynamicsCompressor();
   limiter.threshold.value = LIMITER_THRESHOLD_DB;
   limiter.knee.value = LIMITER_KNEE_DB;

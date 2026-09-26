@@ -187,10 +187,13 @@ describe('createSoftClipCurve', () => {
   it('bends only just under the ceiling, over what the limiter lets out', () => {
     expect(SOFT_CLIP_KNEE).toBe(0.95);
     // Where the limiter starts holding, what it lets out is well under the
-    // knee: its output climbs a twentieth as fast as its input from there, so
-    // 8 dB of limiting passes the clipper untouched.
-    const limiterLetsOut = 10 ** ((LIMITER_THRESHOLD_DB + LIMITER_MAKEUP_DB) / 20);
-    expect(limiterLetsOut).toBeLessThan(SOFT_CLIP_KNEE);
+    // knee, and it climbs only a twentieth as fast as its input from there:
+    // even 30 dB over the threshold — a dense chord at the worst-case gain is
+    // some 25 dB — it is still clear of the clipper, steady state.
+    const limiterLetsOut = (overDb: number) =>
+      10 ** ((LIMITER_THRESHOLD_DB + overDb / 20 + LIMITER_MAKEUP_DB) / 20);
+    expect(limiterLetsOut(0)).toBeLessThan(0.75);
+    expect(limiterLetsOut(30)).toBeLessThan(SOFT_CLIP_KNEE - 0.05);
   });
 
   it('never reaches full scale, even at the endpoints', () => {
@@ -233,21 +236,21 @@ describe('createPianoGraph', () => {
     const { context, created } = createStubContext();
     createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
     const limiter = findNode(created, 'compressor') as unknown as Record<string, StubParam>;
-    expect(limiter.threshold?.value).toBe(-2);
+    expect(limiter.threshold?.value).toBe(-6);
     expect(limiter.knee?.value).toBe(0);
     expect(limiter.ratio?.value).toBe(20);
     expect(limiter.attack?.value).toBe(0.001);
     expect(limiter.release?.value).toBe(0.3);
   });
 
-  it('turns the piano up by the live output gain, after master and ahead of the limiter', () => {
+  it('sets the piano to the live output gain, after master and ahead of the limiter', () => {
     const { context, created } = createStubContext();
     createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
     const limiter = findNode(created, 'compressor');
     const feeding = created.filter((n) => n.outputs.includes(limiter));
     expect(feeding).toHaveLength(1);
     const outputGain = feeding[0] as StubNode & { gain: StubParam };
-    expect(LIVE_OUTPUT_GAIN_DB).toBe(1.76);
+    expect(LIVE_OUTPUT_GAIN_DB).toBe(-0.52);
     expect(outputGain.gain.value).toBeCloseTo(10 ** (LIVE_OUTPUT_GAIN_DB / 20), 10);
     const master = created.find((n) => n.outputs.includes(outputGain)) as unknown as {
       gain: StubParam;
@@ -257,10 +260,11 @@ describe('createPianoGraph', () => {
 
   it("counts the limiter's own makeup gain: the spec's formula, for a hard knee", () => {
     // Full scale in comes out at the threshold plus a twentieth of the way
-    // back up, −1.9 dB; the makeup is that loss to the power 0.6.
+    // back up, −5.7 dB; the makeup is that loss to the power 0.6.
+    expect(compressorMakeupDb(-6, 20)).toBeCloseTo(3.42, 10);
     expect(compressorMakeupDb(-2, 20)).toBeCloseTo(1.14, 10);
     expect(compressorMakeupDb(0, 20)).toBeCloseTo(0, 10);
-    expect(LIMITER_MAKEUP_DB).toBe(compressorMakeupDb(-2, 20));
+    expect(LIMITER_MAKEUP_DB).toBe(compressorMakeupDb(-6, 20));
     // With the output gain: the 2.9 dB the app has always played at.
     expect(LIVE_OUTPUT_GAIN_DB + LIMITER_MAKEUP_DB).toBeCloseTo(2.9, 10);
   });

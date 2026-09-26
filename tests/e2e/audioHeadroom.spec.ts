@@ -194,10 +194,10 @@ test.describe('output headroom', () => {
   test('keeps the corrected worst case under full scale once the limiter has settled', async ({
     page,
   }) => {
-    // The two tests above strike at 0.25 s, while a newly made
-    // DynamicsCompressorNode may still be opening up — it starts out ducking
-    // hard — so the worst case is struck again a second in, against a limiter
-    // that has settled, as the live one always has. The click lands with it.
+    // The two tests above strike at 0.25 s, while the piano still goes round
+    // a newly made limiter (see `LIMITER_WARMUP_S`) and only the soft clipper
+    // holds the peaks. Here the worst case is struck a second in, once the
+    // limiter has settled and taken over. The click lands with it.
     const peak = await renderPeak(page, {
       voiceGain: worstCaseVoiceGain(),
       voiceCount: VOICE_COUNT,
@@ -209,6 +209,49 @@ test.describe('output headroom', () => {
     test.info().annotations.push({ type: 'peak', description: peak.toFixed(4) });
     expect(peak).toBeGreaterThan(0.9); // the stage really is at work up there
     expect(peak).toBeLessThanOrEqual(1);
+  });
+
+  test('holds a dense, sustained, very hot chord under the soft clipper', async ({ page }) => {
+    // It is the limiter that holds the piano, not the soft clipper: a 20:1
+    // limiter still lets its output climb a twentieth of a dB for every dB
+    // over its threshold, so the threshold has to sit low enough that even the
+    // densest chord it meets comes out under the clipper's knee, which is left
+    // for the rare overshoot. Twelve voices at the worst-case gain, held for
+    // two seconds once the limiter has settled, are some 25 dB over it — far
+    // past anything played. (Held to the end of the render: stopped dead, as
+    // no piano voice ever is, they would leave the limiter letting go while
+    // the last of them is still in its look-ahead.)
+    const { peak, knee } = await page.evaluate(async (voiceGain: number) => {
+      const { PianoGraph } = window as unknown as Modules;
+      const sampleRate = 48000;
+      const context = new OfflineAudioContext({
+        numberOfChannels: 2,
+        length: sampleRate * 3,
+        sampleRate,
+      });
+      const graph = PianoGraph.createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+      for (let voice = 0; voice < 12; voice += 1) {
+        const tone = context.createOscillator();
+        tone.frequency.value = 110 * Math.pow(2, voice / 12);
+        const gain = context.createGain();
+        gain.gain.value = voiceGain;
+        tone.connect(gain);
+        gain.connect(graph.voiceDestination);
+        tone.start(1);
+      }
+      const rendered = await context.startRendering();
+      let loudest = 0;
+      for (let channel = 0; channel < rendered.numberOfChannels; channel += 1) {
+        const data = rendered.getChannelData(channel);
+        for (let i = sampleRate; i < data.length; i += 1) {
+          loudest = Math.max(loudest, Math.abs(data[i] as number));
+        }
+      }
+      return { peak: loudest, knee: PianoGraph.SOFT_CLIP_KNEE };
+    }, worstCaseVoiceGain());
+    test.info().annotations.push({ type: 'peak', description: peak.toFixed(4) });
+    expect(peak).toBeGreaterThan(0.8); // the limiter really is holding it down
+    expect(peak).toBeLessThanOrEqual(knee);
   });
 
   test('bends an overshoot into the ceiling rather than flat-topping below it', async ({
