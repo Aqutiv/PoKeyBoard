@@ -7,7 +7,12 @@ import {
   type ClickGrid,
 } from '@/audio/MetronomeEngine';
 import { forkLibraryTake, isLibraryTakeId } from '@/domain/libraryTakes';
-import { computeTakeDurationMs, lowerBoundByStart, sortNotes } from '@/domain/noteEvents';
+import {
+  computeTakeDurationMs,
+  isSilentNote,
+  lowerBoundByStart,
+  sortStrikes,
+} from '@/domain/noteEvents';
 import {
   MAX_NOTE_DURATION_MS,
   MAX_PLAYBACK_SPEED,
@@ -433,7 +438,7 @@ export class TransportController {
     // are never in the backing. In replace mode the kept notes are all before
     // the playhead, so nothing schedules forward — a natural no-op.
     const current = useTakeStore.getState().take;
-    const backing = sortNotes(applySustainToNotes(current.notes, current.pedalEvents));
+    const backing = sortStrikes(applySustainToNotes(current.notes, current.pedalEvents));
     this.beginPlaybackScheduler(backing, startPlayheadMs);
 
     const begin = () => {
@@ -553,7 +558,7 @@ export class TransportController {
     void audioEngine.unlockFromUserGesture();
 
     const take = useTakeStore.getState().take;
-    const notes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
+    const notes = sortStrikes(applySustainToNotes(take.notes, take.pedalEvents));
     this.playDurationMs = effectivePlaybackDurationMs(take);
 
     const loop = playableLoop(take);
@@ -639,6 +644,8 @@ export class TransportController {
         // The notes a training hold let through were played once, in the pass
         // the run resumed in, not forever.
         if (this.schedulePass === 0 && this.trainingSkipNoteIds?.has(note.id)) continue;
+        // Written, not played: nothing to hear, though a hold still asks for it.
+        if (isSilentNote(note)) continue;
         // A loop lets every key go at its end, as hands leave the keys to
         // start the passage again, rather than ringing on over its top.
         const durationMs = loop

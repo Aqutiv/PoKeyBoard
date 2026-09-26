@@ -43,6 +43,24 @@ describe('getCrossedNoteOnsets', () => {
     expect(new Set(backward.map((n) => n.id))).toEqual(new Set(['c1', 'c2', 'c3']));
   });
 
+  it('keeps copies of one key at one onset in the order they came in, going back', () => {
+    // Strike order: the quieter copy of the shared key first, the louder last.
+    const shared = [
+      note('before', 250, 62),
+      note('soft', 500, 60),
+      note('loud', 500, 60),
+      note('other', 500, 64),
+      note('after', 750, 65),
+    ];
+    expect(getCrossedNoteOnsets(1000, 0, shared).map((n) => n.id)).toEqual([
+      'after',
+      'other',
+      'soft',
+      'loud',
+      'before',
+    ]);
+  });
+
   it('does not replay a boundary onset on tiny backward jitter', () => {
     // Forward crossing lands just past the chord…
     const forward = getCrossedNoteOnsets(400, 501, NOTES);

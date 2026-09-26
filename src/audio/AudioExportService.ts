@@ -21,12 +21,13 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  * graph's compressor. 5: voices made as the render reaches them rather than
  * all before it starts — the same voices, rendered in seconds, not minutes.
  * 6: every recording of the grands calibrated to one velocity curve, so notes
- * play at new levels. 7: the reverb rebuilt as rooms — pre-delay, early
- * reflections, a tail whose treble dies first, normalised by the app rather
- * than the browser — rendered in the take's own room, with a longer room's
- * tail given time to ring out.
+ * play at new levels. 7: of two copies of a key struck together the louder is
+ * heard, whatever order they were stored in, and a velocity-0 note is silent.
+ * 8: the reverb rebuilt as rooms — pre-delay, early reflections, a tail whose
+ * treble dies first, normalised by the app rather than the browser — rendered
+ * in the take's own room, with a longer room's tail given time to ring out.
  */
-export const AUDIO_EXPORTER_VERSION = 7;
+export const AUDIO_EXPORTER_VERSION = 8;
 
 export type ExportQuality = 'share' | 'high';
 

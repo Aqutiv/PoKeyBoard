@@ -3,9 +3,11 @@ import {
   compareNoteEvents,
   computeTakeDurationMs,
   createEmptyTake,
+  isSilentNote,
   removeNotesByIds,
   sortNotes,
   sortPedalEvents,
+  sortStrikes,
 } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 
@@ -41,6 +43,37 @@ describe('compareNoteEvents', () => {
   it('returns zero only for identical keys', () => {
     expect(compareNoteEvents(note({ id: 'a' }), note({ id: 'a' }))).toBe(0);
     expect(compareNoteEvents(note({ id: 'a' }), note({ id: 'b' }))).toBeLessThan(0);
+  });
+});
+
+describe('sortStrikes', () => {
+  it('strikes the quieter copy of a key first, whichever the ids put first', () => {
+    const loudFirst = [note({ id: 'a', velocity: 0.8 }), note({ id: 'b', velocity: 0.3 })];
+    const softFirst = [note({ id: 'a', velocity: 0.3 }), note({ id: 'b', velocity: 0.8 })];
+    expect(sortStrikes(loudFirst).map((n) => n.velocity)).toEqual([0.3, 0.8]);
+    expect(sortStrikes(softFirst).map((n) => n.velocity)).toEqual([0.3, 0.8]);
+  });
+
+  it('leaves the stored order alone', () => {
+    const notes = [note({ id: 'a', velocity: 0.8 }), note({ id: 'b', velocity: 0.3 })];
+    expect(sortNotes(notes).map((n) => n.id)).toEqual(['a', 'b']);
+  });
+
+  it('otherwise orders as the stored order does', () => {
+    const notes = [
+      note({ id: 'c', startMs: 100, midi: 62, velocity: 0.1 }),
+      note({ id: 'b', startMs: 100, midi: 60 }),
+      note({ id: 'a', startMs: 100, midi: 60 }),
+      note({ id: 'd', startMs: 0, midi: 72, velocity: 0.9 }),
+    ];
+    expect(sortStrikes(notes)).toEqual(sortNotes(notes));
+  });
+});
+
+describe('isSilentNote', () => {
+  it('takes velocity 0 as written but not played, and nothing above it', () => {
+    expect(isSilentNote(note({ velocity: 0 }))).toBe(true);
+    expect(isSilentNote(note({ velocity: 1 / 127 }))).toBe(false);
   });
 });
 

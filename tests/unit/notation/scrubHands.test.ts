@@ -121,6 +121,36 @@ describe('scrub auditions', () => {
     playCalibrated(true);
   });
 
+  it('light a note written but not played, and audition nothing for it', () => {
+    playCalibrated(true);
+    const silent: NoteEvent = { ...soft, id: 'silent', velocity: 0, staff: 'treble' };
+    let lit: ReadonlyMap<number, string> = new Map();
+    const auditioned = audition([silent], (to) => {
+      scrubController.update(to);
+      lit = scrubController.getActiveHands();
+    });
+    expect(auditioned).toEqual([]);
+    expect([...lit.keys()]).toEqual([60]);
+  });
+
+  it('audition the louder of two copies of a key last, whichever is stored first', () => {
+    playCalibrated(true);
+    const first: NoteEvent = { ...loud, id: 'a', velocity: 0.9 };
+    const second: NoteEvent = { ...loud, id: 'b', velocity: 0.7 };
+    const softThenLoud = [
+      [64, 0.7 * 0.85],
+      [64, 0.9 * 0.85],
+    ];
+    expect(audition([first, second])).toEqual(softThenLoud);
+    // And the same crossing them backward.
+    const back = audition([first, second], (to) => {
+      scrubController.update(to);
+      vi.mocked(audioEngine.scheduleNote).mockClear();
+      scrubController.update(0);
+    });
+    expect(back).toEqual(softThenLoud);
+  });
+
   it('keep the floor as loud as it was before the grands were calibrated', () => {
     // 0.25 then, heard 4.1 dB under the computer keyboard's velocity on the
     // two grands; on the calibrated curve that takes about 0.51.

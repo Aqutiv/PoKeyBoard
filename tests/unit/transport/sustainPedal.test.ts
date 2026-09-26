@@ -83,6 +83,19 @@ describe('applySustainToNotes', () => {
     expect(effectivePlaybackDurationMs(take)).toBe(1_000);
   });
 
+  it('keeps a note written but not played to its length, without a pedalled tail', () => {
+    const pedalDown: PedalEvent = { atMs: 900, down: true };
+    const played = note({ id: 'played', startMs: 0, durationMs: 500 });
+    const silent = note({ id: 'silent', startMs: 1_000, durationMs: 500, velocity: 0 });
+    const take = (pedalEvents: PedalEvent[]) =>
+      createEmptyTake({ durationMs: 1_500, notes: [played, silent], pedalEvents });
+    // Lifted at 6 s, or never lifted at all: the silent note rings on neither way.
+    expect(effectivePlaybackDurationMs(take([pedalDown, { atMs: 6_000, down: false }]))).toBe(
+      1_500,
+    );
+    expect(effectivePlaybackDurationMs(take([pedalDown]))).toBe(1_500);
+  });
+
   it('handles the maximum event count without quadratic rescanning', () => {
     const notes = Array.from({ length: 50_000 }, (_, index) =>
       note({ id: `n-${index}`, startMs: index * 2, durationMs: 1 }),
