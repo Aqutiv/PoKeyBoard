@@ -261,6 +261,43 @@ describe('a pack without a table', () => {
   });
 });
 
+describe('SampleBank.isCalibrated', () => {
+  it('is true for a grand whose every recording the table measured, however much is loaded', async () => {
+    for (const { packVersion } of CALIBRATED) {
+      const manifest = manifestOf(packVersion);
+      expect((await loadedBank(manifest)).isCalibrated(), packVersion).toBe(true);
+      // The e2e suite's stub pack: a few roots of the medium layer.
+      const stub = manifest.files.filter(
+        (entry) => entry.layer === 1 && (entry.midi - 21) % 18 === 0,
+      );
+      expect((await loadedBank(manifest, stub)).isCalibrated(), packVersion).toBe(true);
+    }
+  });
+
+  it('is false for the Wurlitzer, which keeps its own velocity model', async () => {
+    expect((await loadedBank(manifestOf('wurlitzer-ep203w-v1'))).isCalibrated()).toBe(false);
+  });
+
+  it('is false for a pack with no table, or one its table does not wholly cover', async () => {
+    const real = manifestOf('headroom-grand-v2');
+    const unknown = { ...real, version: 'headroom-grand-v99' };
+    expect((await loadedBank(unknown)).isCalibrated()).toBe(false);
+    const extra: SamplePackFileEntry = {
+      file: 'Cs4v3.sample',
+      midi: 61,
+      layer: 1,
+      pack: 'core',
+      bytes: 1,
+    };
+    const uncovered = { ...real, files: [...real.files, extra] };
+    expect((await loadedBank(uncovered)).isCalibrated()).toBe(false);
+  });
+
+  it('is false before any manifest has loaded', () => {
+    expect(new SampleBank('/pack/').isCalibrated()).toBe(false);
+  });
+});
+
 describe('the Wurlitzer', () => {
   it('keeps its own region gains: v² times the region’s trim and the pack’s match', async () => {
     const manifest = manifestOf('wurlitzer-ep203w-v1');

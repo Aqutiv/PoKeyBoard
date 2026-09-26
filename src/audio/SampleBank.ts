@@ -264,6 +264,17 @@ export class SampleBank {
     return this.buffers.has(file);
   }
 
+  /**
+   * Whether this pack plays by a velocity calibration, so a note's velocity
+   * sets its loudness on the one curve (velocityCurve.ts) and nothing else.
+   * False until its manifest has loaded, and for any pack that keeps its own
+   * velocity model: one mapped by regions, like the Wurlitzer, where the
+   * velocity also picks the recording, or one no table wholly covers.
+   */
+  isCalibrated(): boolean {
+    return this.calibration !== null;
+  }
+
   /** True when a playable buffer exists near this key (any layer). */
   isMidiPlayable(midi: number): boolean {
     if (this.manifest?.regions) {

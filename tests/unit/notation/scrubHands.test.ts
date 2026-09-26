@@ -3,17 +3,22 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { curveDb } from '@/audio/velocityCurve';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
-import { PREVIEW_VELOCITY_FLOOR, scrubController } from '@/features/notation/scrubController';
+import {
+  PREVIEW_VELOCITY_FLOOR,
+  scrubController,
+  UNCALIBRATED_PREVIEW_VELOCITY_FLOOR,
+} from '@/features/notation/scrubController';
 import { transportController } from '@/features/transport/transportController';
 import { useTakeStore } from '@/state/useTakeStore';
 
 // The auditions themselves are the engine's business; this is about the
-// lights the key bed reads back.
+// lights the key bed reads back, and the velocity each note is auditioned at.
 vi.mock('@/audio/AudioEngine', () => ({
   audioEngine: {
     scheduleNote: vi.fn(),
     currentTime: 0,
     activeInstrument: { packVersion: 'test-pack' },
+    bank: { isCalibrated: vi.fn(() => true) },
   },
 }));
 
@@ -58,27 +63,62 @@ describe('scrub key lights', () => {
 });
 
 describe('scrub auditions', () => {
-  it('play a soft note at the floor and a louder one at 85% of its velocity', () => {
-    const take = createEmptyTake({
-      notes: [
-        { id: 'soft', midi: 60, startMs: 100, durationMs: 200, velocity: 0.3 },
-        { id: 'loud', midi: 64, startMs: 400, durationMs: 200, velocity: 0.9 },
-      ],
-      durationMs: 5_000,
-    });
-    useTakeStore.getState().setTake(take);
+  /** Whether the stubbed engine's piano plays by a velocity calibration. */
+  const playCalibrated = (calibrated: boolean) =>
+    vi.mocked(audioEngine.bank.isCalibrated).mockReturnValue(calibrated);
+
+  /** Scrub from the take's start across `notes`, returning each audition's [midi, velocity]. */
+  function audition(
+    notes: NoteEvent[],
+    across: (to: number) => void = (to) => scrubController.update(to),
+  ) {
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 5_000 }));
     expect(scrubController.begin()).toBe(true);
     scrubController.update(0);
     vi.mocked(audioEngine.scheduleNote).mockClear();
-    scrubController.update(600);
-    const auditioned = vi
+    across(900);
+    scrubController.end();
+    return vi
       .mocked(audioEngine.scheduleNote)
       .mock.calls.map(([event]) => [event.midi, event.velocity]);
-    expect(auditioned).toEqual([
+  }
+
+  // Soft enough that 85% of it is under either floor.
+  const soft: NoteEvent = { id: 'soft', midi: 60, startMs: 100, durationMs: 200, velocity: 0.2 };
+  const loud: NoteEvent = { id: 'loud', midi: 64, startMs: 400, durationMs: 200, velocity: 0.9 };
+
+  it('play a soft note at the calibrated floor on a calibrated piano, a louder one at 85%', () => {
+    playCalibrated(true);
+    expect(audition([soft, loud])).toEqual([
       [60, PREVIEW_VELOCITY_FLOOR],
       [64, 0.9 * 0.85],
     ]);
-    scrubController.end();
+  });
+
+  it('play a soft note at 0.25 on a piano with its own velocity model, like the Wurlitzer', () => {
+    // There the velocity also picks the recording: the calibrated floor, MIDI
+    // 64, would swap the pp sample 0.25 plays (MIDI 32) for the mp one.
+    playCalibrated(false);
+    expect(UNCALIBRATED_PREVIEW_VELOCITY_FLOOR).toBe(0.25);
+    expect(audition([soft, loud])).toEqual([
+      [60, 0.25],
+      [64, 0.9 * 0.85],
+    ]);
+  });
+
+  it('take a change of piano at once, deciding the floor per audition', () => {
+    const later: NoteEvent = { ...soft, id: 'later', midi: 62, startMs: 700 };
+    playCalibrated(true);
+    const auditioned = audition([soft, later], (to) => {
+      scrubController.update(500);
+      playCalibrated(false);
+      scrubController.update(to);
+    });
+    expect(auditioned).toEqual([
+      [60, PREVIEW_VELOCITY_FLOOR],
+      [62, UNCALIBRATED_PREVIEW_VELOCITY_FLOOR],
+    ]);
+    playCalibrated(true);
   });
 
   it('keep the floor as loud as it was before the grands were calibrated', () => {
