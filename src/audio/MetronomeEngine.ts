@@ -173,9 +173,9 @@ export class MetronomeEngine {
     this.context = context;
     this.gain = context.createGain();
     this.gain.gain.value = this.config.volume;
-    // Own output path: independent of piano master volume and reverb, but it
-    // joins ahead of the graph's limiter so the click can't push the sum past
-    // full scale during loud playback.
+    // Own output path: independent of piano master volume and reverb. The
+    // graph joins it after its limiter, so a click never turns the piano down,
+    // and ahead of its soft clipper, so the sum still cannot pass full scale.
     this.gain.connect(destination);
   }
 

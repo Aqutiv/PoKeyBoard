@@ -1,3 +1,15 @@
+import {
+  LIMITER_ATTACK_S,
+  LIMITER_KNEE_DB,
+  LIMITER_LOOKAHEAD_S,
+  LIMITER_RATIO,
+  LIMITER_RELEASE_S,
+  LIMITER_THRESHOLD_DB,
+  LIMITER_WARMUP_RELEASE_S,
+  LIMITER_WARMUP_S,
+  LIVE_OUTPUT_GAIN_DB,
+} from './gainStaging';
+
 /**
  * Builds the piano output graph shared by live playback and offline
  * rendering:
@@ -5,11 +17,21 @@
  *   voices → voiceBus ─┬→ dry ──────────────────────→ master ┐
  *                      └→ send(gain=mix) → convolver ────────┤
  *                                                            ↓
- *              out ← softClip ← softClipInput ← limiter ← outputStage
+ *                                   limiter ← outputGain ←───┘
+ *                                      ↓
+ *     out ← softClip ← softClipInput ←─┤
+ *                                      ↑
+ *     metronome → clickBus → lookAhead ┘
  *
- * Non-piano sources (the metronome) join at `outputStage`, so they stay
- * independent of master volume and reverb but are still covered by the
- * clip protection.
+ * The piano is set to its live level by the output gain and the limiter's
+ * makeup, and held by the limiter; `gainStaging.ts` has the levels, and why.
+ * A newly made limiter ducks everything for a moment, so it starts out with
+ * a fast release, which gets it over that within a few tens of milliseconds,
+ * easing to its own over the first 40 ms (`LIMITER_WARMUP_S`); nothing goes
+ * round it meanwhile. Non-piano sources (the metronome) join at `clickBus`,
+ * past master volume, reverb and the limiter: a click is independent of the
+ * piano's volume, never turns the piano down, and is still covered by the
+ * soft clipper.
  */
 export interface PianoGraphOptions {
   masterVolume: number;
@@ -20,6 +42,8 @@ export interface PianoGraphOptions {
    * a peak coming. An export turns it off: its level is set once the whole
    * take is rendered, and its peaks are held by a limiter that looks ahead
    * (`loudness.ts`), which a compressor already squeezing them would defeat.
+   * Without the guard there is no stage at all: `outputGain` is unity and
+   * goes straight out, and so does `clickBus`.
    */
   peakGuard?: boolean;
 }
@@ -28,7 +52,11 @@ export interface PianoGraph {
   context: BaseAudioContext;
   /** Voices connect their output here. */
   voiceDestination: GainNode;
-  /** Where non-piano sources join, after master volume but before the limiter. */
+  /**
+   * Where non-piano sources join: after master volume and reverb, and after
+   * the limiter, so a click never turns the piano down; before the soft
+   * clipper, which still holds the sum under full scale.
+   */
   outputDestination: AudioNode;
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
@@ -86,16 +114,22 @@ export function generateReverbImpulse(
 const RAMP_TC = 0.03;
 
 /**
- * Fixed trim on the summing bus. Per-voice gain deliberately exceeds 1 — the
- * pack's `levelMatch` is applied outside `velocityGain`'s clamp — and nothing
- * attenuates by polyphony, so a pedalled fortissimo chord arrives well past
- * full scale. The bus is the one place a constant trim buys transient
- * headroom without touching the musical dynamics between notes.
+ * Fixed trim on the summing bus. A voice's gain can exceed 1 — the velocity
+ * calibration lifts a quietly recorded sample to its target, and the loudest
+ * voice peaks at about 1.5 (`loudestVoicePeak`) — and nothing attenuates by
+ * polyphony, so a pedalled fortissimo chord arrives well past full scale. The
+ * bus is the one place a constant trim buys transient headroom without
+ * touching the musical dynamics between notes.
  */
 export const VOICE_BUS_HEADROOM = 0.7;
 
-/** Below this input magnitude the soft clipper is exactly unity gain. */
-export const SOFT_CLIP_KNEE = 0.7;
+/**
+ * Below this input magnitude the soft clipper is exactly unity gain. Just under
+ * the ceiling, and over what the limiter lets out of even the densest chords:
+ * what it bends is only what gets past the limiter — a click on a loud chord,
+ * or a chord in the moment before the limiter has settled.
+ */
+export const SOFT_CLIP_KNEE = 0.95;
 
 /** What the saturation approaches, leaving a little true-peak headroom. */
 export const SOFT_CLIP_CEILING = 0.98;
@@ -115,10 +149,11 @@ export const SOFT_CLIP_CEILING = 0.98;
 export const SOFT_CLIP_INPUT_RANGE = 4;
 
 /**
- * Final saturation stage. The compressor ahead of it reacts within a
- * millisecond, but not instantly, and how far it looks ahead is up to the
- * browser — so the first moments of a dense onset can pass ungoverned; this
- * bends those peaks back instead of letting them hard-clip at the device.
+ * Final saturation stage. The limiter ahead of it reacts within a millisecond
+ * or so, but not instantly — the first moments of a dense onset can pass
+ * ungoverned — and the metronome joins after the limiter, so a click can land
+ * on top of a loud chord; this bends those peaks back instead of letting them
+ * hard-clip at the device.
  *
  * Identity below the knee — normal-level material is bit-for-bit untouched —
  * then a tanh bend approaching SOFT_CLIP_CEILING. Slope is continuous across
@@ -152,25 +187,40 @@ export function createPianoGraph(
   context: BaseAudioContext,
   options: PianoGraphOptions,
 ): PianoGraph {
+  const peakGuard = options.peakGuard ?? true;
+
   const voiceBus = context.createGain();
   voiceBus.gain.value = VOICE_BUS_HEADROOM;
 
   const master = context.createGain();
   master.gain.value = clamp01(options.masterVolume);
 
-  const outputStage = context.createGain();
-  outputStage.gain.value = 1;
+  // The piano's level into the stage, after master volume: the live output
+  // gain, or unity for an export, whose level is set once it is all rendered.
+  const outputGain = context.createGain();
+  outputGain.gain.value = peakGuard ? 10 ** (LIVE_OUTPUT_GAIN_DB / 20) : 1;
 
-  // Safety limiter for dense chords, not a loudness effect. It is not
-  // transparent: one forte note on many Headroom roots, and an accented
-  // click, already reach -6 dBFS, and the Web Audio compressor adds its own
-  // makeup gain (about +3 dB at these settings).
+  // Where the metronome joins.
+  const clickBus = context.createGain();
+  clickBus.gain.value = 1;
+
+  // Safety limiter for dense chords, not a loudness effect: most notes on
+  // their own stay under it. Its automatic makeup gain still lifts everything
+  // it passes, which `LIMITER_MAKEUP_DB` accounts for.
   const limiter = context.createDynamicsCompressor();
-  limiter.threshold.value = -6;
-  limiter.knee.value = 3;
-  limiter.ratio.value = 20;
-  limiter.attack.value = 0.001;
-  limiter.release.value = 0.18;
+  limiter.threshold.value = LIMITER_THRESHOLD_DB;
+  limiter.knee.value = LIMITER_KNEE_DB;
+  limiter.ratio.value = LIMITER_RATIO;
+  limiter.attack.value = LIMITER_ATTACK_S;
+  limiter.release.value = LIMITER_RELEASE_S;
+
+  // The limiter delays the piano by its look-ahead, a whole number of frames;
+  // the clicks, which skip it, are held back exactly as long, so a click still
+  // lands with the note it is on. (A DelayNode asked for a fraction of a frame
+  // would interpolate between two, and dull the top octave.)
+  const lookAheadS = Math.floor(LIMITER_LOOKAHEAD_S * context.sampleRate) / context.sampleRate;
+  const lookAhead = context.createDelay(LIMITER_LOOKAHEAD_S);
+  lookAhead.delayTime.value = lookAheadS;
 
   // Scales the shaper's [-1, 1] curve domain up to cover the whole range a
   // transient can reach; the curve bakes the inverse back in, so the pair is
@@ -198,14 +248,31 @@ export function createPianoGraph(
   reverbSend.connect(convolver);
   convolver.connect(reverbReturn);
   reverbReturn.connect(master);
-  master.connect(outputStage);
-  if (options.peakGuard ?? true) {
-    outputStage.connect(limiter);
+  master.connect(outputGain);
+  if (peakGuard) {
+    // Warm start: the limiter recovers from its birth at the warm-up release,
+    // which eases to its own over the warm-up. The one path stays in place
+    // throughout — nothing is switched in or out, and the limiter holds loud
+    // chords from the start — only how fast it lets go changes. Counted on the
+    // audio clock, which stands still until the context first runs. A ramp
+    // runs from the event before it, and with none, where it starts is up to
+    // the browser, so its start is set as an event of its own.
+    limiter.release.value = LIMITER_WARMUP_RELEASE_S;
+    limiter.release.setValueAtTime(LIMITER_WARMUP_RELEASE_S, context.currentTime);
+    limiter.release.exponentialRampToValueAtTime(
+      LIMITER_RELEASE_S,
+      context.currentTime + LIMITER_WARMUP_S,
+    );
+
+    outputGain.connect(limiter);
     limiter.connect(softClipInput);
+    clickBus.connect(lookAhead);
+    lookAhead.connect(softClipInput);
     softClipInput.connect(softClip);
     softClip.connect(context.destination);
   } else {
-    outputStage.connect(context.destination);
+    outputGain.connect(context.destination);
+    clickBus.connect(context.destination);
   }
 
   let masterVolume = clamp01(options.masterVolume);
@@ -214,7 +281,7 @@ export function createPianoGraph(
   return {
     context,
     voiceDestination: voiceBus,
-    outputDestination: outputStage,
+    outputDestination: clickBus,
     setMasterVolume(value: number): void {
       masterVolume = clamp01(value);
       master.gain.setTargetAtTime(masterVolume, context.currentTime, RAMP_TC);
@@ -231,8 +298,10 @@ export function createPianoGraph(
         voiceBus,
         dryGain,
         master,
-        outputStage,
+        outputGain,
+        clickBus,
         limiter,
+        lookAhead,
         softClipInput,
         softClip,
         reverbSend,
