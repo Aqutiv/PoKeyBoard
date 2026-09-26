@@ -64,7 +64,7 @@ export interface SampleSelection {
   buffer: AudioBuffer;
   /** 2^(semitones/12) pitch correction from the sample's root. */
   playbackRate: number;
-  /** Combined layer trim and velocity gain to apply to the voice. */
+  /** The voice's gain: what its velocity asks, given how loudly its recording was made. */
   gain: number;
   loop?: { start: number; end: number };
   envelope?: SampleEnvelope;
