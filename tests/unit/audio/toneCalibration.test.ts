@@ -156,8 +156,9 @@ describe('the tone calibration table', () => {
             expect(db).toBeGreaterThanOrEqual(0);
             if (i > 0) expect(db).toBeLessThanOrEqual(makeupDb[i - 1]!);
           }
-          // Only a guarded top root's filter sits near enough its fundamental
-          // to need much; none needs more than the bass ramps' 1.3 dB.
+          // With the guard no filter comes near its note's fundamental: the
+          // most any ramp needs is the 1.3 dB of a few Headroom bass ones,
+          // starting low among many partials, not the 4.5 of the unguarded top.
           expect(makeupDb[0]).toBeLessThan(1.5);
         }
       }
