@@ -2,6 +2,7 @@ import { writtenNotes } from '@/domain/noteEvents';
 import { createTakeTempoMap, type TempoMap } from '@/domain/tempoMap';
 import type {
   NoteEvent,
+  NoteTuplet,
   PedalEvent,
   QuantizationSetting,
   TempoChange,
@@ -1529,13 +1530,18 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
    * lights when it actually sounds.
    */
   const writtenBeats = new Map<LaidOutNote, number>();
-  /** Where each written bracket's last note starts, in beats; see the split below. */
-  const bracketLastBeat = new Map<number, number>();
+  /** Each written bracket's first and last onsets in beats, and its ratio; see the split below. */
+  const brackets = new Map<number, { first: number; last: number; tuplet: NoteTuplet }>();
   for (const note of notes) {
     const group = note.tuplet?.group;
-    if (group === undefined) continue;
+    if (group === undefined || note.tuplet === undefined) continue;
     const beat = tempoMap.beatAtMs(note.startMs);
-    bracketLastBeat.set(group, Math.max(bracketLastBeat.get(group) ?? beat, beat));
+    const known = brackets.get(group);
+    brackets.set(group, {
+      first: Math.min(known?.first ?? beat, beat),
+      last: Math.max(known?.last ?? beat, beat),
+      tuplet: note.tuplet,
+    });
   }
 
   const fifths = normalizeFifths(options.keySignature ?? 0);
@@ -1616,12 +1622,21 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     const endBeat = startBeat + beatsHeld(written);
     if (endBeat - beatLine < 1 / division / 2) return [out];
     // Nor inside a bracket that carries on past the line — six in the time of
-    // four across two beats, or three starting on the half beat. There a note
-    // over the line is part of the figure, written whole as the bracket has
-    // it; cutting it would leave its far half outside the bracket's beam.
-    const group = note.tuplet.group;
-    if (group !== undefined && (bracketLastBeat.get(group) ?? 0) > beatLine - 1 / division / 2) {
-      return [out];
+    // four across two beats, or three starting off the beat. There a note over
+    // the line is part of the figure, written whole as the bracket has it;
+    // cutting it would leave its far half outside the bracket's beam.
+    //
+    // A bracket spans its normal notes; where it starts is read from its
+    // written notes. On the beat before its first one, wherever that still
+    // holds its last — its first slot may be a rest, or a note shared with
+    // another voice — and otherwise at its first note.
+    const bracket = note.tuplet.group === undefined ? undefined : brackets.get(note.tuplet.group);
+    if (bracket !== undefined) {
+      const span = (bracket.tuplet.normal / bracket.tuplet.unit) * denominator;
+      const onBeat = Math.floor(bracket.first + BEAT_EPSILON);
+      const start =
+        onBeat >= bracket.last + 1 / division - span - BEAT_EPSILON ? onBeat : bracket.first;
+      if (start + span > beatLine + 1 / division / 2) return [out];
     }
     // And only where one value states the span up to the line. Five sextuplet
     // slots are no single value, and rounding them down would leave a slot of

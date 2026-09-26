@@ -1052,3 +1052,25 @@ describe('a written tuplet note over a beat line inside its bracket', () => {
     expect(layout.chords.every((chord) => chord.tupletGroup === 0)).toBe(true);
   });
 });
+
+describe('a written tuplet whose last note crosses the beat inside its bracket', () => {
+  it('stays whole where the bracket started off the beat and runs past the line', () => {
+    // Three sextuplet sixteenths in the time of two, bracketed from the fifth
+    // slot of the beat: its last note, two slots long, crosses the beat line
+    // while the bracket still has a slot to run. It is written as the bracket
+    // has it, not cut with its far half outside.
+    const tuplet = { actual: 3, normal: 2, unit: 16, group: 0 };
+    const notes: NoteEvent[] = [
+      { id: 'a', midi: 72, startMs: 333, durationMs: 83, velocity: 0.5, tuplet },
+      { id: 'b', midi: 74, startMs: 417, durationMs: 166, velocity: 0.5, tuplet },
+    ];
+    const layout = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+    });
+    expect(layout.chords).toHaveLength(2);
+    expect(layout.chords.every((chord) => !chord.notes[0]!.tiedToNext)).toBe(true);
+    expect(layout.chords.every((chord) => chord.tupletGroup === 0)).toBe(true);
+  });
+});
