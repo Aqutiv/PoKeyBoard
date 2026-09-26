@@ -3,6 +3,7 @@ import { createTakeTempoMap } from '@/domain/tempoMap';
 import type { PlaybackLoop, Take } from '@/domain/takeTypes';
 import { libraryTrackSummary } from '@/features/library/catalog';
 import { openLibraryTrack } from '@/features/library/libraryService';
+import { rememberLibraryQuery, rememberLibraryScroll } from '@/features/library/scrollMemory';
 import { loopBetween } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -19,14 +20,23 @@ export function handoffTitle(trackId: string): string | undefined {
 }
 
 /**
- * Open the Library at the folder a hand-off's track lives in. For when the
- * track would not open — a Classics score is fetched the first time it is
- * opened, so offline it cannot be — the player lands where it is listed, not
- * a folder away from it.
+ * Open the Library on a hand-off's track, for when the track would not open —
+ * a Classics score is fetched the first time it is opened, so offline it
+ * cannot be. The player lands on the piece that was promised, not somewhere
+ * near it.
+ *
+ * Its folder alone is not enough: the Library restores whatever search was
+ * last typed in a folder, and one that misses this track would hide it
+ * entirely, while an empty one leaves it somewhere down a long list. So the
+ * folder is searched for the track itself, from the top — in the filter box,
+ * where it reads as a search and clears like any other.
  */
 export function revealHandoffInLibrary(trackId: string): void {
-  const folder = libraryTrackSummary(libraryTakeId(trackId))?.folder;
-  if (folder) useSettingsStore.getState().setLibraryFolder(folder);
+  const summary = libraryTrackSummary(libraryTakeId(trackId));
+  if (!summary) return;
+  useSettingsStore.getState().setLibraryFolder(summary.folder);
+  rememberLibraryQuery(summary.folder, summary.title);
+  rememberLibraryScroll(summary.folder, 0);
 }
 
 /**

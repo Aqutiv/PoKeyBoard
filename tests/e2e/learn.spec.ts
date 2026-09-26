@@ -1653,16 +1653,31 @@ test.describe('intermediate chapter two', () => {
   test.describe('when the score cannot be fetched', () => {
     test.use({ serviceWorkers: 'block' });
 
-    test('lands in the Library folder that lists it', async ({ page }) => {
+    test('lands in the Library on the piece, whatever was last searched there', async ({
+      page,
+    }) => {
       await openAt(page, 14);
+      // A search left in Classics that the Minuet does not match. The Library
+      // restores it when it opens, so it would hide the very piece promised.
+      await page.getByRole('button', { name: 'Close chapter' }).click();
+      await nav(page).getByRole('button', { name: 'Library' }).click();
+      const folders = page.getByRole('group', { name: 'Library folder' });
+      await folders.getByRole('button', { name: 'Classics' }).click();
+      await page.getByRole('searchbox', { name: 'Filter classics' }).fill('chopin');
+      await nav(page).getByRole('button', { name: 'Learn' }).click();
+      await levels(page).getByRole('button', { name: 'Intermediate' }).click();
+      await page.getByRole('button', { name: `Open ${CHAPTER}` }).click();
+      await expect(page.getByRole('heading', { name: 'That is chapter two' })).toBeVisible();
+
       await page.route('**/scores/**', (route) => route.abort());
       await page.getByRole('button', { name: `Practise ${MINUET} on Play` }).click();
-      const folders = page.getByRole('group', { name: 'Library folder' });
       await expect(folders.getByRole('button', { name: 'Classics' })).toHaveAttribute(
         'aria-pressed',
         'true',
         { timeout: 30_000 },
       );
+      // Searched for, in the box where it can be cleared like any search.
+      await expect(page.getByRole('searchbox', { name: 'Filter classics' })).toHaveValue(MINUET);
       // Exact: the Minuet's "(alternate edition)" is listed beside it.
       await expect(page.getByRole('button', { name: `Open ${MINUET}`, exact: true })).toBeVisible();
     });

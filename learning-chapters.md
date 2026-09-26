@@ -375,8 +375,10 @@ result is indistinguishable from marking them by hand (`handoff.ts`). The
 track may be a Classics score as well as an authored one: Intermediate
 chapter 2 opens Petzold's Minuet in G, named through `libraryTrackSummary`
 like any Library entry. A score is fetched the first time it is opened, so
-offline the hand-off cannot load it — it lands on the Library's Classics
-folder, where the piece is listed, rather than on an empty Play.
+offline the hand-off cannot load it — it lands on the Library instead of an
+empty Play, in the piece's folder and searched for it. The folder alone would
+not do: the Library restores the last search typed there, which could hide
+the very piece promised.
 
 A line can ask for **the pedal changed with the harmony** (`pedal:
 'changeEach'`): once a moment's notes are in it waits (`AlongRun.pedalOwed`)
