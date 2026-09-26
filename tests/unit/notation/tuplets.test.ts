@@ -887,11 +887,36 @@ describe('the numeral a part of a bracket carries', () => {
   it('prints the bracket’s six over a part of it, not the three its values are drawn in', () => {
     for (const slots of [
       [4, 5],
+      [3, 4, 5],
       [2, 3, 4, 5],
       [1, 2, 3, 4, 5],
     ]) {
       const layout = layoutScore(sextupletPart(slots), OPTS);
       expect(layout.beams.map((beam) => beam.tupletCount)).toEqual([6]);
     }
+  });
+});
+
+describe('what a written tuplet note keeps whole', () => {
+  it('stays whole where no single value states the span up to the beat line', () => {
+    // A sextuplet note on the first slot held a beat: five slots before the
+    // line, which no value states, so cutting there would drop a slot.
+    const notes: NoteEvent[] = [
+      {
+        id: 'five',
+        midi: 72,
+        startMs: 83,
+        durationMs: 500,
+        velocity: 0.5,
+        tuplet: { actual: 6, normal: 4, unit: 16, group: 0 },
+      },
+    ];
+    const layout = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+    });
+    expect(layout.chords).toHaveLength(1);
+    expect(layout.chords[0]!.notes[0]!.tiedToNext).toBe(false);
   });
 });

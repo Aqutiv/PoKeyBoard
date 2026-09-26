@@ -898,12 +898,14 @@ function buildBeamGroups(
         const first = run[0] as ChordGroup;
         const ratio = first.symbol.tuplet;
         const bracket = first.tupletNumeral;
+        // A part is anything shorter than its bracket, even a run that would
+        // make whole triplets: half a sextuplet is still a sextuplet.
         const tupletCount = !ratio
           ? null
-          : run.length % ratio.actual === 0
-            ? run.length
-            : first.tupletGroup !== undefined && bracket !== undefined && run.length < bracket
-              ? bracket
+          : first.tupletGroup !== undefined && bracket !== undefined && run.length < bracket
+            ? bracket
+            : run.length % ratio.actual === 0
+              ? run.length
               : null;
         const counts = run.map((chord) => beamCountFor(chord.symbol.base) || 1);
         beams.push({
@@ -1606,6 +1608,13 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     const beatLine = beatStart + 1;
     const endBeat = startBeat + beatsHeld(written);
     if (endBeat - beatLine < 1 / division / 2) return [out];
+    // And only where one value states the span up to the line. Five sextuplet
+    // slots are no single value, and rounding them down would leave a slot of
+    // silence the score never wrote; such a note stays whole, as it was.
+    const slotsToLine = division - slotInBeat;
+    if (!exactValueForUnits(Math.round((slotsToLine * unitsPerBeat(denominator)) / division))) {
+      return [out];
+    }
     const lineMs = Math.round(tempoMap.msAtBeat(beatLine));
     const endMs = Math.round(tempoMap.msAtBeat(endBeat));
     out.symbol = symbolFor(
