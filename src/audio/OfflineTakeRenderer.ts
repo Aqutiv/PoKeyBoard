@@ -22,6 +22,16 @@ import {
 const RENDER_SAMPLE_RATE = 48_000;
 /** Ring-out after the last note: release plus the reverb tail. */
 const TAIL_S = 3.0;
+/**
+ * How far ahead of an export's render its voices are made, in seconds. An
+ * offline context works through every voice it holds on every render quantum,
+ * whether it has started yet or not, so making a whole take's voices before the
+ * render made a long take cost minutes: 22 of them in desktop Chrome for the
+ * 11-minute Chopin Ballade, whose 5,162 notes seldom sound more than a dozen at
+ * once. Instead the render pauses this often to make the next stretch's voices,
+ * and holds only a few seconds of notes at any time.
+ */
+const SCHEDULE_AHEAD_S = 2;
 /** Hard cap so an OfflineAudioContext cannot exhaust memory. */
 export const MAX_RENDER_MINUTES = 20;
 /** Above this length the export dialog shows a memory warning. */
@@ -47,42 +57,89 @@ export interface RenderedTake {
 }
 
 /**
- * Schedule a whole take's notes (sorted, sustain already applied) as voices,
- * the way the live engine sounds them: a key struck while its string still
- * rings damps the old sound from the new note's start (`VoiceManager`'s
- * `restrike`), so a pedalled repeated note is one string, not a pile of them,
- * and the key stays down until both notes have let go (`scheduleNote`).
- * Returns how many notes had no decoded sample.
+ * Schedule a take's notes (sorted, sustain already applied, each with its
+ * sample) as voices, the way the live engine sounds them: a key struck while
+ * its string still rings damps the old sound from the new note's start
+ * (`VoiceManager`'s `restrike`), so a pedalled repeated note is one string, not
+ * a pile of them, and the key stays down until both notes have let go
+ * (`scheduleNote`). A note with no sample is left out.
+ *
+ * Returns a function that makes the voices of the notes starting before
+ * `untilS`, carrying on from where its last call stopped: a take made a stretch
+ * at a time gets the same voices as one made all at once.
  */
 export function scheduleTakeVoices(
   context: BaseAudioContext,
   destination: AudioNode,
-  notes: readonly { midi: number; velocity: number; startMs: number; durationMs: number }[],
-  sampleFor: (midi: number, velocity: number) => SampleSelection | null,
-): number {
-  let missing = 0;
+  notes: readonly { midi: number; startMs: number; durationMs: number }[],
+  samples: readonly (SampleSelection | null)[],
+): (untilS: number) => void {
   const sounding = new Map<number, { voice: SampleVoice; keyUp: number }>();
-  for (const note of notes) {
-    const sample = sampleFor(note.midi, note.velocity);
-    if (!sample) {
-      missing += 1;
-      continue;
+  let next = 0;
+  return (untilS) => {
+    for (; next < notes.length; next += 1) {
+      const note = notes[next]!;
+      const when = note.startMs / 1000;
+      if (when >= untilS) return;
+      const sample = samples[next];
+      if (!sample) continue;
+      let keyUp = when + note.durationMs / 1000;
+      const previous = sounding.get(note.midi);
+      // Still sounding when the key comes down again, held, dying away under its
+      // damper, or never damped up where there are none: that sound gives way to
+      // this one.
+      if (previous && stillSoundingAt(previous.voice, when)) {
+        dampSampleVoice(previous.voice, when);
+        keyUp = Math.max(keyUp, previous.keyUp);
+      }
+      const voice = startSampleVoice(context, destination, sample, when);
+      releaseSampleVoice(voice, keyUp);
+      sounding.set(note.midi, { voice, keyUp });
     }
-    const when = note.startMs / 1000;
-    let keyUp = when + note.durationMs / 1000;
-    const previous = sounding.get(note.midi);
-    // Still sounding when the key comes down again, held, dying away under its
-    // damper, or never damped up where there are none: that sound gives way to
-    // this one.
-    if (previous && stillSoundingAt(previous.voice, when)) {
-      dampSampleVoice(previous.voice, when);
-      keyUp = Math.max(keyUp, previous.keyUp);
-    }
-    const voice = startSampleVoice(context, destination, sample, when);
-    releaseSampleVoice(voice, keyUp);
-    sounding.set(note.midi, { voice, keyUp });
+  };
+}
+
+/**
+ * Make a take's voices as its render comes to them, rather than all before it
+ * starts; see `SCHEDULE_AHEAD_S`. The render pauses at the start of every
+ * stretch while the next stretch's voices are made, each a stretch or two
+ * before it sounds: the same voices, doing the same things at the same times,
+ * as all of them made up front. Where an offline context cannot pause (Firefox
+ * has no `suspend`), they are all made up front, as they always were.
+ *
+ * Resolves once the render is past its last pause, and rejects if a voice could
+ * not be made. Either way the render is let go on, so it never waits on a pause
+ * that nothing will lift.
+ */
+export function scheduleVoicesAhead(
+  context: OfflineAudioContext,
+  scheduleUntil: (untilS: number) => void,
+): Promise<void> {
+  scheduleUntil(2 * SCHEDULE_AHEAD_S);
+  if (typeof context.suspend !== 'function') {
+    scheduleUntil(Number.POSITIVE_INFINITY);
+    return Promise.resolve();
   }
-  return missing;
+  const seconds = context.length / context.sampleRate;
+  const pauses: Promise<void>[] = [];
+  for (let stretch = 1; stretch * SCHEDULE_AHEAD_S < seconds; stretch += 1) {
+    const at = stretch * SCHEDULE_AHEAD_S;
+    pauses.push(
+      context.suspend(at).then(
+        () => {
+          try {
+            scheduleUntil(at + 2 * SCHEDULE_AHEAD_S);
+          } finally {
+            void context.resume();
+          }
+        },
+        // Refused as it was asked for, long before the render gets there: make
+        // every voice still to come now instead.
+        () => scheduleUntil(Number.POSITIVE_INFINITY),
+      ),
+    );
+  }
+  return Promise.all(pauses).then(() => undefined);
 }
 
 /**
@@ -173,6 +230,17 @@ export async function renderTakeForExport(
 
   const effectiveNotes = sortNotes(applySustainToNotes(take.notes, take.pedalEvents));
   const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
+  // Every sample is chosen before the render starts, though most voices are
+  // made during it: the piano a render begins with is the one it ends with.
+  const samples = effectiveNotes.map((note) => sampleFor(note.midi, note.velocity));
+  const missingSamples = samples.filter((sample) => !sample).length;
+  if (missingSamples > 0) {
+    throw new ExportError(
+      `${missingSamples} notes had no decoded sample`,
+      'The piano is still loading — try the export again in a moment.',
+      'exportPianoLoading',
+    );
+  }
   const ringOut = undampedRingOutSeconds(effectiveNotes, sampleFor);
   const length = Math.ceil(cappedRenderSeconds(take, ringOut) * RENDER_SAMPLE_RATE);
   const context = new OfflineAudioContext({
@@ -186,24 +254,15 @@ export async function renderTakeForExport(
     reverbMix: take.instrument.reverbMix,
     peakGuard: false,
   });
-
-  const missingSamples = scheduleTakeVoices(
+  const scheduling = scheduleVoicesAhead(
     context,
-    graph.voiceDestination,
-    effectiveNotes,
-    sampleFor,
+    scheduleTakeVoices(context, graph.voiceDestination, effectiveNotes, samples),
   );
-  if (missingSamples > 0) {
-    throw new ExportError(
-      `${missingSamples} notes had no decoded sample`,
-      'The piano is still loading — try the export again in a moment.',
-      'exportPianoLoading',
-    );
-  }
 
   const [piano, clicks] = await Promise.all([
     context.startRendering(),
     options.includeMetronome ? renderClickTrack(take, options.metronomeVolume) : null,
+    scheduling,
   ]);
   return { piano, clicks };
 }

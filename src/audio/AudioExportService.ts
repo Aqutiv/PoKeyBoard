@@ -18,9 +18,10 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  * so a cached file made the old way is rendered again. 3: voices start at the
  * sample's onset, re-struck keys damp their string, the top octaves ring on.
  * 4: level set by loudness and held by a true-peak limiter, not by the live
- * graph's compressor.
+ * graph's compressor. 5: voices made as the render reaches them rather than
+ * all before it starts — the same voices, rendered in seconds, not minutes.
  */
-export const AUDIO_EXPORTER_VERSION = 4;
+export const AUDIO_EXPORTER_VERSION = 5;
 
 export type ExportQuality = 'share' | 'high';
 
