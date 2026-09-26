@@ -20,8 +20,10 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  * 4: level set by loudness and held by a true-peak limiter, not by the live
  * graph's compressor. 5: voices made as the render reaches them rather than
  * all before it starts — the same voices, rendered in seconds, not minutes.
+ * 6: every recording of the grands calibrated to one velocity curve, so notes
+ * play at new levels.
  */
-export const AUDIO_EXPORTER_VERSION = 5;
+export const AUDIO_EXPORTER_VERSION = 6;
 
 export type ExportQuality = 'share' | 'high';
 

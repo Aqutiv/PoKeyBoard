@@ -6,20 +6,30 @@ import type {
   SampleSelection,
 } from './audioTypes';
 import { releaseTcFor, UNDAMPED_FROM_MIDI } from './sampleVoice';
+import { VELOCITY_CALIBRATIONS } from './velocityCalibration';
+import {
+  calibratedGain,
+  calibrationCovers,
+  type VelocityCalibration,
+} from './velocityCalibrationMath';
 
 /** Velocity below the first threshold → soft layer, below the second → medium. */
 export const VELOCITY_LAYER_THRESHOLDS: readonly [number, number] = [0.45, 0.78];
 
-/** Perceptual center velocity each recorded layer represents. */
+/**
+ * Perceptual center velocity each recorded layer represents. Only for a pack
+ * with no velocity calibration; see `velocityGain`.
+ */
 const LAYER_REFERENCE_VELOCITY = [0.3, 0.6, 0.9] as const;
 
-/** Static trims that roughly balance the layers' recorded loudness. */
+/** Static trims that roughly balance the layers' recorded loudness; as above. */
 const LAYER_TRIM = [1.35, 1.1, 0.95] as const;
 
 /** Keyboard center (F#4-ish) used to prioritize sample loading order. */
 const LOAD_CENTER_MIDI = 66;
 
-const MAX_ROOT_DISTANCE_SEMITONES = 9;
+/** How far from its root a recording may be pitched to stand in for a key. */
+export const MAX_ROOT_DISTANCE_SEMITONES = 9;
 const FETCH_CONCURRENCY = 4;
 const FETCH_RETRIES = 2;
 
@@ -74,9 +84,11 @@ export function velocityToLayer(velocity: number): number {
 }
 
 /**
- * Per-voice gain: the layer's static trim scaled by how far the played
- * velocity sits from the layer's reference, keeping loudness continuous
- * across layer boundaries without flattening the samples' own dynamics.
+ * Per-voice gain for a pack with no velocity calibration: the layer's static
+ * trim scaled by how far the played velocity sits from the layer's reference.
+ * One trim per layer cannot match recordings that differ note by note, so this
+ * steps in level where the layers meet, by up to 6.6 dB on the grands; a pack
+ * with a calibration (velocityCalibration.ts) plays by that instead.
  */
 export function velocityGain(velocity: number, layer: number): number {
   const clamped = Math.min(1, Math.max(0.02, velocity));
@@ -99,6 +111,8 @@ interface LayerRoots {
  */
 export class SampleBank {
   private manifest: SamplePackManifest | null = null;
+  /** The manifest's velocity calibration, when there is one covering all of it. */
+  private calibration: VelocityCalibration | null = null;
   private readonly buffers = new Map<string, AudioBuffer>();
   /** Each decoded file's onset; see `onsetOffsetOf`. */
   private readonly onsets = new Map<string, number>();
@@ -140,6 +154,7 @@ export class SampleBank {
     }
     const manifest = (await response.json()) as SamplePackManifest;
     this.manifest = manifest;
+    this.calibration = calibrationFor(manifest);
     for (const entry of manifest.files) {
       let layer = this.layers.get(entry.layer);
       if (!layer) {
@@ -249,6 +264,17 @@ export class SampleBank {
     return this.buffers.has(file);
   }
 
+  /**
+   * Whether this pack plays by a velocity calibration, so a note's velocity
+   * sets its loudness on the one curve (velocityCurve.ts) and nothing else.
+   * False until its manifest has loaded, and for any pack that keeps its own
+   * velocity model: one mapped by regions, like the Wurlitzer, where the
+   * velocity also picks the recording, or one no table wholly covers.
+   */
+  isCalibrated(): boolean {
+    return this.calibration !== null;
+  }
+
   /** True when a playable buffer exists near this key (any layer). */
   isMidiPlayable(midi: number): boolean {
     if (this.manifest?.regions) {
@@ -282,15 +308,21 @@ export class SampleBank {
       if (!entry) continue;
       const buffer = this.buffers.get(entry.file);
       if (!buffer) continue;
+      // The gain is keyed on the recording actually found, not the one asked
+      // for — during a partial load another layer or root stands in — since
+      // what it corrects is how loudly that file was recorded. A calibrated
+      // pack takes it from the level it measured to the one the velocity asks
+      // for, so every layer lands on one loudness. Otherwise the pack's level
+      // match multiplies the clamped velocity gain rather than feeding into it,
+      // so a quietly mastered pack is not clipped back down by velocityGain's
+      // own ceiling.
+      const calibrated = this.calibration
+        ? calibratedGain(this.calibration, velocity, midi, layerIndex, root)
+        : undefined;
       return {
         buffer,
         playbackRate: Math.pow(2, (midi - root) / 12),
-        // The pack's level match multiplies the clamped velocity gain rather
-        // than feeding into it, so a quietly mastered pack is not clipped back
-        // down by velocityGain's own ceiling. It is keyed on the layer actually
-        // resolved, not the requested one, because it describes how loudly that
-        // file was recorded — during a partial load those differ.
-        gain: velocityGain(velocity, preferredLayer) * this.levelMatchFor(layerIndex),
+        gain: calibrated ?? velocityGain(velocity, preferredLayer) * this.levelMatchFor(layerIndex),
         offset: this.onsets.get(entry.file) ?? 0,
         releaseTc: releaseTcFor(midi),
         ...(midi >= UNDAMPED_FROM_MIDI ? { undamped: true } : {}),
@@ -331,8 +363,8 @@ export class SampleBank {
 
   /**
    * How much this pack's layer must be lifted to sit at the reference pack's
-   * loudness. 1 for the reference pack itself, and for any manifest predating
-   * the measurement.
+   * loudness, where no calibration measures every file instead. 1 for the
+   * reference pack itself, and for any manifest predating the measurement.
    */
   private levelMatchFor(layer: number): number {
     const layers = this.manifest?.velocityLayers;
@@ -453,6 +485,18 @@ export class SampleBank {
     const progress = this.getProgress();
     for (const listener of this.listeners) listener(progress);
   }
+}
+
+/**
+ * The velocity calibration a manifest plays by: its pack version's entry in the
+ * generated table, and only when that covers every file the manifest lists,
+ * which it always should — both are fixed once a pack is published. A pack
+ * mapped by regions (the Wurlitzer) keeps its own velocity model.
+ */
+function calibrationFor(manifest: SamplePackManifest): VelocityCalibration | null {
+  if (manifest.regions) return null;
+  const calibration = VELOCITY_CALIBRATIONS[manifest.version];
+  return calibration && calibrationCovers(calibration, manifest.files) ? calibration : null;
 }
 
 function nearestValue(sorted: readonly number[], target: number): number | undefined {

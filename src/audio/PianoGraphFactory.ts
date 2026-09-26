@@ -114,11 +114,12 @@ export function generateReverbImpulse(
 const RAMP_TC = 0.03;
 
 /**
- * Fixed trim on the summing bus. Per-voice gain deliberately exceeds 1 — the
- * pack's `levelMatch` is applied outside `velocityGain`'s clamp — and nothing
- * attenuates by polyphony, so a pedalled fortissimo chord arrives well past
- * full scale. The bus is the one place a constant trim buys transient
- * headroom without touching the musical dynamics between notes.
+ * Fixed trim on the summing bus. A voice's gain can exceed 1 — the velocity
+ * calibration lifts a quietly recorded sample to its target, and the loudest
+ * voice peaks at about 1.5 (`loudestVoicePeak`) — and nothing attenuates by
+ * polyphony, so a pedalled fortissimo chord arrives well past full scale. The
+ * bus is the one place a constant trim buys transient headroom without
+ * touching the musical dynamics between notes.
  */
 export const VOICE_BUS_HEADROOM = 0.7;
 

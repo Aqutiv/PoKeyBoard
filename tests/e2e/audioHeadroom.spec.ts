@@ -1,10 +1,9 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'vite';
 import { expect, test } from './fixtures';
-import type { SamplePackManifest } from '../../src/audio/audioTypes';
-import { pianoInstrument } from '../../src/audio/instruments';
-import { velocityGain, velocityToLayer } from '../../src/audio/SampleBank';
+import { MAX_ROOT_DISTANCE_SEMITONES } from '../../src/audio/SampleBank';
+import { VELOCITY_CALIBRATIONS } from '../../src/audio/velocityCalibration';
+import { loudestVoicePeak } from '../../src/audio/velocityCalibrationMath';
 
 /**
  * The only spec that measures actual audio. Node has no Web Audio and the
@@ -24,21 +23,20 @@ const METRONOME_PEAK = 0.6;
 const METRONOME_VOLUME = 0.6;
 
 /**
- * The worst-case per-voice gain the app can produce: SampleBank multiplies
- * velocityGain by the layer's levelMatch *outside* velocityGain's own clamp, and
- * headroom-grand's loud layer carries the largest of any pack, about 2 in all.
- * The match is read per layer, where the manifest keeps it and where SampleBank
- * reads it (`levelMatchFor`).
+ * The worst-case per-voice gain the app can produce, for the full-scale sines
+ * this spec drives the graph with: not the largest gain, which goes to the
+ * quietest recordings, but the loudest peak any voice really reaches at full
+ * velocity — each recording's sample peak times the gain the velocity
+ * calibration gives it, on every key it can sound, stand-ins during a partial
+ * load included (`loudestVoicePeak`), on any pack. About 1.5: the Headroom
+ * piano's soft A6 standing in for C6. A fully loaded pack peaks at 1.2.
  */
 function worstCaseVoiceGain(): number {
-  const packDir = pianoInstrument('headroom-grand').path.replace(/\/$/, '');
-  const manifest = JSON.parse(
-    readFileSync(path.resolve('public', packDir, 'manifest.json'), 'utf8'),
-  ) as SamplePackManifest;
-  const layer = velocityToLayer(LOUD_VELOCITY);
-  const levelMatch = manifest.velocityLayers.find((entry) => entry.index === layer)?.levelMatch;
-  if (levelMatch === undefined) throw new Error('headroom-grand has lost its loud levelMatch');
-  return velocityGain(LOUD_VELOCITY, layer) * levelMatch;
+  return Math.max(
+    ...Object.values(VELOCITY_CALIBRATIONS).map((calibration) =>
+      loudestVoicePeak(calibration, LOUD_VELOCITY, MAX_ROOT_DISTANCE_SEMITONES),
+    ),
+  );
 }
 
 /** The bundled modules, as the page sees them. */

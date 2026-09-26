@@ -12,10 +12,12 @@
 ```
 src/
   audio/        AudioEngine (facade singleton), instruments (the piano
-                registry), SampleBank, VoiceManager, PianoGraphFactory
-                (+ procedural reverb IR), MetronomeEngine, OfflineTakeRenderer,
-                AudioExportService, loudness (BS.1770 loudness, true peak,
-                look-ahead limiter), id3, audioCapabilities, iosAudioSession
+                registry), SampleBank (+ velocityCurve, and the generated
+                velocityCalibration with its maths), VoiceManager,
+                PianoGraphFactory (+ procedural reverb IR), MetronomeEngine,
+                OfflineTakeRenderer, AudioExportService, loudness (BS.1770
+                loudness, true peak, look-ahead limiter), id3,
+                audioCapabilities, iosAudioSession
   workers/      mp3Encoder.worker (mastering + LAME wasm, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
@@ -118,10 +120,20 @@ persistence layer to apply the stored instrument, so a user on the second piano
 never decodes 5.7 MB of the first one first.
 
 Packs are mastered at different levels — Headroom sits ~15 dB below Salamander —
-so the build script measures each pack against the default one and writes a
-per-layer `levelMatch` into its manifest. `SampleBank` applies it _outside_
-`velocityGain`'s clamp, keyed on the layer actually resolved rather than the one
-requested, because it describes how loudly that file was recorded.
+and within a pack each recording at its own, note by note. So a grand plays by a
+velocity calibration: every one of its recordings is measured once
+(`tests/tools/generateVelocityCalibration.ts`, K-weighted over the 300 ms after
+its onset) into `velocityCalibration.ts`, keyed by pack version — in code, since
+a published pack and its manifest never change — and `SampleBank` gives a voice
+the gain that takes its recording from that level to where its velocity asks:
+one decibel curve for every pack (`velocityCurve.ts`), tilted from bass to
+treble as the pack's medium layer is, and anchored so C3–B5 at the computer
+keyboard's velocity plays exactly as loudly as before. The layers then change
+the timbre and never the loudness. The gain is keyed on the recording actually
+resolved rather than the one requested, because a stand-in during a partial
+load was recorded at its own level. A pack without a table falls back to
+per-layer trims (`velocityGain`) times the per-layer `levelMatch` the build
+script writes into its manifest; the Wurlitzer keeps its own region gains.
 
 The selected piano is authoritative everywhere, including export: `setTake`
 stamps the take's `samplePackVersion` from the active instrument, so live

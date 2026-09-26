@@ -65,7 +65,10 @@ describe('velocityToLayer', () => {
   });
 });
 
-describe('velocityGain', () => {
+// The gain of a pack with no velocity calibration. The grands have one, and
+// velocityCalibration.test.ts holds them to meeting themselves at every layer
+// boundary; these are the looser promises of the fallback.
+describe('velocityGain, for a pack with no calibration', () => {
   it('is monotonically non-decreasing within a layer', () => {
     for (let layer = 0; layer < 3; layer += 1) {
       let previous = 0;
@@ -93,6 +96,8 @@ describe('velocityGain', () => {
       const above = velocityGain(boundary + 0.001, velocityToLayer(boundary + 0.001));
       // The samples themselves get louder across the boundary; the applied
       // gain must not amplify that step by more than ~2x in either direction.
+      // Only a bound: one trim per layer cannot match recordings that differ
+      // note by note, which is what the calibration is for.
       expect(above / below).toBeGreaterThan(0.5);
       expect(above / below).toBeLessThan(2);
     }
@@ -134,7 +139,8 @@ async function loadedBank(levelMatch?: number): Promise<SampleBank> {
   return bank;
 }
 
-describe('a pack level match', () => {
+// The stub manifest's version has no calibration, so it plays by the fallback.
+describe('a pack level match, where there is no calibration', () => {
   it('scales the voice gain past velocityGain’s own ceiling', async () => {
     const plain = await loadedBank();
     const base = plain.getSample(60, 0.9)?.gain;
