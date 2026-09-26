@@ -30,10 +30,18 @@ const MAX_BARS_PER_SYSTEM = 4;
  * line so every system carries the same number of bars — an eight-bar tune
  * breaks 4+4 or 2+2+2+2, never 3+3+2, and a phrase never ends partway along a
  * system.
+ *
+ * `fifths` is the key signature, which every system repeats after its clef —
+ * so it comes out of every system's width, not just the first one's.
  */
-export function barsPerSystemFor(barCount: number, beatsPerBar: number, widthPx: number): number {
+export function barsPerSystemFor(
+  barCount: number,
+  beatsPerBar: number,
+  widthPx: number,
+  fifths = 0,
+): number {
   if (barCount <= ONE_SYSTEM_MAX_BARS) return barCount;
-  const usablePx = widthPx - gutterWidthFor(0) - SCORE_LEAD_IN - SNIPPET_RIGHT_PAD_PX;
+  const usablePx = widthPx - gutterWidthFor(fifths) - SCORE_LEAD_IN - SNIPPET_RIGHT_PAD_PX;
   const fit = Math.min(
     MAX_BARS_PER_SYSTEM,
     Math.max(1, Math.floor(usablePx / (beatsPerBar * MIN_PX_PER_BEAT))),

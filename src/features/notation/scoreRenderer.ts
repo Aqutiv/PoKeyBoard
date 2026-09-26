@@ -50,6 +50,8 @@ export const SCORE_MIN_HEIGHT = BASS_TOP + STAFF_H + 38;
 export const GUTTER = 58;
 /** Horizontal pitch of the accidentals in the gutter's key signature. */
 const KEY_ACCIDENTAL_PX = GAP * 1.05;
+/** The line joining a system's staves at its left edge. */
+const SYSTEM_LINE_X = 4.5;
 
 export function gutterWidthFor(fifths: number): number {
   const count = Math.abs(normalizeFifths(fifths));
@@ -791,6 +793,8 @@ function drawStaffLines(
   ctx: CanvasRenderingContext2D,
   view: ScoreView,
   palette: ScorePalette,
+  fromX = 0,
+  toX = view.widthPx,
 ): void {
   ctx.strokeStyle = palette.staffLine;
   ctx.lineWidth = 1;
@@ -798,8 +802,8 @@ function drawStaffLines(
     for (let line = 0; line < 5; line += 1) {
       const y = top + line * GAP + 0.5;
       ctx.beginPath();
-      ctx.moveTo(0, y);
-      ctx.lineTo(view.widthPx, y);
+      ctx.moveTo(fromX, y);
+      ctx.lineTo(toX, y);
       ctx.stroke();
     }
   }
@@ -1699,12 +1703,20 @@ function drawGutter(
   const { timeSignature } = input;
   ctx.fillStyle = palette.gutterBg;
   ctx.fillRect(0, 0, view.gutterPx, view.heightPx);
+  // The fill is for Play's score, which scrolls beneath the gutter: music
+  // going by must not show through the clef. A lesson's staff stands still,
+  // and there the fill hid nothing but the lines the clef and the key
+  // signature are read against — and which line a sharp sits on is all a
+  // signature says. So they go back in, from the system's edge.
+  if (chromeOf(view) !== 'full') {
+    drawStaffLines(ctx, view, palette, SYSTEM_LINE_X, view.gutterPx);
+  }
   ctx.strokeStyle = palette.barLine;
   ctx.lineWidth = 1.4;
   // System bar line joining the staffs at the left edge.
   ctx.beginPath();
-  ctx.moveTo(4.5, view.trebleTop);
-  ctx.lineTo(4.5, systemBottom(view));
+  ctx.moveTo(SYSTEM_LINE_X, view.trebleTop);
+  ctx.lineTo(SYSTEM_LINE_X, systemBottom(view));
   ctx.stroke();
 
   ctx.fillStyle = palette.noteDim;

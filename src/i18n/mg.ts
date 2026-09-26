@@ -279,6 +279,16 @@ export const mg: Messages = {
     hearIt: 'Henoy',
     chordQualityPrompt: 'Majeur sa mineur?',
     chordQualityWrong: ({ answer }) => `${answer} ilay teo.`,
+    keySignaturePrompt: 'Lakile lehibe inona no ananan’io famantarana io?',
+    majorKey: ({ note }) => `${note} lehibe`,
+    keySignatureWrong: ({ key }) => `Io famantarana io dia an’i ${key}.`,
+    keySignatureLabel: ({ fifths }) => {
+      const count = Math.abs(fifths);
+      if (count === 0) return 'Famantarana lakile: tsy misy diesy na bemôly';
+      return `Famantarana lakile: ${fifths > 0 ? 'diesy' : 'bemôly'} ${count}`;
+    },
+    playTonic: 'Tendreo ny naoty fototr’ity lakile ity.',
+    circleLabel: 'Faribolana fahadimy',
     chapterTitles: {
       meetTheKeyboard: 'Fantaro ny klavie',
       musicalAlphabet: 'Ny abidia mozikaly',

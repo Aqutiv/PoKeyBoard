@@ -33,7 +33,7 @@ src/
                 useMidiInput), PianoKeyboard
     learn/      chapter catalog, pure exercise spec + matcher, useExercise,
                 LearnPage (outline), ChapterRunner, KeyboardDiagram,
-                StaffSnippet, per-locale lesson content
+                StaffSnippet, CircleOfFifths, per-locale lesson content
     notation/   staffMapping, pitchSpelling (letters in context), keyDetection
                 (key and mode), quantization, notationLayout, scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
@@ -155,7 +155,8 @@ A voice behaves like the string it stands for, the same way live and offline (`s
 ## Learn
 
 A chapter is data, not code: an ordered list of steps, each either theory (prose
-plus an optional keyboard diagram, staff snippet, or Listen demo) or an exercise
+plus an optional keyboard diagram, staff snippet, circle of fifths, or Listen
+demo) or an exercise
 carrying an `ExerciseSpec`. `exerciseMatcher.ts` is a pure reducer over that spec
 — no React, no `AudioContext` — so the whole matching suite runs headless;
 `useExercise` adds only the `subscribeInput` subscription, the held-note

@@ -43,6 +43,29 @@ export function singleNotePhrase(midi: number, staff?: NoteStaff): LearnPhrase {
   return phrase;
 }
 
+const signatureCache = new Map<number, LearnPhrase>();
+
+/**
+ * A staff with a key signature and no notes, cached by signature.
+ *
+ * Cached for the reason `singleNotePhrase` is: identity. A quiz or drill round
+ * holds its picture for as long as the round lasts, and the runner re-renders
+ * on every key played in the meantime.
+ */
+export function signaturePhrase(fifths: number): LearnPhrase {
+  let phrase = signatureCache.get(fifths);
+  if (!phrase) {
+    phrase = {
+      bpm: PHRASE_BPM,
+      timeSignature: { numerator: BAR_BEATS, denominator: 4 },
+      events: [],
+      keySignature: fifths,
+    };
+    signatureCache.set(fifths, phrase);
+  }
+  return phrase;
+}
+
 /**
  * The view a note-level staff hint asks for. Undefined means the treble staff,
  * which is what every chapter before the bass one draws.

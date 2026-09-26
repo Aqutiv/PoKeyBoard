@@ -139,8 +139,9 @@ export const HALF_STEPS_WHOLE_STEPS: LearnChapter = {
       kind: 'theory',
       visual: {
         kind: 'staff',
-        // Sharp side on purpose: StaffSnippet engraves in C major, so a flat
-        // would come out spelled as its sharp and contradict the lesson.
+        // No key signature, so the sharp is written beside its note, spelled
+        // as named: "C#4" is C♯. Written "Db4", the same key would engrave as
+        // D♭ — the name, not the key, decides.
         phrase: {
           bpm: 100,
           timeSignature: { numerator: 4, denominator: 4 },

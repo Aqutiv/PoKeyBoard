@@ -275,6 +275,18 @@ export const es: Messages = {
     hearIt: 'Escúchalo',
     chordQualityPrompt: '¿Mayor o menor?',
     chordQualityWrong: ({ answer }) => `Ese era ${answer}.`,
+    keySignaturePrompt: '¿Qué tonalidad mayor tiene esta armadura?',
+    majorKey: ({ note }) => `${note} mayor`,
+    keySignatureWrong: ({ key }) => `Esa armadura es la de ${key}.`,
+    keySignatureLabel: ({ fifths }) => {
+      const count = Math.abs(fifths);
+      if (count === 0) return 'Armadura: sin sostenidos ni bemoles';
+      const sign =
+        fifths > 0 ? (count === 1 ? 'sostenido' : 'sostenidos') : count === 1 ? 'bemol' : 'bemoles';
+      return `Armadura: ${count} ${sign}`;
+    },
+    playTonic: 'Toca la tónica de esta tonalidad.',
+    circleLabel: 'Círculo de quintas',
     chapterTitles: {
       meetTheKeyboard: 'Conoce el teclado',
       musicalAlphabet: 'El alfabeto musical',

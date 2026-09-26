@@ -129,7 +129,7 @@ test.describe('learn outline', () => {
 
     for (const level of ['Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
-      await expect(chapterButtons(page), level).toHaveCount(level === 'Intermediate' ? 1 : 0);
+      await expect(chapterButtons(page), level).toHaveCount(level === 'Intermediate' ? 2 : 0);
       await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
       await page.getByText('Upcoming lessons', { exact: true }).click();
@@ -187,13 +187,16 @@ test.describe('learn outline', () => {
     await expect(page.getByText('10 lessons available')).toBeVisible();
     // The next level is still to be written: its chapters show, locked.
     await levels(page).getByRole('button', { name: 'Intermediate' }).click();
-    await expect(page.getByText('1 lesson available')).toBeVisible();
+    await expect(page.getByText('2 lessons available')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open How to Practise' })).toBeEnabled();
+    await expect(
+      page.getByRole('button', { name: 'Open Key Signatures & the Circle of Fifths' }),
+    ).toBeEnabled();
     await page.getByText('Upcoming lessons', { exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'Key Signatures & the Circle of Fifths — coming soon' }),
+      page.getByRole('button', { name: 'Scales Beyond C — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(9);
+    await expect(page.getByText('Coming soon')).toHaveCount(8);
   });
 });
 
@@ -1511,5 +1514,157 @@ test.describe('intermediate chapter one', () => {
     await expect(page.getByRole('button', { name: 'Playback speed: 60%' })).toBeVisible();
     await expect(page.locator('.transport__loop')).toHaveAttribute('aria-pressed', 'true');
     await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-right');
+  });
+});
+
+test.describe('intermediate chapter two', () => {
+  const CHAPTER = 'Key Signatures & the Circle of Fifths';
+  const openAt = (page: Page, step: number) =>
+    openChapterAt(page, CHAPTER, 'keySignatures', step, 'Intermediate');
+  const MINUET = 'Minuet in G major, BWV Anh. 114';
+
+  /**
+   * An answer button, matched whole: "Answer E" would otherwise also find
+   * "Answer E♭".
+   */
+  const answer = (page: Page, key: string) =>
+    page.getByRole('button', { name: `Answer ${key}`, exact: true });
+  const quizStatus = (page: Page) => page.locator('.learn-quiz__status');
+
+  test('reads D major through its signature, where a white F starts it over', async ({ page }) => {
+    await openAt(page, 2);
+    await expect(page.getByRole('heading', { name: 'Read it with the signature' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    await playKey(page, 'KeyS'); // D4
+    await playKey(page, 'KeyD'); // E4
+    await expect(progressLine(page)).toHaveText('2 of 8');
+    // Written on the F space with nothing beside it — but the signature says
+    // sharp, so the white key is the wrong one.
+    await playKey(page, 'KeyF');
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const code of ['KeyS', 'KeyD', 'KeyT', 'KeyG', 'KeyH', 'KeyJ', 'KeyO', 'KeyL']) {
+      await playKey(page, code);
+    }
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('reads F major through its one flat', async ({ page }) => {
+    await openAt(page, 8);
+    await expect(page.getByRole('heading', { name: 'A flat key from the page' })).toBeVisible();
+    // F G A B♭ C D E F, from a C4 base: B♭ is the black key under U.
+    for (const code of ['KeyF', 'KeyG', 'KeyH', 'KeyU', 'KeyK', 'KeyL', 'Semicolon', 'Quote']) {
+      await playKey(page, code);
+    }
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('names the key from its signature, and corrects a wrong one by name', async ({ page }) => {
+    await openAt(page, 5);
+    await expect(page.getByRole('heading', { name: 'Name the key' })).toBeVisible();
+    // Keys in circle order, and the picture says what it shows.
+    await expect(page.locator('.learn-quiz__choice')).toHaveText(['C', 'G', 'D', 'A', 'E']);
+    await expect(
+      page.getByRole('img', { name: 'Key signature: no sharps or flats' }),
+    ).toBeVisible();
+
+    await answer(page, 'G').click();
+    await expect(quizStatus(page)).toHaveText('That signature is C major.');
+    await answer(page, 'C').click();
+    await expect(page.getByRole('img', { name: 'Key signature: 3 sharps' })).toBeVisible();
+    for (const key of ['A', 'G', 'E', 'D']) await answer(page, key).click();
+    await expect(quizStatus(page)).toHaveText('Nicely done.');
+    await expect(nextButton(page)).toBeEnabled();
+  });
+
+  test('asks every key up to four sharps or flats once, both sides mixed', async ({ page }) => {
+    await openAt(page, 9);
+    await expect(page.locator('.learn-quiz__choice')).toHaveText([
+      'A♭',
+      'E♭',
+      'B♭',
+      'F',
+      'C',
+      'G',
+      'D',
+      'A',
+      'E',
+    ]);
+    for (const key of ['G', 'F', 'C', 'E', 'A♭', 'A', 'E♭', 'D', 'B♭']) {
+      await answer(page, key).click();
+    }
+    await expect(quizStatus(page)).toHaveText('Nicely done.');
+  });
+
+  test('takes a key’s home note in any octave', async ({ page }) => {
+    await openAt(page, 10);
+    await expect(page.getByRole('heading', { name: 'Find home' })).toBeVisible();
+    await expect(page.locator('.learn-exercise__prompt')).toHaveText(
+      'Play the home note of this key.',
+    );
+    await expect(page.getByRole('img', { name: 'Key signature: 2 sharps' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 6');
+
+    await playKey(page, 'KeyG'); // G is one sharp's home, not two's
+    await settleDrillHold(page);
+    await expect(progressLine(page)).toHaveText('0 of 6');
+
+    await playKey(page, 'KeyL'); // D5: D, an octave up
+    await expect(progressLine(page)).toHaveText('1 of 6');
+    await expect(page.getByRole('img', { name: 'Key signature: 1 flat' })).toBeVisible();
+  });
+
+  test('draws the circle, and walks it from C', async ({ page }) => {
+    await openAt(page, 13);
+    await expect(page.getByRole('heading', { name: 'Walk the circle' })).toBeVisible();
+    await expect(page.getByRole('img', { name: 'Circle of fifths' })).toBeVisible();
+    await expect(page.locator('.learn-circle__name')).toHaveText([
+      'C',
+      'G',
+      'D',
+      'A',
+      'E',
+      'B',
+      'F♯/G♭',
+      'D♭',
+      'A♭',
+      'E♭',
+      'B♭',
+      'F',
+    ]);
+    // C G D A E B, all inside the octave from middle C.
+    for (const code of ['KeyA', 'KeyG', 'KeyS', 'KeyH', 'KeyD', 'KeyJ']) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('hands off to the Minuet in G, right hand in Training', async ({ page }) => {
+    await openAt(page, 14);
+    await expect(page.getByRole('heading', { name: 'That is chapter two' })).toBeVisible();
+    await expect(
+      page.getByText('It opens in Training, so Play waits for you at every note.'),
+    ).toBeVisible();
+    await page.getByRole('button', { name: `Practise ${MINUET} on Play` }).click();
+    await expect(page.locator('.play-header__title')).toHaveText(MINUET, { timeout: 30_000 });
+    await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-right');
+  });
+
+  // A score fetched by the service worker is out of `page.route`'s reach, so
+  // the worker stays off here whichever way the suite runs — as the Library's
+  // own bad-network tests do.
+  test.describe('when the score cannot be fetched', () => {
+    test.use({ serviceWorkers: 'block' });
+
+    test('lands in the Library folder that lists it', async ({ page }) => {
+      await openAt(page, 14);
+      await page.route('**/scores/**', (route) => route.abort());
+      await page.getByRole('button', { name: `Practise ${MINUET} on Play` }).click();
+      const folders = page.getByRole('group', { name: 'Library folder' });
+      await expect(folders.getByRole('button', { name: 'Classics' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+        { timeout: 30_000 },
+      );
+      // Exact: the Minuet's "(alternate edition)" is listed beside it.
+      await expect(page.getByRole('button', { name: `Open ${MINUET}`, exact: true })).toBeVisible();
+    });
   });
 });

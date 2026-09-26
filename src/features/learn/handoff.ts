@@ -1,11 +1,33 @@
+import { libraryTakeId } from '@/domain/libraryTakes';
 import { createTakeTempoMap } from '@/domain/tempoMap';
 import type { PlaybackLoop, Take } from '@/domain/takeTypes';
+import { libraryTrackSummary } from '@/features/library/catalog';
 import { openLibraryTrack } from '@/features/library/libraryService';
 import { loopBetween } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import type { LearnHandoff } from './types';
+
+/**
+ * The title of the track a hand-off opens — an authored Library track and a
+ * vendored Classics score alike — or undefined for one the Library does not
+ * have, which leaves the closing card with its plain "Try it on Play".
+ */
+export function handoffTitle(trackId: string): string | undefined {
+  return libraryTrackSummary(libraryTakeId(trackId))?.title;
+}
+
+/**
+ * Open the Library at the folder a hand-off's track lives in. For when the
+ * track would not open — a Classics score is fetched the first time it is
+ * opened, so offline it cannot be — the player lands where it is listed, not
+ * a folder away from it.
+ */
+export function revealHandoffInLibrary(trackId: string): void {
+  const folder = libraryTrackSummary(libraryTakeId(trackId))?.folder;
+  if (folder) useSettingsStore.getState().setLibraryFolder(folder);
+}
 
 /**
  * The loop a hand-off asks for, on the take it opened: its beats turned into

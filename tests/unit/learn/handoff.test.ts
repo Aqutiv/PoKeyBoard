@@ -1,9 +1,45 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createTakeTempoMap } from '@/domain/tempoMap';
-import { handoffLoop } from '@/features/learn/handoff';
+import { handoffLoop, handoffTitle, revealHandoffInLibrary } from '@/features/learn/handoff';
 import { buildLibraryTake } from '@/features/library/trackBuilder';
 import { A_BEAUTIFUL_DAY } from '@/features/library/tracks/aBeautifulDay';
 import { loopBetween } from '@/features/transport/practiceLoop';
+import { useSettingsStore } from '@/state/useSettingsStore';
+
+const MINUET = 'score-bach-minuet-in-g-major-bwv-anh-114';
+
+describe('handoffTitle', () => {
+  it('names an authored track', () => {
+    expect(handoffTitle('a-beautiful-day')).toBe(A_BEAUTIFUL_DAY.title);
+  });
+
+  it('names a Classics score, which the authored list alone does not hold', () => {
+    // Looked up there, it came back empty and the closing card silently fell
+    // back to its plain "Try it on Play".
+    expect(handoffTitle(MINUET)).toBe('Minuet in G major, BWV Anh. 114');
+  });
+
+  it('names nothing the Library does not have', () => {
+    expect(handoffTitle('no-such-track')).toBeUndefined();
+  });
+});
+
+describe('revealHandoffInLibrary', () => {
+  const initial = useSettingsStore.getState().libraryFolder;
+  afterEach(() => useSettingsStore.getState().setLibraryFolder(initial));
+
+  it('opens the Library at the folder the track is listed in', () => {
+    useSettingsStore.getState().setLibraryFolder('originals');
+    revealHandoffInLibrary(MINUET);
+    expect(useSettingsStore.getState().libraryFolder).toBe('classics');
+  });
+
+  it('leaves the folder alone for a track the Library does not have', () => {
+    useSettingsStore.getState().setLibraryFolder('originals');
+    revealHandoffInLibrary('no-such-track');
+    expect(useSettingsStore.getState().libraryFolder).toBe('originals');
+  });
+});
 
 describe('handoffLoop', () => {
   const take = buildLibraryTake(A_BEAUTIFUL_DAY);

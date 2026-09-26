@@ -67,7 +67,8 @@ interface StaffSnippetProps {
    * Bar furniture. 'bare' by default — a lesson about one written note has no
    * use for a time signature. The rhythm chapter passes 'lesson' to get the
    * time signature without the measure number. Only the first system of a
-   * long line carries it, as on a printed page; the rest keep just the clef.
+   * long line carries it, as on a printed page; the rest keep just the clef
+   * and the key signature, which a printed page repeats on every line.
    */
   chrome?: ScoreChrome;
 }
@@ -96,6 +97,9 @@ function lessonLayout(
   const score = layoutScore([...notes], {
     bpm: phrase.bpm,
     timeSignature: phrase.timeSignature,
+    // Spelled against the signature, so a note it already sharpens or
+    // flattens is drawn bare.
+    keySignature: phrase.keySignature ?? 0,
     quantization: '1/16',
     minMeasures: 1,
     // A lesson about the beat shows eighths in pairs, one pair per beat, as
@@ -159,7 +163,14 @@ export function StaffSnippet({
   // Unmeasured, a long line is drawn as one system rather than guessed at; the
   // first resize settles it before anything is read.
   const barsPerSystem =
-    widthPx === 0 ? barCount : barsPerSystemFor(barCount, phrase.timeSignature.numerator, widthPx);
+    widthPx === 0
+      ? barCount
+      : barsPerSystemFor(
+          barCount,
+          phrase.timeSignature.numerator,
+          widthPx,
+          phrase.keySignature ?? 0,
+        );
 
   const systems = useMemo((): readonly StaffSystem[] => {
     if (barsPerSystem >= barCount) {
@@ -262,6 +273,7 @@ function StaffSystemCanvas({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const theme = useSyncExternalStore(subscribeTheme, getTheme, getTheme);
   const { layout, geometry, spanMs } = system;
+  const fifths = phrase.keySignature ?? 0;
 
   // Kept in a ref so the ResizeObserver can be created once and still call the
   // current closure. The runner re-renders on every note-on and note-off, and
@@ -287,7 +299,8 @@ function StaffSystemCanvas({
       context.setTransform(dpr, 0, 0, dpr, 0, 0);
       context.clearRect(0, 0, widthPx, heightPx);
 
-      const gutterPx = gutterWidthFor(0);
+      // A signature widens the fixed prefix it is drawn in.
+      const gutterPx = gutterWidthFor(fifths);
       // Fit the system's span in the space left after the fixed prefix.
       const usablePx = Math.max(1, widthPx - gutterPx - SCORE_LEAD_IN - SNIPPET_RIGHT_PAD_PX);
       const pxPerMs = usablePx / Math.max(1, spanMs);
@@ -313,7 +326,7 @@ function StaffSystemCanvas({
         {
           layout,
           timeSignature: phrase.timeSignature,
-          keySignature: 0,
+          keySignature: fifths,
           playheadMs: NO_PLAYHEAD_MS,
           recording: false,
           openNotes: [],
@@ -335,6 +348,7 @@ function StaffSystemCanvas({
     geometry,
     spanMs,
     phrase.timeSignature,
+    fifths,
     theme,
     litMidis,
     litNoteIds,

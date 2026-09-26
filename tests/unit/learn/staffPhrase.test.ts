@@ -1,7 +1,21 @@
 import { describe, expect, it } from 'vitest';
 import { phraseToNotes } from '@/features/learn/phrase';
 import { midiToStaffPosition } from '@/features/notation/staffMapping';
-import { singleNotePhrase, staffModeFor } from '@/features/learn/staffPhrase';
+import { signaturePhrase, singleNotePhrase, staffModeFor } from '@/features/learn/staffPhrase';
+
+describe('signaturePhrase', () => {
+  it('returns the very same object for the same signature', () => {
+    // A key round holds its picture for as long as it lasts, through every
+    // re-render a key press causes — the reason `singleNotePhrase` caches.
+    expect(signaturePhrase(2)).toBe(signaturePhrase(2));
+    expect(signaturePhrase(2)).not.toBe(signaturePhrase(-2));
+  });
+
+  it('draws the signature and no note, since a note would be the answer', () => {
+    expect(signaturePhrase(-3)).toMatchObject({ keySignature: -3, events: [] });
+    expect(phraseToNotes(signaturePhrase(-3))).toEqual([]);
+  });
+});
 
 describe('singleNotePhrase', () => {
   it('returns the very same object for the same note', () => {

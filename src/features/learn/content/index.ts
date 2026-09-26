@@ -53,6 +53,9 @@ const PROSE: Partial<
   howToPractise: {
     en: () => import('./en/howToPractise').then((m) => m.howToPractiseEn),
   },
+  keySignatures: {
+    en: () => import('./en/keySignatures').then((m) => m.keySignaturesEn),
+  },
 };
 
 /**
