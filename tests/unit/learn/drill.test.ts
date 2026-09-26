@@ -258,6 +258,42 @@ describe('drillRoundAt: named chords', () => {
   });
 });
 
+describe('drillRoundAt: degrees in named keys', () => {
+  // G major's 7th, D major's 3rd, F major's 4th: each key's black key.
+  const pool: DrillPool = {
+    kind: 'keyDegree',
+    questions: [
+      { key: 1, degree: 7 },
+      { key: 2, degree: 3 },
+      { key: -1, degree: 4 },
+    ],
+  };
+
+  it('asks for the degree of the named key, in any octave', () => {
+    const asked = [0, 1, 2].map((round) => drillRoundAt(pool, round)?.spec);
+    // Stride two over three: G 7, F 4, D 3.
+    expect(asked).toEqual([
+      { kind: 'pitchClass', pitchClass: 6 },
+      { kind: 'pitchClass', pitchClass: 10 },
+      { kind: 'pitchClass', pitchClass: 6 },
+    ]);
+  });
+
+  it('names the key and the degree for the prompt, and draws nothing', () => {
+    const round = drillRoundAt(pool, 1);
+    expect(round?.kind).toBe('keyDegree');
+    expect(round?.key).toBe(-1);
+    expect(round?.degree).toBe(4);
+    expect(round?.label).toBe('');
+    expect(round?.phrase).toBeUndefined();
+  });
+
+  it('asks nothing of an empty pool, or of a degree the scale does not have', () => {
+    expect(drillRoundAt({ kind: 'keyDegree', questions: [] }, 0)).toBeNull();
+    expect(drillRoundAt({ kind: 'keyDegree', questions: [{ key: 1, degree: 8 }] }, 0)).toBeNull();
+  });
+});
+
 describe('drillRoundAt: key home notes', () => {
   // Two sharps and three flats: D major and E flat major.
   const keys: DrillPool = { kind: 'keyTonic', signatures: [2, -3] };

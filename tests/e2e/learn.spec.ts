@@ -129,7 +129,7 @@ test.describe('learn outline', () => {
 
     for (const level of ['Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
-      await expect(chapterButtons(page), level).toHaveCount(level === 'Intermediate' ? 2 : 0);
+      await expect(chapterButtons(page), level).toHaveCount(level === 'Intermediate' ? 3 : 0);
       await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
       await page.getByText('Upcoming lessons', { exact: true }).click();
@@ -187,16 +187,15 @@ test.describe('learn outline', () => {
     await expect(page.getByText('10 lessons available')).toBeVisible();
     // The next level is still to be written: its chapters show, locked.
     await levels(page).getByRole('button', { name: 'Intermediate' }).click();
-    await expect(page.getByText('2 lessons available')).toBeVisible();
+    await expect(page.getByText('3 lessons available')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open How to Practise' })).toBeEnabled();
     await expect(
       page.getByRole('button', { name: 'Open Key Signatures & the Circle of Fifths' }),
     ).toBeEnabled();
+    await expect(page.getByRole('button', { name: 'Open Scales Beyond C' })).toBeEnabled();
     await page.getByText('Upcoming lessons', { exact: true }).click();
-    await expect(
-      page.getByRole('button', { name: 'Scales Beyond C — coming soon' }),
-    ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(8);
+    await expect(page.getByRole('button', { name: 'Minor Keys — coming soon' })).toBeDisabled();
+    await expect(page.getByText('Coming soon')).toHaveCount(7);
   });
 });
 
@@ -1681,5 +1680,126 @@ test.describe('intermediate chapter two', () => {
       // Exact: the Minuet's "(alternate edition)" is listed beside it.
       await expect(page.getByRole('button', { name: `Open ${MINUET}`, exact: true })).toBeVisible();
     });
+  });
+});
+
+test.describe('intermediate chapter three', () => {
+  const CHAPTER = 'Scales Beyond C';
+  const openAt = (page: Page, step: number) =>
+    openChapterAt(page, CHAPTER, 'scalesBeyondC', step, 'Intermediate');
+
+  /** G A B C D E on the letter rows from the C below G4. */
+  const G_TO_E = ['KeyG', 'KeyH', 'KeyJ', 'KeyK', 'KeyL', 'Semicolon'];
+
+  test('plays G major by heart, reaching its top two notes with X', async ({ page }) => {
+    await openAt(page, 3);
+    await expect(page.getByRole('heading', { name: 'G major by heart' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const code of G_TO_E) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('6 of 8');
+    // A white F where F♯ belongs starts the scale again.
+    await playKey(page, 'Quote');
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const code of G_TO_E) await playKey(page, code);
+    // X moves the rows up an octave: F♯5 and G5 are then T and G.
+    await playKey(page, 'KeyX');
+    await playKey(page, 'KeyT');
+    await playKey(page, 'KeyG');
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('shows G major’s octave whole on the narrowest phone', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 568 });
+    await openAt(page, 3);
+    await expect(page.getByRole('heading', { name: 'G major by heart' })).toBeVisible();
+    await expect(page.locator('.piano__range')).toHaveText('G4 – G5');
+  });
+
+  test('starts each step’s letter rows where it is written, whatever X did before', async ({
+    page,
+  }) => {
+    await openAt(page, 2);
+    await expect(page.getByRole('heading', { name: 'The same fingers as C' })).toBeVisible();
+    // Up an octave on this step…
+    await playKey(page, 'KeyX');
+    await nextButton(page).click();
+    await expect(page.getByRole('heading', { name: 'G major by heart' })).toBeVisible();
+    // …and back from the C below G4 on the next, though it parks on the same
+    // key. The scales take any octave, so only the key lit can tell.
+    await page.keyboard.down('KeyG');
+    await expect(page.getByRole('button', { name: 'G4 key' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    await page.keyboard.up('KeyG');
+  });
+
+  test('plays D major by heart, where a white F starts it over', async ({ page }) => {
+    await openAt(page, 5);
+    await expect(page.getByRole('heading', { name: 'D major by heart' })).toBeVisible();
+    await playKey(page, 'KeyS');
+    await playKey(page, 'KeyD');
+    await expect(progressLine(page)).toHaveText('2 of 8');
+    await playKey(page, 'KeyF');
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const code of ['KeyS', 'KeyD', 'KeyT', 'KeyG', 'KeyH', 'KeyJ', 'KeyO', 'KeyL']) {
+      await playKey(page, code);
+    }
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('plays F major by heart, where a white B starts it over', async ({ page }) => {
+    await openAt(page, 8);
+    await expect(page.getByRole('heading', { name: 'F major by heart' })).toBeVisible();
+    for (const code of ['KeyF', 'KeyG', 'KeyH']) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('3 of 8');
+    await playKey(page, 'KeyJ');
+    await expect(progressLine(page)).toHaveText('0 of 8');
+    for (const code of ['KeyF', 'KeyG', 'KeyH', 'KeyU', 'KeyK', 'KeyL', 'Semicolon', 'Quote']) {
+      await playKey(page, code);
+    }
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('drills where each key’s black keys land, naming the key', async ({ page }) => {
+    await openAt(page, 9);
+    await expect(page.getByRole('heading', { name: 'Where the black keys land' })).toBeVisible();
+    const prompt = page.locator('.learn-exercise__prompt');
+    await expect(prompt).toHaveText('In G major, play degree 7.');
+    await expect(progressLine(page)).toHaveText('0 of 7');
+    await playKey(page, 'KeyF'); // F natural: G major's seventh is F♯
+    await settleDrillHold(page);
+    await expect(progressLine(page)).toHaveText('0 of 7');
+    await playKey(page, 'KeyT'); // F♯4
+    await expect(progressLine(page)).toHaveText('1 of 7');
+    await expect(prompt).toHaveText('In F major, play degree 4.');
+    await playKey(page, 'KeyU'); // B♭4
+    await expect(progressLine(page)).toHaveText('2 of 7');
+  });
+
+  test('plays D major up and down in time', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openAt(page, 10);
+    await expect(page.getByRole('heading', { name: 'D major, up and down in time' })).toBeVisible();
+    const keys = ['KeyS', 'KeyD', 'KeyT', 'KeyG', 'KeyH', 'KeyJ', 'KeyO', 'KeyL'];
+    const upAndDown = [...keys, ...keys.slice(0, -1).reverse()];
+    await playKeysInTime(
+      page,
+      upAndDown.map((code, beat) => [code, beat] as const),
+    );
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('hands off to the Canon in D, right hand in Training', async ({ page }) => {
+    await openAt(page, 11);
+    await expect(page.getByRole('heading', { name: 'That is chapter three' })).toBeVisible();
+    await expect(
+      page.getByText('It opens in Training, so Play waits for you at every note.'),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Practise Canon in D (easy) on Play' }).click();
+    await expect(page.locator('.play-header__title')).toHaveText('Canon in D (easy)', {
+      timeout: 30_000,
+    });
+    await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-right');
   });
 });

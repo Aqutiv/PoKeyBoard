@@ -56,6 +56,9 @@ const PROSE: Partial<
   keySignatures: {
     en: () => import('./en/keySignatures').then((m) => m.keySignaturesEn),
   },
+  scalesBeyondC: {
+    en: () => import('./en/scalesBeyondC').then((m) => m.scalesBeyondCEn),
+  },
 };
 
 /**

@@ -159,3 +159,68 @@ describe('the keys the take plays, to a screen reader', () => {
     expect(key('E4')).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+describe('the letter rows, parked by a lesson', () => {
+  /**
+   * A lesson keyboard parked on G4, as the G major steps park it — or, with a
+   * null anchor, Play's, which parks nowhere.
+   */
+  function lesson(parkId?: string, anchorMidi: number | null = 67) {
+    return (
+      <I18nContext.Provider value={{ language: 'en', locale: 'en', m: en }}>
+        <PianoKeyboard
+          {...(anchorMidi !== null ? { anchorMidi, onAnchorChange: () => {} } : {})}
+          parkId={parkId}
+        />
+      </I18nContext.Provider>
+    );
+  }
+
+  /** Tap a letter key and report the note the engine was asked for, if any. */
+  function tap(code: string): number | undefined {
+    const noteOn = vi.mocked(audioEngine.noteOn);
+    noteOn.mockClear();
+    act(() => {
+      window.dispatchEvent(new KeyboardEvent('keydown', { code }));
+      window.dispatchEvent(new KeyboardEvent('keyup', { code }));
+    });
+    return noteOn.mock.calls[0]?.[0];
+  }
+
+  beforeEach(() => {
+    vi.spyOn(audioEngine, 'noteOn').mockImplementation(() => true);
+    vi.spyOn(audioEngine, 'noteOff').mockImplementation(() => {});
+  });
+
+  it('reach a G scale’s top two notes after one X', () => {
+    render(lesson('playG'));
+    // Parked on G4, the rows still start from the C below it.
+    expect(tap('KeyT')).toBe(66);
+    tap('KeyX');
+    expect(tap('KeyT')).toBe(78);
+    expect(tap('KeyG')).toBe(79);
+  });
+
+  it('start the next step where it is written, though it shares the anchor', () => {
+    const { rerender } = render(lesson('gFingering'));
+    tap('KeyX');
+    expect(tap('KeyT')).toBe(78);
+    rerender(lesson('playG'));
+    expect(tap('KeyT')).toBe(66);
+  });
+
+  it('keep an octave moved within a step for as long as the step lasts', () => {
+    const { rerender } = render(lesson('playG'));
+    tap('KeyX');
+    rerender(lesson('playG'));
+    expect(tap('KeyT')).toBe(78);
+  });
+
+  it('leave Play’s octave alone, which no lesson parks', () => {
+    const { rerender } = render(lesson('a', null));
+    tap('KeyX');
+    rerender(lesson('b', null));
+    // Play's base starts at C4; X moved it to C5, and nothing moves it back.
+    expect(tap('KeyT')).toBe(78);
+  });
+});

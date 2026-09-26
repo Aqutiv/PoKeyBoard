@@ -63,6 +63,43 @@ describe('nextTrainingGate', () => {
     expect(nextTrainingGate([], 0, 'both')).toBeNull();
   });
 
+  it('never stops for a hidden note, and lets playback play it', () => {
+    // A written trill note at 500 and the trill a hidden voice plays for it.
+    const hide = (n: NoteEvent): NoteEvent => ({ ...n, hidden: true });
+    const trill = sortNotes([
+      note('written', 77, 500, 'treble'),
+      hide(note('g1', 79, 500, 'treble')),
+      hide(note('f1', 77, 562, 'treble')),
+      hide(note('g2', 79, 625, 'treble')),
+      note('next', 76, 1000, 'treble'),
+    ]);
+    expect(nextTrainingGate(trill, 0, 'right')).toEqual({
+      atMs: 500,
+      midis: new Set([77]),
+      noteIds: new Set(['written']),
+    });
+    // Resuming past the hold: the hidden notes are no hold of their own.
+    expect(nextTrainingGate(trill, 501, 'right')?.atMs).toBe(1000);
+    expect(nextTrainingGate(sortNotes([hide(note('only', 60, 0))]), 0, 'both')).toBeNull();
+  });
+
+  it('lets a hidden copy of the key asked for through with it', () => {
+    // A score completing one voice with a note another holds: the same key at
+    // the same moment. The player strikes it once; the copy must not echo it.
+    const hiddenCopy: NoteEvent = { ...note('copy', 65, 500, 'bass'), hidden: true };
+    const take = sortNotes([
+      hiddenCopy,
+      note('held', 65, 500, 'treble'),
+      // Same key, a little later inside the window: not a copy but a new strike.
+      { ...note('later', 65, 530, 'treble'), hidden: true },
+    ]);
+    expect(nextTrainingGate(take, 0, 'right')).toEqual({
+      atMs: 500,
+      midis: new Set([65]),
+      noteIds: new Set(['held', 'copy']),
+    });
+  });
+
   it('falls back to the middle-C split when the take names no staff', () => {
     const recorded = sortNotes([note('a', 55, 100), note('b', 72, 200)]);
     expect(nextTrainingGate(recorded, 0, 'right')?.midis).toEqual(new Set([72]));

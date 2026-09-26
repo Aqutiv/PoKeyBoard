@@ -23,6 +23,7 @@ import { TRIADS } from '@/features/learn/chapters/triads';
 import { CHORDS_PEDAL_AND_HANDS } from '@/features/learn/chapters/chordsPedalAndHands';
 import { HOW_TO_PRACTISE, THEME_TRACK_BEAT } from '@/features/learn/chapters/howToPractise';
 import { KEY_SIGNATURES } from '@/features/learn/chapters/keySignatures';
+import { SCALES_BEYOND_C } from '@/features/learn/chapters/scalesBeyondC';
 import { CIRCLE_SLOTS, slotHolds } from '@/features/learn/circleSlots';
 import { handoffTitle } from '@/features/learn/handoff';
 import { quizRoundAt } from '@/features/learn/useQuiz';
@@ -118,6 +119,7 @@ describe('learn catalog', () => {
       'chordsPedalAndHands',
       'howToPractise',
       'keySignatures',
+      'scalesBeyondC',
     ]);
   });
 
@@ -142,6 +144,7 @@ describe('every authored chapter', () => {
     CHORDS_PEDAL_AND_HANDS,
     HOW_TO_PRACTISE,
     KEY_SIGNATURES,
+    SCALES_BEYOND_C,
   ];
 
   it('keeps the two tints of a diagram apart', () => {
@@ -1079,6 +1082,42 @@ function handoffTake(trackId: string): Take | undefined {
   return musicXmlToTake(extractMusicXmlText(bytes), entry.file);
 }
 
+/** A line's written accidentals, as [midi, sign], engraved the way its snippet is. */
+function accidentalsOf(line: LearnPhrase): (number | string | null)[][] {
+  return layoutScore(phraseToNotes(line), {
+    bpm: line.bpm,
+    timeSignature: line.timeSignature,
+    quantization: '1/16',
+    minMeasures: 1,
+    keySignature: line.keySignature ?? 0,
+  })
+    .chords.flatMap((chord) => chord.notes)
+    .filter((note) => note.accidental !== null)
+    .map((note) => [note.midi, note.accidental]);
+}
+
+/** The pitch classes a signature raises or lowers. */
+function alteredBy(fifths: number): number[] {
+  return keyAlterations(fifths).flatMap((alter, letter) =>
+    alter === 0 ? [] : [(letterPitchClass(letter) + alter + 12) % 12],
+  );
+}
+
+/**
+ * Whether a note of this pitch class is in reach from `anchor`: among the
+ * seven white keys a small phone shows from it, and within the letter rows'
+ * octave and a half from the C below it.
+ */
+function reachable(anchor: number, pitchClass: number): boolean {
+  const COMPUTER_KEYBOARD_SPAN = 17;
+  const high = stepWhites(anchor, MIN_VISIBLE_WHITES, 1);
+  const base = Math.floor(anchor / 12) * 12;
+  for (let midi = anchor; midi <= high; midi += 1) {
+    if (midi % 12 === pitchClass && midi - base <= COMPUTER_KEYBOARD_SPAN) return true;
+  }
+  return false;
+}
+
 describe('chapter seven', () => {
   sharedChapterChecks(FIRST_MELODY);
 
@@ -1604,23 +1643,6 @@ describe('intermediate chapter two', () => {
     letter: LETTERS.indexOf(name.charAt(0)),
     alter: name.charAt(1) === '#' ? 1 : name.charAt(1) === 'b' ? -1 : 0,
   });
-  /** A line's written accidentals, as [midi, sign], engraved the way its snippet is. */
-  const accidentalsOf = (line: LearnPhrase) =>
-    layoutScore(phraseToNotes(line), {
-      bpm: line.bpm,
-      timeSignature: line.timeSignature,
-      quantization: '1/16',
-      minMeasures: 1,
-      keySignature: line.keySignature ?? 0,
-    })
-      .chords.flatMap((chord) => chord.notes)
-      .filter((note) => note.accidental !== null)
-      .map((note) => [note.midi, note.accidental]);
-  /** The pitch classes a signature raises or lowers. */
-  const alteredBy = (fifths: number) =>
-    keyAlterations(fifths).flatMap((alter, letter) =>
-      alter === 0 ? [] : [(letterPitchClass(letter) + alter + 12) % 12],
-    );
   /** The pool a key question or key drill asks from; null for any other step. */
   const keyPool = (s: LearnStep): readonly number[] | null => {
     if (s.kind === 'quiz' && s.question.kind === 'keySignature') return s.question.signatures;
@@ -1791,15 +1813,6 @@ describe('intermediate chapter two', () => {
 
   it('keeps every home note and the circle walk in reach of a phone and the computer keyboard', () => {
     // Neither is a written line, so the shared reach check does not see them.
-    const COMPUTER_KEYBOARD_SPAN = 17;
-    const reachable = (anchor: number, pitchClass: number) => {
-      const high = stepWhites(anchor, MIN_VISIBLE_WHITES, 1);
-      const base = Math.floor(anchor / 12) * 12;
-      for (let midi = anchor; midi <= high; midi += 1) {
-        if (midi % 12 === pitchClass && midi - base <= COMPUTER_KEYBOARD_SPAN) return true;
-      }
-      return false;
-    };
     for (const s of KEY_SIGNATURES.steps) {
       const anchor = s.anchorMidi ?? 60;
       if (s.kind === 'drill' && s.drill.kind === 'keyTonic') {
@@ -1859,5 +1872,203 @@ describe('intermediate chapter two', () => {
     expect(new Set(rightFs.map((note) => note.midi))).toEqual(new Set([66, 78]));
     // Never an F natural: every F in it is the signature's.
     expect(notes.some((note) => note.midi % 12 === 5)).toBe(false);
+  });
+});
+
+describe('intermediate chapter three', () => {
+  sharedChapterChecks(SCALES_BEYOND_C);
+
+  const step = (id: string) => SCALES_BEYOND_C.steps.find((s) => s.id === id);
+  const diagramOf = (id: string) => {
+    const visual = step(id)?.visual;
+    if (visual?.kind !== 'keyboard') throw new Error(`expected a keyboard diagram at ${id}`);
+    return visual;
+  };
+  const byHeart = (id: string) => {
+    const found = step(id);
+    if (found?.kind !== 'exercise' || found.spec.kind !== 'sequence') {
+      throw new Error(`expected a scale by heart at ${id}`);
+    }
+    return found;
+  };
+  /** A key's major scale up one octave, as pitch classes, home to home. */
+  const scaleOf = (fifths: number) =>
+    [...MAJOR_SCALE_STEPS, 12].map((offset) => (majorTonicPitchClass(fifths) + offset) % 12);
+  /** Each scale played by heart: its step, its key in fifths, and its home key. */
+  const BY_HEART = [
+    ['playG', 1, 67],
+    ['playD', 2, 62],
+    ['playF', -1, 65],
+  ] as const;
+  /** A diagram's finger numbers, low key to high. */
+  const fingersOf = (id: string) =>
+    Object.entries(diagramOf(id).labelText ?? {})
+      .map(([midi, finger]) => [Number(midi), finger] as const)
+      .sort(([a], [b]) => a - b);
+
+  it('plays three scales by heart and one in time, and drills where their black keys land', () => {
+    const kinds = SCALES_BEYOND_C.steps.map((s) => s.kind);
+    expect(kinds).toHaveLength(12);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(4);
+    expect(kinds.filter((kind) => kind === 'drill')).toHaveLength(1);
+    expect(kinds.filter((kind) => kind === 'quiz')).toHaveLength(0);
+  });
+
+  it('grades each scale by heart: its own major scale, climbing, with nothing to read', () => {
+    for (const [id, key, home] of BY_HEART) {
+      const s = byHeart(id);
+      if (s.spec.kind !== 'sequence') continue;
+      expect(s.spec.pitchClasses, id).toEqual(scaleOf(key));
+      expect(s.spec.direction, id).toBe('up');
+      expect(s.visual, id).toBeUndefined();
+      expect(s.anchorMidi, id).toBe(home);
+      expect(s.fit, id).toEqual({ lowMidi: home, highMidi: home + 12 });
+    }
+  });
+
+  it('climbs D and F on the letter rows from the C below, and G with one X', () => {
+    const COMPUTER_KEYBOARD_SPAN = 17;
+    /**
+     * How many octaves up the rows must move for a climbing line, played from
+     * its anchor with every note as low as it can go.
+     */
+    const shiftsFor = (anchor: number, pitchClasses: readonly number[], high: number) => {
+      let base = Math.floor(anchor / 12) * 12;
+      let previous = anchor - 1;
+      let shifts = 0;
+      for (const pitchClass of pitchClasses) {
+        let midi = previous + 1;
+        while (midi % 12 !== pitchClass) midi += 1;
+        while (midi - base > COMPUTER_KEYBOARD_SPAN) {
+          base += 12;
+          shifts += 1;
+        }
+        expect(midi, `${midi} is still on the rows`).toBeGreaterThanOrEqual(base);
+        expect(midi, `${midi} is on screen`).toBeLessThanOrEqual(high);
+        previous = midi;
+      }
+      return shifts;
+    };
+    const shifts = Object.fromEntries(
+      BY_HEART.map(([id]) => {
+        const s = byHeart(id);
+        if (s.spec.kind !== 'sequence') return [id, -1];
+        return [id, shiftsFor(s.anchorMidi ?? 60, s.spec.pitchClasses, s.fit?.highMidi ?? 0)];
+      }),
+    );
+    expect(shifts).toEqual({ playG: 1, playD: 0, playF: 0 });
+  });
+
+  it('rings exactly each key’s black keys, its signature’s, among the whole scale', () => {
+    for (const [id, key] of [
+      ['gMajor', 1],
+      ['dMajor', 2],
+      ['fMajor', -1],
+    ] as const) {
+      const diagram = diagramOf(id);
+      const ringed = (diagram.highlightSecondary ?? []).map((midi) => midi % 12);
+      expect(new Set(ringed), id).toEqual(new Set(alteredBy(key)));
+      const all = [...(diagram.highlight ?? []), ...(diagram.highlightSecondary ?? [])];
+      expect(new Set(all.map((midi) => midi % 12)), id).toEqual(new Set(scaleOf(key)));
+    }
+  });
+
+  it('fingers G and D as C and F a note later, never with the thumb on a black key', () => {
+    const numbers = (id: string) => fingersOf(id).map(([, finger]) => finger);
+    expect(numbers('gFingering')).toEqual(['1', '2', '3', '1', '2', '3', '4', '5']);
+    expect(numbers('dMajor')).toEqual(['1', '2', '3', '1', '2', '3', '4', '5']);
+    expect(numbers('fFingering')).toEqual(['1', '2', '3', '4', '1', '2', '3', '4']);
+    for (const id of ['gFingering', 'dMajor', 'fFingering']) {
+      for (const [midi, finger] of fingersOf(id)) {
+        if (finger === '1') expect(isBlackKey(midi), `${id}: thumb on ${midi}`).toBe(false);
+      }
+    }
+    // The tuck diagrams ring the key the thumb crosses under to reach.
+    for (const id of ['gFingering', 'fFingering']) {
+      const tuck = fingersOf(id).filter(([, finger]) => finger === '1')[1]?.[0];
+      expect(diagramOf(id).highlightSecondary, id).toEqual([tuck]);
+    }
+  });
+
+  it('drills a degree of each key, never the first, with every black key among the answers', () => {
+    const s = step('blackKeys');
+    if (s?.kind !== 'drill' || s.drill.kind !== 'keyDegree')
+      throw new Error('expected a key drill');
+    // "Show me" would fire one fixed phrase at a note that changes every round.
+    expect(s.listen).toBeUndefined();
+    expect(s.rounds).toBeLessThanOrEqual(s.drill.questions.length);
+    const asked = Array.from({ length: s.rounds }, (_, round) => drillRoundAt(s.drill, round));
+    const answers: number[] = [];
+    for (const round of asked) {
+      const key = round?.key ?? 99;
+      const degree = round?.degree ?? 0;
+      expect(degree, `${key} ${degree}`).toBeGreaterThan(1);
+      const pitchClass = (majorTonicPitchClass(key) + (MAJOR_SCALE_STEPS[degree - 1] ?? 0)) % 12;
+      expect(round?.spec).toEqual({ kind: 'pitchClass', pitchClass });
+      expect(reachable(s.anchorMidi ?? 60, pitchClass), `${key} ${degree}`).toBe(true);
+      answers.push(pitchClass);
+    }
+    expect(new Set(asked.map((round) => round?.key))).toEqual(new Set([1, 2, -1]));
+    // F♯ (G and D), C♯ (D) and B♭ (F): every black key the three scales have.
+    expect(new Set(answers.filter((pitchClass) => isBlackKey(pitchClass)))).toEqual(
+      new Set([6, 1, 10]),
+    );
+    answers.forEach((pitchClass, i) => {
+      if (i > 0) expect(pitchClass, `round ${i}`).not.toBe(answers[i - 1]);
+    });
+    // The e2e plays these in this order.
+    expect(asked.map((round) => `${majorTonicName(round?.key ?? 0)} ${round?.degree}`)).toEqual([
+      'G 7',
+      'F 4',
+      'D 3',
+      'G 3',
+      'D 7',
+      'F 7',
+      'D 5',
+    ]);
+  });
+
+  it('times only D major, up and back down under its two sharps, with no sign beside a note', () => {
+    const timed = SCALES_BEYOND_C.steps.filter(
+      (s) => s.kind === 'exercise' && s.spec.kind === 'playAlong' && s.spec.timed,
+    );
+    expect(timed.map((s) => s.id)).toEqual(['dInTime']);
+    const s = step('dInTime');
+    if (s?.kind !== 'exercise' || s.spec.kind !== 'playAlong') throw new Error('expected a line');
+    const { phrase } = s.spec;
+    expect(phrase.keySignature).toBe(2);
+    expect(accidentalsOf(phrase)).toEqual([]);
+    const midis = momentsOf(phrase).map((moment) => moment.midis[0] as number);
+    expect(midis[0]).toBe(62);
+    const steps = midis.slice(1).map((midi, i) => midi - (midis[i] as number));
+    expect(steps).toEqual([2, 2, 1, 2, 2, 2, 1, -1, -2, -2, -2, -1, -2, -2]);
+  });
+
+  it('hands off to the Canon in D, whose right hand comes in walking down the D major scale', () => {
+    expect(SCALES_BEYOND_C.handoff).toEqual({
+      trackId: 'score-canon-in-d-easy',
+      mode: 'training-right',
+    });
+    expect(handoffTitle('score-canon-in-d-easy')).toBe('Canon in D (easy)');
+    const take = handoffTake('score-canon-in-d-easy');
+    if (!take) throw new Error('expected the Canon');
+    expect(take.tempo.keySignature).toBe(2);
+    const map = createTakeTempoMap(take.tempo);
+    const right = take.notes
+      .filter((note) => noteHand(note) === 'right')
+      .map((note) => [note.midi, Math.round(map.beatAtMs(note.startMs))]);
+    // Nothing for the right hand in the first four bars; then F♯ E | D C♯ |
+    // B A | B C♯ in half notes — the scale coming down.
+    expect(right.filter(([, beat]) => (beat as number) < 16)).toEqual([]);
+    expect(right.filter(([, beat]) => (beat as number) >= 16 && (beat as number) < 32)).toEqual([
+      [78, 16],
+      [76, 18],
+      [74, 20],
+      [73, 22],
+      [71, 24],
+      [69, 26],
+      [71, 28],
+      [73, 30],
+    ]);
   });
 });

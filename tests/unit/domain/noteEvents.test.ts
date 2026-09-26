@@ -3,11 +3,13 @@ import {
   compareNoteEvents,
   computeTakeDurationMs,
   createEmptyTake,
+  isHiddenNote,
   isSilentNote,
   removeNotesByIds,
   sortNotes,
   sortPedalEvents,
   sortStrikes,
+  writtenNotes,
 } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 
@@ -74,6 +76,22 @@ describe('isSilentNote', () => {
   it('takes velocity 0 as written but not played, and nothing above it', () => {
     expect(isSilentNote(note({ velocity: 0 }))).toBe(true);
     expect(isSilentNote(note({ velocity: 1 / 127 }))).toBe(false);
+  });
+});
+
+describe('hidden notes', () => {
+  it('takes only an explicit true as hidden', () => {
+    expect(isHiddenNote(note({ hidden: true }))).toBe(true);
+    expect(isHiddenNote(note({ hidden: false }))).toBe(false);
+    expect(isHiddenNote(note({}))).toBe(false);
+  });
+
+  it('writes every note but the hidden, and hands back the same array when none is', () => {
+    const shown = note({ id: 'a' });
+    const kept = note({ id: 'b', hidden: true });
+    expect(writtenNotes([shown, kept])).toEqual([shown]);
+    const plain = [shown, note({ id: 'c' })];
+    expect(writtenNotes(plain)).toBe(plain);
   });
 });
 

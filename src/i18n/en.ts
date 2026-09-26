@@ -266,6 +266,7 @@ export const en: Messages = {
     quizAnswerLabel: ({ note }) => `Answer ${note}`,
     playNote: ({ note }) => `Play ${note}.`,
     playDegree: ({ degree }) => `Play degree ${degree}.`,
+    playDegreeInKey: ({ key, degree }) => `In ${key}, play degree ${degree}.`,
     readNotePrompt: 'Which note is this?',
     playWhatYouSee: 'Play the note shown.',
     chordQuality: { major: 'major', minor: 'minor' },
