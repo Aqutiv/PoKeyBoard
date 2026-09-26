@@ -371,7 +371,9 @@ describe('createPianoGraph', () => {
     // A DynamicsCompressorNode is born ducking and recovers at its release
     // rate, so it is born with a fast one, eased to its own over the warm-up.
     // The clock stands still until the context runs, so the warm-up starts
-    // with the audio, whenever the graph was made.
+    // with the audio, whenever the graph was made. The ramp is anchored by an
+    // event of its own: a ramp runs from the event before it, and with none,
+    // where it starts is up to the browser.
     const { context, created } = createStubContext({ currentTime: 3.5 });
     createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
     const limiter = findNode(created, 'compressor') as StubNode & { release: StubParam };
@@ -379,6 +381,7 @@ describe('createPianoGraph', () => {
     expect(LIMITER_WARMUP_S).toBe(0.04);
     expect(limiter.release.value).toBe(LIMITER_WARMUP_RELEASE_S);
     expect(limiter.release.events).toEqual([
+      { type: 'setValueAtTime', value: LIMITER_WARMUP_RELEASE_S, time: 3.5 },
       {
         type: 'exponentialRampToValueAtTime',
         value: LIMITER_RELEASE_S,

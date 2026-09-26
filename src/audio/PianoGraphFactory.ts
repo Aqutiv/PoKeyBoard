@@ -253,8 +253,11 @@ export function createPianoGraph(
     // which eases to its own over the warm-up. The one path stays in place
     // throughout — nothing is switched in or out, and the limiter holds loud
     // chords from the start — only how fast it lets go changes. Counted on the
-    // audio clock, which stands still until the context first runs.
+    // audio clock, which stands still until the context first runs. A ramp
+    // runs from the event before it, and with none, where it starts is up to
+    // the browser, so its start is set as an event of its own.
     limiter.release.value = LIMITER_WARMUP_RELEASE_S;
+    limiter.release.setValueAtTime(LIMITER_WARMUP_RELEASE_S, context.currentTime);
     limiter.release.exponentialRampToValueAtTime(
       LIMITER_RELEASE_S,
       context.currentTime + LIMITER_WARMUP_S,
