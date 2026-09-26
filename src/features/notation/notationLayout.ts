@@ -1,3 +1,4 @@
+import { writtenNotes } from '@/domain/noteEvents';
 import { createTakeTempoMap, type TempoMap } from '@/domain/tempoMap';
 import type {
   NoteEvent,
@@ -1281,7 +1282,12 @@ function deriveOctaveSpans(chords: readonly ChordGroup[]): OctaveSpan[] {
   return spans;
 }
 
-export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
+export function layoutScore(performed: readonly NoteEvent[], options: LayoutOptions): ScoreLayout {
+  // Engraving reads only the notes a score draws. A hidden one plays, but it
+  // brings nothing onto the page: no head, and no voice, stem vote, beat
+  // division or spelling context for the notes around it either. Dynamics are
+  // the exception, since they are read from the playing.
+  const notes = writtenNotes(performed);
   const barMs = barDurationMs(options.bpm, options.timeSignature);
   const minMeasures = options.minMeasures ?? 4;
   const tempoMap = createTakeTempoMap({
@@ -1659,10 +1665,11 @@ export function layoutScore(notes: readonly NoteEvent[], options: LayoutOptions)
   // shift moves whole chords bodily, so nothing about their arrangement changes.
   const octaves = deriveOctaveSpans(chords);
   // Read from the notes as played, not from where they are drawn: how hard a
-  // key went down is performance, and quantizing it would only blur it. The
-  // thresholds are counted in bars, which the tempo map knows how to find
+  // key went down is performance, and quantizing it would only blur it. So the
+  // hidden ones count here, as the trill the page leaves out is still heard.
+  // The thresholds are counted in bars, which the tempo map knows how to find
   // wherever the tempo happens to be at the time.
-  const { marks, hairpins } = readDynamics(notes, {
+  const { marks, hairpins } = readDynamics(performed, {
     barAtMs: (atMs) => tempoMap.beatAtMs(atMs) / options.timeSignature.numerator,
   });
   return {

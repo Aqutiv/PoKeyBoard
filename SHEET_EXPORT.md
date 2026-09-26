@@ -200,6 +200,11 @@ takes seconds and never touches the audio engine.
   themselves, and derived rests carry none, so a change the source declares
   during a bar of rest is announced at the next note instead of where it was
   written. Pitches are unaffected either way; only the announcement moves.
+- A note the source kept off the page (`hidden`: `print-object="no"` or no
+  notehead — MuseScore's written-out trills and turns, and copies that
+  complete a voice) is not engraved, and nothing it would have brought comes
+  with it: no voice, stem vote, beat division or rest. It still plays, and
+  the dynamics are read from every note as played, hidden ones included.
 - Notes struck together on one staff engrave as one chord per voice, stemmed
   apart, rather than as a single stem carrying the longest value. Imported
   voices beam continuously; where a take has none, voices are derived from

@@ -73,6 +73,15 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   is written exactly that way. A spelling that names some other pitch is dropped on import rather
   than failing the take. Recorded takes omit it and are spelled from their key and context
   (`pitchSpelling.ts`). Never audible.
+- A note's `hidden` is a sixth hint: `true` where the source kept the note off the page — MusicXML's
+  `print-object="no"`, or a `<notehead>none</notehead>`. That is how MuseScore writes out a trill
+  or a turn for playback beside the note carrying its sign, or completes a voice with a copy of a
+  note another voice holds. A hidden note plays like any other — playback, scrubbing, the keyboard
+  and both exports sound it, and it hashes the same as a printed one — but the notation never draws
+  it and a training hold never waits for it. The mirror of velocity 0, which is written but never
+  played. A tied note is hidden only if every link of it was. Only an import sets it, and only ever
+  to `true`; `false` reads as printed. Takes imported before it existed draw their hidden notes
+  until the score is imported again.
 - `instrument.reverbRoom` (`studio | room | hall | cathedral`) is **optional**, and audible: the room the reverb models, which the export renders in and hashes (see AUDIO_EXPORT.md, Reverb). Absent means `room` — every take saved before there was a choice was heard there, through a reverb Room is calibrated to match — and new takes always carry it. A room this build does not know is dropped on import with a repair notice, and the take plays in `room`. Added without a schema bump, like `tempo.changes`: older takes parse untouched, and an older build drops the field and plays every take in its one room.
 - `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v3`, `headroom-grand-v2`, `wurlitzer-ep203w-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).

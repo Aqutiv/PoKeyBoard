@@ -1043,6 +1043,119 @@ describe('the tuplets a score declares', () => {
   });
 });
 
+describe('notes a score keeps off the page', () => {
+  /** A note the score hides: `print-object="no"`, as MuseScore writes it. */
+  function hiddenNote(step: string, octave: number, duration: number, extra = ''): string {
+    return note(step, octave, duration, extra).replace('<note>', '<note print-object="no">');
+  }
+  const backup = (duration: number) => `<backup><duration>${duration}</duration></backup>`;
+
+  it('keeps a hidden note, sounding, and marks it hidden', () => {
+    // K. 545 bar 4 in small: a written trill note, silenced, and the trill a
+    // hidden voice plays out in its place.
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          '<attributes><divisions>8</divisions>' +
+            '<time><beats>4</beats><beat-type>4</beat-type></time></attributes>' +
+            note('F', 5, 4, '<voice>1</voice>').replace('<note>', '<note dynamics="0">') +
+            backup(4) +
+            hiddenNote('G', 5, 1, '<voice>2</voice>') +
+            hiddenNote('F', 5, 1, '<voice>2</voice>') +
+            hiddenNote('G', 5, 1, '<voice>2</voice>') +
+            hiddenNote('F', 5, 1, '<voice>2</voice>'),
+        ),
+      ),
+    );
+    expect(take.notes).toHaveLength(5);
+    const written = take.notes.filter((n) => n.hidden === undefined);
+    const hidden = take.notes.filter((n) => n.hidden === true);
+    expect(written.map((n) => [n.midi, n.velocity])).toEqual([[77, 0]]);
+    expect(hidden.map((n) => n.midi)).toEqual([79, 77, 79, 77]);
+    expect(hidden.every((n) => n.velocity > 0)).toBe(true);
+    // A printed note says nothing, so takes without hidden notes stay as they were.
+    expect('hidden' in (written[0] as object)).toBe(false);
+  });
+
+  it('reads a note with no head as hidden too', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 + note('E', 4, 2) + note('D', 4, 2, '<stem>none</stem><notehead>none</notehead>'),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => n.hidden)).toEqual([undefined, true]);
+  });
+
+  it('hides a tied note only when every link of it is hidden', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            // Hidden into printed: the printed half must stay on the page.
+            hiddenNote('C', 4, 1, '<tie type="start"/>') +
+            note('C', 4, 3, '<tie type="stop"/>') +
+            backup(4) +
+            // Printed into hidden.
+            note('E', 4, 2, '<voice>2</voice><tie type="start"/>') +
+            hiddenNote('E', 4, 2, '<voice>2</voice><tie type="stop"/>') +
+            backup(4) +
+            // Hidden all the way.
+            hiddenNote('G', 4, 2, '<voice>3</voice><tie type="start"/>') +
+            hiddenNote('G', 4, 2, '<voice>3</voice><tie type="stop"/>'),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => [n.midi, n.durationMs, n.hidden])).toEqual([
+      [60, 2000, undefined],
+      [64, 2000, undefined],
+      [67, 2000, true],
+    ]);
+  });
+
+  it('hides only the hidden heads of a chord', () => {
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + note('C', 4, 4) + hiddenNote('E', 4, 4, '<chord/>'))),
+    );
+    expect(take.notes.map((n) => [n.midi, n.startMs, n.hidden])).toEqual([
+      [60, 0, undefined],
+      [64, 0, true],
+    ]);
+  });
+
+  it('still lets hidden values choose the grid', () => {
+    // The grid is read from the shortest value alone, and a score's hidden
+    // runs keep printed flourishes beside them on a grid fine enough to write.
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          '<attributes><divisions>8</divisions>' +
+            '<time><beats>4</beats><beat-type>4</beat-type></time></attributes>' +
+            note('C', 5, 32) +
+            backup(32) +
+            hiddenNote('D', 5, 1, '<voice>2</voice>') +
+            hiddenNote('C', 5, 1, '<voice>2</voice>'),
+        ),
+      ),
+    );
+    expect(take.display.quantization).toBe('1/32');
+  });
+
+  it('survives a round trip through parseTakeJson', () => {
+    const take = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + note('C', 4, 2) + hiddenNote('D', 4, 2))),
+    );
+    const parsed = parseTakeJson(take);
+    expect(parsed.repairs).toEqual([]);
+    expect(parsed.take.notes.map((n) => n.hidden)).toEqual([undefined, true]);
+  });
+});
+
 describe('rejections', () => {
   it('rejects score-timewise documents', () => {
     expect(() => musicXmlToTake('<score-timewise version="3.1"></score-timewise>')).toThrow(

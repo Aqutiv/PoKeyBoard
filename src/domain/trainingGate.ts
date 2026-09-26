@@ -1,5 +1,5 @@
 import { noteHand, type Hand } from './hands';
-import { lowerBoundByStart } from './noteEvents';
+import { isHiddenNote, lowerBoundByStart } from './noteEvents';
 import type { NoteEvent } from './takeTypes';
 
 /** Which hand training waits on. `both` waits on whatever comes next. */
@@ -18,15 +18,21 @@ export interface TrainingGate {
   atMs: number;
   midis: ReadonlySet<number>;
   /**
-   * The exact notes that make up `midis`. Once the user has played them the
-   * take's own copies are skipped, so a resumed pass does not echo what they
-   * just sounded live.
+   * The exact notes that make up `midis`, and any hidden copy struck with one
+   * of them. Once the user has played them the take's own copies are skipped,
+   * so a resumed pass does not echo what they just sounded live.
    */
   noteIds: ReadonlySet<string>;
 }
 
-function matches(note: NoteEvent, hand: TrainingHand): boolean {
-  return hand === 'both' || noteHand(note) === hand;
+/**
+ * Whether a hold waits for this note: one of the chosen hand's, and written. A
+ * hidden note (`isHiddenNote`) is not on the page, so nothing there tells the
+ * player to play it — the trill beside a written trill note, say. Playback
+ * plays it for them instead.
+ */
+function asksFor(note: NoteEvent, hand: TrainingHand): boolean {
+  return !isHiddenNote(note) && (hand === 'both' || noteHand(note) === hand);
 }
 
 /**
@@ -49,18 +55,31 @@ export function nextTrainingGate(
 ): TrainingGate | null {
   const end = lowerBoundByStart(notes, endMs);
   let index = lowerBoundByStart(notes, fromMs);
-  while (index < end && !matches(notes[index] as NoteEvent, hand)) index += 1;
+  while (index < end && !asksFor(notes[index] as NoteEvent, hand)) index += 1;
   if (index >= end) return null;
 
   const atMs = (notes[index] as NoteEvent).startMs;
   const midis = new Set<number>();
   const noteIds = new Set<string>();
+  /** Each key asked for, at the moment it is asked for: `midi@startMs`. */
+  const strikes = new Set<string>();
   for (let i = index; i < end; i += 1) {
     const note = notes[i] as NoteEvent;
     if (note.startMs > atMs + CHORD_WINDOW_MS) break;
-    if (!matches(note, hand)) continue;
+    if (!asksFor(note, hand)) continue;
     midis.add(note.midi);
     noteIds.add(note.id);
+    strikes.add(`${note.midi}@${note.startMs}`);
+  }
+  // A hidden copy of a key asked for, at the very moment it is asked for, is
+  // the same strike — a score completes one voice with a note another holds.
+  // The player has just struck it, so it goes with them rather than echoing
+  // under their finger as the run resumes. Read from the first note at the
+  // hold, since a copy can come before the note it copies.
+  for (let i = lowerBoundByStart(notes, atMs); i < end; i += 1) {
+    const note = notes[i] as NoteEvent;
+    if (note.startMs > atMs + CHORD_WINDOW_MS) break;
+    if (isHiddenNote(note) && strikes.has(`${note.midi}@${note.startMs}`)) noteIds.add(note.id);
   }
   return { atMs, midis, noteIds };
 }

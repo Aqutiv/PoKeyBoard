@@ -270,6 +270,7 @@ export const mg: Messages = {
     quizAnswerLabel: ({ note }) => `Valio ${note}`,
     playNote: ({ note }) => `Tendreo ${note}.`,
     playDegree: ({ degree }) => `Tendreo ny ambaratonga ${degree}.`,
+    playDegreeInKey: ({ key, degree }) => `Ao amin’ny ${key}, tendreo ny ambaratonga ${degree}.`,
     readNotePrompt: 'Naoty inona ity?',
     playWhatYouSee: 'Tendreo ny naoty hita.',
     chordQuality: { major: 'majeur', minor: 'mineur' },

@@ -381,6 +381,8 @@ export interface Messages {
     playNote: (p: { note: string }) => string;
     /** A drill round that names a scale degree rather than a note. */
     playDegree: (p: { degree: number }) => string;
+    /** The same, in a key the round names: `key` is already words, from `majorKey`. */
+    playDegreeInKey: (p: { key: string; degree: number }) => string;
     /** Reading rounds, where the question is a staff rather than a name. */
     readNotePrompt: string;
     playWhatYouSee: string;

@@ -85,6 +85,9 @@ export const noteEventSchema = z.object({
   clef: z.enum(['treble', 'bass']).optional(),
   tuplet: noteTupletSchema.optional(),
   spelling: noteSpellingSchema.optional(),
+  // Whether the source kept the note off the page. Inaudible like the rest: a
+  // hidden note sounds exactly as it would printed.
+  hidden: z.boolean().optional(),
 });
 
 export const pedalEventSchema = z.object({
