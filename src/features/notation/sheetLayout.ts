@@ -954,12 +954,12 @@ function buildBeams(measure: SheetMeasure, groups: readonly BeamGroup[]): void {
     // The layout decided which beams join which notes; the sheet only has the
     // same run when it received all of it, and otherwise joins what it has.
     const group = groups[layoutId];
+    const whole = group !== undefined && group.members.length === run.length;
     emitBeam(
       measure,
       run,
-      group !== undefined && group.members.length === run.length
-        ? group.secondary
-        : fallbackSecondary(run),
+      whole ? group.secondary : fallbackSecondary(run),
+      whole ? group.tupletCount : tupletCountFor(run[0]!.chord.symbol, run.length),
     );
   }
 }
@@ -992,7 +992,12 @@ function tupletCountFor(symbol: DurationSymbol, runLength: number): number | nul
   return ratio && runLength % ratio.actual === 0 ? runLength : null;
 }
 
-function emitBeam(measure: SheetMeasure, run: BeamMember[], secondary: BeamPiece[][]): void {
+function emitBeam(
+  measure: SheetMeasure,
+  run: BeamMember[],
+  secondary: BeamPiece[][],
+  tupletCount: number | null,
+): void {
   const first = run[0] as BeamMember;
   const staff = first.chord.staff;
   const stemDown = first.chord.stemDown;
@@ -1014,10 +1019,9 @@ function emitBeam(measure: SheetMeasure, run: BeamMember[], secondary: BeamPiece
     staff,
     stemDown,
     beamCount,
-    // Only whole tuplets are numbered; see `buildBeamGroups`, which decides
-    // the same way. A number over a fragment would name a rhythm that is not
-    // being played.
-    tupletCount: tupletCountFor(run[0]!.chord.symbol, run.length),
+    // The layout's numeral where the sheet has the layout's whole run; see
+    // `buildBeamGroups`. A run cut short here numbers only whole tuplets.
+    tupletCount,
     x1Pt: xs[0]!,
     y1Pt: span.y1,
     x2Pt: xs[xs.length - 1]!,
