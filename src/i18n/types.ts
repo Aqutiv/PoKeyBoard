@@ -368,6 +368,8 @@ export interface Messages {
     /** A chapter's closing hand-off: open its piece on Play, in Training. */
     practiseOnPlay: (p: { title: string }) => string;
     practiseOnPlayHint: string;
+    /** The same, for a hand-off that also slows the piece and loops the bars practised. */
+    practiseOnPlayToolsHint: (p: { speed: number }) => string;
     backToChapters: string;
     /** Recognition steps: a key lights up and the user names it. */
     quizPrompt: string;
