@@ -993,3 +993,38 @@ describe('a written triplet tied past its beat with the grid off', () => {
     );
   });
 });
+
+describe('a written triplet whose remainder crosses a bar line', () => {
+  it('writes the whole beats plainly, cut at the bar line, then the last slots', () => {
+    // A triplet note on beat 3's last slot held a beat and two thirds: one
+    // slot to beat 4, a plain beat to the bar line, and one slot into the
+    // next bar — never one triplet half straddling the bar line.
+    const notes: NoteEvent[] = [
+      {
+        id: 'long',
+        midi: 72,
+        startMs: 1333,
+        durationMs: 834,
+        velocity: 0.5,
+        tuplet: { actual: 3, normal: 2, unit: 8, group: 0 },
+      },
+    ];
+    const layout = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+    });
+    expect(
+      layout.chords.map((chord) => [
+        chord.displayStartMs,
+        `${chord.symbol.base}${chord.symbol.tuplet ? '(3)' : ''}`,
+        chord.notes[0]!.tiedFromPrev,
+        chord.notes[0]!.tiedToNext,
+      ]),
+    ).toEqual([
+      [1333, 'eighth(3)', false, true],
+      [1500, 'quarter', true, true],
+      [2000, 'eighth(3)', true, false],
+    ]);
+  });
+});

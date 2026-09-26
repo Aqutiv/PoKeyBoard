@@ -1618,8 +1618,7 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     // the tuplet ended at the line. It is read on whichever grid states it —
     // the plain one for a quarter or an eighth tied on, the tuplet's slots
     // only where it holds a slot or two into a beat that is in threes too. A
-    // plain remainder is cut into tied values at bar lines like any note; one
-    // in slots has to be a single value, or the note stays whole, as it was.
+    // plain remainder is cut into tied values at bar lines like any note.
     const tailBeats = endBeat - beatLine;
     const offBy = (step: number) => Math.abs(tailBeats - Math.round(tailBeats / step) * step);
     // With the grid off there is no plain grid to weigh against: a remainder
@@ -1632,11 +1631,15 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     )
       ? division
       : null;
+    // A remainder in slots is written as the whole beats in it, plain values
+    // the bar lines cut like any note's, then the slots of its last beat —
+    // which lie inside one beat, so no bar line runs through them. Those
+    // slots have to be one value, or the note stays whole, as it was.
+    const wholeBeats = tailDivision === null ? 0 : Math.floor(tailBeats + 1 / division / 4);
+    const lastSlots = tailDivision === null ? 0 : Math.round((tailBeats - wholeBeats) * division);
     if (
-      tailDivision !== null &&
-      !exactValueForUnits(
-        Math.round((Math.round(tailBeats * division) * unitsPerBeat(denominator)) / division),
-      )
+      lastSlots > 0 &&
+      !exactValueForUnits(Math.round((lastSlots * unitsPerBeat(denominator)) / division))
     ) {
       return [out];
     }
@@ -1650,17 +1653,37 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     // Measured to the line, should that value come out plain — half a beat of
     // sextuplets is an eighth — and be cut at bar lines like any other.
     writtenBeats.set(out, beatLine - startBeat);
-    const rest: LaidOutNote = {
-      ...out,
-      displayStartMs: lineMs,
-      symbol: symbolFor({ ...written, startMs: lineMs, durationMs: endMs - lineMs }, tailDivision),
-      tiedFromPrev: true,
-      tiedToNext: false,
-    };
-    delete rest.tupletGroup;
-    delete rest.tupletNumeral;
-    writtenBeats.set(rest, tailBeats);
-    return [out, rest];
+    const pieces: { fromMs: number; toMs: number; beats: number; division: number | null }[] =
+      tailDivision === null
+        ? [{ fromMs: lineMs, toMs: endMs, beats: tailBeats, division: null }]
+        : [];
+    if (tailDivision !== null) {
+      const slotsFrom = beatLine + wholeBeats;
+      const slotsMs = Math.round(tempoMap.msAtBeat(slotsFrom));
+      if (wholeBeats > 0) {
+        pieces.push({ fromMs: lineMs, toMs: slotsMs, beats: wholeBeats, division: null });
+      }
+      if (lastSlots > 0) {
+        pieces.push({ fromMs: slotsMs, toMs: endMs, beats: lastSlots / division, division });
+      }
+    }
+    const tail = pieces.map((piece, i) => {
+      const next: LaidOutNote = {
+        ...out,
+        displayStartMs: piece.fromMs,
+        symbol: symbolFor(
+          { ...written, startMs: piece.fromMs, durationMs: piece.toMs - piece.fromMs },
+          piece.division,
+        ),
+        tiedFromPrev: true,
+        tiedToNext: i < pieces.length - 1,
+      };
+      delete next.tupletGroup;
+      delete next.tupletNumeral;
+      writtenBeats.set(next, piece.beats);
+      return next;
+    });
+    return [out, ...tail];
   });
 
   const tied = tieAcrossBarLines(laidOut, {
