@@ -7,6 +7,7 @@ import {
   evaluateFit,
   fitQuadratic,
   heldBackDb,
+  loudestVoicePeak,
   MAX_RESIDUAL_DB,
   nearestRoot,
   octavesFromMiddleC,
@@ -75,27 +76,32 @@ describe('evaluateFit', () => {
   });
 });
 
+/** The limit, so the cases below read as how far past it they are. */
+const LIMIT = MAX_RESIDUAL_DB;
+
 describe('the residual clamp', () => {
-  it('passes a residual inside ±4 dB and holds one outside it at the limit', () => {
-    expect(MAX_RESIDUAL_DB).toBe(4);
-    expect(clampResidualDb(3.9)).toBe(3.9);
+  it('passes a residual inside ±7 dB and holds one outside it at the limit', () => {
+    expect(MAX_RESIDUAL_DB).toBe(7);
+    expect(clampResidualDb(6.9)).toBe(6.9);
     expect(clampResidualDb(-2)).toBe(-2);
-    expect(clampResidualDb(4.5)).toBe(4);
-    expect(clampResidualDb(-6)).toBe(-4);
+    expect(clampResidualDb(7.5)).toBe(7);
+    expect(clampResidualDb(-9)).toBe(-7);
   });
 
   it('holds a root back by nothing while all its recordings are within the limit', () => {
-    expect(heldBackDb([1, -2, 3.9])).toBe(0);
+    // Headroom's F♯6, 6.2–6.9 dB hot on every layer, is corrected in full.
+    expect(heldBackDb([6.2, 6.9, 6.6])).toBe(0);
+    expect(heldBackDb([1, -2, LIMIT])).toBe(0);
   });
 
   it('otherwise by the least shared shift that brings every recording within it', () => {
-    // Headroom's F♯6, hot on every layer, and its D♯6, whose soft layer alone is off.
-    expect(heldBackDb([6.2, 6.9, 6.6])).toBeCloseTo(2.9, 12);
-    expect(heldBackDb([-6.2, -1.3, 1])).toBeCloseTo(-2.2, 12);
+    // Hot on every layer; and off on one layer alone.
+    expect(heldBackDb([LIMIT + 2.2, LIMIT + 2.9, LIMIT + 2.6])).toBeCloseTo(2.9, 12);
+    expect(heldBackDb([-LIMIT - 2.2, -1.3, 1])).toBeCloseTo(-2.2, 12);
   });
 
-  it('gives up on a shared shift when the recordings lie more than 8 dB apart', () => {
-    expect(heldBackDb([-5, 4.5])).toBeUndefined();
+  it('gives up on a shared shift when the recordings lie more than twice the limit apart', () => {
+    expect(heldBackDb([-LIMIT - 1, LIMIT + 0.5])).toBeUndefined();
   });
 });
 
@@ -105,7 +111,7 @@ function measuredPack(offsets: (layer: number, midi: number) => number) {
     ROOTS.map((midi) => {
       const x = octavesFromMiddleC(midi);
       const level = -30 + 6 * layer + x - 0.4 * x * x + Math.cos(midi + layer) * 0.8;
-      return { layer, midi, levelDb: level + offsets(layer, midi) };
+      return { layer, midi, levelDb: level + offsets(layer, midi), peakDb: level + 14 };
     }),
   );
 }
@@ -122,16 +128,31 @@ describe('calibrateLayers', () => {
     }
   });
 
-  it('takes a root as measured while every layer of it is within 4 dB of its fit', () => {
+  it('takes a root as measured while every layer of it is within the limit of its fit', () => {
     for (const layer of calibrateLayers(measuredPack(() => 0))) {
       for (const root of layer.roots) expect(root.correctedDb).toBe(root.measuredDb);
     }
   });
 
+  it('carries every recording’s peak through', () => {
+    const measured = measuredPack(() => 0);
+    for (const [index, layer] of calibrateLayers(measured).entries()) {
+      for (const root of layer.roots) {
+        const recording = measured.find(
+          (entry) => entry.layer === index && entry.midi === root.midi,
+        );
+        expect(root.peakDb).toBe(recording?.peakDb);
+      }
+    }
+  });
+
   it('holds a stray root back on all its layers at once, never past the limit', () => {
-    // One root recorded 9 dB hot throughout, one whose soft layer alone is 8 dB quiet.
+    // One root recorded 5 dB past the limit throughout, one whose soft layer
+    // alone is 4 dB past it the other way.
     const layers = calibrateLayers(
-      measuredPack((layer, midi) => (midi === 72 ? 9 : midi === 87 && layer === 0 ? -8 : 0)),
+      measuredPack((layer, midi) =>
+        midi === 72 ? LIMIT + 5 : midi === 87 && layer === 0 ? -LIMIT - 4 : 0,
+      ),
     );
     for (const midi of ROOTS) {
       const roots = layers.map((layer) => layer.roots.find((root) => root.midi === midi)!);
@@ -150,7 +171,7 @@ describe('calibrateLayers', () => {
 
   it('clamps each recording on its own when no shared shift can hold them all', () => {
     const layers = calibrateLayers(
-      measuredPack((layer, midi) => (midi === 72 ? [-6, 0, 6][layer]! : 0)),
+      measuredPack((layer, midi) => (midi === 72 ? [-LIMIT - 2, 0, LIMIT + 2][layer]! : 0)),
     );
     for (const layer of layers) {
       const root = layer.roots.find((entry) => entry.midi === 72)!;
@@ -190,19 +211,27 @@ describe('nearestRoot', () => {
   });
 });
 
-/** A small calibration: flat soft and loud layers, and a tilted medium one. */
-function sampleCalibration(): VelocityCalibration {
-  const layer = (fit: Quadratic, hot = 0) => ({
+/**
+ * A small calibration: flat soft and loud layers, and a tilted medium one.
+ * Every recording peaks at −40 dBFS but those `peaks` names, by layer and root.
+ */
+function sampleCalibration(peaks: Record<string, number> = {}): VelocityCalibration {
+  const layer = (index: number, fit: Quadratic, hot = 0) => ({
     fit,
     rmsResidualDb: 0,
     roots: [48, 60, 72].map((midi) => {
       const level = evaluateFit(fit, midi) + (midi === 72 ? hot : 0);
-      return { midi, measuredDb: level, correctedDb: level };
+      return {
+        midi,
+        measuredDb: level,
+        correctedDb: level,
+        peakDb: peaks[`${index}:${midi}`] ?? -40,
+      };
     }),
   });
   return {
     referenceDb: -18,
-    layers: [layer([-30, 0, 0]), layer([-24, 1.5, -0.5]), layer([-16, 0, 0], 2)],
+    layers: [layer(0, [-30, 0, 0]), layer(1, [-24, 1.5, -0.5]), layer(2, [-16, 0, 0], 2)],
   };
 }
 
@@ -239,6 +268,39 @@ describe('the calibrated voice gain', () => {
     const calibration = sampleCalibration();
     expect(calibratedGain(calibration, 0.5, 60, 3, 60)).toBeUndefined();
     expect(calibratedGain(calibration, 0.5, 63, 1, 63)).toBeUndefined();
+  });
+
+  it('finds the loudest peak a voice reaches: a recording’s peak times its gain', () => {
+    const calibration = sampleCalibration({ '2:60': -3 });
+    // On its own key only, the hot recording is the loudest.
+    expect(loudestVoicePeak(calibration, 1, 0)).toBeCloseTo(
+      calibratedGain(calibration, 1, 60, 2, 60)! * 10 ** (-3 / 20),
+      12,
+    );
+    // A softer velocity plays every voice quieter.
+    expect(loudestVoicePeak(calibration, 0.5, 0)).toBeLessThan(loudestVoicePeak(calibration, 1, 0));
+  });
+
+  it('counts the keys a recording can stand in for, where the tilt can raise its gain', () => {
+    const calibration = sampleCalibration({ '2:60': -3 });
+    // The medium layer's tilt rises from middle C to F♯5 (78), so the same
+    // recording pitched up to A4, nine semitones, plays hotter than on C4.
+    const standIns = Array.from({ length: 19 }, (_, index) => 51 + index);
+    const expected = Math.max(
+      ...standIns.map((midi) => calibratedGain(calibration, 1, midi, 2, 60)! * 10 ** (-3 / 20)),
+    );
+    expect(loudestVoicePeak(calibration, 1, 9)).toBeCloseTo(expected, 12);
+    expect(expected).toBeGreaterThan(loudestVoicePeak(calibration, 1, 0));
+  });
+
+  it('keeps to the keys the pack was recorded across', () => {
+    // The top root, 72, could reach up to 81, where the tilt is higher still,
+    // but no key above the highest recording is on the keyboard.
+    const calibration = sampleCalibration({ '2:72': -3 });
+    expect(loudestVoicePeak(calibration, 1, 9)).toBeCloseTo(
+      calibratedGain(calibration, 1, 72, 2, 72)! * 10 ** (-3 / 20),
+      12,
+    );
   });
 
   it('covers a manifest only when it holds every one of its files', () => {

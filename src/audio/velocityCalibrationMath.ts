@@ -19,12 +19,13 @@ import { curveDb } from './velocityCurve';
  * layer, lands on one level for one velocity. Which layer sounds then changes
  * the timbre and never the loudness.
  *
- * A recording's level is taken as measured, as long as it lies within 4 dB of
- * the fit through its layer: a root further from its neighbours than that may
- * be a measurement gone wrong rather than a recording, and correcting it in
- * full would be trusting that. Such a root is corrected only as far as the
- * limit allows, and all its layers together, by one shared amount; see
- * `heldBackDb`.
+ * A recording's level is taken as measured, as long as it lies within 7 dB of
+ * the fit through its layer. Real roots stray that far — the Headroom piano's
+ * F♯6 and C7 were recorded 6–7 dB hot, alike on all three layers — but a root
+ * further out than that is more likely a measurement gone wrong, and
+ * correcting it in full would be trusting that. Such a root is corrected only
+ * as far as the limit allows, all its layers together, by one shared amount;
+ * see `heldBackDb`.
  */
 
 /**
@@ -82,8 +83,12 @@ export function fitQuadratic(points: readonly (readonly [number, number])[]): Qu
   ];
 }
 
-/** The furthest a recording's level is trusted to stray from its layer's fit. */
-export const MAX_RESIDUAL_DB = 4;
+/**
+ * The furthest a recording's level is trusted to stray from its layer's fit.
+ * Every root of the published grands lies within it: the furthest, Headroom's
+ * F♯6, measures 6.9 dB off on its medium layer.
+ */
+export const MAX_RESIDUAL_DB = 7;
 
 export function clampResidualDb(residualDb: number): number {
   return Math.min(MAX_RESIDUAL_DB, Math.max(-MAX_RESIDUAL_DB, residualDb));
@@ -98,10 +103,11 @@ export function clampResidualDb(residualDb: number): number {
  *
  * Shared, because held back one recording at a time, a root with one layer
  * past the limit and the next inside it would step in level where the two
- * meet — on the Headroom piano, six roots by up to 2.2 dB — which is the very
- * thing the calibration is for. Undefined when no single shift will do, the
- * recordings lying more than twice the limit apart; each is then clamped on
- * its own.
+ * meet — which is the very thing the calibration is for. (Tried at a 4 dB
+ * limit, that left six Headroom roots stepping by up to 2.2 dB.) Undefined
+ * when no single shift will do, the recordings lying more than twice the limit
+ * apart; each is then clamped on its own. No root of the published grands is
+ * held back at all; this guards the packs to come.
  */
 export function heldBackDb(residualsDb: readonly number[]): number | undefined {
   const least = Math.max(...residualsDb) - MAX_RESIDUAL_DB;
@@ -119,6 +125,8 @@ export interface CalibratedRoot {
    * leaves in — always within `MAX_RESIDUAL_DB` of the fit.
    */
   correctedDb: number;
+  /** The recording's sample peak, dBFS, over both channels and the whole file. */
+  peakDb: number;
 }
 
 export interface LayerCalibration {
@@ -142,11 +150,12 @@ export interface VelocityCalibration {
   layers: readonly LayerCalibration[];
 }
 
-/** One recording's measured level. */
+/** One recording, as measured. */
 export interface MeasuredRecording {
   layer: number;
   midi: number;
   levelDb: number;
+  peakDb: number;
 }
 
 /**
@@ -184,6 +193,7 @@ export function calibrateLayers(measured: readonly MeasuredRecording[]): LayerCa
           shared === undefined
             ? evaluateFit(fit, recording.midi) + clampResidualDb(residual)
             : recording.levelDb - shared,
+        peakDb: recording.peakDb,
       };
     });
     return { fit, rmsResidualDb: Math.sqrt(squares / recordings.length), roots };
@@ -274,6 +284,36 @@ export function calibratedGain(
   const recorded = correctedLevelDb(calibration, layer, root);
   if (recorded === undefined) return undefined;
   return 10 ** ((targetDb(calibration, velocity, midi) - recorded) / 20);
+}
+
+/**
+ * The loudest a single voice can peak at `velocity`, as a linear amplitude:
+ * each recording's sample peak times the gain it plays at, on every key it can
+ * sound — its own, and any within `reachSemitones` it may stand in for during a
+ * partial load, kept to the keys the pack was recorded across. The tilt makes
+ * a recording's gain depend on the key, so a stand-in can peak higher than the
+ * recording on its own key does.
+ */
+export function loudestVoicePeak(
+  calibration: VelocityCalibration,
+  velocity: number,
+  reachSemitones: number,
+): number {
+  const roots = calibration.layers.flatMap((layer) => layer.roots.map((root) => root.midi));
+  const lowest = Math.min(...roots);
+  const highest = Math.max(...roots);
+  let loudest = 0;
+  for (const [layer, { roots: recordings }] of calibration.layers.entries()) {
+    for (const { midi: root, peakDb } of recordings) {
+      const from = Math.max(lowest, root - reachSemitones);
+      const to = Math.min(highest, root + reachSemitones);
+      for (let midi = from; midi <= to; midi += 1) {
+        const gain = calibratedGain(calibration, velocity, midi, layer, root) ?? 0;
+        loudest = Math.max(loudest, gain * 10 ** (peakDb / 20));
+      }
+    }
+  }
+  return loudest;
 }
 
 /** Whether the table holds every one of these recordings. */

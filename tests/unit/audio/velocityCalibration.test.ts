@@ -121,7 +121,18 @@ describe('the velocity calibration table', () => {
     }
   });
 
-  it('never trusts a recording more than 4 dB off its layer’s fit', () => {
+  it('holds every recording’s sample peak', () => {
+    for (const table of Object.values(VELOCITY_CALIBRATIONS)) {
+      for (const layer of table.layers) {
+        for (const root of layer.roots) {
+          expect(root.peakDb).toBeLessThanOrEqual(0);
+          expect(root.peakDb).toBeGreaterThan(-60);
+        }
+      }
+    }
+  });
+
+  it('never trusts a recording further off its layer’s fit than the limit', () => {
     for (const [version, table] of Object.entries(VELOCITY_CALIBRATIONS)) {
       const roots = new Set(table.layers.flatMap((layer) => layer.roots.map((root) => root.midi)));
       for (const midi of roots) {
@@ -136,7 +147,10 @@ describe('the velocity calibration table', () => {
         }
         // Held back all together, by the least that brings every layer within it.
         const expected = heldBackDb(recordings.map(({ fitted, root }) => root.measuredDb - fitted));
-        expect(expected, `${version} ${midi}: layers more than 8 dB apart`).toBeDefined();
+        expect(
+          expected,
+          `${version} ${midi}: layers more than twice the limit apart`,
+        ).toBeDefined();
         for (const { root } of recordings) {
           expect(root.measuredDb - root.correctedDb).toBeCloseTo(expected!, 1);
         }

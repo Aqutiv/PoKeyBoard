@@ -1,8 +1,9 @@
 import path from 'node:path';
 import { build } from 'vite';
 import { expect, test } from './fixtures';
+import { MAX_ROOT_DISTANCE_SEMITONES } from '../../src/audio/SampleBank';
 import { VELOCITY_CALIBRATIONS } from '../../src/audio/velocityCalibration';
-import { calibratedGain } from '../../src/audio/velocityCalibrationMath';
+import { loudestVoicePeak } from '../../src/audio/velocityCalibrationMath';
 
 /**
  * The only spec that measures actual audio. Node has no Web Audio and the
@@ -19,22 +20,20 @@ const VOICE_COUNT = 12;
 const METRONOME_PEAK = 0.6;
 
 /**
- * The worst-case per-voice gain the app can produce: the largest the velocity
- * calibration gives at full velocity, on any root and layer of any pack. That
- * is a soft recording standing in for a loud one during a partial load — about
- * 27, on the Headroom piano — though only because that recording is so quiet.
+ * The worst-case per-voice gain the app can produce, for the full-scale sines
+ * this spec drives the graph with: not the largest gain, which goes to the
+ * quietest recordings, but the loudest peak any voice really reaches at full
+ * velocity — each recording's sample peak times the gain the velocity
+ * calibration gives it, on every key it can sound, stand-ins during a partial
+ * load included (`loudestVoicePeak`), on any pack. About 1.5: the Headroom
+ * piano's soft A6 standing in for C6. A fully loaded pack peaks at 1.2.
  */
 function worstCaseVoiceGain(): number {
-  let worst = 0;
-  for (const calibration of Object.values(VELOCITY_CALIBRATIONS)) {
-    for (const [layer, { roots }] of calibration.layers.entries()) {
-      for (const { midi } of roots) {
-        const gain = calibratedGain(calibration, LOUD_VELOCITY, midi, layer, midi) ?? 0;
-        worst = Math.max(worst, gain);
-      }
-    }
-  }
-  return worst;
+  return Math.max(
+    ...Object.values(VELOCITY_CALIBRATIONS).map((calibration) =>
+      loudestVoicePeak(calibration, LOUD_VELOCITY, MAX_ROOT_DISTANCE_SEMITONES),
+    ),
+  );
 }
 
 /** IIFE bundle of the real graph module, exposed as `window.PianoGraph`. */

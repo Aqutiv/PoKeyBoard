@@ -28,7 +28,8 @@ const LAYER_TRIM = [1.35, 1.1, 0.95] as const;
 /** Keyboard center (F#4-ish) used to prioritize sample loading order. */
 const LOAD_CENTER_MIDI = 66;
 
-const MAX_ROOT_DISTANCE_SEMITONES = 9;
+/** How far from its root a recording may be pitched to stand in for a key. */
+export const MAX_ROOT_DISTANCE_SEMITONES = 9;
 const FETCH_CONCURRENCY = 4;
 const FETCH_RETRIES = 2;
 

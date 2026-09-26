@@ -14,6 +14,10 @@
  * measured over 400 ms instead, and 0.5 dB over a whole second, where the
  * layers' different decays start to tell. The run prints those figures.
  *
+ * Each recording's sample peak goes in the table too, over the whole file,
+ * for the loudest peak a voice can reach (`loudestVoicePeak`), which the
+ * output headroom spec drives the graph with.
+ *
  * The table is machine-owned: regenerating overwrites it. Only needed when a
  * pack is added or rebuilt as a new version; published packs never change.
  * Not part of `npm test` (which only globs tests/unit and tests/integration).
@@ -30,12 +34,19 @@ import { expect, it } from 'vitest';
 import type { SamplePackManifest } from '@/audio/audioTypes';
 import { PIANO_INSTRUMENTS } from '@/audio/instruments';
 import { kWeighting } from '@/audio/loudness';
-import { onsetOffsetOf, velocityGain, velocityToLayer } from '@/audio/SampleBank';
+import {
+  MAX_ROOT_DISTANCE_SEMITONES,
+  onsetOffsetOf,
+  velocityGain,
+  velocityToLayer,
+} from '@/audio/SampleBank';
 import {
   ANCHOR_HIGH_MIDI,
   ANCHOR_LOW_MIDI,
   calibratedGain,
   calibrateLayers,
+  evaluateFit,
+  loudestVoicePeak,
   MAX_RESIDUAL_DB,
   nearestRoot,
   solveReferenceDb,
@@ -54,8 +65,6 @@ const TABLE_PATH = path.join(ROOT, 'src/audio/velocityCalibration.ts');
 const WINDOW_S = 0.3;
 /** The windows the run compares it with, to show how much the choice moves. */
 const CHECK_WINDOWS_S = [0.4, 1];
-/** Enough of each file to hold the onset search and the longest window. */
-const DECODE_S = 1.4;
 
 interface Recording {
   channels: Float32Array[];
@@ -71,15 +80,13 @@ function streamInfo(bytes: Buffer): { sampleRate: number; channels: number } {
   return { sampleRate: Number(packed >> 44n), channels: Number((packed >> 41n) & 7n) + 1 };
 }
 
-/** The opening of a pack file, decoded at its own rate, one array per channel. */
+/** A whole pack file, decoded at its own rate, one array per channel. */
 async function decode(file: string): Promise<Recording> {
   const { sampleRate, channels } = streamInfo(await readFile(file));
   const bytes = await new Promise<Buffer>((resolve, reject) => {
-    const child = spawn(
-      'ffmpeg',
-      ['-v', 'error', '-t', String(DECODE_S), '-i', file, '-f', 'f32le', '-'],
-      { stdio: ['ignore', 'pipe', 'pipe'] },
-    );
+    const child = spawn('ffmpeg', ['-v', 'error', '-i', file, '-f', 'f32le', '-'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+    });
     const chunks: Buffer[] = [];
     let errors = '';
     child.stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
@@ -134,6 +141,15 @@ function kWeightedLevelDb(recording: Recording, fromS: number, seconds: number):
   return -0.691 + 10 * Math.log10(power);
 }
 
+/** The largest sample magnitude anywhere in the recording, in dBFS. */
+function samplePeakDb({ channels }: Recording): number {
+  let peak = 0;
+  for (const samples of channels) {
+    for (const sample of samples) peak = Math.max(peak, Math.abs(sample));
+  }
+  return 20 * Math.log10(peak);
+}
+
 /** A stand-in AudioBuffer, enough for `onsetOffsetOf`. */
 function asAudioBuffer({ channels, sampleRate }: Recording): AudioBuffer {
   return {
@@ -148,6 +164,7 @@ interface Measured {
   layer: number;
   midi: number;
   levelDb: number;
+  peakDb: number;
   /** The same recording over each of `CHECK_WINDOWS_S`. */
   checkDb: number[];
 }
@@ -165,6 +182,7 @@ async function measurePack(packVersion: string, manifest: SamplePackManifest) {
           layer: entry.layer,
           midi: entry.midi,
           levelDb: kWeightedLevelDb(recording, onset, WINDOW_S),
+          peakDb: samplePeakDb(recording),
           checkDb: CHECK_WINDOWS_S.map((seconds) => kWeightedLevelDb(recording, onset, seconds)),
         });
       }
@@ -242,11 +260,31 @@ function heldBackRoots(calibration: VelocityCalibration): string[] {
     );
 }
 
+/** The recording furthest from its layer's fit, and how far, signed. */
+function furthestFromFit(calibration: VelocityCalibration): string {
+  let furthest = { residual: 0, midi: 0, layer: 0 };
+  for (const [layer, { fit, roots }] of calibration.layers.entries()) {
+    for (const root of roots) {
+      const residual = root.measuredDb - evaluateFit(fit, root.midi);
+      if (Math.abs(residual) > Math.abs(furthest.residual)) {
+        furthest = { residual, midi: root.midi, layer };
+      }
+    }
+  }
+  const sign = furthest.residual > 0 ? '+' : '−';
+  return `${noteName(furthest.midi)} ${LAYER_NAMES[furthest.layer]} (${sign}${Math.abs(furthest.residual).toFixed(1)})`;
+}
+
+/** The loudest peak a voice reaches at full velocity, stand-ins included, in dBFS. */
+function loudestPeakDb(calibration: VelocityCalibration): number {
+  return 20 * Math.log10(loudestVoicePeak(calibration, 1, MAX_ROOT_DISTANCE_SEMITONES));
+}
+
 function renderLayer(layer: LayerCalibration): string {
   const roots = layer.roots
     .map(
       (root) =>
-        `{ midi: ${root.midi}, measuredDb: ${round(root.measuredDb, 2)}, correctedDb: ${round(root.correctedDb, 2)} },`,
+        `{ midi: ${root.midi}, measuredDb: ${round(root.measuredDb, 2)}, correctedDb: ${round(root.correctedDb, 2)}, peakDb: ${round(root.peakDb, 2)} },`,
     )
     .join('\n');
   const fit = layer.fit.map((term) => round(term, 4)).join(', ');
@@ -269,7 +307,9 @@ function renderTable(packs: readonly { version: string; calibration: VelocityCal
       return [
         ` *   ${version}`,
         ` *     fit RMS residual, dB: ${quality}`,
+        ` *     furthest from its fit, dB: ${furthestFromFit(calibration)}`,
         ` *     held back, dB left over target: ${held.length > 0 ? held.join(', ') : 'none'}`,
+        ` *     loudest voice peak at full velocity: ${loudestPeakDb(calibration).toFixed(1)} dBFS`,
       ].join('\n');
     })
     .join('\n');
@@ -297,8 +337,9 @@ function renderTable(packs: readonly { version: string; calibration: VelocityCal
  * Levels are in dB as BS.1770 measures loudness, over the ${WINDOW_S * 1000} ms after each
  * recording's onset; fits are quadratics in octaves from middle C. A root
  * whose recordings stray more than ${MAX_RESIDUAL_DB} dB from their fits is held back to
- * that, and plays off its target by what is left. Keyed by pack version: a
- * published pack never changes, so neither does its entry.
+ * that, and plays off its target by what is left. Peaks are each file's
+ * sample peak in dBFS. Keyed by pack version: a published pack never changes,
+ * so neither does its entry.
  *
 ${summary}
  */
@@ -366,7 +407,11 @@ it('generates the velocity calibration', { timeout: 600_000 }, async () => {
       );
     }
     const held = heldBackRoots(calibration);
+    console.log(`  furthest from its fit: ${furthestFromFit(calibration)}`);
     console.log(`  held back: ${held.length > 0 ? held.join(', ') : 'none'}`);
+    console.log(
+      `  loudest voice peak at full velocity: ${loudestPeakDb(calibration).toFixed(2)} dBFS`,
+    );
     reportWindowCheck(measured);
   }
 
