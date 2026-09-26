@@ -46,6 +46,7 @@ export type RepairCode =
   | 'countInClamped'
   | 'tempoChangesRepaired'
   | 'instrumentDefaulted'
+  | 'reverbRoomDropped'
   | 'noteTimingRounded'
   | 'noteIdsAssigned'
   | 'displayReset';
@@ -526,6 +527,14 @@ export interface Messages {
     pianoSwitching: string;
     pianoVolume: string;
     reverb: string;
+    /** The room the reverb models, and its choices, smallest first. */
+    reverbRoom: string;
+    reverbRooms: {
+      studio: string;
+      room: string;
+      hall: string;
+      cathedral: string;
+    };
     velocity: string;
     velocityTouch: string;
     velocityFixed: string;
@@ -641,6 +650,7 @@ export interface Messages {
     countInClamped: string;
     tempoChangesRepaired: string;
     instrumentDefaulted: string;
+    reverbRoomDropped: string;
     noteTimingRounded: string;
     noteIdsAssigned: (p: { count: number }) => string;
     displayReset: string;

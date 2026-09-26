@@ -1,5 +1,10 @@
 import { PIANO_SAMPLE_CACHE } from '@/pwa/cacheNames';
-import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX } from '@/domain/takeTypes';
+import {
+  DEFAULT_MASTER_VOLUME,
+  DEFAULT_REVERB_MIX,
+  DEFAULT_REVERB_ROOM,
+  type ReverbRoom,
+} from '@/domain/takeTypes';
 import type {
   EngineStatus,
   NoteSourceId,
@@ -43,6 +48,7 @@ export class AudioEngine {
   private status: EngineStatus = 'uninitialized';
   private masterVolume = DEFAULT_MASTER_VOLUME;
   private reverbMix = DEFAULT_REVERB_MIX;
+  private reverbRoom: ReverbRoom = DEFAULT_REVERB_ROOM;
 
   private readonly statusListeners = new Set<(status: EngineStatus) => void>();
   private readonly activeNoteListeners = new Set<(midis: ReadonlySet<number>) => void>();
@@ -171,6 +177,7 @@ export class AudioEngine {
     this.graph = createPianoGraph(this.context, {
       masterVolume: this.masterVolume,
       reverbMix: this.reverbMix,
+      reverbRoom: this.reverbRoom,
     });
     this.voices = new VoiceManager(this.context, this.graph.voiceDestination);
     this.voices.subscribeActiveNotes((midis) => {
@@ -413,12 +420,22 @@ export class AudioEngine {
     this.graph?.setReverbMix(value);
   }
 
+  /** Move the reverb to another room; the graph ducks it across the switch. */
+  setReverbRoom(room: ReverbRoom): void {
+    this.reverbRoom = room;
+    this.graph?.setReverbRoom(room);
+  }
+
   getMasterVolume(): number {
     return this.masterVolume;
   }
 
   getReverbMix(): number {
     return this.reverbMix;
+  }
+
+  getReverbRoom(): ReverbRoom {
+    return this.reverbRoom;
   }
 
   async suspend(): Promise<void> {

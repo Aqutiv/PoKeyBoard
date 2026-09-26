@@ -6,13 +6,14 @@ import {
   removeNotesByIds,
   sortNotes,
 } from '@/domain/noteEvents';
-import type {
-  InstrumentSettings,
-  NoteEvent,
-  PedalEvent,
-  PlaybackLoop,
-  Take,
-  TempoSettings,
+import {
+  reverbRoomOf,
+  type InstrumentSettings,
+  type NoteEvent,
+  type PedalEvent,
+  type PlaybackLoop,
+  type Take,
+  type TempoSettings,
 } from '@/domain/takeTypes';
 
 export interface TakeStoreState {
@@ -203,10 +204,12 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
     set((state) => {
       // The volume is saved with the take but never exported: the render plays
       // at the default volume, so moving it alone leaves the cached export in
-      // place.
+      // place. The room is compared as heard, so a take from before rooms
+      // being told it is in Room is not a change.
       const audible =
         instrument.id !== state.take.instrument.id ||
-        instrument.reverbMix !== state.take.instrument.reverbMix;
+        instrument.reverbMix !== state.take.instrument.reverbMix ||
+        reverbRoomOf(instrument) !== reverbRoomOf(state.take.instrument);
       return {
         take: touched({ ...state.take, instrument }),
         dirty: true,

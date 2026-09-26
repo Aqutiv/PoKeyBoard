@@ -495,6 +495,13 @@ export const fr: Messages = {
     pianoSwitching: 'Chargement du nouveau piano…',
     pianoVolume: 'Volume du piano',
     reverb: 'Réverbération',
+    reverbRoom: 'Salle de la réverbération',
+    reverbRooms: {
+      studio: 'Studio',
+      room: 'Pièce',
+      hall: 'Salle de concert',
+      cathedral: 'Cathédrale',
+    },
     velocity: 'Vélocité',
     velocityTouch: 'Selon la position du toucher sur la touche',
     velocityFixed: 'Fixe',
@@ -675,6 +682,8 @@ export const fr: Messages = {
     tempoChangesRepaired: 'Les changements de tempo ont été nettoyés.',
     instrumentDefaulted:
       'Des réglages d’instrument par défaut ont été appliqués car ils manquaient.',
+    reverbRoomDropped:
+      'Une salle de réverbération inconnue a été ignorée ; la prise sonne dans « Pièce ».',
     noteTimingRounded:
       'Le minutage fractionnaire des notes a été arrondi à la milliseconde entière.',
     noteIdsAssigned: ({ count }) => `Des ids ont été attribués à ${count} note(s).`,
