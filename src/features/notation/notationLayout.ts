@@ -1615,6 +1615,24 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     if (!exactValueForUnits(Math.round((slotsToLine * unitsPerBeat(denominator)) / division))) {
       return [out];
     }
+    // What is left starts on a beat line and belongs to no written bracket:
+    // the tuplet ended at the line. It is read on whichever grid states it —
+    // the plain one for a quarter or an eighth tied on, the tuplet's slots
+    // only where it holds a slot or two into a beat that is in threes too. A
+    // plain remainder is cut into tied values at bar lines like any note; one
+    // in slots has to be a single value, or the note stays whole, as it was.
+    const tailBeats = endBeat - beatLine;
+    const offBy = (step: number) => Math.abs(tailBeats - Math.round(tailBeats / step) * step);
+    const tailDivision =
+      gridBeats !== null && offBy(gridBeats) > offBy(1 / division) ? division : null;
+    if (
+      tailDivision !== null &&
+      !exactValueForUnits(
+        Math.round((Math.round(tailBeats * division) * unitsPerBeat(denominator)) / division),
+      )
+    ) {
+      return [out];
+    }
     const lineMs = Math.round(tempoMap.msAtBeat(beatLine));
     const endMs = Math.round(tempoMap.msAtBeat(endBeat));
     out.symbol = symbolFor(
@@ -1625,14 +1643,6 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     // Measured to the line, should that value come out plain — half a beat of
     // sextuplets is an eighth — and be cut at bar lines like any other.
     writtenBeats.set(out, beatLine - startBeat);
-    // What is left starts on a beat line and belongs to no written bracket:
-    // the tuplet ended at the line. It is read on whichever grid states it —
-    // the plain one for a quarter or an eighth tied on, the tuplet's slots
-    // only where it holds a slot or two into a beat that is in threes too.
-    const tailBeats = endBeat - beatLine;
-    const offBy = (step: number) => Math.abs(tailBeats - Math.round(tailBeats / step) * step);
-    const tailDivision =
-      gridBeats !== null && offBy(gridBeats) > offBy(1 / division) ? division : null;
     const rest: LaidOutNote = {
       ...out,
       displayStartMs: lineMs,

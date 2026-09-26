@@ -920,3 +920,28 @@ describe('what a written tuplet note keeps whole', () => {
     expect(layout.chords[0]!.notes[0]!.tiedToNext).toBe(false);
   });
 });
+
+describe('a written tuplet note whose remainder no value states', () => {
+  it('stays whole rather than losing a slot after the beat line', () => {
+    // A sextuplet note on the third slot held a beat and a half: four slots
+    // before the line (a quarter-sextuplet value) and five after, which is
+    // no single value in sixths — so it is not cut at all.
+    const notes: NoteEvent[] = [
+      {
+        id: 'long',
+        midi: 72,
+        startMs: 167,
+        durationMs: 750,
+        velocity: 0.5,
+        tuplet: { actual: 6, normal: 4, unit: 16, group: 0 },
+      },
+    ];
+    const layout = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+    });
+    expect(layout.chords.every((chord) => !chord.notes[0]!.tiedFromPrev)).toBe(true);
+    expect(layout.chords.filter((chord) => chord.notes[0]!.id === 'long')).toHaveLength(1);
+  });
+});
