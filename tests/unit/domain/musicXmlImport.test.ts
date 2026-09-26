@@ -253,6 +253,25 @@ describe('staves and voices', () => {
     }
   });
 
+  it('keeps a tied copy of a shared key where the score wrote it', () => {
+    // Voice 1's C5 is tied over the bar line and voice 2 strikes C5 with it:
+    // the tied note is only complete a bar later, but it was written first.
+    const text = scoreWith(
+      measure(
+        1,
+        GRAND_DIV1 +
+          note('C', 5, 4, '<voice>1</voice><staff>1</staff><tie type="start"/>') +
+          '<backup><duration>4</duration></backup>' +
+          note('C', 5, 1, '<voice>2</voice><staff>1</staff>'),
+      ) + measure(2, note('C', 5, 4, '<voice>1</voice><staff>1</staff><tie type="stop"/>')),
+    );
+    const take = musicXmlToTake(text);
+    expect(take.notes.map((n) => [n.voice, n.durationMs])).toEqual([
+      [0, 4000],
+      [1, 500],
+    ]);
+  });
+
   it('numbers an import’s notes under a stem of its own', () => {
     const text = scoreWith(measure(1, DIV1 + note('C', 4, 1) + note('D', 4, 1) + note('E', 4, 1)));
     const stem = (id: string): string => id.slice(0, id.lastIndexOf('-'));
