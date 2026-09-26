@@ -1,5 +1,10 @@
 import { sortNotes } from '@/domain/noteEvents';
-import { DEFAULT_MASTER_VOLUME, type Take } from '@/domain/takeTypes';
+import {
+  DEFAULT_MASTER_VOLUME,
+  reverbRoomOf,
+  type ReverbRoom,
+  type Take,
+} from '@/domain/takeTypes';
 import {
   applySustainToNotes,
   effectivePlaybackDurationMs,
@@ -10,6 +15,7 @@ import type { ClickTrack } from './loudness';
 import { CLICK_LENGTH_S, clickBeatsForRange, scheduleClick } from './MetronomeEngine';
 import type { SampleSelection } from './audioTypes';
 import { createPianoGraph } from './PianoGraphFactory';
+import { REVERB_ROOM_PRESETS } from './reverbImpulse';
 import {
   dampSampleVoice,
   releaseSampleVoice,
@@ -20,8 +26,10 @@ import {
 } from './sampleVoice';
 
 const RENDER_SAMPLE_RATE = 48_000;
-/** Ring-out after the last note: release plus the reverb tail. */
-const TAIL_S = 3.0;
+/** The least ring-out after the last note: release plus the reverb tail. */
+const MIN_TAIL_S = 3.0;
+/** How long past its RT60 a room's tail is given, for the last of it to go. */
+const TAIL_PAST_RT60_S = 0.5;
 /**
  * How far ahead of an export's render its voices are made, in seconds. An
  * offline context works through every voice it holds on every render quantum,
@@ -163,6 +171,15 @@ export function undampedRingOutSeconds(
 }
 
 /**
+ * How long an export rings on after its last note, in seconds: three seconds,
+ * which covers the release and every room up to Room, or for a longer room its
+ * RT60 and half a second more, by when its tail has fallen past 60 dB.
+ */
+export function renderTailSeconds(room: ReverbRoom): number {
+  return Math.max(MIN_TAIL_S, REVERB_ROOM_PRESETS[room].rt60S + TAIL_PAST_RT60_S);
+}
+
+/**
  * How long an export renders, in seconds: past the take's last key-up by the
  * tail, or until its top strings fall quiet if they ring on longer. Reads the
  * samples decoded so far.
@@ -173,7 +190,10 @@ export function estimateRenderSeconds(take: Take): number {
 }
 
 function renderSeconds(take: Take, ringOutS: number): number {
-  return Math.max(effectivePlaybackDurationMs(take) / 1000, ringOutS) + TAIL_S;
+  return (
+    Math.max(effectivePlaybackDurationMs(take) / 1000, ringOutS) +
+    renderTailSeconds(reverbRoomOf(take.instrument))
+  );
 }
 
 /**
@@ -193,10 +213,11 @@ export function estimateRenderMemoryMB(take: Take): number {
 
 /**
  * Render a take through the same sample bank, graph shape, and envelope
- * constants as live playback. Two things differ, both about level: the piano
- * plays at the default volume rather than wherever the volume slider was left
- * — that slider is for the room, not the file — and without the graph's live
- * peak guard, which a limiter that can look ahead replaces afterwards.
+ * constants as live playback, in the take's own reverb room. Two things
+ * differ, both about level: the piano plays at the default volume rather than
+ * wherever the volume slider was left — that slider is for the listener's
+ * room, not the file — and without the graph's live peak guard, which a
+ * limiter that can look ahead replaces afterwards.
  */
 export async function renderTakeForExport(
   take: Take,
@@ -252,6 +273,7 @@ export async function renderTakeForExport(
   const graph = createPianoGraph(context, {
     masterVolume: DEFAULT_MASTER_VOLUME,
     reverbMix: take.instrument.reverbMix,
+    reverbRoom: reverbRoomOf(take.instrument),
     peakGuard: false,
   });
   const scheduling = scheduleVoicesAhead(

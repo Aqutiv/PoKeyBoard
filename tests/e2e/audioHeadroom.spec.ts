@@ -2,6 +2,7 @@ import path from 'node:path';
 import { build } from 'vite';
 import { expect, test } from './fixtures';
 import { MAX_ROOT_DISTANCE_SEMITONES } from '../../src/audio/SampleBank';
+import { REVERB_ROOMS, type ReverbRoom } from '../../src/domain/takeTypes';
 import { VELOCITY_CALIBRATIONS } from '../../src/audio/velocityCalibration';
 import { loudestVoicePeak } from '../../src/audio/velocityCalibrationMath';
 
@@ -74,6 +75,8 @@ interface RenderInput {
   metronomePeak: number;
   masterVolume: number;
   reverbMix: number;
+  /** The graph's default room unless said otherwise. */
+  reverbRoom?: ReverbRoom;
   /** When the chord and the click land, in seconds; 0.25 unless said otherwise. */
   onsetS?: number;
 }
@@ -100,6 +103,7 @@ async function renderPeak(
     const graph = factory.createPianoGraph(context, {
       masterVolume: options.masterVolume,
       reverbMix: options.reverbMix,
+      reverbRoom: options.reverbRoom,
     });
 
     const makeTone = (frequency: number) => {
@@ -178,15 +182,21 @@ test.describe('output headroom', () => {
     expect(peak).toBeLessThanOrEqual(1);
   });
 
-  test('stays below full scale at maximum volume and reverb', async ({ page }) => {
-    const peak = await renderPeak(page, {
-      voiceGain: worstCaseVoiceGain(),
-      voiceCount: VOICE_COUNT,
-      metronomePeak: METRONOME_PEAK,
-      masterVolume: 1,
-      reverbMix: 1,
-    });
-    expect(peak).toBeLessThanOrEqual(1);
+  test('stays below full scale at maximum volume and reverb, in every room', async ({ page }) => {
+    // The rooms differ in how their energy is spread and how hard their early
+    // reflections land, and the Studio's is the most concentrated.
+    for (const reverbRoom of REVERB_ROOMS) {
+      const peak = await renderPeak(page, {
+        voiceGain: worstCaseVoiceGain(),
+        voiceCount: VOICE_COUNT,
+        metronomePeak: METRONOME_PEAK,
+        masterVolume: 1,
+        reverbMix: 1,
+        reverbRoom,
+      });
+      test.info().annotations.push({ type: `peak in ${reverbRoom}`, description: peak.toFixed(4) });
+      expect(peak, reverbRoom).toBeLessThanOrEqual(1);
+    }
   });
 
   test('keeps the corrected worst case under full scale once the limiter has settled', async ({

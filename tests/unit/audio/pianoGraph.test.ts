@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   compressorMakeupDb,
   LIMITER_LOOKAHEAD_S,
@@ -12,11 +12,14 @@ import {
 import {
   createPianoGraph,
   createSoftClipCurve,
+  REVERB_SWITCH_S,
   SOFT_CLIP_CEILING,
   SOFT_CLIP_INPUT_RANGE,
   SOFT_CLIP_KNEE,
   VOICE_BUS_HEADROOM,
 } from '@/audio/PianoGraphFactory';
+import { reverbImpulse } from '@/audio/reverbImpulse';
+import type { ReverbRoom } from '@/domain/takeTypes';
 
 /**
  * jsdom has no Web Audio, so the context is hand-stubbed the way
@@ -28,7 +31,8 @@ interface StubNode {
   outputs: StubNode[];
   disconnected: boolean;
   connect(target: StubNode): void;
-  disconnect(): void;
+  /** From one target, or from everything. */
+  disconnect(target?: StubNode): void;
 }
 
 interface StubParam {
@@ -40,6 +44,7 @@ interface StubParam {
   setValueAtTime(value: number, when: number): void;
   linearRampToValueAtTime(value: number, when: number): void;
   exponentialRampToValueAtTime(value: number, when: number): void;
+  cancelScheduledValues(when: number): void;
 }
 
 function param(initial = 0): StubParam {
@@ -50,6 +55,9 @@ function param(initial = 0): StubParam {
     setTargetAtTime(value) {
       this.targets.push(value);
       this.value = value;
+    },
+    cancelScheduledValues(time) {
+      this.events.push({ type: 'cancelScheduledValues', value: NaN, time });
     },
     setValueAtTime(value, time) {
       this.events.push({ type: 'setValueAtTime', value, time });
@@ -71,14 +79,54 @@ function node<T extends object>(kind: string, extra: T): StubNode & T {
     connect(target: StubNode) {
       this.outputs.push(target);
     },
-    disconnect() {
+    disconnect(target?: StubNode) {
+      if (target) {
+        this.outputs = this.outputs.filter((output) => output !== target);
+        return;
+      }
+      this.outputs = [];
       this.disconnected = true;
     },
     ...extra,
   } as StubNode & T;
 }
 
-function createStubContext({ currentTime = 0, sampleRate = 48000 } = {}) {
+/**
+ * A convolver that remembers, each time it is handed an impulse, whether it was
+ * told to normalise it: the browser applies `normalize` as the buffer is set,
+ * so the order the two are set in is what counts.
+ */
+interface StubConvolver extends StubNode {
+  normalize: boolean;
+  buffer: StubBuffer | null;
+  normalizeAtEachBuffer: boolean[];
+}
+
+interface StubBuffer {
+  numberOfChannels: number;
+  length: number;
+  sampleRate: number;
+  getChannelData(channel: number): Float32Array;
+}
+
+function convolver(): StubConvolver {
+  const stub = node('convolver', { normalize: true, normalizeAtEachBuffer: [] as boolean[] });
+  let buffer: StubBuffer | null = null;
+  Object.defineProperty(stub, 'buffer', {
+    get: () => buffer,
+    set(value: StubBuffer | null) {
+      buffer = value;
+      stub.normalizeAtEachBuffer.push(stub.normalize);
+    },
+  });
+  return stub as StubConvolver;
+}
+
+function createStubContext({
+  currentTime = 0,
+  sampleRate = 48000,
+  state = 'running' as AudioContextState,
+} = {}) {
   const created: StubNode[] = [];
   const track = <T extends StubNode>(n: T): T => {
     created.push(n);
@@ -88,6 +136,7 @@ function createStubContext({ currentTime = 0, sampleRate = 48000 } = {}) {
   const context = {
     currentTime,
     sampleRate,
+    state,
     destination,
     createGain: () => track(node('gain', { gain: param(1) })),
     createDynamicsCompressor: () =>
@@ -104,15 +153,58 @@ function createStubContext({ currentTime = 0, sampleRate = 48000 } = {}) {
       track(node('waveshaper', { curve: null as Float32Array | null, oversample: 'none' })),
     createDelay: (maxDelayTime: number) =>
       track(node('delay', { delayTime: param(0), maxDelayTime })),
-    createConvolver: () => track(node('convolver', { buffer: null as AudioBuffer | null })),
-    createBuffer: (channels: number, length: number, rate: number) => ({
-      numberOfChannels: channels,
-      length,
-      sampleRate: rate,
-      getChannelData: () => new Float32Array(length),
-    }),
+    createConvolver: () => track(convolver()),
+    createBuffer: (channels: number, length: number, rate: number): StubBuffer => {
+      const data = Array.from({ length: channels }, () => new Float32Array(length));
+      return {
+        numberOfChannels: channels,
+        length,
+        sampleRate: rate,
+        getChannelData: (channel: number) => data[channel] as Float32Array,
+      };
+    },
   };
   return { context: context as unknown as BaseAudioContext, created, destination, raw: context };
+}
+
+/** Every convolver the graph has built, the first one included. */
+function convolvers(created: StubNode[]): StubConvolver[] {
+  return created.filter((n) => n.kind === 'convolver') as StubConvolver[];
+}
+
+/** The send, which feeds the convolver in place and nothing else. */
+function reverbSend(created: StubNode[]): StubNode {
+  const send = created.find(
+    (n) => n.kind === 'gain' && n.outputs.some((o) => o.kind === 'convolver'),
+  );
+  if (!send) throw new Error('nothing feeds a convolver');
+  return send;
+}
+
+/** The convolver the reverb is playing through. */
+function activeConvolver(created: StubNode[]): StubConvolver {
+  const fed = reverbSend(created).outputs.filter((o) => o.kind === 'convolver');
+  expect(fed).toHaveLength(1);
+  return fed[0] as StubConvolver;
+}
+
+/** The gain the reverb comes back through, which a room switch ducks. */
+function reverbReturn(created: StubNode[]): StubNode & { gain: StubParam } {
+  return activeConvolver(created).outputs[0] as StubNode & { gain: StubParam };
+}
+
+/** Whether a stub buffer holds exactly the room's impulse at the context's rate. */
+function holdsImpulse(buffer: StubBuffer | null, room: ReverbRoom, sampleRate: number): boolean {
+  if (!buffer) return false;
+  const impulse = reverbImpulse(room, sampleRate);
+  return (
+    buffer.numberOfChannels === impulse.length &&
+    buffer.sampleRate === sampleRate &&
+    impulse.every((data, channel) => {
+      const held = buffer.getChannelData(channel);
+      return held.length === data.length && held.every((sample, i) => sample === data[i]);
+    })
+  );
 }
 
 function findNode(created: StubNode[], kind: string): StubNode {
@@ -428,5 +520,161 @@ describe('createPianoGraph', () => {
     for (const n of created) {
       expect(n.disconnected, `${n.kind} left connected`).toBe(true);
     }
+  });
+});
+
+describe('reverb rooms', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('hands the convolver an impulse already normalised, the browser’s normalisation off', () => {
+    const { context, created } = createStubContext();
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    const convolver = activeConvolver(created);
+    expect(convolver.normalize).toBe(false);
+    // Off before the impulse arrives: the browser normalises as it is set.
+    expect(convolver.normalizeAtEachBuffer).toEqual([false]);
+    expect(holdsImpulse(convolver.buffer, 'room', 48000)).toBe(true);
+    expect(graph.getReverbRoom()).toBe('room');
+  });
+
+  it('starts in the room it is given, at the context’s own rate', () => {
+    const { context, created } = createStubContext({ sampleRate: 44100 });
+    const graph = createPianoGraph(context, {
+      masterVolume: 0.85,
+      reverbMix: 0.18,
+      reverbRoom: 'cathedral',
+    });
+    expect(holdsImpulse(activeConvolver(created).buffer, 'cathedral', 44100)).toBe(true);
+    expect(graph.getReverbRoom()).toBe('cathedral');
+  });
+
+  it('switches room by ducking the reverb, swapping the convolver, and bringing it back', () => {
+    vi.useFakeTimers();
+    const { context, created, raw } = createStubContext({ currentTime: 2 });
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    const old = activeConvolver(created);
+    const back = reverbReturn(created);
+
+    graph.setReverbRoom('hall');
+    expect(graph.getReverbRoom()).toBe('hall');
+    // The new room's convolver is ready before the duck begins — the costly
+    // part, done while the old room still plays — normalisation off first…
+    const hall = convolvers(created)[1] as StubConvolver;
+    expect(holdsImpulse(hall.buffer, 'hall', 48000)).toBe(true);
+    expect(hall.normalizeAtEachBuffer).toEqual([false]);
+    expect(hall.outputs).toEqual([]);
+    // …then the reverb is taken from where it stands down to nothing, while
+    // the old room goes on sounding under it.
+    expect(REVERB_SWITCH_S).toBe(0.02);
+    expect(back.gain.events).toContainEqual({ type: 'setValueAtTime', value: 1, time: 2 });
+    expect(back.gain.events.at(-1)).toEqual({
+      type: 'linearRampToValueAtTime',
+      value: 0,
+      time: expect.closeTo(2 + REVERB_SWITCH_S, 10),
+    });
+    expect(activeConvolver(created)).toBe(old);
+
+    raw.currentTime = 2.025;
+    vi.advanceTimersByTime(100);
+    expect(activeConvolver(created)).toBe(hall);
+    expect(hall.outputs).toEqual([back]);
+    expect(old.disconnected).toBe(true);
+    expect(back.gain.events.slice(-2)).toEqual([
+      { type: 'setValueAtTime', value: 0, time: 2.025 },
+      {
+        type: 'linearRampToValueAtTime',
+        value: 1,
+        time: expect.closeTo(2.025 + REVERB_SWITCH_S, 10),
+      },
+    ]);
+  });
+
+  it('swaps only once the audio clock is past the duck, however soon the page gets there', () => {
+    vi.useFakeTimers();
+    const { context, created, raw } = createStubContext({ currentTime: 5 });
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    graph.setReverbRoom('studio');
+
+    raw.currentTime = 5.01;
+    vi.advanceTimersByTime(200);
+    expect(holdsImpulse(activeConvolver(created).buffer, 'room', 48000)).toBe(true);
+
+    raw.currentTime = 5.03;
+    vi.advanceTimersByTime(200);
+    expect(holdsImpulse(activeConvolver(created).buffer, 'studio', 48000)).toBe(true);
+  });
+
+  it('settles a quick run of switches on the last room, swapping once', () => {
+    vi.useFakeTimers();
+    const { context, created, raw } = createStubContext({ currentTime: 1 });
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    graph.setReverbRoom('studio');
+    graph.setReverbRoom('hall');
+    graph.setReverbRoom('cathedral');
+    expect(graph.getReverbRoom()).toBe('cathedral');
+
+    raw.currentTime = 1.1;
+    vi.advanceTimersByTime(200);
+    expect(holdsImpulse(activeConvolver(created).buffer, 'cathedral', 48000)).toBe(true);
+    // The rooms passed through on the way were never played through.
+    const [, studio, hall] = convolvers(created) as StubConvolver[];
+    expect(studio?.outputs).toEqual([]);
+    expect(hall?.outputs).toEqual([]);
+    for (const convolver of convolvers(created)) {
+      expect(convolver.normalizeAtEachBuffer).toEqual([false]);
+    }
+    expect(reverbReturn(created).gain.events.at(-1)).toMatchObject({ value: 1 });
+  });
+
+  it('comes back to the room it was leaving when asked to mid-duck', () => {
+    vi.useFakeTimers();
+    const { context, created, raw } = createStubContext({ currentTime: 1 });
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    const room = activeConvolver(created);
+    graph.setReverbRoom('hall');
+    graph.setReverbRoom('room');
+    expect(graph.getReverbRoom()).toBe('room');
+
+    raw.currentTime = 1.1;
+    vi.advanceTimersByTime(200);
+    expect(activeConvolver(created)).toBe(room);
+    expect(reverbReturn(created).gain.events.at(-1)).toMatchObject({
+      type: 'linearRampToValueAtTime',
+      value: 1,
+    });
+  });
+
+  it('swaps at once while no audio runs, with nothing to duck', () => {
+    vi.useFakeTimers();
+    const { context, created } = createStubContext({ state: 'suspended' });
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    graph.setReverbRoom('hall');
+    expect(holdsImpulse(activeConvolver(created).buffer, 'hall', 48000)).toBe(true);
+    expect(reverbReturn(created).gain.events).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('leaves the reverb alone when asked for the room it is in', () => {
+    const { context, created } = createStubContext();
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    graph.setReverbRoom('room');
+    expect(reverbReturn(created).gain.events).toEqual([]);
+    expect(convolvers(created)).toHaveLength(1);
+  });
+
+  it('abandons a pending swap when disposed', () => {
+    vi.useFakeTimers();
+    const { context, created, raw } = createStubContext({ currentTime: 1 });
+    const graph = createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
+    const [room] = convolvers(created) as [StubConvolver];
+    graph.setReverbRoom('hall');
+    graph.dispose();
+    raw.currentTime = 2;
+    vi.advanceTimersByTime(1000);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(room.disconnected).toBe(true);
+    expect((convolvers(created)[1] as StubConvolver).outputs).toEqual([]);
   });
 });
