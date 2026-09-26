@@ -261,8 +261,12 @@ export function AudioExportDialog() {
 
         {phase.kind === 'working' ? (
           <>
-            <p className="export-stage" role="status">
-              {stageLabel(m, phase.progress.stage)}
+            {/* Only the stage is announced: the percentage beside it changes a
+                hundred times a stage, and the bar carries it for whoever asks. */}
+            <p className="export-stage">
+              <span id="export-stage-label" role="status">
+                {stageLabel(m, phase.progress.stage)}
+              </span>
               {phase.progress.fraction >= 0
                 ? ` ${Math.round(phase.progress.fraction * 100)}%`
                 : null}
@@ -270,13 +274,18 @@ export function AudioExportDialog() {
             <div
               className={`export-bar${phase.progress.fraction < 0 ? ' export-bar--indeterminate' : ''}`}
               role="progressbar"
+              aria-labelledby="export-stage-label"
               aria-valuemin={0}
               aria-valuemax={100}
               aria-valuenow={
                 phase.progress.fraction >= 0 ? Math.round(phase.progress.fraction * 100) : undefined
               }
             >
+              {/* A fresh fill where a bar starts over, from sliding to a number or
+                  from one stage to the next: the width's easing is for small
+                  steps, not for sweeping back across the bar. */}
               <div
+                key={phase.progress.fraction < 0 ? 'indeterminate' : phase.progress.stage}
                 className="export-bar__fill"
                 style={
                   phase.progress.fraction >= 0

@@ -1,4 +1,4 @@
-import { runInSlices, runToEnd, type SliceOptions, type Steps } from '@/utils/steps';
+import { runInSlices, runToEnd, stepProgress, type SliceOptions, type Steps } from '@/utils/steps';
 import { LIMITER_MAKEUP_DB, LIVE_OUTPUT_GAIN_DB } from './gainStaging';
 
 /**
@@ -88,6 +88,17 @@ function lufsOf(power: number): number {
  */
 export function integratedLoudness(channels: readonly Float32Array[], sampleRate: number): number {
   return runToEnd(integratedLoudnessSteps(channels, sampleRate));
+}
+
+/** How many steps `integratedLoudnessSteps` takes; see `masterExportSteps`. */
+function loudnessStepCount(channels: number, length: number, sampleRate: number): number {
+  const segments = Math.floor(length / Math.round(sampleRate * STEP_S));
+  return segments < STEPS_PER_BLOCK ? 0 : channels * segments;
+}
+
+/** How many steps a pass over `frames` frames takes, `FRAMES_PER_STEP` a step. */
+function stepsOver(frames: number): number {
+  return frames > 0 ? Math.ceil(frames / FRAMES_PER_STEP) : 0;
 }
 
 /** `integratedLoudness`, pausing after every 100 ms of each channel. */
@@ -222,6 +233,11 @@ export function truePeak(channels: readonly Float32Array[]): number {
   return runToEnd(truePeakSteps(channels));
 }
 
+/** How many steps `truePeakSteps` takes: its two passes over each channel. */
+function truePeakStepCount(channels: number, length: number): number {
+  return channels * (stepsOver(length) + stepsOver(length - 1));
+}
+
 /** `truePeak`, pausing every `FRAMES_PER_STEP` frames of each channel. */
 function* truePeakSteps(channels: readonly Float32Array[]): Steps<number> {
   let samplePeak = 0;
@@ -262,6 +278,16 @@ const LOOKAHEAD_S = 0.005;
 /** How fast gain recovers after a peak: a time constant, not a fixed ramp. */
 const RELEASE_S = 0.15;
 
+/** The limiter's look-ahead in frames, never shorter than its interpolator. */
+function lookaheadFrames(sampleRate: number): number {
+  return Math.max(HALF_TAPS + 2, Math.round(LOOKAHEAD_S * sampleRate));
+}
+
+/** How many steps `limitTruePeakSteps` takes: every frame, then the window's tail. */
+function limiterStepCount(length: number, sampleRate: number): number {
+  return stepsOver(length + lookaheadFrames(sampleRate) - 1);
+}
+
 /**
  * Bring every channel under `ceiling` — between samples too — turning them all
  * down together so the stereo image never swings, and only where they would
@@ -292,7 +318,7 @@ function* limitTruePeakSteps(
   sampleRate: number,
 ): Steps<number> {
   const length = channels[0]?.length ?? 0;
-  const window = Math.max(HALF_TAPS + 2, Math.round(LOOKAHEAD_S * sampleRate));
+  const window = lookaheadFrames(sampleRate);
   const recover = 1 - Math.exp(-1 / (RELEASE_S * sampleRate));
 
   // Sliding minimum of the wanted gain over the last `window` frames.
@@ -446,6 +472,9 @@ export interface MasteringResult {
  * the metronome if there is one (measured apart, so clicks never count toward
  * the piano's loudness), and hold the result under the true-peak ceiling. A
  * take too short or too quiet to measure keeps its played level.
+ *
+ * `onProgress` hears how far through the work it is, from just above 0 to
+ * exactly 1; see `masterExportSteps`.
  */
 export function masterExport(
   left: Float32Array,
@@ -453,8 +482,14 @@ export function masterExport(
   clicks: ClickTrack | null,
   mode: LoudnessMode,
   sampleRate: number,
+  onProgress?: (fraction: number) => void,
 ): MasteringResult {
-  return runToEnd(masterExportSteps(left, right, clicks, mode, sampleRate));
+  return runToEnd(masterExportSteps(left, right, clicks, mode, sampleRate, onProgress));
+}
+
+/** How `masterExportInSlices` runs: its slices, and who hears how far it has got. */
+export interface MasteringSliceOptions extends SliceOptions {
+  onProgress?: (fraction: number) => void;
 }
 
 /**
@@ -469,29 +504,59 @@ export function masterExportInSlices(
   clicks: ClickTrack | null,
   mode: LoudnessMode,
   sampleRate: number,
-  options?: SliceOptions,
+  options?: MasteringSliceOptions,
 ): Promise<MasteringResult> {
-  return runInSlices(masterExportSteps(left, right, clicks, mode, sampleRate), options);
+  return runInSlices(
+    masterExportSteps(left, right, clicks, mode, sampleRate, options?.onProgress),
+    options,
+  );
 }
 
-/** `masterExport` as steps, for either way of running it. */
+/**
+ * `masterExport` as steps, for either way of running it. Every pass is counted
+ * against a plan of the steps they will all take, so `onProgress` hears the
+ * share done after each step. The plan counts the true-peak pass, which a
+ * take too quiet or short to measure turns out not to need: then it counts as
+ * done at once.
+ */
 function* masterExportSteps(
   left: Float32Array,
   right: Float32Array,
   clicks: ClickTrack | null,
   mode: LoudnessMode,
   sampleRate: number,
+  onProgress?: (fraction: number) => void,
 ): Steps<MasteringResult> {
   const piano = [left, right];
-  const renderedLufs = yield* integratedLoudnessSteps(piano, sampleRate);
+  const length = left.length;
+  const peakSteps = mode === 'normalized' ? truePeakStepCount(piano.length, length) : 0;
+  const progress = stepProgress(
+    loudnessStepCount(piano.length, length, sampleRate) +
+      peakSteps +
+      stepsOver(length) +
+      (clicks?.atS.length ?? 0) +
+      limiterStepCount(length, sampleRate),
+    onProgress,
+  );
+  const renderedLufs = yield* progress.count(integratedLoudnessSteps(piano, sampleRate));
   const ceiling = 10 ** (CEILING_DBTP / 20);
   let gain = 10 ** (LIVE_MAKEUP_DB / 20);
   if (mode === 'normalized' && Number.isFinite(renderedLufs)) {
     gain = 10 ** ((TARGET_LUFS - renderedLufs) / 20);
-    const peak = yield* truePeakSteps(piano);
+    const peak = yield* progress.count(truePeakSteps(piano));
     const most = ceiling * 10 ** (MAX_LIMITING_DB / 20);
     if (peak * gain > most) gain = most / peak;
+  } else {
+    progress.skip(peakSteps);
   }
+  yield* progress.count(applyGainSteps(left, right, gain));
+  if (clicks) yield* progress.count(mixClicks(left, right, clicks, sampleRate));
+  const limitedDb = yield* progress.count(limitTruePeakSteps(piano, ceiling, sampleRate));
+  return { renderedLufs, gainDb: 20 * Math.log10(gain), limitedDb };
+}
+
+/** Turn both channels by `gain`, in place, pausing every `FRAMES_PER_STEP` frames. */
+function* applyGainSteps(left: Float32Array, right: Float32Array, gain: number): Steps<void> {
   for (let from = 0; from < left.length; from += FRAMES_PER_STEP) {
     const to = Math.min(left.length, from + FRAMES_PER_STEP);
     for (let i = from; i < to; i += 1) {
@@ -500,7 +565,4 @@ function* masterExportSteps(
     }
     yield;
   }
-  if (clicks) yield* mixClicks(left, right, clicks, sampleRate);
-  const limitedDb = yield* limitTruePeakSteps(piano, ceiling, sampleRate);
-  return { renderedLufs, gainDb: 20 * Math.log10(gain), limitedDb };
 }

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { ExportProgress } from '@/audio/AudioExportService';
 import { createEmptyTake } from '@/domain/noteEvents';
 
 afterEach(() => {
@@ -11,7 +12,13 @@ afterEach(() => {
 });
 
 /** The export service over stub storage, with `render` standing in for the offline render. */
-async function exportService(render: () => Promise<unknown>) {
+async function exportService(
+  render: (
+    take: unknown,
+    options: unknown,
+    onProgress?: (fraction: number) => void,
+  ) => Promise<unknown>,
+) {
   vi.resetModules();
   vi.doMock('@/data/audioCacheRepository', () => ({
     getCachedAudio: vi.fn(async () => null),
@@ -89,5 +96,40 @@ describe('audio export cancellation', () => {
 
     await expect(pending).rejects.toBeInstanceOf(ExportCancelledError);
     expect(createMp3Encoder).not.toHaveBeenCalled();
+  });
+
+  it('hears a render out while its export lasts, and never after', async () => {
+    let renderProgress: ((fraction: number) => void) | undefined;
+    const { audioExportService, ExportCancelledError } = await exportService(
+      (_take, _options, onProgress) => {
+        renderProgress = onProgress;
+        return new Promise<never>(() => undefined);
+      },
+    );
+    const heard: ExportProgress[] = [];
+    const first = audioExportService.exportTake(take, options, (progress) => heard.push(progress));
+    await vi.waitFor(() => expect(renderProgress).toBeDefined());
+    const cancelledRender = renderProgress!;
+    cancelledRender(0.25);
+    expect(heard.at(-1)).toEqual({ stage: 'rendering', fraction: 0.25 });
+
+    // A cancelled render runs on to its end, still pausing and reporting.
+    audioExportService.cancel();
+    await expect(first).rejects.toBeInstanceOf(ExportCancelledError);
+    const heardBefore = heard.length;
+    cancelledRender(0.5);
+    expect(heard).toHaveLength(heardBefore);
+
+    // Nor does it reach the bar of the export that comes next.
+    const next: ExportProgress[] = [];
+    const second = audioExportService.exportTake(take, options, (progress) => next.push(progress));
+    await vi.waitFor(() => expect(renderProgress).not.toBe(cancelledRender));
+    cancelledRender(0.75);
+    renderProgress!(0.1);
+    expect(next.filter((progress) => progress.fraction >= 0)).toEqual([
+      { stage: 'rendering', fraction: 0.1 },
+    ]);
+    audioExportService.cancel();
+    await expect(second).rejects.toBeInstanceOf(ExportCancelledError);
   });
 });
