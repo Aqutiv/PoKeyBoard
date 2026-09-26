@@ -257,6 +257,8 @@ export const en: Messages = {
     tryOnPlay: 'Try it on Play',
     practiseOnPlay: ({ title }) => `Practise ${title} on Play`,
     practiseOnPlayHint: 'It opens in Training, so Play waits for you at every note.',
+    practiseOnPlayToolsHint: ({ speed }) =>
+      `It opens in Training at ${speed}% speed, looping the bars you practised here.`,
     backToChapters: 'Back to chapters',
     quizPrompt: 'Which key is highlighted?',
     quizCorrect: 'Correct.',
@@ -336,7 +338,7 @@ export const en: Messages = {
       chordsPedalAndHands:
         'Left hand under right, the pedal changing with the harmony: a whole piece, hands together.',
       howToPractise:
-        'Slow, in pieces, hands apart — and the two tools already in this app that make it stick.',
+        'Slow, in pieces, hands apart — and the tools already in this app that make it stick.',
       keySignatures: 'Why sharps and flats sit at the front, and how to name the key at a glance.',
       scalesBeyondC:
         'G, F and D major: where the black keys land, and why the fingering shifts to suit them.',

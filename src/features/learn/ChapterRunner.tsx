@@ -10,12 +10,10 @@ import { useRouter } from '@/app/routerContext';
 import { whiteKeyCount } from '@/features/keyboard/keyboardGeometry';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { LIBRARY_TRACKS } from '@/features/library/catalog';
-import { openLibraryTrack } from '@/features/library/libraryService';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { transportController } from '@/features/transport/transportController';
 import { useI18n } from '@/i18n/i18nContext';
 import type { Messages } from '@/i18n/types';
-import { useSettingsStore } from '@/state/useSettingsStore';
 import { KeyboardDiagram } from './KeyboardDiagram';
 import { QuizPanel } from './QuizPanel';
 import { StaffSnippet } from './StaffSnippet';
@@ -23,6 +21,7 @@ import { findLearnChapter } from './chapters';
 import { loadChapterProse } from './content';
 import type { ChapterProse } from './content/types';
 import { playPhrase } from './demo';
+import { openHandoff } from './handoff';
 import type { DrillRound } from './drill';
 import { noteLabel } from './noteLabel';
 import {
@@ -41,7 +40,7 @@ import { useQuiz } from './useQuiz';
 
 const DEFAULT_ANCHOR_MIDI = 60;
 /** Every Learn phrase is written at this tempo, so the click matches them. */
-const LESSON_BPM = 60;
+const DEFAULT_LESSON_BPM = 60;
 const LESSON_TIME_SIGNATURE = { numerator: 4, denominator: 4 } as const;
 /** Enough that the bar line chosen for a demo is never already passing. */
 const LISTEN_LEAD_S = 0.25;
@@ -146,7 +145,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   // A timed line is judged against the same click a rhythm is.
   const timedSpec = spec?.kind === 'rhythm' || (spec?.kind === 'playAlong' && !!spec.timed);
   const wantsClick = step?.click === true || timedSpec;
-  const click = useLessonClick(wantsClick && pianoReady, LESSON_BPM, LESSON_TIME_SIGNATURE);
+  // Each step clicks at its own tempo — a chapter about practice steps its
+  // passage up from 60 to 100 — and at the tempo every earlier chapter used
+  // unless it says otherwise.
+  const tempo = step?.tempo ?? DEFAULT_LESSON_BPM;
+  const click = useLessonClick(wantsClick && pianoReady, tempo, LESSON_TIME_SIGNATURE);
 
   const exercise = useExercise(spec, click.beatsAt);
   const quiz = useQuiz(step?.kind === 'quiz' ? step : null);
@@ -246,7 +249,6 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   const handoffTitle = handoff
     ? LIBRARY_TRACKS.find((def) => def.trackId === handoff.trackId)?.title
     : undefined;
-  const setPlaybackMode = useSettingsStore((s) => s.setPlaybackMode);
   const [handingOff, setHandingOff] = useState(false);
 
   // The open outlives the runner if the chapter is closed while it is still
@@ -262,24 +264,17 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
     setHandingOff(true);
     const controller = new AbortController();
     handoffAbort.current = controller;
-    // Opened before the mode is touched: a Training mode switched on with
-    // nothing loaded would be a surprise on the next visit to Play. The chapter
-    // is finished either way — it was — and a track that would not open is
-    // left to be found in the Library by hand rather than on an empty Play.
-    void openLibraryTrack(handoff.trackId, controller.signal).then(
+    // The track is opened before Play's settings are touched: a Training mode
+    // switched on with nothing loaded would be a surprise on the next visit to
+    // Play. The chapter is finished either way — it was — and a track that
+    // would not open is left to be found in the Library by hand rather than on
+    // an empty Play.
+    void openHandoff(handoff, controller.signal).then(
       (opened) => {
         if (controller.signal.aborted) return;
         setHandingOff(false);
         finish();
-        if (!opened) {
-          navigate('library');
-          return;
-        }
-        // The same two calls the Modes menu makes, so Play is in exactly the
-        // state it would be had the user chosen Training there.
-        setPlaybackMode(handoff.mode);
-        transportController.refreshTrainingMode();
-        navigate('play');
+        navigate(opened ? 'play' : 'library');
       },
       (error: unknown) => {
         if (controller.signal.aborted) return;
@@ -289,7 +284,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
         navigate('library');
       },
     );
-  }, [finish, handingOff, handoff, navigate, setPlaybackMode]);
+  }, [finish, handingOff, handoff, navigate]);
 
   const advance = useCallback(() => {
     if (isLast) finish();
@@ -530,7 +525,11 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
           <div className="learn-card__outro">
             {handoff && handoffTitle ? (
               <>
-                <p className="learn-card__body">{m.learn.practiseOnPlayHint}</p>
+                <p className="learn-card__body">
+                  {handoff.speed !== undefined && handoff.loopBeats
+                    ? m.learn.practiseOnPlayToolsHint({ speed: Math.round(handoff.speed * 100) })
+                    : m.learn.practiseOnPlayHint}
+                </p>
                 <button
                   type="button"
                   className="btn btn--small"

@@ -25,8 +25,9 @@ async function gotoLearn(page: Page): Promise<void> {
 }
 
 /** Open a chapter and wait for the core samples, or input emits nothing. */
-async function openChapter(page: Page, title: string): Promise<void> {
+async function openChapter(page: Page, title: string, level?: string): Promise<void> {
   await gotoLearn(page);
+  if (level) await levels(page).getByRole('button', { name: level }).click();
   await page.getByRole('button', { name: `Open ${title}` }).click();
   await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
   // And for the chapter module itself: the keyboard is live while it is still
@@ -128,7 +129,7 @@ test.describe('learn outline', () => {
 
     for (const level of ['Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
-      await expect(chapterButtons(page), level).toHaveCount(0);
+      await expect(chapterButtons(page), level).toHaveCount(level === 'Intermediate' ? 1 : 0);
       await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
       await page.getByText('Upcoming lessons', { exact: true }).click();
@@ -186,12 +187,13 @@ test.describe('learn outline', () => {
     await expect(page.getByText('10 lessons available')).toBeVisible();
     // The next level is still to be written: its chapters show, locked.
     await levels(page).getByRole('button', { name: 'Intermediate' }).click();
-    await expect(page.getByText('0 lessons available')).toBeVisible();
+    await expect(page.getByText('1 lesson available')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Open How to Practise' })).toBeEnabled();
     await page.getByText('Upcoming lessons', { exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'How to Practise — coming soon' }),
+      page.getByRole('button', { name: 'Key Signatures & the Circle of Fifths — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(10);
+    await expect(page.getByText('Coming soon')).toHaveCount(9);
   });
 });
 
@@ -995,6 +997,7 @@ async function openChapterAt(
   title: string,
   chapterId: string,
   step: number,
+  level?: string,
 ): Promise<void> {
   await gotoLearn(page);
   await page.evaluate(
@@ -1021,7 +1024,7 @@ async function openChapterAt(
     { id: chapterId, seeded: step },
   );
   await page.reload();
-  await openChapter(page, title);
+  await openChapter(page, title, level);
 }
 
 /** Wall-clock ms of the lesson click's first beat; see chapter six. */
@@ -1039,7 +1042,10 @@ async function lessonClickOrigin(page: Page): Promise<number> {
 async function playKeysInTime(
   page: Page,
   presses: readonly (readonly [string, number])[],
+  /** The step's click tempo; lessons click at 60 unless a step says otherwise. */
+  bpm = 60,
 ): Promise<void> {
+  const beatMs = 60_000 / bpm;
   const originMs = await lessonClickOrigin(page);
   await page.evaluate(
     async ({ originMs, presses, barMs, beatMs }) => {
@@ -1051,7 +1057,7 @@ async function playKeysInTime(
         window.dispatchEvent(new KeyboardEvent('keyup', { code, bubbles: true }));
       }
     },
-    { originMs, presses: presses.map(([code, beat]) => [code, beat]), barMs: 4000, beatMs: 1000 },
+    { originMs, presses: presses.map(([code, beat]) => [code, beat]), barMs: 4 * beatMs, beatMs },
   );
 }
 
@@ -1435,5 +1441,75 @@ test.describe('chapter ten', () => {
     await page.getByRole('button', { name: 'Practise A Beautiful Day on Play' }).click();
     await expect(page.getByText('A Beautiful Day').first()).toBeVisible({ timeout: 30_000 });
     await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-both');
+  });
+});
+
+test.describe('intermediate chapter one', () => {
+  const CHAPTER = 'How to Practise';
+  const openAt = (page: Page, step: number) =>
+    openChapterAt(page, CHAPTER, 'howToPractise', step, 'Intermediate');
+
+  /** The passage, E G A G | F E D– | C E A G | F A G–, as keys from a C4 base. */
+  const PASSAGE: readonly (readonly [string, number])[] = [
+    ['KeyD', 0],
+    ['KeyG', 1],
+    ['KeyH', 2],
+    ['KeyG', 3],
+    ['KeyF', 4],
+    ['KeyD', 5],
+    ['KeyS', 6],
+    ['KeyA', 8],
+    ['KeyD', 9],
+    ['KeyH', 10],
+    ['KeyG', 11],
+    ['KeyF', 12],
+    ['KeyH', 13],
+    ['KeyG', 14],
+  ];
+
+  test('learns the first chunk note by note, and a slip starts it over', async ({ page }) => {
+    await openAt(page, 2);
+    await expect(page.getByRole('heading', { name: 'One small piece at a time' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 7');
+    for (const [code] of PASSAGE.slice(0, 3)) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('3 of 7');
+    // B is nowhere in the chunk.
+    await playKey(page, 'KeyJ');
+    await expect(progressLine(page)).toHaveText('0 of 7');
+    for (const [code] of PASSAGE.slice(0, 7)) await playKey(page, code);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('plays the passage in time at 80', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openAt(page, 7);
+    await expect(page.getByRole('heading', { name: 'The passage at 80' })).toBeVisible();
+    await playKeysInTime(page, PASSAGE, 80);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('clicks at 100 on the last tempo step, and grades against it', async ({ page }) => {
+    test.setTimeout(90_000);
+    await openAt(page, 8);
+    await expect(page.getByRole('heading', { name: 'The passage at 100' })).toBeVisible();
+    // Played to a 60bpm beat, the passage is on none of 100's beats.
+    await playKeysInTime(page, PASSAGE.slice(0, 4), 60);
+    await expect(progressLine(page)).not.toHaveText('Nicely done.');
+    await expect(progressLine(page)).not.toHaveText('4 of 14');
+    await playKeysInTime(page, PASSAGE, 100);
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('hands off the piece slowed down and looping, right hand in Training', async ({ page }) => {
+    await openAt(page, 12);
+    await expect(page.getByRole('heading', { name: 'That is chapter one' })).toBeVisible();
+    await expect(
+      page.getByText('It opens in Training at 60% speed, looping the bars you practised here.'),
+    ).toBeVisible();
+    await page.getByRole('button', { name: 'Practise A Beautiful Day on Play' }).click();
+    await expect(page.getByText('A Beautiful Day').first()).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByRole('button', { name: 'Playback speed: 60%' })).toBeVisible();
+    await expect(page.locator('.transport__loop')).toHaveAttribute('aria-pressed', 'true');
+    await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-right');
   });
 });

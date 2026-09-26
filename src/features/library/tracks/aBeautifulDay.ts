@@ -1,3 +1,4 @@
+import type { NoteStaff } from '@/domain/takeTypes';
 import type { LibraryTrackDef, TrackEvent } from '../trackBuilder';
 
 /**
@@ -6,32 +7,53 @@ import type { LibraryTrackDef, TrackEvent } from '../trackBuilder';
  * C major, 4/4 at 92 bpm, ~95 seconds. Intro(2) A(8) A'(8) B(8) A''(8)
  * Coda(2). Written to sit entirely inside the default visible keyboard
  * range (C3–B5) so every highlighted key is on screen for beginners.
+ *
+ * Every note names its hand's staff. The left hand's broken chords climb to
+ * C4, D4 and E4, so the split at middle C that notes without a staff fall back
+ * on would hand them to the right hand — and right-hand Training, which Learn's
+ * practice chapter opens this piece in, would then wait for accompaniment
+ * notes on top of the tune it taught.
  */
 
 const events: TrackEvent[] = [];
 
-/** One note at bar/beat (both 1-based); duration in beats. */
-function n(bar: number, beat: number, note: string | string[], dur: number, vel: number): void {
-  events.push([(bar - 1) * 4 + (beat - 1), note, dur, vel]);
+/** One right-hand note at bar/beat (both 1-based); duration in beats. */
+function n(
+  bar: number,
+  beat: number,
+  note: string | string[],
+  dur: number,
+  vel: number,
+  staff: NoteStaff = 'treble',
+): void {
+  events.push([(bar - 1) * 4 + (beat - 1), note, dur, vel, staff]);
+}
+
+/** One left-hand note, however high it reaches. */
+function l(bar: number, beat: number, note: string | string[], dur: number, vel: number): void {
+  n(bar, beat, note, dur, vel, 'bass');
 }
 
 /** Left hand: four gentle quarter notes. */
 function lhQ(bar: number, notes: [string, string, string, string], soft = 0): void {
   const vels = [0.5 - soft, 0.44 - soft, 0.47 - soft, 0.42 - soft];
-  notes.forEach((name, i) => n(bar, i + 1, name, 0.95, vels[i] as number));
+  notes.forEach((name, i) => l(bar, i + 1, name, 0.95, vels[i] as number));
 }
 
 /** Left hand: flowing eighth notes (B section and final verse). */
 function lh8(bar: number, notes: [string, string, string, string], base = 0.48): void {
   const pattern = [notes[0], notes[1], notes[2], notes[1], notes[3], notes[1], notes[2], notes[1]];
   pattern.forEach((name, i) => {
-    n(bar, 1 + i * 0.5, name, 0.45, i % 2 === 0 ? base : base - 0.07);
+    l(bar, 1 + i * 0.5, name, 0.45, i % 2 === 0 ? base : base - 0.07);
   });
 }
 
 const C: [string, string, string, string] = ['C3', 'G3', 'E4', 'G3'];
 const Gd: [string, string, string, string] = ['D3', 'G3', 'B3', 'G3'];
-const Am: [string, string, string, string] = ['A3', 'E4', 'C4', 'E4'];
+// C4 on the pulse, not E4: the tune sings E4 on beat 2 of bar 5 and beat 4 of
+// bar 13, and a left hand striking the same key at the same moment doubles it —
+// in right-hand Training, the accompaniment replays the very note just played.
+const Am: [string, string, string, string] = ['A3', 'C4', 'E4', 'C4'];
 const F: [string, string, string, string] = ['F3', 'C4', 'A3', 'C4'];
 // lh8 draws [root, pulse, color, top]: root–pulse–color–pulse–top–pulse–color–pulse.
 const C8: [string, string, string, string] = ['C3', 'G3', 'E4', 'C4'];
@@ -42,14 +64,14 @@ const Dm78: [string, string, string, string] = ['D3', 'A3', 'C4', 'D3'];
 const G8: [string, string, string, string] = ['G3', 'D4', 'B3', 'G3'];
 
 // ---- Intro: two bars of morning light -----------------------------------
-n(1, 1, 'C3', 4, 0.5);
-n(1, 2, 'G3', 3, 0.44);
-n(1, 3, 'E4', 2, 0.46);
+l(1, 1, 'C3', 4, 0.5);
+l(1, 2, 'G3', 3, 0.44);
+l(1, 3, 'E4', 2, 0.46);
 n(1, 3, 'G4', 1, 0.52);
 n(1, 4, 'C5', 1, 0.56);
-n(2, 1, 'D3', 4, 0.48);
-n(2, 2, 'G3', 3, 0.43);
-n(2, 3, 'B3', 2, 0.45);
+l(2, 1, 'D3', 4, 0.48);
+l(2, 2, 'G3', 3, 0.43);
+l(2, 3, 'B3', 2, 0.45);
 n(2, 3, 'A4', 1, 0.52);
 n(2, 4, 'G4', 1, 0.48);
 
@@ -80,10 +102,10 @@ lhQ(8, Gd);
 n(8, 1, 'B4', 0.95, 0.7);
 n(8, 2, 'A4', 0.95, 0.66);
 n(8, 3, 'G4', 2, 0.63);
-n(9, 1, 'F3', 0.95, 0.5);
-n(9, 2, 'C4', 0.95, 0.44);
-n(9, 3, 'D3', 0.95, 0.49);
-n(9, 4, 'B3', 0.9, 0.43);
+l(9, 1, 'F3', 0.95, 0.5);
+l(9, 2, 'C4', 0.95, 0.44);
+l(9, 3, 'D3', 0.95, 0.49);
+l(9, 4, 'B3', 0.9, 0.43);
 n(9, 1, 'A4', 0.95, 0.66);
 n(9, 2, 'F4', 0.95, 0.62);
 n(9, 3, 'G4', 0.95, 0.66);
@@ -120,10 +142,10 @@ lhQ(16, Gd);
 n(16, 1, 'A4', 0.95, 0.68);
 n(16, 2, 'B4', 0.95, 0.71);
 n(16, 3, 'D5', 2, 0.75);
-n(17, 1, 'F3', 0.95, 0.5);
-n(17, 2, 'C4', 0.95, 0.44);
-n(17, 3, 'D3', 0.95, 0.49);
-n(17, 4, 'B3', 0.9, 0.43);
+l(17, 1, 'F3', 0.95, 0.5);
+l(17, 2, 'C4', 0.95, 0.44);
+l(17, 3, 'D3', 0.95, 0.49);
+l(17, 4, 'B3', 0.9, 0.43);
 n(17, 1, 'C5', 0.95, 0.73);
 n(17, 2, 'A4', 0.95, 0.68);
 n(17, 3, 'B4', 0.95, 0.7);
@@ -195,14 +217,14 @@ lh8(32, Gd8);
 n(32, 1, 'B4', 0.95, 0.71);
 n(32, 2, 'A4', 0.95, 0.67);
 n(32, 3, 'G4', 2, 0.64);
-n(33, 1, 'F3', 0.45, 0.5);
-n(33, 1.5, 'C4', 0.45, 0.42);
-n(33, 2, 'A3', 0.45, 0.46);
-n(33, 2.5, 'C4', 0.45, 0.42);
-n(33, 3, 'G3', 0.45, 0.5);
-n(33, 3.5, 'D4', 0.45, 0.42);
-n(33, 4, 'B3', 0.45, 0.46);
-n(33, 4.5, 'D4', 0.45, 0.42);
+l(33, 1, 'F3', 0.45, 0.5);
+l(33, 1.5, 'C4', 0.45, 0.42);
+l(33, 2, 'A3', 0.45, 0.46);
+l(33, 2.5, 'C4', 0.45, 0.42);
+l(33, 3, 'G3', 0.45, 0.5);
+l(33, 3.5, 'D4', 0.45, 0.42);
+l(33, 4, 'B3', 0.45, 0.46);
+l(33, 4.5, 'D4', 0.45, 0.42);
 n(33, 1, 'F4', 0.95, 0.66);
 n(33, 2, 'A4', 0.95, 0.7);
 n(33, 3, 'B4', 0.95, 0.72);
@@ -215,7 +237,7 @@ lhQ(35, F, 0.04);
 n(35, 1, 'E5', 1, 0.66);
 n(35, 2, 'C5', 1, 0.62);
 n(35, 3, 'G4', 2, 0.58);
-n(36, 1, ['C3', 'G3'], 6, 0.48);
+l(36, 1, ['C3', 'G3'], 6, 0.48);
 n(36, 1, ['E4', 'G4', 'C5'], 6, 0.58);
 
 export const A_BEAUTIFUL_DAY: LibraryTrackDef = {

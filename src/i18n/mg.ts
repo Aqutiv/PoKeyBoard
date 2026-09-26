@@ -261,6 +261,8 @@ export const mg: Messages = {
     practiseOnPlay: ({ title }) => `Manaova fanazaran-tena amin’ny ${title} ao amin’ny Mitendry`,
     practiseOnPlayHint:
       'Misokatra amin’ny Fanazaran-tena izy, ka miandry anao amin’ny naoty tsirairay ny Mitendry.',
+    practiseOnPlayToolsHint: ({ speed }) =>
+      `Misokatra amin’ny Fanazaran-tena amin’ny hafainganam-pandeha ${speed}% izy, ary averimberina ireo fizarana nianaranao teto.`,
     backToChapters: 'Hiverina amin’ny toko',
     quizPrompt: 'Kitendry inona no voamariky?',
     quizCorrect: 'Marina.',
@@ -341,7 +343,7 @@ export const mg: Messages = {
       chordsPedalAndHands:
         'Tanana havia ambanin’ny havanana, ny pedaly miova araka ny harmonia: hira feno, tanana roa.',
       howToPractise:
-        'Miadana, tsikelikely, tanana misaraka — sy ny fitaovana roa efa ao anatin’ity app ity.',
+        'Miadana, tsikelikely, tanana misaraka — sy ireo fitaovana efa ao anatin’ity app ity.',
       keySignatures: 'Antony misy ny diesy sy bemôly eo aloha, sy ny fomba hamantarana ny lakile.',
       scalesBeyondC:
         'Sol, fa ary re lehibe: toerana misy ny kitendry mainty, sy ny antony hiovan’ny rantsan-tanana.',

@@ -46,7 +46,22 @@ export interface LearnChapter {
    * The mode is written to the saved Play setting, which is why the button
    * says it opens in Training rather than switching it behind anyone's back.
    */
-  handoff?: { trackId: string; mode: Exclude<PlaybackMode, 'simple'> };
+  handoff?: LearnHandoff;
+}
+
+export interface LearnHandoff {
+  trackId: string;
+  mode: Exclude<PlaybackMode, 'simple'>;
+  /**
+   * Play's practice speed to open at — one of `PLAYBACK_SPEEDS`, so the speed
+   * menu shows it as chosen. Omitted is the track's own speed.
+   */
+  speed?: number;
+  /**
+   * The passage Play's A–B loop repeats, in the track's beats from its start:
+   * the bars the chapter practised. Omitted is no loop.
+   */
+  loopBeats?: readonly [from: number, to: number];
 }
 
 export type LearnStep = TheoryStep | ExerciseStep | QuizStep | DrillStep;
@@ -86,6 +101,13 @@ interface StepBase {
    * anything is asked of the reader.
    */
   click?: true;
+  /**
+   * The click's tempo on this step, in quarter-note beats per minute. 60
+   * unless stated, and stated only where a click runs. A timed line and a
+   * Listen phrase on the step are written at this tempo, so the demo, the
+   * click and the grading all keep the same beat.
+   */
+  tempo?: number;
 }
 
 export interface TheoryStep extends StepBase {

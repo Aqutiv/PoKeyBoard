@@ -257,6 +257,8 @@ export const es: Messages = {
     tryOnPlay: 'Probarlo en Tocar',
     practiseOnPlay: ({ title }) => `Practicar ${title} en Tocar`,
     practiseOnPlayHint: 'Se abre en Entrenamiento, así que Tocar te espera en cada nota.',
+    practiseOnPlayToolsHint: ({ speed }) =>
+      `Se abre en Entrenamiento al ${speed}% de velocidad, repitiendo los compases que practicaste aquí.`,
     backToChapters: 'Volver a los capítulos',
     quizPrompt: '¿Qué tecla está resaltada?',
     quizCorrect: 'Correcto.',
@@ -333,7 +335,7 @@ export const es: Messages = {
       chordsPedalAndHands:
         'Mano izquierda bajo la derecha y el pedal cambiando con la armonía: una pieza entera.',
       howToPractise:
-        'Despacio, por trozos, manos separadas — y las dos herramientas que ya tienes en esta app.',
+        'Despacio, por trozos, manos separadas — y las herramientas que ya tienes en esta app.',
       keySignatures:
         'Por qué los sostenidos y bemoles van delante, y cómo nombrar la tonalidad de un vistazo.',
       scalesBeyondC:
