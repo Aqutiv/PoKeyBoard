@@ -494,6 +494,7 @@ export const mg: Messages = {
       'Alaina miadana ny piano rehefa mitendry ianao. Alaivo ny iray mba hahafahana mitendry ny kitendry rehetra tsy an-tserasera — samy alaina sy fafana manokana ny piano tsirairay, ary tsy voakasika mihitsy ny rakitrao.',
     pianoSalamanderDesc: 'Piano fanao an-tsehatra Yamaha C5, mazava sy akaiky',
     pianoHeadroomDesc: 'Piano Yamaha C3, malefaka sy mafana',
+    pianoBitklavierDesc: 'Piano fanao an-tsehatra Steinway D, feno sy mirindra',
     pianoWurlitzerDesc: 'piano elektrika EP203W',
     pianoSwitching: 'Mampiditra ny piano vaovao…',
     pianoVolume: 'Feon’ny piano',
@@ -642,6 +643,8 @@ export const mg: Messages = {
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
       'Piano: Salamander Grand Piano v3 nataon’i Alexander Holm (CC-BY 3.0) sy Headroom Piano nataon’i Bengt Nilsson (CC-BY 4.0), samy nampifanaraka ho an’ny web. Fanovana MP3 amin’ny encoder LAME natao WebAssembly. Ny fanamarihana feno dia miaraka amin’ny loharano ao amin’ny THIRD_PARTY_NOTICES.md.',
+    bitklavierAttribution:
+      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: Steinway D noraketina tao amin’ny Oniversiten’i Princeton nataon’i Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers ary Daniel Trueman. Nampifanaraka ho an’ny web: sosona hafainganam-pandeha telo amin’ireo enina ambin’ny folo, nohafohezina tamin’ny fihenan’ny feo, nampiakarina ny haavon’ny feony ary navadika ho FLAC 16-bit.',
     wurlitzerAttribution:
       'Santionan’ny Wurlitzer EP203W nataon’i Greg Sullivan; fandrindrana SFZ nataon’i kinwie. Nampifanaraka ho an’ny web miaraka amin’ny tadivavarana sustain, fanitsiana feo ary fitendry 88.',
     version: ({ version }) => `Kinova ${version}.`,

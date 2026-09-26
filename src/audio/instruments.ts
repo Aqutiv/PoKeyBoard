@@ -6,7 +6,8 @@
  * `packVersion` (see DEPLOYMENT.md), because takes record the version they were
  * played with and the export cache keys off it.
  */
-export type PianoInstrumentId = 'salamander-grand' | 'headroom-grand' | 'wurlitzer-ep203w';
+export type PianoInstrumentId =
+  'salamander-grand' | 'headroom-grand' | 'bitklavier-grand' | 'wurlitzer-ep203w';
 
 export interface PianoInstrument {
   id: PianoInstrumentId;
@@ -44,6 +45,14 @@ export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
     packVersion: 'headroom-grand-v2',
     name: 'Headroom',
     path: 'piano/headroom-grand-v2/',
+    midiProgram: 0, // Acoustic Grand Piano
+  },
+  {
+    // A Steinway D; named, like the others, after the sample library.
+    id: 'bitklavier-grand',
+    packVersion: 'bitklavier-grand-v1',
+    name: 'bitKlavier',
+    path: 'piano/bitklavier-grand-v1/',
     midiProgram: 0, // Acoustic Grand Piano
   },
   {

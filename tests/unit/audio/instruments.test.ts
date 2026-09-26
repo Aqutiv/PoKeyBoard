@@ -18,6 +18,21 @@ const CORE_ROOT_MIN = 45;
 const CORE_ROOT_MAX = 84;
 
 describe('the piano registry', () => {
+  it('offers all four pianos, the grands first, Salamander by default', () => {
+    expect(PIANO_INSTRUMENT_IDS).toEqual([
+      'salamander-grand',
+      'headroom-grand',
+      'bitklavier-grand',
+      'wurlitzer-ep203w',
+    ]);
+    expect(DEFAULT_PIANO_INSTRUMENT_ID).toBe('salamander-grand');
+    expect(pianoInstrument('bitklavier-grand')).toMatchObject({
+      packVersion: 'bitklavier-grand-v1',
+      name: 'bitKlavier',
+      midiProgram: 0,
+    });
+  });
+
   it('gives every instrument a distinct pack under public/piano', () => {
     const versions = PIANO_INSTRUMENTS.map((instrument) => instrument.packVersion);
     expect(new Set(versions).size).toBe(PIANO_INSTRUMENTS.length);
@@ -41,6 +56,9 @@ describe('the piano registry', () => {
   it('resolves a stored pack version, falling back rather than throwing', () => {
     expect(instrumentForPackVersion('salamander-grand-v3').id).toBe('salamander-grand');
     expect(instrumentForPackVersion('headroom-grand-v2').id).toBe('headroom-grand');
+    expect(instrumentForPackVersion('bitklavier-grand-v1').id).toBe('bitklavier-grand');
+    // A later generation, stamped by a newer app shell, is still the same piano.
+    expect(instrumentForPackVersion('bitklavier-grand-v2').id).toBe('bitklavier-grand');
     // Retired packs, still stamped on takes recorded before the stereo FLAC
     // generation (and, for v1, before the .sample rename).
     expect(instrumentForPackVersion('salamander-grand-v1').id).toBe('salamander-grand');
@@ -131,5 +149,46 @@ describe.each(PIANO_INSTRUMENTS)('the $packVersion pack on disk', (instrument) =
     }
     expect(manifest.coreBytes).toBe(coreBytes);
     expect(manifest.totalBytes).toBe(totalBytes);
+  });
+});
+
+describe('the bitklavier-grand-v1 pack', () => {
+  const manifest = JSON.parse(
+    readFileSync(path.resolve('public', 'piano', 'bitklavier-grand-v1', 'manifest.json'), 'utf8'),
+  ) as SamplePackManifest;
+
+  it('keeps v7, v10 and v14 of its sixteen layers, each raised before dither', () => {
+    expect(
+      manifest.velocityLayers.map(({ sourceLayer, label }) => `${label} v${sourceLayer}`),
+    ).toEqual(['soft v7', 'medium v10', 'loud v14']);
+    for (const layer of manifest.velocityLayers) {
+      expect(layer.gainDb).toBeGreaterThan(0);
+      // What the gain's -1 dBFS ceiling held back, the app adds after decoding.
+      expect(layer.levelMatch).toBeGreaterThanOrEqual(1);
+    }
+    // No other pack changed its source's level before dither.
+    for (const { packVersion } of PIANO_INSTRUMENTS) {
+      if (packVersion === manifest.version) continue;
+      const other = JSON.parse(
+        readFileSync(path.resolve('public', 'piano', packVersion, 'manifest.json'), 'utf8'),
+      ) as SamplePackManifest;
+      expect(other.velocityLayers.every((layer) => layer.gainDb === undefined)).toBe(true);
+    }
+  });
+
+  it('was built from a pinned source for every file it ships, and nothing else', () => {
+    const pins = JSON.parse(
+      readFileSync(path.resolve('scripts', 'lib', 'bitklavier-grand-v1.pins.json'), 'utf8'),
+    ) as { files: Record<string, { bytes: number; sha256: string }> };
+    // "Fs6v14.sample" came from upstream's "F#6v14.wav".
+    const sources = manifest.files.map((entry) =>
+      entry.file.replace(/^([A-G])s/, '$1#').replace(/\.sample$/, '.wav'),
+    );
+    expect(Object.keys(pins.files).sort()).toEqual(sources.sort());
+    for (const pin of Object.values(pins.files)) {
+      // At least the 3.5 s of the shortest recording, 48 kHz 24-bit stereo.
+      expect(pin.bytes).toBeGreaterThan(3.4 * 48_000 * 6);
+      expect(pin.sha256).toMatch(/^[0-9a-f]{64}$/);
+    }
   });
 });

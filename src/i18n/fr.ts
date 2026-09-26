@@ -490,6 +490,7 @@ export const fr: Messages = {
       'Les pianos se chargent au fil du jeu. Téléchargez-en un pour garder chaque touche jouable hors ligne — chaque piano se télécharge et se supprime séparément, sans jamais toucher à vos prises.',
     pianoSalamanderDesc: 'Piano de concert Yamaha C5, brillant et proche',
     pianoHeadroomDesc: 'Piano à queue Yamaha C3, chaleureux et intime',
+    pianoBitklavierDesc: 'Piano de concert Steinway D, riche et homogène',
     pianoWurlitzerDesc: 'piano électrique EP203W',
     pianoSwitching: 'Chargement du nouveau piano…',
     pianoVolume: 'Volume du piano',
@@ -636,6 +637,8 @@ export const fr: Messages = {
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
       'Pianos : Salamander Grand Piano v3 par Alexander Holm (CC-BY 3.0) et Headroom Piano par Bengt Nilsson (CC-BY 4.0), tous deux adaptés pour le web. Encodage MP3 par l’encodeur LAME compilé en WebAssembly. Les mentions complètes accompagnent le code source dans THIRD_PARTY_NOTICES.md.',
+    bitklavierAttribution:
+      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image : un Steinway D enregistré à l’université de Princeton par Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers et Daniel Trueman. Adapté pour le web : trois de ses seize couches de vélocité, raccourcies par un fondu de sortie, rehaussées en niveau et réencodées en FLAC 16 bits.',
     wurlitzerAttribution:
       'Échantillons Wurlitzer EP203W par Greg Sullivan ; mapping SFZ par kinwie. Adaptés pour le web avec boucles de sustain, accordage et une étendue de 88 touches.',
     version: ({ version }) => `Version ${version}.`,

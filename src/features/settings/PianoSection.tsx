@@ -11,10 +11,11 @@ import { formatMB } from './formatBytes';
 /** Descriptions only — the piano's name comes from the registry, untranslated. */
 const PIANO_DESCRIPTION_KEYS: Record<
   PianoInstrumentId,
-  'pianoSalamanderDesc' | 'pianoHeadroomDesc' | 'pianoWurlitzerDesc'
+  'pianoSalamanderDesc' | 'pianoHeadroomDesc' | 'pianoBitklavierDesc' | 'pianoWurlitzerDesc'
 > = {
   'salamander-grand': 'pianoSalamanderDesc',
   'headroom-grand': 'pianoHeadroomDesc',
+  'bitklavier-grand': 'pianoBitklavierDesc',
   'wurlitzer-ep203w': 'pianoWurlitzerDesc',
 };
 

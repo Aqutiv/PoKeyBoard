@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -102,7 +103,11 @@ describe('the velocity calibration table', () => {
   it('covers every recording of every grand the app offers, and nothing else', () => {
     // A future grand pack without a table would quietly fall back to the old
     // per-layer trims, with their steps at every layer boundary.
-    expect(CALIBRATED.length).toBeGreaterThanOrEqual(2);
+    expect(CALIBRATED.map((instrument) => instrument.packVersion)).toEqual([
+      'salamander-grand-v3',
+      'headroom-grand-v2',
+      'bitklavier-grand-v1',
+    ]);
     for (const instrument of PIANO_INSTRUMENTS) {
       const manifest = manifestOf(instrument.packVersion);
       const table = VELOCITY_CALIBRATIONS[instrument.packVersion];
@@ -121,6 +126,23 @@ describe('the velocity calibration table', () => {
     }
   });
 
+  it('never changes a published pack’s entry', () => {
+    // A published pack never changes, so neither may what was measured from
+    // it: regenerating the table for another pack has to leave these rows as
+    // they were, byte for byte, or every take on them would change level.
+    const digest = (version: string) =>
+      createHash('sha256').update(JSON.stringify(VELOCITY_CALIBRATIONS[version])).digest('hex');
+    expect(digest('salamander-grand-v3')).toBe(
+      '777e2eb3b5945093f0fa6d06b6fbdd3fac019a3f5f424fa78b6d115b18141268',
+    );
+    expect(digest('headroom-grand-v2')).toBe(
+      'bc125a99c4c0d166122846bdec2f65a1f492d8c820c893f4a32e843e7afa8999',
+    );
+    expect(digest('bitklavier-grand-v1')).toBe(
+      'beb94bd88beb98ca4ae2ef0443a6ec578ca0d7c8c8e03274813ff933312e1f90',
+    );
+  });
+
   it('holds every recording’s sample peak', () => {
     for (const table of Object.values(VELOCITY_CALIBRATIONS)) {
       for (const layer of table.layers) {
@@ -129,6 +151,14 @@ describe('the velocity calibration table', () => {
           expect(root.peakDb).toBeGreaterThan(-60);
         }
       }
+    }
+  });
+
+  it('keeps every bitKlavier recording under the ceiling its gain before dither was held to', () => {
+    // scripts/build-sample-pack.mjs raised each layer in float, before the
+    // 16-bit quantisation, but never past -1 dBFS.
+    for (const layer of VELOCITY_CALIBRATIONS['bitklavier-grand-v1']!.layers) {
+      for (const root of layer.roots) expect(root.peakDb, `${root.midi}`).toBeLessThanOrEqual(-1);
     }
   });
 

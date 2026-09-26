@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
 import { db } from '@/data/db';
 import { META_LAST_OPEN_TAKE, setMetadata } from '@/data/metadataRepository';
 import { loadSettings, restoreSettingsFromBackup, saveSettings } from '@/data/settingsRepository';
@@ -27,6 +28,17 @@ describe('settingsRepository', () => {
     expect(loaded.showNoteLabels).toBe(false);
     expect(loaded.pianoInstrument).toBe('headroom-grand');
     expect(loaded.backgroundPlayback).toBe(true);
+  });
+
+  it('keeps every piano the app offers as it was chosen, Headroom and bitKlavier alike', async () => {
+    for (const pianoInstrument of PIANO_INSTRUMENT_IDS) {
+      await db.settings.put({ key: 'pianoInstrument', value: pianoInstrument });
+      expect((await loadSettings()).pianoInstrument).toBe(pianoInstrument);
+      await restoreSettingsFromBackup({ pianoInstrument });
+      expect((await loadSettings()).pianoInstrument).toBe(pianoInstrument);
+    }
+    expect(PIANO_INSTRUMENT_IDS).toContain('headroom-grand');
+    expect(PIANO_INSTRUMENT_IDS).toContain('bitklavier-grand');
   });
 
   it('ignores unknown keys and wrong types on load', async () => {
