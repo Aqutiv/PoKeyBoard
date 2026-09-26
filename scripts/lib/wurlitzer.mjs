@@ -203,6 +203,11 @@ export async function buildWurlitzer() {
   }
   // Match the same C3-B5 keys at the app's default fixed velocity. Apply just
   // one gain after source region trims and v²; never rebalance individual layers.
+  // The reference is Salamander as its old per-layer trims played it (the
+  // medium layer's, below). Its velocity calibration is anchored to keep these
+  // keys at this velocity exactly that loud (ANCHOR_LOW_MIDI..ANCHOR_HIGH_MIDI in
+  // src/audio/velocityCalibrationMath.ts; within 0.05 dB by this measure), so
+  // the match holds. Move either one and the other has to follow.
   const referenceDir = path.join('public', 'piano', 'salamander-grand-v3');
   const reference = JSON.parse(await readFile(path.join(referenceDir, 'manifest.json'), 'utf8'));
   const levels = new Map();

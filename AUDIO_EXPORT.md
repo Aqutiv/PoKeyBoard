@@ -21,6 +21,8 @@ Either way a **look-ahead limiter** then holds the result under a **−1 dBTP** 
 
 Metronome clicks join after the level is set, at half their live level, so an accented click at full volume never has the limiter ducking the piano on its own.
 
+Each note's own level is set before any of this, exactly as live: by its velocity, on the one curve every recording of the grands is calibrated to (see ARCHITECTURE.md, Choosing a piano). Exporter version 5 is the first to render that way, so exports cached before it render again. A take played at the computer keyboard's velocity is as loud as it was; one played softer or harder spans about twice the range it did.
+
 ## Tags
 
 An ID3v2.3 tag (the version every player reads, Windows' own among them) names the take (`TIT2`), a library track's composer (`TPE1`, `TCOM`), the album `PoKeyBoard` and the piano it was rendered on (`TSSE`). The cache holds the untagged MP3 and the tag is written each time the file is handed over, so a take renamed after its export never carries its old title.

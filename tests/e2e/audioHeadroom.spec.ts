@@ -1,10 +1,8 @@
-import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { build } from 'vite';
 import { expect, test } from './fixtures';
-import type { SamplePackManifest } from '../../src/audio/audioTypes';
-import { pianoInstrument } from '../../src/audio/instruments';
-import { velocityGain, velocityToLayer } from '../../src/audio/SampleBank';
+import { VELOCITY_CALIBRATIONS } from '../../src/audio/velocityCalibration';
+import { calibratedGain } from '../../src/audio/velocityCalibrationMath';
 
 /**
  * The only spec that measures actual audio. Node has no Web Audio and the
@@ -21,18 +19,22 @@ const VOICE_COUNT = 12;
 const METRONOME_PEAK = 0.6;
 
 /**
- * The worst-case per-voice gain the app can produce: SampleBank multiplies
- * velocityGain by the pack's levelMatch *outside* velocityGain's own clamp, and
- * headroom-grand's levelMatch is the largest of any pack.
+ * The worst-case per-voice gain the app can produce: the largest the velocity
+ * calibration gives at full velocity, on any root and layer of any pack. That
+ * is a soft recording standing in for a loud one during a partial load — about
+ * 27, on the Headroom piano — though only because that recording is so quiet.
  */
 function worstCaseVoiceGain(): number {
-  const packDir = pianoInstrument('headroom-grand').path.replace(/\/$/, '');
-  const manifest = JSON.parse(
-    readFileSync(path.resolve('public', packDir, 'manifest.json'), 'utf8'),
-  ) as SamplePackManifest & { levelMatch?: number[] };
-  const layer = velocityToLayer(LOUD_VELOCITY);
-  const levelMatch = manifest.levelMatch?.[layer] ?? 1;
-  return velocityGain(LOUD_VELOCITY, layer) * levelMatch;
+  let worst = 0;
+  for (const calibration of Object.values(VELOCITY_CALIBRATIONS)) {
+    for (const [layer, { roots }] of calibration.layers.entries()) {
+      for (const { midi } of roots) {
+        const gain = calibratedGain(calibration, LOUD_VELOCITY, midi, layer, midi) ?? 0;
+        worst = Math.max(worst, gain);
+      }
+    }
+  }
+  return worst;
 }
 
 /** IIFE bundle of the real graph module, exposed as `window.PianoGraph`. */
