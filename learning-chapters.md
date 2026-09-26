@@ -13,7 +13,7 @@ must agree.
 |              | Built | Remaining |
 | ------------ | ----- | --------- |
 | Beginner     | 10    | 0         |
-| Intermediate | 1     | 9         |
+| Intermediate | 2     | 8         |
 | Advanced     | 0     | 10        |
 
 ---
@@ -55,11 +55,11 @@ _One piece in C → several keys, with real accompaniment._
 
 ### Part 1 — Getting serious
 
-| #   | Chapter                               | Teaches                                                                                                                                | Exercises validate                                       |
-| --- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| 1   | **How to Practise** ✅                | Slow practice, hands separate, chunking, spaced repetition; the metronome, the record button, the speed menu and the A–B loop as tools | the same passage at 60, 80 and 100 bpm against the click |
-| 2   | Key Signatures & the Circle of Fifths | Why sharps/flats sit at the clef; their order; finding the tonic; the circle                                                           | name the key from a signature; play its tonic and scale  |
-| 3   | Scales Beyond C                       | G, F and D major; where the black keys land; why the fingering shifts                                                                  | each scale, one octave, with the right shape             |
+| #   | Chapter                                      | Teaches                                                                                                                                | Exercises validate                                       |
+| --- | -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| 1   | **How to Practise** ✅                       | Slow practice, hands separate, chunking, spaced repetition; the metronome, the record button, the speed menu and the A–B loop as tools | the same passage at 60, 80 and 100 bpm against the click |
+| 2   | **Key Signatures & the Circle of Fifths** ✅ | Why sharps/flats sit at the clef; their order; finding the tonic; the circle                                                           | name the key from a signature; play its tonic and scale  |
+| 3   | Scales Beyond C                              | G, F and D major; where the black keys land; why the fingering shifts                                                                  | each scale, one octave, with the right shape             |
 
 ### Part 2 — Harmony's building blocks
 
@@ -155,18 +155,22 @@ id would.
 
 Four step kinds (`src/features/learn/types.ts`):
 
-- `theory` — prose, plus an optional keyboard diagram, staff snippet, or Listen
-  demo.
+- `theory` — prose, plus an optional keyboard diagram, staff snippet, circle
+  of fifths, or Listen demo.
 - `exercise` — carries an `ExerciseSpec`; the user plays it.
 - `quiz` — recognition instead of production; the app shows something and the
-  user names it. Question kinds: `nameTheKey`, `readNote`, `chordQuality` —
-  the last plays a triad and asks "major or minor?", the one question the
-  course asks of the ear alone. Its chord is **heard, never drawn**: on a
-  staff it could be told apart by counting. A "Hear it" button plays it
-  through the runner's own demo lock (`playDemo`), shared with Listen and
-  "Show me", because a scheduled note cannot be unscheduled. Answers are ids
-  (`QuizChoice`: a pitch class or a quality) and the panel turns them into
-  words.
+  user names it. Question kinds: `nameTheKey`, `readNote`, `chordQuality`,
+  `keySignature`. `chordQuality` plays a triad and asks "major or minor?", the
+  one question the course asks of the ear alone. Its chord is **heard, never
+  drawn**: on a staff it could be told apart by counting. A "Hear it" button
+  plays it through the runner's own demo lock (`playDemo`), shared with Listen
+  and "Show me", because a scheduled note cannot be unscheduled.
+  `keySignature` draws a signature and nothing else, and asks for its major
+  key. Answers are ids (`QuizChoice`: a pitch class or a quality) and the
+  panel turns them into words — a key by its home note's pitch class, with
+  the session's `keys` saying which key each button stands for, since a pitch
+  class alone cannot tell F♯ major from G♭ major. The buttons stand in circle
+  order, flats to sharps, whatever order the pool asks in.
 - `drill` — the mirror of a quiz: the app names something and the user plays
   it, over several rounds. Not an `ExerciseSpec` kind — rounds cannot live in a
   spec, since the matcher is a pure reducer with no notion of them. A drill is
@@ -177,6 +181,9 @@ Four step kinds (`src/features/learn/types.ts`):
   names a degree of a major scale ("Play degree 5.") and grades its pitch
   class, so any octave counts and no note name gives the answer away.
   `namedChord` names a triad ("Play A minor.") and grades it with `chord`.
+  `keyTonic` draws a key signature and asks for its home note, graded as a
+  pitch class in any octave. A round carries its pool's `kind`, which the
+  runner's prompt switches on.
 
 A correct answer is **held on screen for 500ms** before the next round replaces
 it (`HOLD_MS` in `useDrill.ts`). Advancing on the same render that satisfied a
@@ -263,20 +270,36 @@ the Library's track builder), so chapter 9's C minor engraves C–E♭–G. Left
 the context speller, the same key could as well come out D♯. Write the
 accidental wherever the letter matters; a bare letter names only a key.
 
+A lesson staff can carry a **key signature** (`LearnPhrase.keySignature`, in
+fifths: sharps positive, flats negative). Notes are still named at the pitch
+they sound — "F#4" under two sharps — and the engraver leaves off whatever the
+signature already says, so a bare "F4" there would be F natural, drawn with a
+natural sign. `signaturePhrase` is a signature with no notes, for a question
+whose answer a written note would give away. A lesson's staff lines run on
+through the gutter, under the clef and the signature: Play's score fills its
+gutter so the music scrolling beneath it does not show through, but a lesson's
+staff stands still, and which line a sharp sits on is all a signature says.
+
+The **circle of fifths** is a visual of its own (`circle`), drawn by
+`CircleOfFifths` from the slots in `circleSlots.ts`: twelve major keys
+clockwise from C, the bottom slot standing for both six sharps and six flats.
+It takes two tints by key, as the keyboard diagram does, and the catalog holds
+them apart the same way.
+
 `ExerciseSpec` kinds (`src/features/learn/exerciseSpec.ts`), and who needs them:
 
-| Kind            | Means                                                      | Used by        |
-| --------------- | ---------------------------------------------------------- | -------------- |
-| `distinctKeys`  | any N different keys                                       | B1             |
-| `risingLeap`    | a note, then one at least N semitones higher               | B1             |
-| `pitchClass`    | one named pitch class, optionally in N octaves             | B1, B2, B3     |
-| `blackKeyGroup` | a whole group of 2 or 3 black keys                         | B1             |
-| `interval`      | two notes N semitones apart, optionally pitch-class pinned | B1, B3, I5     |
-| `exactKeys`     | exactly these midis                                        | B5, B9, A1     |
-| `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I3 |
-| `rhythm`        | these beat offsets, in time with the click                 | B6, I7, A4     |
-| `playAlong`     | a written line, in order — optionally in time, as chords   | B7–B10, A6     |
-| `chord`         | a named triad, root position, any octave, nothing extra    | B9, I6, A1     |
+| Kind            | Means                                                      | Used by            |
+| --------------- | ---------------------------------------------------------- | ------------------ |
+| `distinctKeys`  | any N different keys                                       | B1                 |
+| `risingLeap`    | a note, then one at least N semitones higher               | B1                 |
+| `pitchClass`    | one named pitch class, optionally in N octaves             | B1, B2, B3, I2     |
+| `blackKeyGroup` | a whole group of 2 or 3 black keys                         | B1                 |
+| `interval`      | two notes N semitones apart, optionally pitch-class pinned | B1, B3, I5         |
+| `exactKeys`     | exactly these midis                                        | B5, B9, A1         |
+| `sequence`      | these pitch classes in this order, optionally up/down      | B2, B3, B8, I2, I3 |
+| `rhythm`        | these beat offsets, in time with the click                 | B6, I7, A4         |
+| `playAlong`     | a written line, in order — optionally in time, as chords   | B7–B10, I1, I2, A6 |
+| `chord`         | a named triad, root position, any octave, nothing extra    | B9, I6, A1         |
 
 An `interval` with no `lowerPitchClass` and no `together` reads the cumulative
 candidate set, which makes it "any two keys N semitones apart" rather than one
@@ -348,7 +371,14 @@ Beautiful Day", whose tune runs over the very I–V–vi–IV it teaches. A hand
 can also set Play up to practise (`speed`, `loopBeats`): Intermediate chapter 1
 opens that same tune at 60% speed, looping the bars it practised. They are
 applied through the calls Play's own speed menu and loop button make, so the
-result is indistinguishable from marking them by hand (`handoff.ts`).
+result is indistinguishable from marking them by hand (`handoff.ts`). The
+track may be a Classics score as well as an authored one: Intermediate
+chapter 2 opens Petzold's Minuet in G, named through `libraryTrackSummary`
+like any Library entry. A score is fetched the first time it is opened, so
+offline the hand-off cannot load it — it lands on the Library instead of an
+empty Play, in the piece's folder and searched for it. The folder alone would
+not do: the Library restores the last search typed there, which could hide
+the very piece promised.
 
 A line can ask for **the pedal changed with the harmony** (`pedal:
 'changeEach'`): once a moment's notes are in it waits (`AlongRun.pedalOwed`)
@@ -438,7 +468,10 @@ Learned the hard way; violating any of these produces a silent failure.
 - **Reading rounds cannot be done by screen reader.** The staff canvas is
   `role="img"` with a generic label; naming the note would announce the answer.
   A drill that asks you to read a picture is inherently visual, so the skip
-  affordance is the honest escape hatch rather than a fake label.
+  affordance is the honest escape hatch rather than a fake label. A
+  key-signature round is the exception: its label states the signature ("Key
+  signature: 2 sharps"), which is what is drawn, and leaves the key to be
+  worked out.
 - ~~**Only note heads light, not stems, flags or beams.**~~ Answered by
   chapter 6, and the answer is _deliberately nothing_. A head says which note is
   sounding; a stem and a flag are part of how long it lasts, and a beam belongs

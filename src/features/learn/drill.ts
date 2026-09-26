@@ -1,3 +1,4 @@
+import { majorTonicPitchClass } from '@/features/notation/keySignature';
 import type { StaffMode } from '@/features/notation/scoreRenderer';
 import {
   DEFAULT_ONSET_WINDOW_MS,
@@ -8,13 +9,15 @@ import {
 } from './exerciseSpec';
 import { noteLabel } from './noteLabel';
 import { roundEntryAt } from './rounds';
-import { singleNotePhrase, staffModeFor } from './staffPhrase';
+import { signaturePhrase, singleNotePhrase, staffModeFor } from './staffPhrase';
 import type { DrillPool, LearnPhrase } from './types';
 
 /** Middle C — where the first reading chapter's five notes start. */
 export const DEFAULT_STAFF_BASE_MIDI = 60;
 
 export interface DrillRound {
+  /** The pool it came from — what the runner switches on to ask for it. */
+  kind: DrillPool['kind'];
   /** What the user has to play. Handed straight to the exercise matcher. */
   spec: ExerciseSpec;
   /** Filled into the one generic "Play {note}." message. Empty when the
@@ -28,6 +31,12 @@ export interface DrillRound {
   degree?: number;
   /** For a chord round, the chord asked for — the prompt names it. */
   chord?: NamedChord;
+  /**
+   * For a key round, the signature drawn — in fifths. The prompt asks for its
+   * home note without naming it, and the staff's label can state the
+   * signature, since that is the question rather than the answer.
+   */
+  signature?: number;
 }
 
 /**
@@ -51,7 +60,12 @@ export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null 
   if (pool.kind === 'namedChord') {
     const chord = roundEntryAt(pool.chords, round);
     if (chord === undefined) return null;
-    return { spec: { kind: 'chord', chord, together: CHORD_TOGETHER }, label: '', chord };
+    return {
+      kind: pool.kind,
+      spec: { kind: 'chord', chord, together: CHORD_TOGETHER },
+      label: '',
+      chord,
+    };
   }
 
   if (pool.kind === 'scaleDegree') {
@@ -62,7 +76,24 @@ export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null 
     // same key an octave up is the same degree. Nothing is drawn, and no note
     // is named — the name would be the answer.
     const pitchClass = ((pool.tonic + offset) % 12) as PitchClass;
-    return { spec: { kind: 'pitchClass', pitchClass }, label: '', degree };
+    return { kind: pool.kind, spec: { kind: 'pitchClass', pitchClass }, label: '', degree };
+  }
+
+  if (pool.kind === 'keyTonic') {
+    const signature = roundEntryAt(pool.signatures, round);
+    if (signature === undefined) return null;
+    // Any octave, as for a degree: the question is which note is home, and
+    // the same key an octave up is the same home. The staff draws the
+    // signature alone — a written note would be the answer.
+    const pitchClass = majorTonicPitchClass(signature) as PitchClass;
+    return {
+      kind: pool.kind,
+      spec: { kind: 'pitchClass', pitchClass },
+      label: '',
+      phrase: signaturePhrase(signature),
+      staves: 'treble',
+      signature,
+    };
   }
 
   const pitchClass = roundEntryAt(pool.pitchClasses, round);
@@ -78,6 +109,7 @@ export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null 
     // No label either — the staff *is* the question, and writing the note's
     // name beside it would hand over the answer.
     return {
+      kind: pool.kind,
       spec: { kind: 'exactKeys', midis: [midi] },
       label: '',
       phrase: singleNotePhrase(midi, pool.staff),
@@ -85,6 +117,7 @@ export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null 
     };
   }
   return {
+    kind: pool.kind,
     spec: { kind: 'pitchClass', pitchClass },
     label: noteLabel(pitchClass, pool.spelling),
   };

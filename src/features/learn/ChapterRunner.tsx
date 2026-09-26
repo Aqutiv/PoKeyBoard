@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import {
   useLiveActiveNotes,
@@ -9,11 +9,11 @@ import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useRouter } from '@/app/routerContext';
 import { whiteKeyCount } from '@/features/keyboard/keyboardGeometry';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
-import { LIBRARY_TRACKS } from '@/features/library/catalog';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { transportController } from '@/features/transport/transportController';
 import { useI18n } from '@/i18n/i18nContext';
 import type { Messages } from '@/i18n/types';
+import { CircleOfFifths } from './CircleOfFifths';
 import { KeyboardDiagram } from './KeyboardDiagram';
 import { QuizPanel } from './QuizPanel';
 import { StaffSnippet } from './StaffSnippet';
@@ -21,7 +21,7 @@ import { findLearnChapter } from './chapters';
 import { loadChapterProse } from './content';
 import type { ChapterProse } from './content/types';
 import { playPhrase } from './demo';
-import { openHandoff } from './handoff';
+import { handoffTitle, openHandoff, revealHandoffInLibrary } from './handoff';
 import type { DrillRound } from './drill';
 import { noteLabel } from './noteLabel';
 import {
@@ -47,17 +47,30 @@ const LISTEN_LEAD_S = 0.25;
 const EMPTY_TARGETS: ReadonlySet<number> = new Set();
 const NO_WRONG: ReadonlySet<number> = new Set();
 
-/** What a drill round asks for, in words. A reading round asks with its picture. */
+/**
+ * What a drill round asks for, in words. A reading round asks with its
+ * picture, and so does a key round — but for its home note, not the note
+ * shown, since it shows none. A switch, so a new kind of pool is a compile
+ * error here rather than a round asked in another kind's words.
+ */
 function drillPrompt(round: DrillRound | null, m: Messages): string {
   if (!round) return '';
-  if (round.phrase) return m.learn.playWhatYouSee;
-  if (round.chord) {
-    const quality = m.learn.chordQuality[round.chord.quality];
-    const chord = m.learn.chordName({ note: noteLabel(round.chord.root), quality });
-    return m.learn.playChord({ chord });
+  switch (round.kind) {
+    case 'readNote':
+      return m.learn.playWhatYouSee;
+    case 'keyTonic':
+      return m.learn.playTonic;
+    case 'namedChord': {
+      if (!round.chord) return '';
+      const quality = m.learn.chordQuality[round.chord.quality];
+      const chord = m.learn.chordName({ note: noteLabel(round.chord.root), quality });
+      return m.learn.playChord({ chord });
+    }
+    case 'scaleDegree':
+      return m.learn.playDegree({ degree: round.degree ?? 1 });
+    case 'namedKey':
+      return m.learn.playNote({ note: round.label });
   }
-  if (round.degree !== undefined) return m.learn.playDegree({ degree: round.degree });
-  return m.learn.playNote({ note: round.label });
 }
 
 interface ChapterRunnerProps {
@@ -246,9 +259,9 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   }, [chapterId, onClose, onProgress, progress]);
 
   const handoff = chapter?.handoff;
-  const handoffTitle = handoff
-    ? LIBRARY_TRACKS.find((def) => def.trackId === handoff.trackId)?.title
-    : undefined;
+  // Authored tracks and Classics scores alike: a title only the authored list
+  // could find would drop a Classics hand-off to the plain button, silently.
+  const handoffName = handoff ? handoffTitle(handoff.trackId) : undefined;
   const [handingOff, setHandingOff] = useState(false);
 
   // The open outlives the runner if the chapter is closed while it is still
@@ -269,11 +282,14 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
     // Play. The chapter is finished either way — it was — and a track that
     // would not open is left to be found in the Library by hand rather than on
     // an empty Play.
+    // Left to be found in the Library, it is shown in its own folder — a
+    // Classics score is fetched on first open, so offline it cannot load.
     void openHandoff(handoff, controller.signal).then(
       (opened) => {
         if (controller.signal.aborted) return;
         setHandingOff(false);
         finish();
+        if (!opened) revealHandoffInLibrary(handoff.trackId);
         navigate(opened ? 'play' : 'library');
       },
       (error: unknown) => {
@@ -281,6 +297,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
         console.error('Opening the chapter hand-off failed:', error);
         setHandingOff(false);
         finish();
+        revealHandoffInLibrary(handoff.trackId);
         navigate('library');
       },
     );
@@ -367,6 +384,50 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
   const title = m.learn.chapterTitles[chapterId];
   const text = step ? prose?.[step.id] : undefined;
 
+  // A switch, like `canAdvance`: a new kind of picture that nobody taught the
+  // runner to draw would otherwise leave its step silently blank.
+  const visual = step?.visual;
+  const picture = ((): ReactNode => {
+    switch (visual?.kind) {
+      case undefined:
+        return null;
+      case 'keyboard':
+        return (
+          <KeyboardDiagram
+            lowMidi={visual.lowMidi}
+            highMidi={visual.highMidi}
+            highlight={visual.highlight}
+            highlightSecondary={visual.highlightSecondary}
+            labels={visual.labels}
+            spelling={visual.spelling}
+            labelText={visual.labelText}
+            ariaLabel={m.learn.diagramLabel}
+          />
+        );
+      case 'staff':
+        return (
+          <StaffSnippet
+            phrase={visual.phrase}
+            staves={visual.staves}
+            showRests={visual.rests}
+            chrome={visual.chrome}
+            ariaLabel={m.learn.staffLabel}
+            litMidis={heldMidis}
+            litNoteIds={litNoteIds}
+            focusNoteId={focusNoteId}
+          />
+        );
+      case 'circle':
+        return (
+          <CircleOfFifths
+            highlight={visual.highlight}
+            highlightSecondary={visual.highlightSecondary}
+            ariaLabel={m.learn.circleLabel}
+          />
+        );
+    }
+  })();
+
   return (
     <section
       className="page learn-runner"
@@ -417,30 +478,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
           <p className="learn-card__body">{m.learn.loadingChapter}</p>
         )}
 
-        {step?.visual?.kind === 'keyboard' ? (
-          <KeyboardDiagram
-            lowMidi={step.visual.lowMidi}
-            highMidi={step.visual.highMidi}
-            highlight={step.visual.highlight}
-            highlightSecondary={step.visual.highlightSecondary}
-            labels={step.visual.labels}
-            spelling={step.visual.spelling}
-            labelText={step.visual.labelText}
-            ariaLabel={m.learn.diagramLabel}
-          />
-        ) : null}
-        {step?.visual?.kind === 'staff' ? (
-          <StaffSnippet
-            phrase={step.visual.phrase}
-            staves={step.visual.staves}
-            showRests={step.visual.rests}
-            chrome={step.visual.chrome}
-            ariaLabel={m.learn.staffLabel}
-            litMidis={heldMidis}
-            litNoteIds={litNoteIds}
-            focusNoteId={focusNoteId}
-          />
-        ) : null}
+        {picture}
 
         {listen ? (
           <button
@@ -465,7 +503,13 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
               <StaffSnippet
                 phrase={drill.round.phrase}
                 staves={drill.round.staves}
-                ariaLabel={m.learn.staffLabel}
+                // A signature is said, as a key quiz says it: it is what is
+                // drawn, and the key is still left to be worked out.
+                ariaLabel={
+                  drill.round.signature !== undefined
+                    ? m.learn.keySignatureLabel({ fifths: drill.round.signature })
+                    : m.learn.staffLabel
+                }
                 litMidis={heldMidis}
               />
             ) : null}
@@ -523,7 +567,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
         {isLast && steps.length > 0 ? (
           <div className="learn-card__outro">
-            {handoff && handoffTitle ? (
+            {handoff && handoffName ? (
               <>
                 <p className="learn-card__body">
                   {handoff.speed !== undefined && handoff.loopBeats
@@ -536,7 +580,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
                   onClick={onHandoff}
                   disabled={handingOff}
                 >
-                  {m.learn.practiseOnPlay({ title: handoffTitle })}
+                  {m.learn.practiseOnPlay({ title: handoffName })}
                 </button>
               </>
             ) : (

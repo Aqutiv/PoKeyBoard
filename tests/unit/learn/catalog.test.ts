@@ -1,4 +1,10 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import process from 'node:process';
 import { describe, expect, it } from 'vitest';
+import { musicXmlToTake } from '@/domain/musicXmlImport';
+import { extractMusicXmlText } from '@/domain/mxlContainer';
+import type { Take } from '@/domain/takeTypes';
 import { MEET_THE_KEYBOARD } from '@/features/learn/chapters/meetTheKeyboard';
 import {
   findLearnChapter,
@@ -16,7 +22,20 @@ import { C_MAJOR_SCALE } from '@/features/learn/chapters/cMajorScale';
 import { TRIADS } from '@/features/learn/chapters/triads';
 import { CHORDS_PEDAL_AND_HANDS } from '@/features/learn/chapters/chordsPedalAndHands';
 import { HOW_TO_PRACTISE, THEME_TRACK_BEAT } from '@/features/learn/chapters/howToPractise';
+import { KEY_SIGNATURES } from '@/features/learn/chapters/keySignatures';
+import { CIRCLE_SLOTS, slotHolds } from '@/features/learn/circleSlots';
+import { handoffTitle } from '@/features/learn/handoff';
+import { quizRoundAt } from '@/features/learn/useQuiz';
 import type { LearnPhrase, LearnStep } from '@/features/learn/types';
+import { CLASSIC_SCORES } from '@/features/library/classicsManifest';
+import { SCORE_PACK_PATH } from '@/features/library/scoreLoader';
+import {
+  keyAlterations,
+  letterPitchClass,
+  majorTonicName,
+  majorTonicPitchClass,
+  signatureSteps,
+} from '@/features/notation/keySignature';
 import { buildLibraryTake } from '@/features/library/trackBuilder';
 import { A_BEAUTIFUL_DAY } from '@/features/library/tracks/aBeautifulDay';
 import { PLAYBACK_SPEEDS } from '@/features/transport/modes';
@@ -98,6 +117,7 @@ describe('learn catalog', () => {
       'triads',
       'chordsPedalAndHands',
       'howToPractise',
+      'keySignatures',
     ]);
   });
 
@@ -121,17 +141,31 @@ describe('every authored chapter', () => {
     TRIADS,
     CHORDS_PEDAL_AND_HANDS,
     HOW_TO_PRACTISE,
+    KEY_SIGNATURES,
   ];
 
   it('keeps the two tints of a diagram apart', () => {
-    // `KeyboardDiagram` checks the first tint first, so a key in both sets
-    // shows the first colour and the second is silently never seen.
+    // `KeyboardDiagram` and `CircleOfFifths` check the first tint first, so a
+    // key in both sets shows the first colour and the second is silently
+    // never seen.
     for (const chapter of AUTHORED) {
       for (const step of chapter.steps) {
-        if (step.visual?.kind !== 'keyboard') continue;
-        const first = new Set(step.visual.highlight ?? []);
-        const overlap = (step.visual.highlightSecondary ?? []).filter((midi) => first.has(midi));
-        expect(overlap, `${chapter.id}/${step.id}`).toEqual([]);
+        const { visual } = step;
+        if (visual?.kind === 'keyboard') {
+          const first = new Set(visual.highlight ?? []);
+          const overlap = (visual.highlightSecondary ?? []).filter((midi) => first.has(midi));
+          expect(overlap, `${chapter.id}/${step.id}`).toEqual([]);
+        }
+        if (visual?.kind === 'circle') {
+          // By slot, not by number: the bottom slot stands for 6 and −6 alike.
+          for (const slot of CIRCLE_SLOTS) {
+            const inFirst = (visual.highlight ?? []).some((fifths) => slotHolds(slot, fifths));
+            const inSecond = (visual.highlightSecondary ?? []).some((fifths) =>
+              slotHolds(slot, fifths),
+            );
+            expect(inFirst && inSecond, `${chapter.id}/${step.id} slot ${slot}`).toBe(false);
+          }
+        }
       }
     }
   });
@@ -259,7 +293,7 @@ describe('chapter two', () => {
     for (const step of MUSICAL_ALPHABET.steps) {
       if (step.kind !== 'quiz') continue;
       expect(step.rounds).toBeGreaterThan(0);
-      if (step.question.kind === 'chordQuality') throw new Error('expected a note quiz');
+      if (step.question.kind !== 'nameTheKey') throw new Error('expected a note quiz');
       expect(step.question.pitchClasses.length).toBeGreaterThanOrEqual(2);
     }
   });
@@ -988,24 +1022,27 @@ function sharedChapterChecks(chapter: LearnChapter): void {
   it('hands off only to a Library track that exists, set up as Play could be by hand', () => {
     const { handoff } = chapter;
     if (!handoff) return;
-    const def = LIBRARY_TRACKS.find((track) => track.trackId === handoff.trackId);
-    expect(def).toBeDefined();
+    // Named the way the closing button names it. A title only the authored
+    // list could find would drop a Classics hand-off to the plain button.
+    expect(handoffTitle(handoff.trackId)).toBeTruthy();
+    const take = handoffTake(handoff.trackId);
+    expect(take).toBeDefined();
+    if (!take) return;
     // One-hand Training decides a note's hand by its staff, and falls back on
     // the split at middle C — which puts any left-hand note above it in the
     // right hand. A track opened for one hand must say which hand plays what.
-    if (def && (handoff.mode === 'training-left' || handoff.mode === 'training-right')) {
-      const notes = buildLibraryTake(def).notes;
-      for (const note of notes) {
-        expect(note.staff, `${def.trackId} ${note.id}`).toBeDefined();
+    if (handoff.mode === 'training-left' || handoff.mode === 'training-right') {
+      for (const note of take.notes) {
+        expect(note.staff, `${handoff.trackId} ${note.id}`).toBeDefined();
       }
       // Nor may the two hands strike one key at one moment: Training accepts
       // the player's note, then the accompaniment plays the same key again.
       const struck = new Map<string, string>();
-      for (const note of notes) {
+      for (const note of take.notes) {
         const key = `${note.midi}@${note.startMs}`;
         const hand = noteHand(note);
         const other = struck.get(key);
-        expect(other === undefined || other === hand, `${def.trackId} ${key}`).toBe(true);
+        expect(other === undefined || other === hand, `${handoff.trackId} ${key}`).toBe(true);
         struck.set(key, hand);
       }
     }
@@ -1013,17 +1050,33 @@ function sharedChapterChecks(chapter: LearnChapter): void {
     if (handoff.speed !== undefined) {
       expect(PLAYBACK_SPEEDS as readonly number[]).toContain(handoff.speed);
     }
-    if (handoff.loopBeats && def) {
+    if (handoff.loopBeats) {
       const [from, to] = handoff.loopBeats;
-      const beatsPerBar = def.timeSignature.numerator;
+      const beatsPerBar = take.tempo.timeSignature.numerator;
       expect(from % beatsPerBar, 'loop starts on a bar line').toBe(0);
       expect(to % beatsPerBar, 'loop ends on a bar line').toBe(0);
       expect(to).toBeGreaterThan(from);
-      const take = buildLibraryTake(def);
       const endMs = createTakeTempoMap(take.tempo).msAtBeat(to);
       expect(endMs, 'loop inside the track').toBeLessThanOrEqual(take.durationMs);
     }
   });
+}
+
+/** The vendored Classics pack, read off disk in place of the network. */
+const SCORE_PACK_DIR = path.resolve(process.cwd(), 'public', SCORE_PACK_PATH);
+
+/**
+ * The take a hand-off opens, built as the app builds it: an authored track
+ * through its builder, a Classics score through the importer `loadClassicTake`
+ * runs on the bytes it fetches.
+ */
+function handoffTake(trackId: string): Take | undefined {
+  const def = LIBRARY_TRACKS.find((track) => track.trackId === trackId);
+  if (def) return buildLibraryTake(def);
+  const entry = CLASSIC_SCORES.find((score) => score.trackId === trackId);
+  if (!entry) return undefined;
+  const bytes = new Uint8Array(readFileSync(path.join(SCORE_PACK_DIR, entry.file)));
+  return musicXmlToTake(extractMusicXmlText(bytes), entry.file);
 }
 
 describe('chapter seven', () => {
@@ -1516,5 +1569,295 @@ describe('intermediate chapter one', () => {
       speed: 0.6,
       loopBeats: [THEME_TRACK_BEAT, THEME_TRACK_BEAT + 16],
     });
+  });
+});
+
+describe('intermediate chapter two', () => {
+  sharedChapterChecks(KEY_SIGNATURES);
+
+  const step = (id: string) => KEY_SIGNATURES.steps.find((s) => s.id === id);
+  const pictureOf = (id: string): LearnPhrase => {
+    const visual = step(id)?.visual;
+    if (visual?.kind !== 'staff') throw new Error(`expected a staff at ${id}`);
+    return visual.phrase;
+  };
+  const lineOf = (id: string) => {
+    const found = step(id);
+    if (found?.kind !== 'exercise' || found.spec.kind !== 'playAlong') {
+      throw new Error(`expected a playAlong line at ${id}`);
+    }
+    return found.spec;
+  };
+  const diagramOf = (id: string) => {
+    const visual = step(id)?.visual;
+    if (visual?.kind !== 'keyboard') throw new Error(`expected a keyboard diagram at ${id}`);
+    return visual;
+  };
+  const quizAt = (id: string) => {
+    const found = step(id);
+    if (found?.kind !== 'quiz') throw new Error(`expected a quiz at ${id}`);
+    return found;
+  };
+  const LETTERS = 'CDEFGAB';
+  /** The letter and alteration a written name states: "F#4" is F, +1. */
+  const spelledAs = (name: string) => ({
+    letter: LETTERS.indexOf(name.charAt(0)),
+    alter: name.charAt(1) === '#' ? 1 : name.charAt(1) === 'b' ? -1 : 0,
+  });
+  /** A line's written accidentals, as [midi, sign], engraved the way its snippet is. */
+  const accidentalsOf = (line: LearnPhrase) =>
+    layoutScore(phraseToNotes(line), {
+      bpm: line.bpm,
+      timeSignature: line.timeSignature,
+      quantization: '1/16',
+      minMeasures: 1,
+      keySignature: line.keySignature ?? 0,
+    })
+      .chords.flatMap((chord) => chord.notes)
+      .filter((note) => note.accidental !== null)
+      .map((note) => [note.midi, note.accidental]);
+  /** The pitch classes a signature raises or lowers. */
+  const alteredBy = (fifths: number) =>
+    keyAlterations(fifths).flatMap((alter, letter) =>
+      alter === 0 ? [] : [(letterPitchClass(letter) + alter + 12) % 12],
+    );
+  /** The pool a key question or key drill asks from; null for any other step. */
+  const keyPool = (s: LearnStep): readonly number[] | null => {
+    if (s.kind === 'quiz' && s.question.kind === 'keySignature') return s.question.signatures;
+    if (s.kind === 'drill' && s.drill.kind === 'keyTonic') return s.drill.signatures;
+    return null;
+  };
+
+  it('reads two scales, asks two quizzes, drills the home note and walks the circle', () => {
+    const kinds = KEY_SIGNATURES.steps.map((s) => s.kind);
+    expect(kinds).toHaveLength(15);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(3);
+    expect(kinds.filter((kind) => kind === 'quiz')).toHaveLength(2);
+    expect(kinds.filter((kind) => kind === 'drill')).toHaveLength(1);
+  });
+
+  it('moves the sharps, not the notes: the same scale with and without its signature', () => {
+    const spelledOut = pictureOf('sharpsEverywhere');
+    const signed = pictureOf('theSignature');
+    expect(spelledOut.keySignature ?? 0).toBe(0);
+    expect(signed.keySignature).toBe(2);
+    expect(signed.events).toEqual(spelledOut.events);
+    // Written out, the F and the C carry their sharps; under the signature,
+    // nothing does.
+    expect(accidentalsOf(spelledOut)).toEqual([
+      [66, '#'],
+      [73, '#'],
+    ]);
+    expect(accidentalsOf(signed)).toEqual([]);
+    // And the signed one is the very line the scale exercise grades.
+    expect(lineOf('readInD').phrase).toBe(signed);
+  });
+
+  it('writes every note of a signed line in its key, so none is drawn with a sign', () => {
+    for (const s of KEY_SIGNATURES.steps) {
+      if (s.visual?.kind !== 'staff') continue;
+      const { phrase } = s.visual;
+      if (phrase.keySignature === undefined) continue;
+      const alterations = keyAlterations(phrase.keySignature);
+      for (const [, noteOrChord] of phrase.events) {
+        const names = Array.isArray(noteOrChord) ? noteOrChord : [noteOrChord];
+        for (const name of names) {
+          const { letter, alter } = spelledAs(name);
+          expect(alter, `${s.id}: ${name}`).toBe(alterations[letter]);
+        }
+      }
+      expect(accidentalsOf(phrase), s.id).toEqual([]);
+    }
+  });
+
+  it('climbs both scales by the major pattern from their signature’s own home note', () => {
+    expect(lineOf('readInD').phrase.keySignature).toBe(2);
+    expect(lineOf('readInF').phrase.keySignature).toBe(-1);
+    for (const id of ['readInD', 'readInF']) {
+      const { phrase, timed } = lineOf(id);
+      expect(timed, id).toBeUndefined();
+      const midis = momentsOf(phrase).map((moment) => moment.midis[0] as number);
+      expect((midis[0] as number) % 12, id).toBe(majorTonicPitchClass(phrase.keySignature ?? 0));
+      const steps = midis.slice(1).map((midi, i) => midi - (midis[i] as number));
+      expect(steps, id).toEqual([2, 2, 1, 2, 2, 2, 1]);
+    }
+  });
+
+  it('plays D’s F♯ an octave below the one its signature draws', () => {
+    // "In every octave" is the point: the signature's sharp sits on the top
+    // line, F5, and the scale's F is the one below it.
+    expect(signatureSteps(2, 'treble')[0]).toBe(8);
+    const midis = momentsOf(lineOf('readInD').phrase).flatMap((moment) => moment.midis);
+    expect(midis).toContain(66);
+    expect(midis).not.toContain(78);
+  });
+
+  it('draws the whole order of sharps and of flats, and nothing after them', () => {
+    expect(pictureOf('orderOfSharps')).toMatchObject({ keySignature: 7, events: [] });
+    expect(pictureOf('orderOfFlats')).toMatchObject({ keySignature: -7, events: [] });
+  });
+
+  it('teaches naming rules that hold for every signature', () => {
+    /** The letter a signature's `index`th sign is written on, read off its staff step. */
+    const letterAt = (fifths: number, index: number) =>
+      ((signatureSteps(fifths, 'treble')[index] as number) + 2) % 7;
+    for (let sharps = 1; sharps <= 7; sharps += 1) {
+      // A half step above the last sharp is home.
+      const last = (letterPitchClass(letterAt(sharps, sharps - 1)) + 1) % 12;
+      expect((last + 1) % 12, `${sharps} sharps`).toBe(majorTonicPitchClass(sharps));
+    }
+    for (let flats = 2; flats <= 7; flats += 1) {
+      // The second-to-last flat is home.
+      const secondToLast = (letterPitchClass(letterAt(-flats, flats - 2)) + 11) % 12;
+      expect(secondToLast, `${flats} flats`).toBe(majorTonicPitchClass(-flats));
+    }
+    // And one flat, the exception learned by heart, is F.
+    expect(majorTonicName(-1)).toBe('F');
+  });
+
+  it('shows those rules on its diagrams: A major’s sharps, and E♭ major’s flats', () => {
+    const sharps = diagramOf('lastSharp');
+    expect(new Set((sharps.highlightSecondary ?? []).map((midi) => midi % 12))).toEqual(
+      new Set(alteredBy(3)),
+    );
+    expect((sharps.highlight ?? []).map((midi) => midi % 12)).toEqual([majorTonicPitchClass(3)]);
+    const flats = diagramOf('secondToLastFlat');
+    const all = [...(flats.highlight ?? []), ...(flats.highlightSecondary ?? [])];
+    expect(new Set(all.map((midi) => midi % 12))).toEqual(new Set(alteredBy(-3)));
+    expect((flats.highlight ?? []).map((midi) => midi % 12)).toEqual([majorTonicPitchClass(-3)]);
+  });
+
+  it('asks about keys within four sharps or flats, no two sharing a home note', () => {
+    const asked = KEY_SIGNATURES.steps.flatMap((s) => {
+      const pool = keyPool(s);
+      return pool ? [{ s, pool }] : [];
+    });
+    expect(asked).toHaveLength(3);
+    for (const { s, pool } of asked) {
+      for (const fifths of pool) expect(Math.abs(fifths), s.id).toBeLessThanOrEqual(4);
+      expect(new Set(pool.map(majorTonicPitchClass)).size, s.id).toBe(pool.length);
+      if (s.kind === 'quiz' || s.kind === 'drill') {
+        expect(s.rounds, s.id).toBeLessThanOrEqual(pool.length);
+      }
+    }
+  });
+
+  it('labels every answer with its key, in circle order', () => {
+    for (const id of ['nameSharpKeys', 'nameAnyKey']) {
+      const { question } = quizAt(id);
+      if (question.kind !== 'keySignature') throw new Error(`expected a key quiz at ${id}`);
+      const asked = quizRoundAt(question, 0);
+      const inOrder = [...question.signatures].sort((a, b) => a - b);
+      expect(asked.keys, id).toEqual(inOrder);
+      expect(asked.choices, id).toEqual(inOrder.map(majorTonicPitchClass));
+    }
+    const namesOf = (id: string) => quizRoundAt(quizAt(id).question, 0).keys?.map(majorTonicName);
+    expect(namesOf('nameSharpKeys')).toEqual(['C', 'G', 'D', 'A', 'E']);
+    expect(namesOf('nameAnyKey')).toEqual(['A♭', 'E♭', 'B♭', 'F', 'C', 'G', 'D', 'A', 'E']);
+  });
+
+  it('asks the sharp keys in a scattered order, then every key once with the sides mixed', () => {
+    const askedIn = (id: string) => {
+      const quiz = quizAt(id);
+      return Array.from({ length: quiz.rounds }, (_, round) =>
+        majorTonicName(quizRoundAt(quiz.question, round).signature ?? 99),
+      );
+    };
+    // The e2e answers these in this order.
+    expect(askedIn('nameSharpKeys')).toEqual(['C', 'A', 'G', 'E', 'D']);
+    expect(askedIn('nameAnyKey')).toEqual(['G', 'F', 'C', 'E', 'A♭', 'A', 'E♭', 'D', 'B♭']);
+  });
+
+  it('drills the home note in any octave, drawing the signature and nothing else', () => {
+    const s = step('playTheTonic');
+    if (s?.kind !== 'drill' || s.drill.kind !== 'keyTonic') throw new Error('expected a key drill');
+    // "Show me" would fire one fixed phrase at a key that changes every round.
+    expect(s.listen).toBeUndefined();
+    const sides = new Set<number>();
+    for (let round = 0; round < s.rounds; round += 1) {
+      const asked = drillRoundAt(s.drill, round);
+      const signature = asked?.signature ?? 99;
+      sides.add(Math.sign(signature));
+      expect(asked?.kind).toBe('keyTonic');
+      expect(asked?.spec).toEqual({
+        kind: 'pitchClass',
+        pitchClass: majorTonicPitchClass(signature),
+      });
+      expect(asked?.label).toBe('');
+      expect(asked?.phrase).toMatchObject({ keySignature: signature, events: [] });
+    }
+    expect(sides.has(1) && sides.has(-1)).toBe(true);
+  });
+
+  it('keeps every home note and the circle walk in reach of a phone and the computer keyboard', () => {
+    // Neither is a written line, so the shared reach check does not see them.
+    const COMPUTER_KEYBOARD_SPAN = 17;
+    const reachable = (anchor: number, pitchClass: number) => {
+      const high = stepWhites(anchor, MIN_VISIBLE_WHITES, 1);
+      const base = Math.floor(anchor / 12) * 12;
+      for (let midi = anchor; midi <= high; midi += 1) {
+        if (midi % 12 === pitchClass && midi - base <= COMPUTER_KEYBOARD_SPAN) return true;
+      }
+      return false;
+    };
+    for (const s of KEY_SIGNATURES.steps) {
+      const anchor = s.anchorMidi ?? 60;
+      if (s.kind === 'drill' && s.drill.kind === 'keyTonic') {
+        for (const fifths of s.drill.signatures) {
+          expect(reachable(anchor, majorTonicPitchClass(fifths)), `${s.id}: ${fifths}`).toBe(true);
+        }
+      }
+      if (s.kind === 'exercise' && s.spec.kind === 'sequence') {
+        for (const pitchClass of s.spec.pitchClasses) {
+          expect(reachable(anchor, pitchClass), `${s.id}: ${pitchClass}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it('walks the circle clockwise from C, a fifth at a time, and lights the keys it walks', () => {
+    const s = step('walkTheCircle');
+    if (s?.kind !== 'exercise' || s.spec.kind !== 'sequence') throw new Error('expected a walk');
+    const { pitchClasses, direction } = s.spec;
+    const walked = CIRCLE_SLOTS.slice(0, 6);
+    expect(pitchClasses).toEqual(walked.map(majorTonicPitchClass));
+    pitchClasses.forEach((pitchClass, i) => {
+      if (i > 0) expect(pitchClass).toBe(((pitchClasses[i - 1] as number) + 7) % 12);
+    });
+    // Any octave, either way: the walk is in the order, not the register.
+    expect(direction).toBeUndefined();
+    expect(s.visual).toMatchObject({ kind: 'circle', highlight: walked });
+  });
+
+  it('marks only keys the circle draws', () => {
+    for (const s of KEY_SIGNATURES.steps) {
+      if (s.visual?.kind !== 'circle') continue;
+      for (const fifths of [
+        ...(s.visual.highlight ?? []),
+        ...(s.visual.highlightSecondary ?? []),
+      ]) {
+        expect(
+          CIRCLE_SLOTS.some((slot) => slotHolds(slot, fifths)),
+          `${s.id}: ${fifths}`,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('hands off to the Minuet in G, whose right hand reads its one sharp in two octaves', () => {
+    expect(KEY_SIGNATURES.handoff).toEqual({
+      trackId: 'score-bach-minuet-in-g-major-bwv-anh-114',
+      mode: 'training-right',
+    });
+    expect(handoffTitle('score-bach-minuet-in-g-major-bwv-anh-114')).toBe(
+      'Minuet in G major, BWV Anh. 114',
+    );
+    const take = handoffTake('score-bach-minuet-in-g-major-bwv-anh-114');
+    expect(take?.tempo.keySignature).toBe(1);
+    const notes = take?.notes ?? [];
+    const rightFs = notes.filter((note) => noteHand(note) === 'right' && note.midi % 12 === 6);
+    expect(new Set(rightFs.map((note) => note.midi))).toEqual(new Set([66, 78]));
+    // Never an F natural: every F in it is the signature's.
+    expect(notes.some((note) => note.midi % 12 === 5)).toBe(false);
   });
 });

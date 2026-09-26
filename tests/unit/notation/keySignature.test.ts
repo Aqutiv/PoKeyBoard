@@ -3,7 +3,9 @@ import type { NoteEvent } from '@/domain/takeTypes';
 import { detectFifths } from '@/features/notation/keyDetection';
 import {
   keyAlterations,
+  letterPitchClass,
   majorTonicName,
+  majorTonicPitchClass,
   normalizeFifths,
   signatureAccidental,
   signatureSteps,
@@ -43,6 +45,25 @@ describe('key signatures', () => {
     expect(majorTonicName(0)).toBe('C');
     expect(majorTonicName(-3)).toBe('E♭');
     expect(majorTonicName(2)).toBe('D');
+  });
+
+  it('finds the home note a fifth further round for every sharp, and back for every flat', () => {
+    // C G D A E B F♯ C♯, and C F B♭ E♭ A♭ D♭ G♭ C♭ — seven half steps a step.
+    expect([0, 1, 2, 3, 4, 5, 6, 7].map(majorTonicPitchClass)).toEqual([0, 7, 2, 9, 4, 11, 6, 1]);
+    expect([0, -1, -2, -3, -4, -5, -6, -7].map(majorTonicPitchClass)).toEqual([
+      0, 5, 10, 3, 8, 1, 6, 11,
+    ]);
+  });
+
+  it('agrees with the key it names, for every signature', () => {
+    const LETTERS = 'CDEFGAB';
+    for (let fifths = -7; fifths <= 7; fifths += 1) {
+      const name = majorTonicName(fifths);
+      const letter = LETTERS.indexOf(name.charAt(0));
+      const alter = name.endsWith('♯') ? 1 : name.endsWith('♭') ? -1 : 0;
+      const pitchClass = (letterPitchClass(letter) + alter + 12) % 12;
+      expect(majorTonicPitchClass(fifths), name).toBe(pitchClass);
+    }
   });
 });
 

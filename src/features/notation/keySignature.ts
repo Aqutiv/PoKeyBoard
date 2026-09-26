@@ -131,6 +131,15 @@ export function letterPitchClass(letter: number): number {
   return LETTER_PITCH_CLASS[letter] as number;
 }
 
+/**
+ * The pitch class a signature's major key is built on: each sharp moves home a
+ * fifth up — seven half steps — and each flat a fifth down. Two sharps is D,
+ * one flat is F.
+ */
+export function majorTonicPitchClass(fifths: number): number {
+  return (((normalizeFifths(fifths) * 7) % 12) + 12) % 12;
+}
+
 /** Every key, from seven flats to seven sharps — the order a chooser offers them. */
 export const ALL_FIFTHS: readonly number[] = [-7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4, 5, 6, 7];
 
