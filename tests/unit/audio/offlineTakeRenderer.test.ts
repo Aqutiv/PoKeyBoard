@@ -15,6 +15,7 @@ const { createPianoGraph, rendered } = vi.hoisted(() => ({
 vi.mock('@/audio/PianoGraphFactory', () => ({ createPianoGraph }));
 vi.mock('@/audio/AudioEngine', () => ({
   audioEngine: {
+    whenSwitchSettled: vi.fn(async () => undefined),
     ensurePlayableRange: vi.fn(async () => undefined),
     bank: {
       getSample: vi.fn(() => ({ buffer: { duration: 4 }, playbackRate: 1, gain: 1 })),

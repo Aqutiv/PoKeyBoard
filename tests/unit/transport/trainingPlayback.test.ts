@@ -18,7 +18,12 @@ const h = vi.hoisted(() => ({
   inputs: new Set<(event: InputNoteEvent) => void>(),
   phase: 'core-ready' as SampleLoadPhase,
   coreReady: true,
+  /** Holds a change of piano open until the test settles it. */
   switchPromise: null as Promise<void> | null,
+  /** The next change of piano cannot load the new one. */
+  switchFails: false,
+  switching: false,
+  sounding: 'salamander-grand',
 }));
 
 vi.mock('@/audio/AudioEngine', () => ({
@@ -29,7 +34,23 @@ vi.mock('@/audio/AudioEngine', () => ({
     unlockFromUserGesture: vi.fn(async () => {}),
     getLoadProgress: vi.fn(() => ({ phase: h.phase })),
     bank: { isCoreReady: () => h.coreReady },
-    setInstrument: vi.fn(() => h.switchPromise ?? Promise.resolve()),
+    isSwitching: () => h.switching,
+    get soundingInstrument() {
+      return { id: h.sounding };
+    },
+    // Like the engine: the piano playing plays on until the switch settles, and
+    // only then does the chosen one take over — unless it could not be loaded.
+    // Every caller gets the one promise, as the engine's callers do.
+    setInstrument: vi.fn((id: string) => {
+      const pending = h.switchPromise ?? Promise.resolve();
+      h.switching = true;
+      const settle = () => {
+        h.switching = false;
+        if (!h.switchFails) h.sounding = id;
+      };
+      void pending.then(settle, settle);
+      return pending;
+    }),
     scheduleNote: vi.fn((event: { midi: number }) => h.scheduled.push(event.midi)),
     subscribeSchedulerTick: vi.fn(() => () => {}),
     subscribeInput: vi.fn((listener: (event: InputNoteEvent) => void) => {
@@ -100,6 +121,9 @@ describe('training playback', () => {
     h.phase = 'core-ready';
     h.coreReady = true;
     h.switchPromise = null;
+    h.switchFails = false;
+    h.switching = false;
+    h.sounding = 'salamander-grand';
     useSettingsStore.setState({ pianoInstrument: 'salamander-grand' });
     useTakeStore.getState().setTake(createEmptyTake({ notes: NOTES, durationMs: 900 }));
     useSettingsStore.getState().setPlaybackMode('training-right');
@@ -112,7 +136,7 @@ describe('training playback', () => {
     vi.useRealTimers();
   });
 
-  it('pauses and rejects playback, recording, and another selection until the piano is decoded', async () => {
+  it('plays on through a change of piano, holding only recording until the new one is ready', async () => {
     useSettingsStore.getState().setPlaybackMode('simple');
     transportController.play();
     runTo(100);
@@ -120,24 +144,49 @@ describe('training playback', () => {
     h.switchPromise = new Promise<void>((resolve) => {
       finish = resolve;
     });
+    vi.mocked(audioEngine.allNotesOff).mockClear();
     const switching = transportController.selectPiano('headroom-grand');
-    expect(transportController.getState()).toBe('paused');
+    expect(transportController.getState()).toBe('playing');
+    expect(transportController.isPianoSwitching()).toBe(true);
+    expect(audioEngine.allNotesOff).not.toHaveBeenCalled();
+    // The take's keys go with the request, so every note it plays sounds on the
+    // new piano from the moment that piano takes over.
+    expect(audioEngine.setInstrument).toHaveBeenCalledWith('headroom-grand', {
+      cover: { low: 48, high: 67 },
+    });
     const position = transportController.getPlayheadMs();
-    transportController.play();
+    const heard = h.scheduled.length;
+    runTo(position + 500);
+    expect(transportController.getPlayheadMs()).toBeGreaterThan(position);
+    expect(h.scheduled.length).toBeGreaterThan(heard);
+
+    // A pass is played on one piano from its first note, so it waits.
+    transportController.pause();
     await transportController.record();
-    expect(await transportController.selectPiano('wurlitzer-ep203w')).toBe(false);
     expect(transportController.getState()).toBe('paused');
-    expect(transportController.getPlayheadMs()).toBe(position);
-    finish();
-    expect(await switching).toBe(true);
     transportController.play();
     expect(transportController.getState()).toBe('playing');
-    // Playback schedules its first sound 60 ms ahead of the audio clock.
-    h.now += 0.06;
-    expect(transportController.getPlayheadMs()).toBeCloseTo(position);
+
+    finish();
+    expect(await switching).toBe(true);
+    expect(transportController.isPianoSwitching()).toBe(false);
+    transportController.stop();
+    await transportController.record();
+    expect(transportController.getState()).toBe('countIn');
   });
 
-  it('disarms a training hold when changing piano so a keypress cannot resume during loading', async () => {
+  it('takes another choice while a piano is still loading', async () => {
+    useSettingsStore.getState().setPlaybackMode('simple');
+    transportController.play();
+    h.switchPromise = new Promise<void>(() => {});
+    void transportController.selectPiano('headroom-grand');
+    h.switchPromise = null;
+    expect(await transportController.selectPiano('wurlitzer-ep203w')).toBe(true);
+    expect(audioEngine.setInstrument).toHaveBeenLastCalledWith('wurlitzer-ep203w');
+    expect(transportController.getState()).toBe('playing');
+  });
+
+  it('keeps a training hold through a change of piano', async () => {
     transportController.play();
     runTo(350);
     expect(transportController.isWaitingForTraining()).toBe(true);
@@ -146,15 +195,26 @@ describe('training playback', () => {
       finish = resolve;
     });
     const switching = transportController.selectPiano('headroom-grand');
-    expect(transportController.isWaitingForTraining()).toBe(false);
+    // Still asking for the same keys, and they still let the music through.
+    expect(transportController.isWaitingForTraining()).toBe(true);
     press(64);
     press(67);
-    expect(transportController.getState()).toBe('paused');
+    expect(transportController.getState()).toBe('playing');
     finish();
-    await switching;
+    expect(await switching).toBe(true);
   });
 
-  it('keeps playback blocked after failed decoding and permits it after retry succeeds', async () => {
+  it('plays on with the piano it had when the new one cannot be loaded', async () => {
+    useSettingsStore.getState().setPlaybackMode('simple');
+    transportController.play();
+    runTo(100);
+    h.switchFails = true;
+    expect(await transportController.selectPiano('headroom-grand')).toBe(false);
+    expect(transportController.getState()).toBe('playing');
+    expect(transportController.isPianoReady()).toBe(true);
+  });
+
+  it('keeps playback blocked while no piano can play, and permits it once one can', async () => {
     h.phase = 'error';
     h.coreReady = false;
     expect(await transportController.selectPiano('headroom-grand')).toBe(false);

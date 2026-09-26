@@ -598,6 +598,10 @@ button {
 .play-piano-controls {
   display: none;
 }
+/* A piano that could not be loaded, beside either picker (Settings loads lazily). */
+.piano-switch-status--failed {
+  color: var(--record);
+}
 .take-title {
   min-width: 0;
   flex: 1;

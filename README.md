@@ -76,7 +76,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 ## Daily listening and practice
 
 - On desktop, **Play** includes piano selection and **Piano volume** beside the metronome. **Click volume** controls the metronome independently.
-- Changing piano pauses playback and waits for the selected instrument to load before Play, Resume, or Record become available. Resume when ready; the playback position is preserved.
+- Changing piano never stops the music: the piano playing carries on while the new one loads, and the new one takes over from the next note, mid-phrase. Notes already ringing finish on the piano they began on. Record waits the moment it takes for the new piano to be ready; if it cannot be loaded, the previous piano stays chosen and says so.
 - During playback the keyboard lights every note the take plays, each hand in its own shade, and slides to wherever the music is — a glow at the edge marks notes still off the keys. Turn the sliding off in Settings → **Playing** (**Keyboard follows playback**); it also waits a few seconds after you move the keyboard yourself, and never moves under a key you are holding.
 - Zoom the score with **−** and **+** above it, by pinching it with two fingers on a touch screen or a trackpad (Safari's included), or with Ctrl/⌘ + scroll; the zoom is kept with the take. A pinch never moves the playhead, even if the first finger had begun to scrub. Fast passages are spread out so their noteheads never touch.
 - Choose **Listen**, **Practice left**, **Practice right**, or **Practice both** next to the transport. Practice waits for you to play the highlighted notes. **Recording** holds Overdub/Replace; compact screens keep the combined **Modes** menu.

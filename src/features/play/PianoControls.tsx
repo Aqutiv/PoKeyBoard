@@ -1,7 +1,9 @@
 import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
-import { usePianoSwitching, useTransportState } from '@/app/hooks/useTransport';
+import { usePianoSwitchState } from '@/app/hooks/useAudioEngine';
+import { useTransportState } from '@/app/hooks/useTransport';
+import { PianoSwitchStatus } from '@/features/settings/PianoSwitchStatus';
 import { transportController } from '@/features/transport/transportController';
 
 /** Desktop shortcuts to the same controls available in Settings. */
@@ -9,7 +11,7 @@ export function PianoControls() {
   const m = useMessages();
   const piano = useSettingsStore((s) => s.pianoInstrument);
   const volume = useSettingsStore((s) => s.masterVolume);
-  const switching = usePianoSwitching();
+  const switchState = usePianoSwitchState();
   const state = useTransportState();
   const setVolume = useSettingsStore((s) => s.setMasterVolume);
   return (
@@ -18,7 +20,8 @@ export function PianoControls() {
         <span>{m.settings.piano}</span>
         <select
           value={piano}
-          disabled={switching || (state !== 'idle' && state !== 'paused' && state !== 'playing')}
+          // Open while a new piano loads: the one playing plays on meanwhile.
+          disabled={state !== 'idle' && state !== 'paused' && state !== 'playing'}
           onChange={(e) =>
             void transportController.selectPiano(e.target.value as PianoInstrumentId)
           }
@@ -30,7 +33,7 @@ export function PianoControls() {
           ))}
         </select>
       </label>
-      {switching ? <span role="status">{m.settings.pianoSwitching}</span> : null}
+      <PianoSwitchStatus state={switchState} />
       <label>
         <span>{m.settings.pianoVolume}</span>
         <input

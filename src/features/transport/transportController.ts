@@ -1,4 +1,4 @@
-import { audioEngine, type InputNoteEvent } from '@/audio/AudioEngine';
+import { audioEngine, type InputNoteEvent, type KeySpan } from '@/audio/AudioEngine';
 import type { PianoInstrumentId } from '@/audio/instruments';
 import {
   constantClickGrid,
@@ -75,7 +75,6 @@ export class TransportController {
   private state: TransportState = 'idle';
   private readonly stateListeners = new Set<() => void>();
   private errorMessage: string | null = null;
-  private pianoSwitching = false;
 
   private metronomeOn = false;
   private pausedPlayheadMs = 0;
@@ -132,38 +131,60 @@ export class TransportController {
     return this.errorMessage;
   }
 
+  /** A new piano is decoding while the previous one plays on. */
   isPianoSwitching(): boolean {
-    return this.pianoSwitching;
+    return audioEngine.isSwitching();
   }
 
+  /** The piano playing can play: all that playback, and a resume, need. */
+  isPianoPlayable(): boolean {
+    return audioEngine.bank.isCoreReady();
+  }
+
+  /**
+   * The piano chosen is the one playing, and ready. Recording waits for it, so
+   * a pass is played on one piano from its first note.
+   */
   isPianoReady(): boolean {
-    return !this.pianoSwitching && audioEngine.bank.isCoreReady();
+    return !audioEngine.isSwitching() && audioEngine.bank.isCoreReady();
   }
 
-  /** Pause before replacing the sample bank; transport stays locked until decoding finishes. */
+  /**
+   * Change piano without stopping: the one playing plays on while the new one
+   * decodes, and the new one takes over from the next note (see
+   * `AudioEngine.setInstrument`). Resolves true once the chosen piano is the
+   * one playing — false if another choice overtook it, or it failed to load.
+   */
   async selectPiano(id: PianoInstrumentId): Promise<boolean> {
     if (
-      this.pianoSwitching ||
       id === useSettingsStore.getState().pianoInstrument ||
       (this.state !== 'idle' && this.state !== 'paused' && this.state !== 'playing')
     )
       return false;
-    this.pause();
-    this.clearTrainingGate();
-    this.pianoSwitching = true;
-    for (const listener of this.stateListeners) listener();
+    // Before the store changes, whose subscribers ask for the same switch
+    // without knowing what the take needs: every note it plays must sound on
+    // the new piano from the moment it takes over.
+    const switching = audioEngine.setInstrument(id, { cover: this.takeKeySpan() });
+    useSettingsStore.getState().setPianoInstrument(id);
     try {
-      useSettingsStore.getState().setPianoInstrument(id);
-      await audioEngine.setInstrument(id);
-      return audioEngine.bank.isCoreReady();
+      await switching;
     } catch {
       // Optional range samples can fail after the core has decoded. Progress
       // still exposes the error, but the usable core must remain available.
-      return audioEngine.bank.isCoreReady();
-    } finally {
-      this.pianoSwitching = false;
-      for (const listener of this.stateListeners) listener();
     }
+    return audioEngine.soundingInstrument.id === id && audioEngine.bank.isCoreReady();
+  }
+
+  /** The keys the loaded take's played notes span, or null for a take with none. */
+  private takeKeySpan(): KeySpan | null {
+    let low = Infinity;
+    let high = -Infinity;
+    for (const note of useTakeStore.getState().take.notes) {
+      if (isSilentNote(note)) continue;
+      low = Math.min(low, note.midi);
+      high = Math.max(high, note.midi);
+    }
+    return low <= high ? { low, high } : null;
   }
 
   subscribeState(listener: () => void): () => void {
@@ -539,7 +560,7 @@ export class TransportController {
   // -------------------------------------------------------- playback --
 
   play(): void {
-    if (!this.isPianoReady()) return;
+    if (!this.isPianoPlayable()) return;
     // Pressing Play at a training wait point lets that note through rather
     // than fighting the hold: the take sounds it, since the user did not.
     if (this.trainingWaiting && this.trainingGate) {
@@ -554,7 +575,9 @@ export class TransportController {
   private startPlayback(
     resume: { skipNoteIds: ReadonlySet<string> | null; gateFromMs: number } | null,
   ): void {
-    if (!this.isPianoReady() || !canTransition(this.state, 'PLAY')) return;
+    // Not `isPianoReady`: a loop edit, or a resume from a training hold, runs
+    // through here mid-playback and must carry on through a change of piano.
+    if (!this.isPianoPlayable() || !canTransition(this.state, 'PLAY')) return;
     void audioEngine.unlockFromUserGesture();
 
     const take = useTakeStore.getState().take;

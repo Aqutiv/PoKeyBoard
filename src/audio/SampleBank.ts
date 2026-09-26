@@ -172,7 +172,12 @@ export class SampleBank {
    * keyboard range becomes playable as early as possible.
    */
   async loadCorePack(context: BaseAudioContext): Promise<void> {
+    // A release calls a load off, from wherever it has got to — even its
+    // manifest — and a load called off like that is no failure: it reports
+    // nothing, and leaves nothing decoded behind it.
+    const generation = this.generation;
     const manifest = await this.loadManifest();
+    if (generation !== this.generation) return;
     this.lastError = undefined;
     this.setPhase('loading-core');
     const core = manifest.files
@@ -183,11 +188,13 @@ export class SampleBank {
           Math.abs(a.layer - 1) - Math.abs(b.layer - 1),
       );
     try {
-      await this.loadEntries(context, core);
+      await this.loadEntries(context, core, generation);
+      if (generation !== this.generation) return;
       if (!this.isCoreReady()) throw new Error('Core sample pack is incomplete.');
       this.lastError = undefined;
       this.setPhase('core-ready');
     } catch (error) {
+      if (generation !== this.generation) return;
       this.fail(
         error instanceof Error ? error.message : 'The core piano samples could not be loaded.',
       );
@@ -205,7 +212,9 @@ export class SampleBank {
     lowMidi: number,
     highMidi: number,
   ): Promise<void> {
+    const generation = this.generation;
     const manifest = await this.loadManifest();
+    if (generation !== this.generation) return;
     const mappedFiles = manifest.regions
       ? new Set(
           manifest.regions
@@ -224,12 +233,14 @@ export class SampleBank {
     if (needed.length === 0) return;
     if (this.phase === 'core-ready') this.setPhase('loading-extra');
     try {
-      await this.loadEntries(context, needed);
+      await this.loadEntries(context, needed, generation);
+      if (generation !== this.generation) return;
       if (this.isCoreReady()) {
         this.lastError = undefined;
         this.setPhase('core-ready');
       }
     } catch (error) {
+      if (generation !== this.generation) return;
       this.fail(error instanceof Error ? error.message : 'Piano samples could not be loaded.');
       throw error;
     }
@@ -243,6 +254,9 @@ export class SampleBank {
    */
   releaseBuffers(): void {
     this.generation += 1;
+    // The decodes still under way will drop what they bring, so a load after
+    // this one must not wait on them: it would wait for nothing.
+    this.inFlight.clear();
     this.buffers.clear();
     this.onsets.clear();
     for (const layer of this.layers.values()) layer.loadedRoots.length = 0;
@@ -395,14 +409,19 @@ export class SampleBank {
     return () => this.listeners.delete(listener);
   }
 
+  /** Load `entries`, stopping at the next file once `generation` is released. */
   private async loadEntries(
     context: BaseAudioContext,
     entries: SamplePackFileEntry[],
+    generation: number,
   ): Promise<void> {
     const queue = [...entries];
     const failures: unknown[] = [];
     const workers = Array.from({ length: FETCH_CONCURRENCY }, async () => {
       for (;;) {
+        // Files still queued would start after the release, and keep what they
+        // decode; a release has to stop them too, not only those under way.
+        if (generation !== this.generation) return;
         const entry = queue.shift();
         if (!entry) return;
         try {
@@ -425,13 +444,20 @@ export class SampleBank {
     if (this.buffers.has(entry.file)) return Promise.resolve();
     const existing = this.inFlight.get(entry.file);
     if (existing) return existing;
-    const task = this.fetchAndDecode(context, entry)
+    const generation = this.generation;
+    const task: Promise<void> = this.fetchAndDecode(context, entry)
       .catch((error: unknown) => {
-        this.lastError = `Could not load piano sample ${entry.file}.`;
-        console.error('Sample load failed:', entry.file, error);
+        // A load released mid-flight has no one left to tell.
+        if (generation === this.generation) {
+          this.lastError = `Could not load piano sample ${entry.file}.`;
+          console.error('Sample load failed:', entry.file, error);
+        }
         throw error;
       })
-      .finally(() => this.inFlight.delete(entry.file));
+      .finally(() => {
+        // Only its own entry: after a release, a newer load may hold the key.
+        if (this.inFlight.get(entry.file) === task) this.inFlight.delete(entry.file);
+      });
     this.inFlight.set(entry.file, task);
     return task;
   }

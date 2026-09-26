@@ -24,6 +24,7 @@ vi.mock('@/audio/AudioEngine', () => ({
     unlockFromUserGesture: vi.fn(async () => {}),
     getLoadProgress: vi.fn(() => ({ phase: 'core-ready' })),
     bank: { isCoreReady: () => true },
+    isSwitching: () => false,
     setInstrument: vi.fn(() => Promise.resolve()),
     scheduleNote: vi.fn(
       (event: { midi: number; velocity: number; durationMs: number }, when: number) =>

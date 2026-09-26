@@ -267,6 +267,9 @@ export async function renderTakeForExport(
     );
   }
 
+  // A piano chosen a moment ago may still be decoding while the previous one
+  // plays on; the take is stamped with the new one, and renders on it.
+  await audioEngine.whenSwitchSettled();
   const effectiveNotes = notesToRender(take);
   // Make sure every root the played notes need is decoded (range shifts etc.).
   // A note written but not played needs none, so it cannot widen the range.
