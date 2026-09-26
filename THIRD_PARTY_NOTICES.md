@@ -61,7 +61,8 @@ Attribution is also shown in the app's About view.
 - **Modifications:** subset of the original 16 velocity layers (layers 7, 10
   and 14) across the 30 minor-third root pitches; the hammer-release,
   release-resonance and pedal samples are not used; each recording trimmed to
-  7–12 seconds with a 1.5-second fade-out; a gain applied to each layer
+  7–12 seconds (kept whole where it is shorter) and ended with a 1.5-second
+  fade-out; a gain applied to each layer
   (+7.11, +5.80 and +0.33 dB) that brings it toward the Salamander pack's
   loudness without letting any sample exceed −1 dBFS; reduced from 24 to 16
   bits with triangular dither and encoded as FLAC, keeping the source's 48 kHz

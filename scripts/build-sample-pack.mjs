@@ -31,6 +31,7 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { bitKlavierFetcher, PINS_PATH, pinBitKlavier } from './lib/bitklavier.mjs';
+import { END_WINDOW_S, endsFaded, FADE_S, fadeOut } from './lib/sampleFade.mjs';
 import { buildWurlitzer } from './lib/wurlitzer.mjs';
 
 const STAGING_ROOT = 'samples-staging';
@@ -57,6 +58,12 @@ function safeName(sourceName) {
  * `measureSourceGains`. A pack with its own `fetcher` (and `pin`) fetches its
  * sources that way instead of from `rawBase`.
  *
+ * `fadeFromTrim` marks the two packs published before the fade-out learned a
+ * short recording's length (scripts/lib/sampleFade.mjs): theirs starts 1.5 s
+ * before the trim even where the recording ends sooner, so it starts past the
+ * end or is cut off partway. Kept so this script still reproduces the files
+ * they published, byte for byte; a new generation of either drops it.
+ *
  * Only the *current* packs live here. Published packs are immutable (see
  * src/audio/instruments.ts), so a superseded version is never rebuilt — check
  * out the script at its tag if you ever need to reproduce one.
@@ -76,6 +83,7 @@ const INSTRUMENTS = {
       { index: 2, sourceLayer: 15, label: 'loud' },
     ],
     sourceName: (midi, layer) => `${midiToNoteName(midi)}v${layer.sourceLayer}`,
+    fadeFromTrim: true,
     source: 'Salamander Grand Piano v3 by Alexander Holm',
     license: 'CC-BY 3.0',
     sourceUrl: 'https://github.com/sfzinstruments/SalamanderGrandPiano',
@@ -94,6 +102,7 @@ const INSTRUMENTS = {
     // The close mic stays dry, so the app's reverb slider keeps full control;
     // the alternative Decca Tree position bakes the room into the samples.
     sourceName: (midi, layer) => `HEADROOM PIANO LEVEL${layer.sourceLayer} CLOSE ${midi}`,
+    fadeFromTrim: true,
     source: 'Headroom Piano (Yamaha C3) by Bengt Nilsson, sfz mapping by kinwie',
     license: 'CC-BY 4.0',
     sourceUrl: 'https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano',
@@ -227,14 +236,60 @@ function runFfmpeg(args) {
   });
 }
 
+/**
+ * A file decoded to float at `sampleRate`, in stereo: its samples, one array
+ * per channel, and how many seconds it really holds. Decoded rather than read
+ * from a header, which for a range-fetched WAV names the whole upstream file,
+ * not the bytes that were fetched.
+ */
+function decodeStereo(filePath, sampleRate) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'ffmpeg',
+      ['-v', 'error', '-i', filePath, '-ac', '2', '-ar', String(sampleRate), '-f', 'f32le', '-'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const chunks = [];
+    let errors = '';
+    child.stdout.on('data', (chunk) => chunks.push(chunk));
+    child.stderr.on('data', (chunk) => {
+      errors += String(chunk);
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`ffmpeg exited ${code} on ${filePath}: ${errors.slice(-600)}`));
+        return;
+      }
+      const bytes = Buffer.concat(chunks);
+      const frames = Math.floor(bytes.length / 8);
+      const channels = [new Float32Array(frames), new Float32Array(frames)];
+      for (let frame = 0; frame < frames; frame += 1) {
+        channels[0][frame] = bytes.readFloatLE(frame * 8);
+        channels[1][frame] = bytes.readFloatLE(frame * 8 + 4);
+      }
+      resolve({ channels, seconds: frames / sampleRate });
+    });
+  });
+}
+
+/** Seconds as ffmpeg reads them, to the microsecond, without float noise ("5.5", "1.992"). */
+function secondsArg(seconds) {
+  return String(Number(seconds.toFixed(6)));
+}
+
 async function convert(job) {
   if ((await fileSize(job.output)) > 0) return { skipped: true };
   const trim = trimSecondsFor(job.midi);
-  const fadeStart = trim - 1.5;
+  // The fade runs over the last FADE_S of what the sample keeps: the trim, or
+  // the whole recording where that is shorter.
+  const { startS, lengthS } = job.fadeFromTrim
+    ? { startS: trim - FADE_S, lengthS: FADE_S }
+    : fadeOut(trim, (await decodeStereo(job.staged, job.sampleRate)).seconds);
   // The gain runs in float with the fade, so both land ahead of the one
   // quantisation to 16 bits below, and its dither is added at the level the
   // pack plays from.
-  const filters = [`afade=t=out:st=${fadeStart}:d=1.5`];
+  const filters = [`afade=t=out:st=${secondsArg(startS)}:d=${secondsArg(lengthS)}`];
   if (job.layer.gainDb !== undefined) {
     filters.unshift(`volume=${job.layer.gainDb}dB:precision=float`);
   }
@@ -282,6 +337,19 @@ async function convert(job) {
   ]);
   if ((await fileSize(temporary)) === 0) {
     throw new Error(`ffmpeg produced an empty temporary file for ${job.name}`);
+  }
+  // A sample that stops short of silence clicks as it ends, and an undamped
+  // key plays its sample to the very end, so nothing is published that does.
+  // The packs that predate this fade are left to reproduce what they shipped.
+  if (!job.fadeFromTrim) {
+    const written = await decodeStereo(temporary, job.sampleRate);
+    const { faded, last, ceiling } = endsFaded(written.channels, job.sampleRate, lengthS);
+    if (!faded) {
+      throw new Error(
+        `${job.file} does not end faded: its last ${END_WINDOW_S * 1000} ms peak at ` +
+          `${toDb(last).toFixed(1)} dBFS, over the ${toDb(ceiling).toFixed(1)} dBFS its fade allows`,
+      );
+    }
   }
   await rename(temporary, job.output);
   return {};
@@ -490,6 +558,7 @@ async function main(packVersion, { pin = false } = {}) {
         sourceName,
         rawBase: instrument.rawBase,
         sampleRate: instrument.sampleRate,
+        fadeFromTrim: instrument.fadeFromTrim === true,
         stagingDir,
         midi,
         layer,
