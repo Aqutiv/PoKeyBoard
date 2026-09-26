@@ -21,6 +21,24 @@ describe('take mutation generations', () => {
     expect(useTakeStore.getState().savedGeneration).toBe(current.mutationGeneration);
   });
 
+  it('counts a new room as audible, and naming the room a take already had as not', () => {
+    const beforeRooms = { id: 'grand-piano', masterVolume: 0.85, reverbMix: 0.18 };
+    useTakeStore.getState().setTake(createEmptyTake({ instrument: beforeRooms }));
+    const start = useTakeStore.getState().contentRevision;
+
+    useTakeStore.getState().setInstrumentSettings({ ...beforeRooms, reverbRoom: 'room' });
+    expect(useTakeStore.getState().contentRevision).toBe(start);
+    expect(useTakeStore.getState().dirty).toBe(true);
+
+    useTakeStore.getState().setInstrumentSettings({ ...beforeRooms, reverbRoom: 'cathedral' });
+    expect(useTakeStore.getState().contentRevision).toBe(start + 1);
+
+    // The volume is saved with the take but never exported.
+    const { instrument } = useTakeStore.getState().take;
+    useTakeStore.getState().setInstrumentSettings({ ...instrument, masterVolume: 0.3 });
+    expect(useTakeStore.getState().contentRevision).toBe(start + 1);
+  });
+
   it('undoes the last pass notes and pedals and clamps its playhead', () => {
     const pedal = { atMs: 50, down: true };
     useTakeStore.getState().beginRecordingPass();

@@ -16,7 +16,7 @@ import { extractMusicXmlText, isScoreFileName } from '@/domain/mxlContainer';
 import { musicXmlToTake } from '@/domain/musicXmlImport';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
-import { CURRENT_SCHEMA_VERSION, type Take } from '@/domain/takeTypes';
+import { CURRENT_SCHEMA_VERSION, reverbRoomOf, type Take } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
 import { scrubController } from '@/features/notation/scrubController';
 import { pinLanguage } from '@/i18n/languagePreference';
@@ -64,6 +64,7 @@ function emptyTakeWithDefaults(): Take {
       id: useTakeStore.getState().take.instrument.id,
       masterVolume: settings.masterVolume,
       reverbMix: settings.reverbMix,
+      reverbRoom: settings.reverbRoom,
     },
   });
 }
@@ -86,14 +87,15 @@ async function settleForDestructiveEdit(): Promise<void> {
 
 async function activatePrepared(take: Take): Promise<void> {
   useTakeStore.getState().setTake(take);
-  // A take carries the levels it was heard at, and opening it restores them.
-  // That goes through the settings store rather than straight to the engine so
-  // the store stays a faithful mirror of what is playing — the persistence
-  // subscription drives the engine off it, and a store that disagreed would
-  // make the next slider move act on a stale value.
+  // A take carries the levels and the room it was heard at, and opening it
+  // restores them. That goes through the settings store rather than straight
+  // to the engine so the store stays a faithful mirror of what is playing — the
+  // persistence subscription drives the engine off it, and a store that
+  // disagreed would make the next slider move act on a stale value.
   useSettingsStore.setState({
     masterVolume: take.instrument.masterVolume,
     reverbMix: take.instrument.reverbMix,
+    reverbRoom: reverbRoomOf(take.instrument),
   });
   transportController.restorePlayhead(take.display.playheadMs);
   await setMetadata(META_LAST_OPEN_TAKE, take.id);

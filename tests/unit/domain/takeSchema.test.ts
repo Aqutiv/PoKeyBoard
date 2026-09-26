@@ -6,6 +6,7 @@ import {
   parseTakeJsonString,
   repairRawTake,
 } from '@/domain/takeSchema';
+import { reverbRoomOf } from '@/domain/takeTypes';
 import { ImportValidationError } from '@/utils/errors';
 
 function specExampleTake(): Record<string, unknown> {
@@ -144,6 +145,32 @@ describe('parseTakeJson', () => {
     dorian.tempo = { ...(dorian.tempo as object), keySignature: 0, keyMode: 'dorian' };
     expect(() => parseTakeJson(dorian)).toThrow(ImportValidationError);
   });
+
+  it('keeps the room a take was heard in, and reads a take without one as Room', () => {
+    const raw = specExampleTake();
+    raw.instrument = { ...(raw.instrument as object), reverbRoom: 'cathedral' };
+    const { take, repairs } = parseTakeJson(raw);
+    expect(repairs).toEqual([]);
+    expect(take.instrument.reverbRoom).toBe('cathedral');
+
+    // Takes from before rooms parse untouched, and play in the one they had.
+    const older = parseTakeJson(specExampleTake());
+    expect(older.repairs).toEqual([]);
+    expect(older.take.instrument).not.toHaveProperty('reverbRoom');
+    expect(reverbRoomOf(older.take.instrument)).toBe('room');
+  });
+
+  it.each([['bathroom'], [42], [null], ['']])(
+    'drops a room it does not know (%j) with a notice, keeping the take',
+    (value) => {
+      const raw = specExampleTake();
+      raw.instrument = { ...(raw.instrument as object), reverbRoom: value };
+      const { take, repairs } = parseTakeJson(raw);
+      expect(take.instrument).not.toHaveProperty('reverbRoom');
+      expect(take.instrument.reverbMix).toBe(0.18);
+      expect(repairs).toEqual([{ code: 'reverbRoomDropped' }]);
+    },
+  );
 
   it('rejects an unknown staff name', () => {
     const raw = specExampleTake();

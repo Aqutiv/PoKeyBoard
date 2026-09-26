@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
+import { REVERB_ROOMS } from '@/domain/takeTypes';
 import {
   MIDI_VELOCITY_CURVES,
   MIN_MIDI_RANGE_SPAN,
@@ -23,6 +24,7 @@ const SETTING_SCHEMAS = {
   pianoInstrument: z.enum(PIANO_INSTRUMENT_IDS),
   masterVolume: z.number().min(0).max(1),
   reverbMix: z.number().min(0).max(1),
+  reverbRoom: z.enum(REVERB_ROOMS),
   velocityMode: z.enum(['touch', 'fixed']),
   fixedVelocity: z.number().min(0.2).max(1),
   touchSensitivity: z.enum(TOUCH_SENSITIVITIES),

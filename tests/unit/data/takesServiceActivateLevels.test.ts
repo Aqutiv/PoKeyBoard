@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DEFAULT_PIANO_INSTRUMENT_ID, pianoInstrument } from '@/audio/instruments';
 import { createEmptyTake } from '@/domain/noteEvents';
-import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX } from '@/domain/takeTypes';
+import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX, DEFAULT_REVERB_ROOM } from '@/domain/takeTypes';
 
 afterEach(() => {
   vi.doUnmock('@/data/persistence');
@@ -59,12 +59,13 @@ async function loadService(flush: () => Promise<void> = async () => undefined) {
     scrubController: { isActive: false, end: vi.fn() },
   }));
 
-  const [{ activateTake }, { useSettingsStore }, { useTakeStore }] = await Promise.all([
-    import('@/features/takes/takesService'),
-    import('@/state/useSettingsStore'),
-    import('@/state/useTakeStore'),
-  ]);
-  return { activateTake, useSettingsStore, useTakeStore, setMetadata };
+  const [{ activateTake, createNewTake }, { useSettingsStore }, { useTakeStore }] =
+    await Promise.all([
+      import('@/features/takes/takesService'),
+      import('@/state/useSettingsStore'),
+      import('@/state/useTakeStore'),
+    ]);
+  return { activateTake, createNewTake, useSettingsStore, useTakeStore, setMetadata };
 }
 
 /**
@@ -81,18 +82,48 @@ describe('activating a take', () => {
 
     expect(useSettingsStore.getState().masterVolume).toBe(DEFAULT_MASTER_VOLUME);
     expect(useSettingsStore.getState().reverbMix).toBe(DEFAULT_REVERB_MIX);
+    expect(useSettingsStore.getState().reverbRoom).toBe(DEFAULT_REVERB_ROOM);
 
     await activateTake(
       createEmptyTake({
         title: 'Quiet, wet take',
-        instrument: { id: 'grand-piano', masterVolume: 0.3, reverbMix: 0.9 },
+        instrument: { id: 'grand-piano', masterVolume: 0.3, reverbMix: 0.9, reverbRoom: 'hall' },
       }),
     );
 
     expect(useSettingsStore.getState().masterVolume).toBe(0.3);
     expect(useSettingsStore.getState().reverbMix).toBe(0.9);
+    expect(useSettingsStore.getState().reverbRoom).toBe('hall');
     // Opening a take is not an edit to it.
     expect(useTakeStore.getState().dirty).toBe(false);
+  });
+
+  it('opens a take from before rooms in Room', async () => {
+    const { activateTake, useSettingsStore, useTakeStore } = await loadService();
+    useSettingsStore.setState({ reverbRoom: 'cathedral' });
+
+    await activateTake(
+      createEmptyTake({
+        title: 'Before rooms',
+        instrument: { id: 'grand-piano', masterVolume: 0.5, reverbMix: 0.2 },
+      }),
+    );
+
+    expect(useSettingsStore.getState().reverbRoom).toBe('room');
+    expect(useTakeStore.getState().take.instrument).not.toHaveProperty('reverbRoom');
+  });
+
+  it('starts a new take in the room being played', async () => {
+    const { createNewTake, useSettingsStore, useTakeStore } = await loadService();
+    useSettingsStore.setState({ masterVolume: 0.6, reverbMix: 0.4, reverbRoom: 'studio' });
+
+    await createNewTake();
+
+    expect(useTakeStore.getState().take.instrument).toMatchObject({
+      masterVolume: 0.6,
+      reverbMix: 0.4,
+      reverbRoom: 'studio',
+    });
   });
 
   it('leaves the active take alone when the caller walks away during the save', async () => {

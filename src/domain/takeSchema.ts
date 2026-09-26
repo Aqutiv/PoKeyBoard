@@ -14,6 +14,7 @@ import {
   DEFAULT_INSTRUMENT_ID,
   DEFAULT_MASTER_VOLUME,
   DEFAULT_REVERB_MIX,
+  DEFAULT_REVERB_ROOM,
   DEFAULT_SAMPLE_PACK_VERSION,
   MAX_FIFTHS,
   MAX_NOTE_COUNT,
@@ -28,6 +29,7 @@ import {
   MAX_TUPLET_NOTES,
   MAX_TUPLET_UNIT,
   QUANTIZATION_SETTINGS,
+  REVERB_ROOMS,
   type Take,
 } from './takeTypes';
 
@@ -118,6 +120,10 @@ export const instrumentSchema = z.object({
   id: z.string().min(1).max(64),
   masterVolume: z.number().min(0).max(1),
   reverbMix: z.number().min(0).max(1),
+  // Additive and optional like `tempo.changes`: a take from before rooms parses
+  // untouched and plays in Room, which is what it was heard in, and an older
+  // build drops the field and plays every take there.
+  reverbRoom: z.enum(REVERB_ROOMS).optional(),
 });
 
 export const playbackLoopSchema = z
@@ -276,6 +282,7 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
       id: DEFAULT_INSTRUMENT_ID,
       masterVolume: DEFAULT_MASTER_VOLUME,
       reverbMix: DEFAULT_REVERB_MIX,
+      reverbRoom: DEFAULT_REVERB_ROOM,
     };
     repairs.push({ code: 'instrumentDefaulted' });
   } else if (typeof data.instrument === 'object' && data.instrument !== null) {
@@ -283,6 +290,16 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
     for (const field of ['masterVolume', 'reverbMix'] as const) {
       const value = instrument[field];
       if (isFiniteNumber(value)) instrument[field] = clampWithinEpsilon(value, 0, 1);
+    }
+    // A room this build does not know — a newer one, or a typo — is dropped
+    // rather than failing the take, which then plays in the default room. It
+    // changes what the take sounds like, so the preview says so.
+    if (
+      instrument.reverbRoom !== undefined &&
+      !(REVERB_ROOMS as readonly unknown[]).includes(instrument.reverbRoom)
+    ) {
+      delete instrument.reverbRoom;
+      repairs.push({ code: 'reverbRoomDropped' });
     }
     data.instrument = instrument;
   }
