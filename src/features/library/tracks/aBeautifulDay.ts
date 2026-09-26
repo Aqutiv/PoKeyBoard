@@ -50,7 +50,10 @@ function lh8(bar: number, notes: [string, string, string, string], base = 0.48):
 
 const C: [string, string, string, string] = ['C3', 'G3', 'E4', 'G3'];
 const Gd: [string, string, string, string] = ['D3', 'G3', 'B3', 'G3'];
-const Am: [string, string, string, string] = ['A3', 'E4', 'C4', 'E4'];
+// C4 on the pulse, not E4: the tune sings E4 on beat 2 of bar 5 and beat 4 of
+// bar 13, and a left hand striking the same key at the same moment doubles it —
+// in right-hand Training, the accompaniment replays the very note just played.
+const Am: [string, string, string, string] = ['A3', 'C4', 'E4', 'C4'];
 const F: [string, string, string, string] = ['F3', 'C4', 'A3', 'C4'];
 // lh8 draws [root, pulse, color, top]: root–pulse–color–pulse–top–pulse–color–pulse.
 const C8: [string, string, string, string] = ['C3', 'G3', 'E4', 'C4'];

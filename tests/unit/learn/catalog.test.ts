@@ -994,8 +994,19 @@ function sharedChapterChecks(chapter: LearnChapter): void {
     // the split at middle C — which puts any left-hand note above it in the
     // right hand. A track opened for one hand must say which hand plays what.
     if (def && (handoff.mode === 'training-left' || handoff.mode === 'training-right')) {
-      for (const note of buildLibraryTake(def).notes) {
+      const notes = buildLibraryTake(def).notes;
+      for (const note of notes) {
         expect(note.staff, `${def.trackId} ${note.id}`).toBeDefined();
+      }
+      // Nor may the two hands strike one key at one moment: Training accepts
+      // the player's note, then the accompaniment plays the same key again.
+      const struck = new Map<string, string>();
+      for (const note of notes) {
+        const key = `${note.midi}@${note.startMs}`;
+        const hand = noteHand(note);
+        const other = struck.get(key);
+        expect(other === undefined || other === hand, `${def.trackId} ${key}`).toBe(true);
+        struck.set(key, hand);
       }
     }
     // One of the speed menu's own choices, so the menu shows it as chosen.
