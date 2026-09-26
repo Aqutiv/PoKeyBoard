@@ -1622,8 +1622,16 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     // in slots has to be a single value, or the note stays whole, as it was.
     const tailBeats = endBeat - beatLine;
     const offBy = (step: number) => Math.abs(tailBeats - Math.round(tailBeats / step) * step);
-    const tailDivision =
-      gridBeats !== null && offBy(gridBeats) > offBy(1 / division) ? division : null;
+    // With the grid off there is no plain grid to weigh against: a remainder
+    // of whole slots stays in them, as the declaration says, and anything
+    // else is written as held.
+    const tailDivision = (
+      gridBeats === null
+        ? offBy(1 / division) < 1 / division / 4
+        : offBy(gridBeats) > offBy(1 / division)
+    )
+      ? division
+      : null;
     if (
       tailDivision !== null &&
       !exactValueForUnits(

@@ -973,3 +973,23 @@ describe('the numeral a whole bracket carries', () => {
     }
   });
 });
+
+describe('a written triplet tied past its beat with the grid off', () => {
+  it('keeps a slot tied on a triplet value', () => {
+    const tuplet = { actual: 3, normal: 2, unit: 8, group: 0 };
+    const notes: NoteEvent[] = [
+      { id: 'a', midi: 72, startMs: 0, durationMs: 167, velocity: 0.5, tuplet },
+      { id: 'b', midi: 74, startMs: 167, durationMs: 166, velocity: 0.5, tuplet },
+      { id: 'c', midi: 76, startMs: 333, durationMs: 334, velocity: 0.5, tuplet },
+    ];
+    const layout = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: 'off',
+    });
+    const after = layout.chords.filter((chord) => chord.displayStartMs >= 500);
+    expect(after.map((chord) => `${chord.symbol.base}${chord.symbol.tuplet ? '(3)' : ''}`)).toEqual(
+      ['eighth(3)'],
+    );
+  });
+});
