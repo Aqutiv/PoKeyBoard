@@ -144,18 +144,19 @@ script writes into its manifest; the Wurlitzer keeps its own region gains.
 
 The timbre then follows the touch too, rather than stepping where the layers
 meet: a harder blow brings the upper partials out, and on their own the
-recordings jump in brightness at every switch, by 350 to 900 cents of spectral
-centroid around middle C. So each medium and loud voice of a grand plays through a
-lowpass (`toneCalibration.ts`, from `tests/tools/generateToneCalibration.ts`,
-keyed by pack version the same way): at its layer's bottom, the cutoff that
-brings its recording down to the brightness of the layer below at the same
-root, opening evenly in log frequency to its layer's top. The soft layer plays
-open. The filter's K-weighted loss is given back as make-up, less as it opens,
-so the loudness stays on the curve. Brightness is measured as the voice plays
-(from its onset, under its attack, at 48 kHz), and the cutoffs, per root, climb
-from about half a kilohertz in the bass to several at the top; there, a match
-would take the note's own fundamental, so no ramp starts below 2.5 times it,
-and the top keys keep a smaller correction. A stand-in from a brighter layer
+recordings jump in brightness at every switch, by 200 to 900 cents of spectral
+centroid around middle C, the Steinway least and Headroom most. So each medium
+and loud voice of a grand plays through a lowpass (`toneCalibration.ts`, from
+`tests/tools/generateToneCalibration.ts`, keyed by pack version the same way):
+at its layer's bottom, the cutoff that brings its recording down to the
+brightness of the layer below at the same root, opening evenly in log
+frequency to its layer's top. The soft layer plays open. The filter's
+K-weighted loss is given back as make-up, less as it opens, so the loudness
+stays on the curve. Brightness is measured as the voice plays (from its onset,
+under its attack, at 48 kHz), and the cutoffs, per root, climb from half a
+kilohertz to two in the bass, by the piano, to several at the top; there, a
+match would take the note's own fundamental, so no ramp starts below 2.5 times
+it, and the top keys keep a smaller correction. A stand-in from a brighter layer
 plays at its ramp's bottom, and one from a darker layer open. The cutoff is
 scaled by the playback rate, so a note pitched from its root keeps the root's
 tone.

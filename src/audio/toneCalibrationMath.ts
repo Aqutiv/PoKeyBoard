@@ -10,10 +10,10 @@ import { ATTACK_S, TONE_FILTER_Q_DB } from './sampleVoice';
  * — and the velocity calibration plays each at the loudness its velocity asks
  * for (velocityCalibrationMath.ts). Loudness is not all a harder blow changes,
  * though: it brings the upper partials out, and on their own the recordings
- * step in brightness wherever one layer hands over to the next, by 350 to 900
- * cents of spectral centroid around middle C. So every voice of the medium and
- * loud layers plays through a lowpass whose cutoff follows its velocity across
- * its layer:
+ * step in brightness wherever one layer hands over to the next, by 200 to 900
+ * cents of spectral centroid around middle C, as the piano goes. So every voice
+ * of the medium and loud layers plays through a lowpass whose cutoff follows
+ * its velocity across its layer:
  *
  *   at the layer's bottom, the cutoff that brings its recording down to the
  *   brightness of the layer below's, at the same root (the generator searches
@@ -33,9 +33,9 @@ import { ATTACK_S, TONE_FILTER_Q_DB } from './sampleVoice';
  * quiet recording carries as much of as a loud one and which would otherwise
  * count as brightness.
  *
- * The cutoffs are per root, not per layer: they climb with pitch from about
- * half a kilohertz in the bass to several at the top, and move smoothly from one
- * root to the next. At the very top, though, a match can fall at or under the
+ * The cutoffs are per root, not per layer: they climb with pitch from half a
+ * kilohertz to two in the bass, as the piano goes, to several at the top, and
+ * move smoothly from one root to the next. At the very top, though, a match can fall at or under the
  * note's own fundamental: up there the measure sits close to the fundamental,
  * and only taking the note itself down moves it, with up to 4.5 dB to give
  * back. So no ramp starts below `FUNDAMENTAL_GUARD` times its root's
@@ -48,7 +48,7 @@ export const OPEN_CUTOFF_HZ = 20_000;
 /**
  * The top guard: no ramp starts below this many times its root's fundamental,
  * nor, scaled by the playback rate, any note below this many times its own.
- * Measured across both grands (the generator prints the comparison): at 2.5 a
+ * Measured across the grands (the generator prints the comparison): at 2.5 a
  * guarded note's fundamental loses 0.14 dB, and no guarded ramp needs more than
  * 0.4 dB of make-up, within the 0.2–0.6 dB the middle of the keyboard needs,
  * where the ramps were approved by ear. At 2 that reaches 0.7 dB, and at 3 or
