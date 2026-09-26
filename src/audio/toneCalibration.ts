@@ -1,0 +1,250 @@
+/**
+ * How bright every recording of the grand pianos is, and the lowpass ramp that
+ * makes each velocity layer's tone follow the touch: the tone calibration's
+ * table. What the numbers mean, and how a voice's filter comes from them, is
+ * toneCalibrationMath.ts.
+ *
+ * GENERATED — do not edit. Every number is measured from the committed sample
+ * packs, so editing one by hand only makes a note play at the wrong tone.
+ * Regenerate with:
+ *
+ *   npx vitest run --config vitest.tools.config.ts tests/tools/generateToneCalibration.ts
+ *
+ * Brightness is each recording's spectral centroid, in Hz, as its voice plays
+ * over the 300 ms after its onset, heard at 48 kHz. A ramp's cutoffs
+ * are in Hz at the recording's own pitch: where the search met the layer
+ * below, and where the ramp starts, never under 2.5 times the root's
+ * fundamental. Its make-up is in dB at every eighth of the way up. Keyed by
+ * pack version: a published pack never changes, so neither does its entry.
+ * One recording to a line, which the formatter would spread over ten.
+ *
+ *   salamander-grand-v3
+ *     brightness step into medium, cents: 341 open, 0 toned (median; most 570, 279)
+ *     brightness step into loud, cents: 475 open, 0 toned (median; most 806, 362)
+ *     guarded at 2.5 × the fundamental: 18 of 60 ramps, from A5
+ *     make-up at a ramp's bottom, dB: median 0.15, most 0.61 (C6 loud)
+ *     loudest voice on a ramp: -0.57 dBFS; at full velocity -0.56, and 3.52 on the loudest pack
+ *   headroom-grand-v2
+ *     brightness step into medium, cents: 737 open, 1 toned (median; most 1397, 389)
+ *     brightness step into loud, cents: 767 open, 0 toned (median; most 943, 281)
+ *     guarded at 2.5 × the fundamental: 21 of 60 ramps, from D♯5
+ *     make-up at a ramp's bottom, dB: median 0.36, most 1.29 (A0 medium)
+ *     loudest voice on a ramp: 3.35 dBFS; at full velocity 3.52, and 3.52 on the loudest pack
+ */
+import type { ToneCalibration } from './toneCalibrationMath';
+
+// prettier-ignore
+export const TONE_CALIBRATIONS: Readonly<Record<string, ToneCalibration>> = {
+  'salamander-grand-v3': {
+    layers: [
+      {
+        roots: [
+          { midi:  21, centroidHz:  387.2 },
+          { midi:  24, centroidHz:  392.8 },
+          { midi:  27, centroidHz:  367.3 },
+          { midi:  30, centroidHz:  415.4 },
+          { midi:  33, centroidHz:  446.4 },
+          { midi:  36, centroidHz:  467.4 },
+          { midi:  39, centroidHz:  482.8 },
+          { midi:  42, centroidHz:  390.6 },
+          { midi:  45, centroidHz:  485.4 },
+          { midi:  48, centroidHz:  424.5 },
+          { midi:  51, centroidHz:  595.6 },
+          { midi:  54, centroidHz:  626.2 },
+          { midi:  57, centroidHz:  567.4 },
+          { midi:  60, centroidHz:  663.5 },
+          { midi:  63, centroidHz:  759.5 },
+          { midi:  66, centroidHz:  703.4 },
+          { midi:  69, centroidHz:  747.3 },
+          { midi:  72, centroidHz:  922.6 },
+          { midi:  75, centroidHz:  843.2 },
+          { midi:  78, centroidHz:  837.6 },
+          { midi:  81, centroidHz:  900.0 },
+          { midi:  84, centroidHz:  941.0 },
+          { midi:  87, centroidHz: 1165.9 },
+          { midi:  90, centroidHz: 1198.7 },
+          { midi:  93, centroidHz: 1553.0 },
+          { midi:  96, centroidHz: 1664.8 },
+          { midi:  99, centroidHz: 1619.5 },
+          { midi: 102, centroidHz: 1861.9 },
+          { midi: 105, centroidHz: 2167.9 },
+          { midi: 108, centroidHz: 2097.1 },
+        ],
+      },
+      {
+        roots: [
+          { midi:  21, centroidHz:  506.2, ramp: { matchedCutoffHz:   967, cutoffHz:   967, centroidHz:  387.2, makeupDb: [0.206, 0.083, 0.030, 0.009, 0.003, 0.001, 0.000, 0.000] } },
+          { midi:  24, centroidHz:  465.9, ramp: { matchedCutoffHz:  1171, cutoffHz:  1171, centroidHz:  392.8, makeupDb: [0.091, 0.037, 0.013, 0.005, 0.002, 0.001, 0.001, 0.000] } },
+          { midi:  27, centroidHz:  510.5, ramp: { matchedCutoffHz:   931, cutoffHz:   931, centroidHz:  367.3, makeupDb: [0.228, 0.102, 0.037, 0.011, 0.003, 0.001, 0.000, 0.000] } },
+          { midi:  30, centroidHz:  513.0, ramp: { matchedCutoffHz:  1346, cutoffHz:  1346, centroidHz:  415.4, makeupDb: [0.089, 0.040, 0.016, 0.007, 0.003, 0.002, 0.001, 0.001] } },
+          { midi:  33, centroidHz:  572.6, ramp: { matchedCutoffHz:  1338, cutoffHz:  1338, centroidHz:  446.5, makeupDb: [0.116, 0.050, 0.019, 0.007, 0.002, 0.001, 0.000, 0.000] } },
+          { midi:  36, centroidHz:  605.3, ramp: { matchedCutoffHz:  1268, cutoffHz:  1268, centroidHz:  467.4, makeupDb: [0.140, 0.065, 0.025, 0.008, 0.003, 0.001, 0.000, 0.000] } },
+          { midi:  39, centroidHz:  566.4, ramp: { matchedCutoffHz:  1759, cutoffHz:  1759, centroidHz:  482.8, makeupDb: [0.066, 0.029, 0.011, 0.004, 0.001, 0.001, 0.000, 0.000] } },
+          { midi:  42, centroidHz:  508.8, ramp: { matchedCutoffHz:  1129, cutoffHz:  1129, centroidHz:  390.6, makeupDb: [0.127, 0.054, 0.019, 0.006, 0.002, 0.001, 0.000, 0.000] } },
+          { midi:  45, centroidHz:  585.9, ramp: { matchedCutoffHz:  1482, cutoffHz:  1482, centroidHz:  485.4, makeupDb: [0.155, 0.066, 0.024, 0.008, 0.003, 0.001, 0.000, 0.000] } },
+          { midi:  48, centroidHz:  557.2, ramp: { matchedCutoffHz:  1416, cutoffHz:  1416, centroidHz:  424.6, makeupDb: [0.068, 0.036, 0.015, 0.005, 0.002, 0.001, 0.000, 0.000] } },
+          { midi:  51, centroidHz:  692.8, ramp: { matchedCutoffHz:  2015, cutoffHz:  2015, centroidHz:  595.6, makeupDb: [0.084, 0.038, 0.015, 0.006, 0.002, 0.001, 0.000, 0.000] } },
+          { midi:  54, centroidHz:  783.4, ramp: { matchedCutoffHz:  1577, cutoffHz:  1577, centroidHz:  626.2, makeupDb: [0.330, 0.138, 0.052, 0.019, 0.006, 0.002, 0.001, 0.000] } },
+          { midi:  57, centroidHz:  738.8, ramp: { matchedCutoffHz:  1265, cutoffHz:  1265, centroidHz:  567.4, makeupDb: [0.351, 0.165, 0.066, 0.022, 0.007, 0.002, 0.001, 0.000] } },
+          { midi:  60, centroidHz:  863.5, ramp: { matchedCutoffHz:  1638, cutoffHz:  1638, centroidHz:  663.6, makeupDb: [0.180, 0.088, 0.040, 0.017, 0.006, 0.002, 0.001, 0.000] } },
+          { midi:  63, centroidHz:  905.7, ramp: { matchedCutoffHz:  2043, cutoffHz:  2043, centroidHz:  759.5, makeupDb: [0.230, 0.114, 0.048, 0.018, 0.007, 0.003, 0.001, 0.000] } },
+          { midi:  66, centroidHz:  885.4, ramp: { matchedCutoffHz:  1687, cutoffHz:  1687, centroidHz:  703.5, makeupDb: [0.218, 0.115, 0.054, 0.021, 0.007, 0.002, 0.001, 0.000] } },
+          { midi:  69, centroidHz:  909.8, ramp: { matchedCutoffHz:  2157, cutoffHz:  2157, centroidHz:  747.3, makeupDb: [0.085, 0.044, 0.022, 0.010, 0.004, 0.002, 0.001, 0.000] } },
+          { midi:  72, centroidHz: 1106.2, ramp: { matchedCutoffHz:  2769, cutoffHz:  2769, centroidHz:  922.6, makeupDb: [0.081, 0.045, 0.022, 0.010, 0.004, 0.002, 0.001, 0.000] } },
+          { midi:  75, centroidHz: 1027.4, ramp: { matchedCutoffHz:  2374, cutoffHz:  2374, centroidHz:  843.2, makeupDb: [0.084, 0.044, 0.021, 0.009, 0.004, 0.002, 0.001, 0.000] } },
+          { midi:  78, centroidHz:  962.1, ramp: { matchedCutoffHz:  2341, cutoffHz:  2341, centroidHz:  837.6, makeupDb: [0.072, 0.031, 0.014, 0.006, 0.003, 0.001, 0.001, 0.000] } },
+          { midi:  81, centroidHz: 1104.6, ramp: { matchedCutoffHz:  1750, cutoffHz:  2200, centroidHz:  943.3, makeupDb: [0.273, 0.116, 0.048, 0.019, 0.008, 0.003, 0.001, 0.000] } },
+          { midi:  84, centroidHz: 1220.3, ramp: { matchedCutoffHz:  1556, cutoffHz:  2617, centroidHz: 1066.2, makeupDb: [0.392, 0.177, 0.075, 0.031, 0.012, 0.005, 0.002, 0.001] } },
+          { midi:  87, centroidHz: 1304.9, ramp: { matchedCutoffHz:  2931, cutoffHz:  3112, centroidHz: 1176.7, makeupDb: [0.155, 0.070, 0.032, 0.015, 0.007, 0.003, 0.001, 0.000] } },
+          { midi:  90, centroidHz: 1364.7, ramp: { matchedCutoffHz:  2655, cutoffHz:  3700, centroidHz: 1261.6, makeupDb: [0.139, 0.066, 0.031, 0.015, 0.007, 0.003, 0.002, 0.001] } },
+          { midi:  93, centroidHz: 1736.5, ramp: { matchedCutoffHz:  2890, cutoffHz:  4400, centroidHz: 1649.6, makeupDb: [0.148, 0.074, 0.037, 0.019, 0.009, 0.004, 0.002, 0.001] } },
+          { midi:  96, centroidHz: 1845.2, ramp: { matchedCutoffHz:  2597, cutoffHz:  5233, centroidHz: 1801.3, makeupDb: [0.129, 0.069, 0.036, 0.019, 0.010, 0.005, 0.002, 0.001] } },
+          { midi:  99, centroidHz: 1945.1, ramp: { matchedCutoffHz:  2189, cutoffHz:  6223, centroidHz: 1903.0, makeupDb: [0.116, 0.066, 0.037, 0.020, 0.011, 0.006, 0.003, 0.001] } },
+          { midi: 102, centroidHz: 2069.0, ramp: { matchedCutoffHz:  3671, cutoffHz:  7400, centroidHz: 2024.9, makeupDb: [0.096, 0.057, 0.034, 0.020, 0.011, 0.006, 0.003, 0.001] } },
+          { midi: 105, centroidHz: 2497.9, ramp: { matchedCutoffHz:  3498, cutoffHz:  8800, centroidHz: 2471.7, makeupDb: [0.099, 0.063, 0.039, 0.024, 0.014, 0.008, 0.004, 0.002] } },
+          { midi: 108, centroidHz: 2410.0, ramp: { matchedCutoffHz:  4351, cutoffHz: 10466, centroidHz: 2389.6, makeupDb: [0.060, 0.040, 0.026, 0.017, 0.011, 0.006, 0.004, 0.002] } },
+        ],
+      },
+      {
+        roots: [
+          { midi:  21, centroidHz:  697.9, ramp: { matchedCutoffHz:  1187, cutoffHz:  1187, centroidHz:  506.1, makeupDb: [0.309, 0.160, 0.067, 0.023, 0.007, 0.002, 0.001, 0.000] } },
+          { midi:  24, centroidHz:  655.9, ramp: { matchedCutoffHz:  1067, cutoffHz:  1067, centroidHz:  465.9, makeupDb: [0.253, 0.123, 0.049, 0.016, 0.005, 0.002, 0.001, 0.000] } },
+          { midi:  27, centroidHz:  701.5, ramp: { matchedCutoffHz:  1301, cutoffHz:  1301, centroidHz:  510.4, makeupDb: [0.271, 0.128, 0.050, 0.017, 0.005, 0.002, 0.001, 0.000] } },
+          { midi:  30, centroidHz:  662.9, ramp: { matchedCutoffHz:  1548, cutoffHz:  1548, centroidHz:  513.0, makeupDb: [0.117, 0.054, 0.021, 0.007, 0.003, 0.001, 0.000, 0.000] } },
+          { midi:  33, centroidHz:  912.3, ramp: { matchedCutoffHz:  1367, cutoffHz:  1367, centroidHz:  572.6, makeupDb: [0.295, 0.170, 0.083, 0.034, 0.012, 0.003, 0.001, 0.000] } },
+          { midi:  36, centroidHz:  856.6, ramp: { matchedCutoffHz:  1442, cutoffHz:  1442, centroidHz:  605.2, makeupDb: [0.261, 0.138, 0.059, 0.021, 0.007, 0.002, 0.001, 0.000] } },
+          { midi:  39, centroidHz:  772.6, ramp: { matchedCutoffHz:  1550, cutoffHz:  1550, centroidHz:  566.3, makeupDb: [0.193, 0.099, 0.041, 0.015, 0.005, 0.002, 0.001, 0.000] } },
+          { midi:  42, centroidHz:  675.4, ramp: { matchedCutoffHz:  1510, cutoffHz:  1510, centroidHz:  508.8, makeupDb: [0.122, 0.057, 0.023, 0.009, 0.003, 0.001, 0.000, 0.000] } },
+          { midi:  45, centroidHz:  841.2, ramp: { matchedCutoffHz:  1328, cutoffHz:  1328, centroidHz:  585.8, makeupDb: [0.503, 0.250, 0.098, 0.033, 0.010, 0.003, 0.001, 0.000] } },
+          { midi:  48, centroidHz:  761.5, ramp: { matchedCutoffHz:  1822, cutoffHz:  1822, centroidHz:  557.2, makeupDb: [0.102, 0.054, 0.024, 0.009, 0.003, 0.001, 0.000, 0.000] } },
+          { midi:  51, centroidHz:  884.2, ramp: { matchedCutoffHz:  1992, cutoffHz:  1992, centroidHz:  692.7, makeupDb: [0.165, 0.081, 0.036, 0.014, 0.005, 0.002, 0.001, 0.000] } },
+          { midi:  54, centroidHz: 1036.1, ramp: { matchedCutoffHz:  1960, cutoffHz:  1960, centroidHz:  783.4, makeupDb: [0.318, 0.152, 0.067, 0.027, 0.010, 0.003, 0.001, 0.000] } },
+          { midi:  57, centroidHz: 1072.6, ramp: { matchedCutoffHz:  1560, cutoffHz:  1560, centroidHz:  738.7, makeupDb: [0.563, 0.311, 0.146, 0.059, 0.021, 0.007, 0.002, 0.001] } },
+          { midi:  60, centroidHz: 1135.6, ramp: { matchedCutoffHz:  2401, cutoffHz:  2401, centroidHz:  863.5, makeupDb: [0.165, 0.097, 0.049, 0.021, 0.008, 0.003, 0.001, 0.000] } },
+          { midi:  63, centroidHz: 1096.1, ramp: { matchedCutoffHz:  2633, cutoffHz:  2633, centroidHz:  905.7, makeupDb: [0.183, 0.092, 0.042, 0.018, 0.007, 0.003, 0.001, 0.000] } },
+          { midi:  66, centroidHz: 1137.7, ramp: { matchedCutoffHz:  2432, cutoffHz:  2432, centroidHz:  885.5, makeupDb: [0.167, 0.091, 0.043, 0.018, 0.007, 0.003, 0.001, 0.000] } },
+          { midi:  69, centroidHz: 1180.5, ramp: { matchedCutoffHz:  2814, cutoffHz:  2814, centroidHz:  909.8, makeupDb: [0.075, 0.044, 0.023, 0.011, 0.005, 0.002, 0.001, 0.000] } },
+          { midi:  72, centroidHz: 1455.4, ramp: { matchedCutoffHz:  3022, cutoffHz:  3022, centroidHz: 1106.2, makeupDb: [0.122, 0.071, 0.036, 0.016, 0.007, 0.003, 0.001, 0.000] } },
+          { midi:  75, centroidHz: 1488.5, ramp: { matchedCutoffHz:  2624, cutoffHz:  2624, centroidHz: 1027.5, makeupDb: [0.119, 0.067, 0.034, 0.016, 0.007, 0.003, 0.001, 0.000] } },
+          { midi:  78, centroidHz: 1319.2, ramp: { matchedCutoffHz:  2417, cutoffHz:  2417, centroidHz:  962.1, makeupDb: [0.083, 0.040, 0.020, 0.010, 0.004, 0.002, 0.001, 0.000] } },
+          { midi:  81, centroidHz: 1484.0, ramp: { matchedCutoffHz:  2365, cutoffHz:  2365, centroidHz: 1104.7, makeupDb: [0.366, 0.184, 0.088, 0.040, 0.016, 0.006, 0.002, 0.001] } },
+          { midi:  84, centroidHz: 1544.7, ramp: { matchedCutoffHz:  2618, cutoffHz:  2618, centroidHz: 1220.2, makeupDb: [0.606, 0.299, 0.140, 0.061, 0.025, 0.009, 0.003, 0.001] } },
+          { midi:  87, centroidHz: 1575.8, ramp: { matchedCutoffHz:  2918, cutoffHz:  3112, centroidHz: 1324.1, makeupDb: [0.211, 0.105, 0.051, 0.024, 0.011, 0.005, 0.002, 0.001] } },
+          { midi:  90, centroidHz: 1658.5, ramp: { matchedCutoffHz:  2913, cutoffHz:  3700, centroidHz: 1438.5, makeupDb: [0.181, 0.091, 0.045, 0.021, 0.010, 0.005, 0.002, 0.001] } },
+          { midi:  93, centroidHz: 2012.8, ramp: { matchedCutoffHz:  3157, cutoffHz:  4400, centroidHz: 1844.0, makeupDb: [0.169, 0.086, 0.043, 0.021, 0.010, 0.005, 0.002, 0.001] } },
+          { midi:  96, centroidHz: 2098.6, ramp: { matchedCutoffHz:  2928, cutoffHz:  5233, centroidHz: 2003.2, makeupDb: [0.142, 0.076, 0.040, 0.021, 0.011, 0.005, 0.003, 0.001] } },
+          { midi:  99, centroidHz: 2242.4, ramp: { matchedCutoffHz:  3093, cutoffHz:  6223, centroidHz: 2151.5, makeupDb: [0.124, 0.070, 0.039, 0.022, 0.012, 0.006, 0.003, 0.001] } },
+          { midi: 102, centroidHz: 2424.9, ramp: { matchedCutoffHz:  3268, cutoffHz:  7400, centroidHz: 2353.7, makeupDb: [0.114, 0.068, 0.041, 0.024, 0.013, 0.007, 0.004, 0.002] } },
+          { midi: 105, centroidHz: 3059.2, ramp: { matchedCutoffHz:  3216, cutoffHz:  8800, centroidHz: 2997.0, makeupDb: [0.108, 0.069, 0.043, 0.026, 0.015, 0.009, 0.005, 0.002] } },
+          { midi: 108, centroidHz: 3006.5, ramp: { matchedCutoffHz:  3625, cutoffHz: 10466, centroidHz: 2971.0, makeupDb: [0.081, 0.055, 0.036, 0.023, 0.014, 0.009, 0.005, 0.003] } },
+        ],
+      },
+    ],
+  },
+  'headroom-grand-v2': {
+    layers: [
+      {
+        roots: [
+          { midi:  21, centroidHz:  378.5 },
+          { midi:  24, centroidHz:  339.5 },
+          { midi:  27, centroidHz:  369.6 },
+          { midi:  30, centroidHz:  332.2 },
+          { midi:  33, centroidHz:  401.9 },
+          { midi:  36, centroidHz:  386.5 },
+          { midi:  39, centroidHz:  398.7 },
+          { midi:  42, centroidHz:  338.3 },
+          { midi:  45, centroidHz:  413.4 },
+          { midi:  48, centroidHz:  511.9 },
+          { midi:  51, centroidHz:  526.2 },
+          { midi:  54, centroidHz:  489.8 },
+          { midi:  57, centroidHz:  519.9 },
+          { midi:  60, centroidHz:  586.8 },
+          { midi:  63, centroidHz:  582.3 },
+          { midi:  66, centroidHz:  759.2 },
+          { midi:  69, centroidHz:  811.4 },
+          { midi:  72, centroidHz:  755.7 },
+          { midi:  75, centroidHz:  701.9 },
+          { midi:  78, centroidHz:  812.6 },
+          { midi:  81, centroidHz:  995.3 },
+          { midi:  84, centroidHz: 1049.1 },
+          { midi:  87, centroidHz: 1120.3 },
+          { midi:  90, centroidHz: 1412.0 },
+          { midi:  93, centroidHz: 1397.4 },
+          { midi:  96, centroidHz: 1794.4 },
+          { midi:  99, centroidHz: 1852.6 },
+          { midi: 102, centroidHz: 1949.3 },
+          { midi: 105, centroidHz: 2229.3 },
+          { midi: 108, centroidHz: 2140.9 },
+        ],
+      },
+      {
+        roots: [
+          { midi:  21, centroidHz:  619.5, ramp: { matchedCutoffHz:   548, cutoffHz:   548, centroidHz:  378.6, makeupDb: [1.286, 0.544, 0.206, 0.062, 0.016, 0.005, 0.002, 0.001] } },
+          { midi:  24, centroidHz:  652.6, ramp: { matchedCutoffHz:   505, cutoffHz:   505, centroidHz:  339.4, makeupDb: [1.061, 0.506, 0.232, 0.088, 0.024, 0.005, 0.001, 0.000] } },
+          { midi:  27, centroidHz:  740.1, ramp: { matchedCutoffHz:   549, cutoffHz:   549, centroidHz:  369.6, makeupDb: [1.103, 0.620, 0.300, 0.101, 0.025, 0.006, 0.002, 0.000] } },
+          { midi:  30, centroidHz:  661.5, ramp: { matchedCutoffHz:   561, cutoffHz:   561, centroidHz:  332.3, makeupDb: [0.708, 0.435, 0.217, 0.075, 0.020, 0.005, 0.001, 0.000] } },
+          { midi:  33, centroidHz:  776.0, ramp: { matchedCutoffHz:   607, cutoffHz:   607, centroidHz:  402.0, makeupDb: [1.050, 0.572, 0.279, 0.099, 0.025, 0.006, 0.001, 0.000] } },
+          { midi:  36, centroidHz:  866.1, ramp: { matchedCutoffHz:   569, cutoffHz:   569, centroidHz:  386.5, makeupDb: [1.204, 0.778, 0.423, 0.163, 0.044, 0.010, 0.003, 0.001] } },
+          { midi:  39, centroidHz:  810.0, ramp: { matchedCutoffHz:   627, cutoffHz:   627, centroidHz:  398.6, makeupDb: [1.144, 0.692, 0.352, 0.135, 0.037, 0.009, 0.002, 0.001] } },
+          { midi:  42, centroidHz:  725.1, ramp: { matchedCutoffHz:   584, cutoffHz:   584, centroidHz:  338.5, makeupDb: [0.650, 0.329, 0.159, 0.067, 0.021, 0.005, 0.001, 0.000] } },
+          { midi:  45, centroidHz:  709.6, ramp: { matchedCutoffHz:   821, cutoffHz:   821, centroidHz:  413.5, makeupDb: [0.338, 0.176, 0.079, 0.029, 0.009, 0.002, 0.001, 0.000] } },
+          { midi:  48, centroidHz:  864.2, ramp: { matchedCutoffHz:   961, cutoffHz:   961, centroidHz:  511.8, makeupDb: [0.589, 0.349, 0.169, 0.061, 0.018, 0.005, 0.002, 0.001] } },
+          { midi:  51, centroidHz:  851.6, ramp: { matchedCutoffHz:   800, cutoffHz:   800, centroidHz:  526.1, makeupDb: [1.182, 0.569, 0.249, 0.085, 0.023, 0.006, 0.001, 0.000] } },
+          { midi:  54, centroidHz:  872.8, ramp: { matchedCutoffHz:   760, cutoffHz:   760, centroidHz:  489.7, makeupDb: [0.945, 0.480, 0.217, 0.078, 0.023, 0.006, 0.001, 0.000] } },
+          { midi:  57, centroidHz:  875.2, ramp: { matchedCutoffHz:   986, cutoffHz:   986, centroidHz:  520.0, makeupDb: [0.360, 0.190, 0.084, 0.032, 0.011, 0.004, 0.002, 0.001] } },
+          { midi:  60, centroidHz:  898.1, ramp: { matchedCutoffHz:  1068, cutoffHz:  1068, centroidHz:  586.7, makeupDb: [0.447, 0.208, 0.095, 0.034, 0.011, 0.003, 0.001, 0.000] } },
+          { midi:  63, centroidHz:  991.9, ramp: { matchedCutoffHz:  1011, cutoffHz:  1011, centroidHz:  582.3, makeupDb: [0.579, 0.380, 0.206, 0.081, 0.024, 0.006, 0.002, 0.000] } },
+          { midi:  66, centroidHz: 1058.2, ramp: { matchedCutoffHz:  1580, cutoffHz:  1580, centroidHz:  759.3, makeupDb: [0.376, 0.189, 0.083, 0.032, 0.011, 0.004, 0.001, 0.000] } },
+          { midi:  69, centroidHz: 1202.6, ramp: { matchedCutoffHz:  1490, cutoffHz:  1490, centroidHz:  811.4, makeupDb: [0.649, 0.343, 0.168, 0.071, 0.025, 0.008, 0.002, 0.001] } },
+          { midi:  72, centroidHz: 1154.2, ramp: { matchedCutoffHz:  1379, cutoffHz:  1379, centroidHz:  755.6, makeupDb: [0.385, 0.201, 0.092, 0.037, 0.013, 0.004, 0.001, 0.000] } },
+          { midi:  75, centroidHz: 1050.8, ramp: { matchedCutoffHz:  1132, cutoffHz:  1556, centroidHz:  766.1, makeupDb: [0.243, 0.111, 0.050, 0.020, 0.008, 0.003, 0.001, 0.000] } },
+          { midi:  78, centroidHz: 1232.1, ramp: { matchedCutoffHz:  1196, cutoffHz:  1850, centroidHz:  922.3, makeupDb: [0.364, 0.180, 0.086, 0.037, 0.014, 0.005, 0.002, 0.000] } },
+          { midi:  81, centroidHz: 1450.2, ramp: { matchedCutoffHz:  1673, cutoffHz:  2200, centroidHz: 1074.3, makeupDb: [0.299, 0.147, 0.069, 0.031, 0.013, 0.005, 0.002, 0.000] } },
+          { midi:  84, centroidHz: 1315.9, ramp: { matchedCutoffHz:  1362, cutoffHz:  2617, centroidHz: 1167.1, makeupDb: [0.213, 0.091, 0.038, 0.016, 0.007, 0.003, 0.001, 0.000] } },
+          { midi:  87, centroidHz: 1401.6, ramp: { matchedCutoffHz:  1358, cutoffHz:  3112, centroidHz: 1274.6, makeupDb: [0.189, 0.085, 0.038, 0.017, 0.008, 0.003, 0.001, 0.000] } },
+          { midi:  90, centroidHz: 1696.4, ramp: { matchedCutoffHz:  1952, cutoffHz:  3700, centroidHz: 1543.1, makeupDb: [0.143, 0.068, 0.033, 0.016, 0.008, 0.004, 0.002, 0.001] } },
+          { midi:  93, centroidHz: 1805.6, ramp: { matchedCutoffHz:  1574, cutoffHz:  4400, centroidHz: 1695.7, makeupDb: [0.160, 0.082, 0.041, 0.020, 0.010, 0.005, 0.002, 0.001] } },
+          { midi:  96, centroidHz: 2114.8, ramp: { matchedCutoffHz:  2357, cutoffHz:  5233, centroidHz: 2011.7, makeupDb: [0.131, 0.069, 0.037, 0.019, 0.010, 0.005, 0.002, 0.001] } },
+          { midi:  99, centroidHz: 2188.1, ramp: { matchedCutoffHz:  2758, cutoffHz:  6223, centroidHz: 2101.9, makeupDb: [0.119, 0.067, 0.038, 0.021, 0.011, 0.006, 0.003, 0.001] } },
+          { midi: 102, centroidHz: 2317.8, ramp: { matchedCutoffHz:  2856, cutoffHz:  7400, centroidHz: 2259.6, makeupDb: [0.104, 0.062, 0.036, 0.021, 0.011, 0.006, 0.003, 0.001] } },
+          { midi: 105, centroidHz: 2728.7, ramp: { matchedCutoffHz:  3009, cutoffHz:  8800, centroidHz: 2689.2, makeupDb: [0.101, 0.064, 0.039, 0.024, 0.014, 0.008, 0.004, 0.002] } },
+          { midi: 108, centroidHz: 2713.2, ramp: { matchedCutoffHz:  3504, cutoffHz: 10466, centroidHz: 2679.6, makeupDb: [0.061, 0.041, 0.027, 0.017, 0.010, 0.006, 0.003, 0.001] } },
+        ],
+      },
+      {
+        roots: [
+          { midi:  21, centroidHz: 1020.7, ramp: { matchedCutoffHz:   972, cutoffHz:   972, centroidHz:  619.4, makeupDb: [1.182, 0.661, 0.303, 0.111, 0.033, 0.009, 0.002, 0.001] } },
+          { midi:  24, centroidHz:  992.2, ramp: { matchedCutoffHz:  1397, cutoffHz:  1397, centroidHz:  652.5, makeupDb: [0.543, 0.306, 0.140, 0.052, 0.017, 0.005, 0.002, 0.001] } },
+          { midi:  27, centroidHz: 1145.2, ramp: { matchedCutoffHz:  1452, cutoffHz:  1452, centroidHz:  740.1, makeupDb: [0.723, 0.372, 0.164, 0.064, 0.023, 0.007, 0.002, 0.001] } },
+          { midi:  30, centroidHz: 1016.1, ramp: { matchedCutoffHz:  1476, cutoffHz:  1476, centroidHz:  661.6, makeupDb: [0.467, 0.254, 0.112, 0.042, 0.014, 0.004, 0.001, 0.000] } },
+          { midi:  33, centroidHz: 1281.2, ramp: { matchedCutoffHz:  1436, cutoffHz:  1436, centroidHz:  776.0, makeupDb: [0.837, 0.477, 0.219, 0.084, 0.028, 0.009, 0.003, 0.001] } },
+          { midi:  36, centroidHz: 1342.9, ramp: { matchedCutoffHz:  1805, cutoffHz:  1805, centroidHz:  866.1, makeupDb: [0.472, 0.253, 0.118, 0.050, 0.020, 0.007, 0.002, 0.001] } },
+          { midi:  39, centroidHz: 1396.1, ramp: { matchedCutoffHz:  1459, cutoffHz:  1459, centroidHz:  809.9, makeupDb: [1.172, 0.689, 0.317, 0.121, 0.041, 0.013, 0.004, 0.001] } },
+          { midi:  42, centroidHz: 1189.1, ramp: { matchedCutoffHz:  1804, cutoffHz:  1804, centroidHz:  725.1, makeupDb: [0.319, 0.202, 0.106, 0.046, 0.017, 0.006, 0.002, 0.000] } },
+          { midi:  45, centroidHz: 1139.6, ramp: { matchedCutoffHz:  1811, cutoffHz:  1811, centroidHz:  709.6, makeupDb: [0.202, 0.116, 0.057, 0.024, 0.009, 0.003, 0.001, 0.000] } },
+          { midi:  48, centroidHz: 1447.0, ramp: { matchedCutoffHz:  1827, cutoffHz:  1827, centroidHz:  864.2, makeupDb: [0.514, 0.283, 0.136, 0.059, 0.023, 0.008, 0.002, 0.001] } },
+          { midi:  51, centroidHz: 1424.7, ramp: { matchedCutoffHz:  1616, cutoffHz:  1616, centroidHz:  851.7, makeupDb: [0.754, 0.408, 0.192, 0.082, 0.031, 0.011, 0.003, 0.001] } },
+          { midi:  54, centroidHz: 1377.6, ramp: { matchedCutoffHz:  1961, cutoffHz:  1961, centroidHz:  872.9, makeupDb: [0.367, 0.210, 0.107, 0.047, 0.018, 0.006, 0.002, 0.001] } },
+          { midi:  57, centroidHz: 1395.8, ramp: { matchedCutoffHz:  2330, cutoffHz:  2330, centroidHz:  875.2, makeupDb: [0.133, 0.078, 0.043, 0.022, 0.010, 0.005, 0.002, 0.001] } },
+          { midi:  60, centroidHz: 1511.5, ramp: { matchedCutoffHz:  2086, cutoffHz:  2086, centroidHz:  898.1, makeupDb: [0.228, 0.122, 0.057, 0.025, 0.011, 0.004, 0.001, 0.000] } },
+          { midi:  63, centroidHz: 1596.8, ramp: { matchedCutoffHz:  2290, cutoffHz:  2290, centroidHz:  992.0, makeupDb: [0.353, 0.195, 0.094, 0.041, 0.016, 0.006, 0.002, 0.001] } },
+          { midi:  66, centroidHz: 1596.2, ramp: { matchedCutoffHz:  2436, cutoffHz:  2436, centroidHz: 1058.2, makeupDb: [0.258, 0.147, 0.077, 0.036, 0.016, 0.006, 0.002, 0.001] } },
+          { midi:  69, centroidHz: 1811.9, ramp: { matchedCutoffHz:  2724, cutoffHz:  2724, centroidHz: 1202.6, makeupDb: [0.367, 0.222, 0.121, 0.060, 0.027, 0.011, 0.004, 0.001] } },
+          { midi:  72, centroidHz: 1620.3, ramp: { matchedCutoffHz:  3315, cutoffHz:  3315, centroidHz: 1154.2, makeupDb: [0.085, 0.050, 0.028, 0.016, 0.008, 0.004, 0.001, 0.000] } },
+          { midi:  75, centroidHz: 1702.5, ramp: { matchedCutoffHz:  2342, cutoffHz:  2342, centroidHz: 1050.7, makeupDb: [0.184, 0.107, 0.057, 0.029, 0.013, 0.005, 0.002, 0.000] } },
+          { midi:  78, centroidHz: 1972.5, ramp: { matchedCutoffHz:  2215, cutoffHz:  2215, centroidHz: 1232.0, makeupDb: [0.791, 0.475, 0.259, 0.123, 0.050, 0.018, 0.006, 0.001] } },
+          { midi:  81, centroidHz: 2389.5, ramp: { matchedCutoffHz:  2762, cutoffHz:  2762, centroidHz: 1450.1, makeupDb: [0.479, 0.320, 0.200, 0.114, 0.058, 0.025, 0.009, 0.002] } },
+          { midi:  84, centroidHz: 2049.2, ramp: { matchedCutoffHz:  2225, cutoffHz:  2617, centroidHz: 1385.2, makeupDb: [0.323, 0.168, 0.088, 0.045, 0.021, 0.009, 0.003, 0.001] } },
+          { midi:  87, centroidHz: 2056.5, ramp: { matchedCutoffHz:  2397, cutoffHz:  3112, centroidHz: 1501.8, makeupDb: [0.288, 0.151, 0.080, 0.042, 0.022, 0.010, 0.004, 0.001] } },
+          { midi:  90, centroidHz: 2181.7, ramp: { matchedCutoffHz:  3304, cutoffHz:  3700, centroidHz: 1744.4, makeupDb: [0.181, 0.096, 0.051, 0.026, 0.013, 0.006, 0.002, 0.001] } },
+          { midi:  93, centroidHz: 2570.9, ramp: { matchedCutoffHz:  2555, cutoffHz:  4400, centroidHz: 2099.5, makeupDb: [0.347, 0.201, 0.112, 0.060, 0.031, 0.014, 0.006, 0.002] } },
+          { midi:  96, centroidHz: 2575.0, ramp: { matchedCutoffHz:  3480, cutoffHz:  5233, centroidHz: 2302.9, makeupDb: [0.158, 0.088, 0.049, 0.027, 0.015, 0.008, 0.003, 0.001] } },
+          { midi:  99, centroidHz: 2697.0, ramp: { matchedCutoffHz:  3498, cutoffHz:  6223, centroidHz: 2497.3, makeupDb: [0.214, 0.132, 0.080, 0.047, 0.027, 0.014, 0.006, 0.002] } },
+          { midi: 102, centroidHz: 2787.2, ramp: { matchedCutoffHz:  3872, cutoffHz:  7400, centroidHz: 2637.3, makeupDb: [0.129, 0.079, 0.047, 0.027, 0.015, 0.008, 0.004, 0.001] } },
+          { midi: 105, centroidHz: 3161.5, ramp: { matchedCutoffHz:  4595, cutoffHz:  8800, centroidHz: 3064.9, makeupDb: [0.124, 0.082, 0.053, 0.033, 0.020, 0.011, 0.006, 0.003] } },
+          { midi: 108, centroidHz: 3265.7, ramp: { matchedCutoffHz:  4881, cutoffHz: 10466, centroidHz: 3190.9, makeupDb: [0.106, 0.075, 0.053, 0.036, 0.024, 0.015, 0.008, 0.004] } },
+        ],
+      },
+    ],
+  },
+};

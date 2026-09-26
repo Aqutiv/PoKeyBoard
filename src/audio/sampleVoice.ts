@@ -40,8 +40,22 @@ export function releaseTcFor(midi: number): number {
  */
 export const RESTRIKE_TC = 0.03;
 
+/**
+ * The resonance of a voice's tone filter (see `SampleSelection.toneCutoffHz`).
+ * Web Audio reads a lowpass's Q as decibels, not as a Q: −3.1 dB is a linear
+ * Q of 0.70, a Butterworth's, flat up to the cutoff, 3.1 dB down there and
+ * falling 12 dB an octave past it, with no bump anywhere. A Q.value of 0.7
+ * would be a linear Q of 1.08, peaking 1.7 dB above the cutoff.
+ */
+export const TONE_FILTER_Q_DB = -3.1;
+
 export interface SampleVoice {
   source: AudioBufferSourceNode;
+  /**
+   * The voice's tone filter, between the source and the envelope. Only a voice
+   * with a cutoff (`SampleSelection.toneCutoffHz`) has one.
+   */
+  filter?: BiquadFilterNode;
   gain: GainNode;
   sample: SampleSelection;
   startTime: number;
@@ -59,7 +73,34 @@ export interface SampleVoice {
   keyUpTime?: number;
 }
 
-/** The same source, loop coordinates, and envelope for live and offline audio. */
+/**
+ * The level a voice's envelope holds once its attack is done: its gain, with
+ * what its tone filter takes from its loudness given back, so a filtered note
+ * still sounds as loud as its velocity asks.
+ */
+function heldLevel(sample: SampleSelection): number {
+  return sample.gain * 10 ** ((sample.toneMakeupDb ?? 0) / 20);
+}
+
+/**
+ * A voice's tone filter, a lowpass at `cutoffHz`. Past Nyquist a lowpass
+ * passes everything anyway (as the top of a ramp played a few semitones up
+ * can ask for); kept under it, the browser has nothing to clamp and warn about.
+ */
+function toneFilter(context: BaseAudioContext, cutoffHz: number): BiquadFilterNode {
+  const filter = context.createBiquadFilter();
+  filter.type = 'lowpass';
+  const nyquist = context.sampleRate / 2;
+  filter.frequency.value = nyquist > 0 ? Math.min(cutoffHz, nyquist) : cutoffHz;
+  filter.Q.value = TONE_FILTER_Q_DB;
+  return filter;
+}
+
+/**
+ * The same source, loop coordinates, tone and envelope for live and offline
+ * audio. A voice with a cutoff runs source → tone filter → envelope; any other
+ * has no filter at all, and costs what it always did.
+ */
 export function startSampleVoice(
   context: BaseAudioContext,
   destination: AudioNode,
@@ -77,19 +118,33 @@ export function startSampleVoice(
     source.loopEnd = Math.min(sample.loop.end, sample.buffer.duration);
   }
   const gain = context.createGain();
+  const level = heldLevel(sample);
   const attackEnd = when + (sample.envelope?.attack ?? ATTACK_S);
   gain.gain.setValueAtTime(0, when);
-  gain.gain.linearRampToValueAtTime(sample.gain, attackEnd);
+  gain.gain.linearRampToValueAtTime(level, attackEnd);
   if (sample.envelope) {
     const decayStart = attackEnd + sample.envelope.hold;
     const decayEnd = decayStart + sample.envelope.decay;
-    gain.gain.setValueAtTime(sample.gain, decayStart);
+    gain.gain.setValueAtTime(level, decayStart);
     gain.gain.linearRampToValueAtTime(0, decayEnd);
   }
-  source.connect(gain);
+  const filter =
+    sample.toneCutoffHz === undefined ? undefined : toneFilter(context, sample.toneCutoffHz);
+  if (filter) {
+    source.connect(filter);
+    filter.connect(gain);
+  } else {
+    source.connect(gain);
+  }
   gain.connect(destination);
   source.start(when, sample.offset ?? 0);
-  const voice: SampleVoice = { source, gain, sample, startTime: when };
+  const voice: SampleVoice = {
+    source,
+    gain,
+    sample,
+    startTime: when,
+    ...(filter ? { filter } : {}),
+  };
   if (sample.envelope) {
     // A loop must eventually retire even while the key or pedal stays down.
     voice.stopTime = attackEnd + sample.envelope.hold + sample.envelope.decay;
@@ -115,10 +170,11 @@ export function sampleVoiceLevel(voice: SampleVoice, when: number): number {
   }
   const elapsed = Math.max(0, when - startTime);
   const attack = sample.envelope?.attack ?? ATTACK_S;
-  if (elapsed < attack) return (sample.gain * elapsed) / attack;
-  if (!sample.envelope) return sample.gain;
+  const level = heldLevel(sample);
+  if (elapsed < attack) return (level * elapsed) / attack;
+  if (!sample.envelope) return level;
   return (
-    sample.gain *
+    level *
     Math.max(0, 1 - Math.max(0, elapsed - attack - sample.envelope.hold) / sample.envelope.decay)
   );
 }
@@ -275,11 +331,27 @@ export function liftSampleVoiceFade(voice: SampleVoice, now: number): void {
 /** Lay the envelope's own ramps down again from `after` on, as `startSampleVoice` did. */
 function layEnvelopeAfter(voice: SampleVoice, after: number): void {
   const { gain, sample, startTime } = voice;
+  const level = heldLevel(sample);
   const attackEnd = startTime + (sample.envelope?.attack ?? ATTACK_S);
-  if (after < attackEnd) gain.gain.linearRampToValueAtTime(sample.gain, attackEnd);
+  if (after < attackEnd) gain.gain.linearRampToValueAtTime(level, attackEnd);
   if (!sample.envelope) return;
   const decayStart = attackEnd + sample.envelope.hold;
   const decayEnd = decayStart + sample.envelope.decay;
-  if (after < decayStart) gain.gain.setValueAtTime(sample.gain, decayStart);
+  if (after < decayStart) gain.gain.setValueAtTime(level, decayStart);
   if (after < decayEnd) gain.gain.linearRampToValueAtTime(0, decayEnd);
+}
+
+/**
+ * Take a voice that has ended out of the graph: its source, its tone filter if
+ * it has one, and its envelope. The one place a live voice is torn down,
+ * however it ended — let go, struck again, stolen, called off or stopped.
+ */
+export function disconnectSampleVoice(voice: SampleVoice): void {
+  for (const node of [voice.source, voice.filter, voice.gain]) {
+    try {
+      node?.disconnect();
+    } catch {
+      // Already disconnected — fine.
+    }
+  }
 }

@@ -78,6 +78,18 @@ export interface SampleSelection {
   releaseTc?: number;
   /** A string with no damper: releasing its key lets it ring on. */
   undamped?: boolean;
+  /**
+   * The cutoff of the lowpass that plays this note at the brightness its
+   * velocity asks for, in Hz at the note's own pitch (toneCalibrationMath.ts).
+   * Absent, the voice has no filter at all: the soft layer, the top of the loud
+   * one, the Wurlitzer, and any pack without a tone calibration.
+   */
+  toneCutoffHz?: number;
+  /**
+   * What the tone filter takes from the note's loudness, in dB, which the
+   * voice's envelope gives back on top of `gain`. Only with `toneCutoffHz`.
+   */
+  toneMakeupDb?: number;
 }
 
 export type SampleLoadPhase =
