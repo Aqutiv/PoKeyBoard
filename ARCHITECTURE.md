@@ -105,16 +105,38 @@ pack directory under `public/piano/`: three grands (Salamander, a Yamaha C5, the
 default; Headroom, a Yamaha C3; Steinway, the bitKlavier Grand's Steinway D,
 whose id and pack keep the library's name) and the Wurlitzer electric piano.
 The engine keeps a `SampleBank` per
-instrument but lets only the active one hold decoded buffers — a full pack of
-stereo float32 PCM is ~312 MB, so two resident packs is not an option on a phone.
+instrument but lets only the sounding one hold decoded buffers — plus, for the
+moment a switch takes, the one about to replace it. A full pack of stereo float32
+PCM is ~300 MB (its core ~130 MB), so resident packs are not an option on a phone,
+and a downloaded piano still has to be decoded before it can play.
 
-Switching (`AudioEngine.setInstrument`) releases sounding notes rather than
-cross-fading two different pianos, re-points the load-progress fan-out at the new
-bank (which is why `data-piano-ready` drops to false), decodes the new core pack,
-replays the last requested keyboard range, and only then frees the outgoing
-bank's buffers — so a rapid A→B→A toggle never re-decodes, and there is no window
-where nothing is playable. A generation counter stops an out-of-order switch from
-freeing the bank that just became active.
+Switching (`AudioEngine.setInstrument`) keeps two ids: the piano _selected_
+(`activeInstrument`, which takes are stamped with, synchronously) and the one
+_sounding_ (`bank`, which every note is struck from). While the sounding piano is
+ready the switch is seamless: it plays on while the new bank decodes its core, the
+remembered keyboard range, and the `cover` the transport passes — the loaded
+take's key span, so every note it plays sounds on the new piano from its first.
+The range is re-read after each load, so a keyboard that moves meanwhile is
+covered too. Then the new piano takes over in one synchronous step, and plays from
+the next note struck: nothing is released or cross-faded, because a voice holds a
+buffer of the piano it began on and finishes there — notes ringing, and those
+already queued in playback's 150 ms look-ahead. Only then are every other bank's
+buffers freed, so a rapid A→B→A toggle never re-decodes (choosing the sounding
+piano again just calls the switch off). If the new core cannot be loaded, the
+sounding piano is selected again, `getSwitchState().failed` names the one that
+failed, and persistence writes the store back so the pickers and the take's stamp
+follow. With nothing playable to keep — the first load, or a failed piano — the
+switch is immediate as before: sounding notes are released and the progress
+fan-out points at the new bank (which is why `data-piano-ready` drops to false).
+A generation counter stops an out-of-order switch from taking over or freeing the
+bank that just became active, and `SampleBank.releaseBuffers` calls off a load
+wherever it has got to — its manifest, the files in flight and those still queued
+— so a switch called off leaves nothing decoded behind.
+
+The transport never pauses for a switch. Play and Resume need only the sounding
+piano (`isPianoPlayable`); Record waits for the selected one (`isPianoReady`), so a
+pass is played on one piano. An export awaits `whenSwitchSettled()` so it renders
+the piano the take is stamped with.
 
 Progress subscription lives on the engine, not the bank: `useSyncExternalStore`
 captures its subscribe callback once, so a per-bank subscription would go deaf

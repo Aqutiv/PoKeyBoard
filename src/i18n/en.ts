@@ -495,6 +495,8 @@ export const en: Messages = {
     pianoBitklavierDesc: 'bitKlavier’s D concert grand, recorded at Princeton — rich and even',
     pianoWurlitzerDesc: 'EP203W electric piano',
     pianoSwitching: 'Loading the new piano…',
+    pianoSwitchFailed: ({ piano, current }) =>
+      `Could not load ${piano} — still playing ${current}.`,
     pianoVolume: 'Piano volume',
     reverb: 'Reverb',
     reverbRoom: 'Reverb room',

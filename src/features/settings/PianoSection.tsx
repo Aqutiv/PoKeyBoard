@@ -5,9 +5,11 @@ import { REVERB_ROOMS, reverbRoomOf, type ReverbRoom } from '@/domain/takeTypes'
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
-import { usePianoSwitching, useTransportState } from '@/app/hooks/useTransport';
+import { usePianoSwitchState } from '@/app/hooks/useAudioEngine';
+import { useTransportState } from '@/app/hooks/useTransport';
 import { transportController } from '@/features/transport/transportController';
 import { formatMB } from './formatBytes';
+import { PianoSwitchStatus } from './PianoSwitchStatus';
 
 /** Descriptions only — the piano's name comes from the registry, untranslated. */
 const PIANO_DESCRIPTION_KEYS: Record<
@@ -44,7 +46,7 @@ export function PianoSection() {
   const instrument = useTakeStore((state) => state.take.instrument);
 
   const [packs, setPacks] = useState<Partial<Record<PianoInstrumentId, PackState>>>({});
-  const switching = usePianoSwitching();
+  const switchState = usePianoSwitchState();
   const transportState = useTransportState();
 
   const setPack = useCallback((id: PianoInstrumentId, state: PackState) => {
@@ -118,8 +120,8 @@ export function PianoSection() {
     );
   }, []);
 
-  // The preview has to wait for the new core pack: until it decodes, getSample
-  // returns nothing and the note would be silent.
+  // The preview waits for the new piano to take over: until it has decoded,
+  // the previous one is still the one playing, and would sound the note.
   const selectPiano = useCallback(
     (id: PianoInstrumentId) => {
       const audition = transportController.getState() === 'idle';
@@ -151,11 +153,11 @@ export function PianoSection() {
                   type="radio"
                   name="piano-instrument"
                   checked={active}
+                  // Open while a new piano loads: the one playing plays on meanwhile.
                   disabled={
-                    switching ||
-                    (transportState !== 'idle' &&
-                      transportState !== 'paused' &&
-                      transportState !== 'playing')
+                    transportState !== 'idle' &&
+                    transportState !== 'paused' &&
+                    transportState !== 'playing'
                   }
                   onChange={() => selectPiano(piano.id)}
                 />
@@ -224,7 +226,7 @@ export function PianoSection() {
             </div>
           );
         })}
-        {switching ? <span aria-live="polite">{m.settings.pianoSwitching}</span> : null}
+        <PianoSwitchStatus state={switchState} />
       </div>
 
       <label className="setting-row">

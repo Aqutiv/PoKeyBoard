@@ -526,6 +526,8 @@ export interface Messages {
     pianoBitklavierDesc: string;
     pianoWurlitzerDesc: string;
     pianoSwitching: string;
+    /** A piano that failed to load, and the one that plays on instead. */
+    pianoSwitchFailed: (p: { piano: string; current: string }) => string;
     pianoVolume: string;
     reverb: string;
     /** The room the reverb models, and its choices, smallest first. */

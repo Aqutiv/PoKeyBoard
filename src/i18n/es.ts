@@ -493,6 +493,8 @@ export const es: Messages = {
       'Piano de concierto D de bitKlavier, grabado en Princeton: rico y homogéneo',
     pianoWurlitzerDesc: 'piano eléctrico EP203W',
     pianoSwitching: 'Cargando el piano nuevo…',
+    pianoSwitchFailed: ({ piano, current }) =>
+      `No se pudo cargar ${piano}; sigue sonando ${current}.`,
     pianoVolume: 'Volumen del piano',
     reverb: 'Reverberación',
     reverbRoom: 'Sala de la reverberación',

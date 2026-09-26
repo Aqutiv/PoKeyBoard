@@ -1,5 +1,5 @@
 import { useTransportState } from './hooks/useTransport';
-import { usePianoReady } from './hooks/useAudioEngine';
+import { usePianoPlayable } from './hooks/useAudioEngine';
 import { useRouter } from './routerContext';
 import { transportController } from '@/features/transport/transportController';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
@@ -10,7 +10,7 @@ import { useSettingsStore } from '@/state/useSettingsStore';
 export function NowPlaying() {
   const { route, navigate } = useRouter();
   const state = useTransportState();
-  const pianoReady = usePianoReady();
+  const pianoPlayable = usePianoPlayable();
   const take = useTakeStore((s) => s.take);
   const practicing = useSettingsStore((s) => s.playbackMode !== 'simple');
   const m = useMessages();
@@ -31,7 +31,7 @@ export function NowPlaying() {
       <button
         type="button"
         className="btn btn--small"
-        disabled={state === 'paused' && !practicing && !pianoReady}
+        disabled={state === 'paused' && !practicing && !pianoPlayable}
         onClick={() => {
           if (state === 'playing') transportController.pause();
           else if (practicing) navigate('play');

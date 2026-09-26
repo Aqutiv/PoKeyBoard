@@ -2,7 +2,7 @@ import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { TooltipButton } from '@/ui/TooltipButton';
 import { useCallback } from 'react';
 import { usePlayheadMs, useTrainingWaiting, useTransportState } from '@/app/hooks/useTransport';
-import { usePianoReady } from '@/app/hooks/useAudioEngine';
+import { usePianoPlayable, usePianoReady } from '@/app/hooks/useAudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
@@ -25,6 +25,8 @@ export function TransportControls() {
   const desktop = useMediaQuery('(min-width: 900px) and (min-height: 501px)');
   const playbackMode = useSettingsStore((s) => s.playbackMode);
   const state = useTransportState();
+  // Play carries on through a change of piano; a recording waits for the new one.
+  const pianoPlayable = usePianoPlayable();
   const pianoReady = usePianoReady();
   const playheadMs = usePlayheadMs();
   const take = useTakeStore((s) => s.take);
@@ -112,7 +114,7 @@ export function TransportControls() {
           className="transport__btn transport__btn--play"
           aria-label={playing ? m.transport.pause : m.transport.play}
           onClick={onPlayPause}
-          disabled={!playing && (!pianoReady || !canTransition(state, 'PLAY'))}
+          disabled={!playing && (!pianoPlayable || !canTransition(state, 'PLAY'))}
         >
           {playing ? (
             <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>

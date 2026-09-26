@@ -1,7 +1,6 @@
 import { useSyncExternalStore } from 'react';
-import { audioEngine } from '@/audio/AudioEngine';
+import { audioEngine, type InstrumentSwitchState } from '@/audio/AudioEngine';
 import type { EngineStatus, SampleLoadProgress } from '@/audio/audioTypes';
-import { usePianoSwitching } from './useTransport';
 
 // Subscribe functions must be referentially stable across renders, and every
 // getSnapshot must return a stable reference until an event fires — both are
@@ -23,9 +22,28 @@ export function useSampleLoadProgress(): SampleLoadProgress {
   return useSyncExternalStore(subscribeProgress, getProgress);
 }
 
+const subscribeSwitch = (onStoreChange: () => void) => audioEngine.subscribeSwitch(onStoreChange);
+const getSwitchState = () => audioEngine.getSwitchState();
+
+/** Where a change of piano stands: the one decoding, and the last that failed. */
+export function usePianoSwitchState(): InstrumentSwitchState {
+  return useSyncExternalStore(subscribeSwitch, getSwitchState);
+}
+
+/** A new piano is decoding while the previous one plays on. */
+export function usePianoSwitching(): boolean {
+  return usePianoSwitchState().pending !== null;
+}
+
+/** The piano playing can play — all Play and Resume need, even mid-switch. */
+export function usePianoPlayable(): boolean {
+  return useSyncExternalStore(subscribeProgress, getCoreReady);
+}
+
+/** The piano chosen is the one playing, and ready; recording waits for this. */
 export function usePianoReady(): boolean {
   const switching = usePianoSwitching();
-  const coreReady = useSyncExternalStore(subscribeProgress, getCoreReady);
+  const coreReady = usePianoPlayable();
   return !switching && coreReady;
 }
 

@@ -138,9 +138,10 @@ class PersistenceService {
       // setters entirely.
       if (state.pianoInstrument !== previous.pianoInstrument) {
         void audioEngine.setInstrument(state.pianoInstrument);
-        // setInstrument re-points the engine synchronously, so the take can be
-        // stamped now; waiting for the samples to decode would leave a window
-        // where the take names a piano that is not the one playing.
+        // setInstrument takes the choice synchronously, so the take is stamped
+        // with it now. The previous piano may play on for the moment the new
+        // one takes to decode; an export waits for the new one, so the take
+        // never renders on a piano other than the one it names.
         useTakeStore.getState().stampActiveInstrument();
       }
       // The levels and the room are owned here for the same reason: a restored
@@ -174,6 +175,15 @@ class PersistenceService {
         }
       }
       this.scheduleSettingsSave();
+    });
+    // A piano that could not be loaded is handed back: the engine plays on
+    // with the previous one and chooses it again. The store follows, so the
+    // pickers, the saved setting and the take's stamp name the piano heard.
+    audioEngine.subscribeSwitch(() => {
+      const { failed } = audioEngine.getSwitchState();
+      if (failed && useSettingsStore.getState().pianoInstrument === failed) {
+        useSettingsStore.setState({ pianoInstrument: audioEngine.activeInstrument.id });
+      }
     });
     transportController.onRecordingFinalized.add(() => {
       void this.flushSave();
