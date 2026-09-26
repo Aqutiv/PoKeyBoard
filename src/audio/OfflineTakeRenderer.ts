@@ -230,16 +230,18 @@ export async function renderTakeForExport(
     );
   }
 
-  // Make sure every root the take needs is decoded (range shifts etc.).
-  let minMidi = 127;
-  let maxMidi = 0;
-  for (const note of take.notes) {
-    if (note.midi < minMidi) minMidi = note.midi;
-    if (note.midi > maxMidi) maxMidi = note.midi;
-  }
-  await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
-
   const effectiveNotes = notesToRender(take);
+  // Make sure every root the played notes need is decoded (range shifts etc.).
+  // A note written but not played needs none, so it cannot widen the range.
+  if (effectiveNotes.length > 0) {
+    let minMidi = 127;
+    let maxMidi = 0;
+    for (const note of effectiveNotes) {
+      if (note.midi < minMidi) minMidi = note.midi;
+      if (note.midi > maxMidi) maxMidi = note.midi;
+    }
+    await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
+  }
   const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
   // Every sample is chosen before the render starts, though most voices are
   // made during it: the piano a render begins with is the one it ends with.

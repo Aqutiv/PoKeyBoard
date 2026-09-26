@@ -1,4 +1,5 @@
 import { noteHand, type Hand } from './hands';
+import { isSilentNote } from './noteEvents';
 import { createTakeTempoMap } from './tempoMap';
 import type { Take } from './takeTypes';
 
@@ -143,13 +144,16 @@ export function takeToMidi(take: Take, options: MidiExportOptions): Uint8Array<A
   const tickAt = (ms: number): number =>
     Math.max(0, Math.round(map.beatAtMs(ms) * quartersPerBeat * MIDI_TICKS_PER_QUARTER));
 
+  // A note written but not played has no note-on to give: velocity 0 is a
+  // note-off in MIDI, and merged into a twin it would hold that note on.
+  const played = take.notes.filter((note) => !isSilentNote(note));
   const hands: Record<Hand, PlayedNote[]> = {
     right: playedNotes(
-      take.notes.filter((note) => noteHand(note) === 'right'),
+      played.filter((note) => noteHand(note) === 'right'),
       tickAt,
     ),
     left: playedNotes(
-      take.notes.filter((note) => noteHand(note) === 'left'),
+      played.filter((note) => noteHand(note) === 'left'),
       tickAt,
     ),
   };

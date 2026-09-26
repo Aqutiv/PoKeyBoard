@@ -137,10 +137,18 @@ describe('scrub auditions', () => {
     playCalibrated(true);
     const first: NoteEvent = { ...loud, id: 'a', velocity: 0.9 };
     const second: NoteEvent = { ...loud, id: 'b', velocity: 0.7 };
-    expect(audition([first, second])).toEqual([
+    const softThenLoud = [
       [64, 0.7 * 0.85],
       [64, 0.9 * 0.85],
-    ]);
+    ];
+    expect(audition([first, second])).toEqual(softThenLoud);
+    // And the same crossing them backward.
+    const back = audition([first, second], (to) => {
+      scrubController.update(to);
+      vi.mocked(audioEngine.scheduleNote).mockClear();
+      scrubController.update(0);
+    });
+    expect(back).toEqual(softThenLoud);
   });
 
   it('keep the floor as loud as it was before the grands were calibrated', () => {
