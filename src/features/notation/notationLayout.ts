@@ -890,19 +890,18 @@ function buildBeamGroups(
         // is whole tuplets. A figure split between the hands leaves a fragment
         // on each staff, and "2" over two thirds of a triplet does not mean a
         // shorter triplet, it means a duplet: a different rhythm altogether.
-        // Where the score bracketed the figure, though, a run that is only
-        // part of it is still that tuplet — its first note shared with another
-        // voice, or a rest — and takes the bracket's own numeral, as the score
-        // prints it: six for a sextuplet, whatever ratio its values are drawn
-        // in. Undeclared, a fragment says nothing and lets the beam speak.
+        // Where the score bracketed the figure, though, the run takes the
+        // bracket's own numeral, as the score prints it, however the beam
+        // divides it: a part of it — its first note shared with another voice,
+        // or a rest — is still that tuplet, half a sextuplet is still a six,
+        // and a triplet of eighths split into sixteenths is still marked 3.
+        // Undeclared, a fragment says nothing and lets the beam speak.
         const first = run[0] as ChordGroup;
         const ratio = first.symbol.tuplet;
         const bracket = first.tupletNumeral;
-        // A part is anything shorter than its bracket, even a run that would
-        // make whole triplets: half a sextuplet is still a sextuplet.
         const tupletCount = !ratio
           ? null
-          : first.tupletGroup !== undefined && bracket !== undefined && run.length < bracket
+          : first.tupletGroup !== undefined && bracket !== undefined
             ? bracket
             : run.length % ratio.actual === 0
               ? run.length

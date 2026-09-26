@@ -945,3 +945,31 @@ describe('a written tuplet note whose remainder no value states', () => {
     expect(layout.chords.filter((chord) => chord.notes[0]!.id === 'long')).toHaveLength(1);
   });
 });
+
+describe('the numeral a whole bracket carries', () => {
+  it('keeps a triplet bracket’s 3 over the sixteenths that divide it', () => {
+    // One bracket marked 3 over a beat of triplet sixteenths — six of them,
+    // or four: the score prints its 3 either way, not the 6 they would count.
+    const OPTS = {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16' as const,
+    };
+    for (const slots of [
+      [0, 1, 2, 3, 4, 5],
+      [0, 1, 2, 3],
+    ]) {
+      const notes: NoteEvent[] = slots.map((slot) => ({
+        id: `s${slot}`,
+        midi: 72 + slot,
+        startMs: Math.round((slot * 500) / 6),
+        durationMs: 83,
+        velocity: 0.5,
+        tuplet: { actual: 3, normal: 2, unit: 16, group: 0 },
+      }));
+      const layout = layoutScore(notes, OPTS);
+      expect(layout.chords).toHaveLength(slots.length);
+      expect(layout.beams.map((beam) => beam.tupletCount)).toEqual([3]);
+    }
+  });
+});
