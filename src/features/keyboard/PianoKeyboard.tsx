@@ -118,6 +118,14 @@ interface PianoKeyboardProps {
    */
   anchorMidi?: number;
   onAnchorChange?: (midi: number) => void;
+  /**
+   * With `anchorMidi`: a new value re-parks the letter rows' octave on the
+   * anchor even when the anchor itself has not moved. Learn passes the step's
+   * id, so an octave moved with Z/X lasts for the step it was moved in —
+   * G major needs one to reach its top notes — and the next step's keys play
+   * where its prose says they do.
+   */
+  parkId?: string;
   /** Reported whenever the visible window changes, including on first layout. */
   onRangeChange?: (range: { lowMidi: number; highMidi: number }) => void;
   /**
@@ -137,6 +145,7 @@ export function PianoKeyboard({
   revealTargets = false,
   anchorMidi: anchorMidiOverride,
   onAnchorChange,
+  parkId,
   onRangeChange,
   minVisibleWhites,
 }: PianoKeyboardProps) {
@@ -223,10 +232,14 @@ export function PianoKeyboard({
   //
   // Play passes no override — it persists its own anchor — so this is inert
   // there, and Z/X keep their absolute meaning outside a lesson.
+  //
+  // `parkId` re-runs it where the anchor alone would not: two steps parked on
+  // the same key share an anchor, so an octave moved with Z/X in the first
+  // would otherwise carry into the second. It is not read, only listened to.
   useEffect(() => {
     if (anchorMidiOverride === undefined) return;
     baseOctave.set(Math.floor(layout.lowMidi / 12) * 12);
-  }, [anchorMidiOverride, layout.lowMidi, baseOctave]);
+  }, [anchorMidiOverride, layout.lowMidi, baseOctave, parkId]);
 
   // Load any sample roots the playable registers need: the visible range, plus
   // wherever Z/X and the bumpers have moved the base. Those notes are off

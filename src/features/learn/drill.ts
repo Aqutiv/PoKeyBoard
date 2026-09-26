@@ -29,6 +29,11 @@ export interface DrillRound {
   staves?: StaffMode;
   /** For a degree round, the degree asked for — the prompt names it, not a note. */
   degree?: number;
+  /**
+   * For a degree round that moves between keys, the key it is in, in fifths —
+   * the prompt names it beside the degree.
+   */
+  key?: number;
   /** For a chord round, the chord asked for — the prompt names it. */
   chord?: NamedChord;
   /**
@@ -77,6 +82,22 @@ export function drillRoundAt(pool: DrillPool, round: number): DrillRound | null 
     // is named — the name would be the answer.
     const pitchClass = ((pool.tonic + offset) % 12) as PitchClass;
     return { kind: pool.kind, spec: { kind: 'pitchClass', pitchClass }, label: '', degree };
+  }
+
+  if (pool.kind === 'keyDegree') {
+    const asked = roundEntryAt(pool.questions, round);
+    const offset = asked === undefined ? undefined : MAJOR_SCALE_STEPS[asked.degree - 1];
+    if (asked === undefined || offset === undefined) return null;
+    // Any octave, as for a degree in one key: the question is where the note
+    // lives in the scale. Nothing is drawn and no note is named.
+    const pitchClass = ((majorTonicPitchClass(asked.key) + offset) % 12) as PitchClass;
+    return {
+      kind: pool.kind,
+      spec: { kind: 'pitchClass', pitchClass },
+      label: '',
+      degree: asked.degree,
+      key: asked.key,
+    };
   }
 
   if (pool.kind === 'keyTonic') {
