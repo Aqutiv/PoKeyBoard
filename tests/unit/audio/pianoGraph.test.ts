@@ -3,8 +3,9 @@ import {
   compressorMakeupDb,
   LIMITER_LOOKAHEAD_S,
   LIMITER_MAKEUP_DB,
+  LIMITER_RELEASE_S,
   LIMITER_THRESHOLD_DB,
-  LIMITER_WARMUP_FADE_S,
+  LIMITER_WARMUP_RELEASE_S,
   LIMITER_WARMUP_S,
   LIVE_OUTPUT_GAIN_DB,
 } from '@/audio/gainStaging';
@@ -38,6 +39,7 @@ interface StubParam {
   setTargetAtTime(value: number, when: number, tc: number): void;
   setValueAtTime(value: number, when: number): void;
   linearRampToValueAtTime(value: number, when: number): void;
+  exponentialRampToValueAtTime(value: number, when: number): void;
 }
 
 function param(initial = 0): StubParam {
@@ -54,6 +56,9 @@ function param(initial = 0): StubParam {
     },
     linearRampToValueAtTime(value, time) {
       this.events.push({ type: 'linearRampToValueAtTime', value, time });
+    },
+    exponentialRampToValueAtTime(value, time) {
+      this.events.push({ type: 'exponentialRampToValueAtTime', value, time });
     },
   };
 }
@@ -240,7 +245,9 @@ describe('createPianoGraph', () => {
     expect(limiter.knee?.value).toBe(0);
     expect(limiter.ratio?.value).toBe(20);
     expect(limiter.attack?.value).toBe(0.001);
-    expect(limiter.release?.value).toBe(0.3);
+    // The release it settles at, once warmed up.
+    expect(LIMITER_RELEASE_S).toBe(0.3);
+    expect(limiter.release?.events.at(-1)?.value).toBe(LIMITER_RELEASE_S);
   });
 
   it('sets the piano to the live output gain, after master and ahead of the limiter', () => {
@@ -306,9 +313,11 @@ describe('createPianoGraph', () => {
       ['gain 0.7', 'gain 0.91', 'gain 0.85', 'gain 1', 'destination'],
       ['gain 0.7', 'gain 0.18', 'convolver', 'gain 1', 'gain 0.85', 'gain 1', 'destination'],
     ]);
-    expect(findNode(created, 'compressor').outputs).toEqual([]);
+    const limiter = findNode(created, 'compressor') as StubNode & { release: StubParam };
+    expect(limiter.outputs).toEqual([]);
+    expect(limiter.release.events).toEqual([]);
     expect(findNode(created, 'waveshaper').outputs).toEqual([]);
-    // No way round a limiter that is not there, and no delay anywhere.
+    // No delay anywhere.
     for (const n of created) {
       if (n.kind === 'delay') expect(n.outputs).toEqual([]);
     }
@@ -341,74 +350,55 @@ describe('createPianoGraph', () => {
     expect(lookAhead.delayTime.value).toBe(LIMITER_LOOKAHEAD_S);
   });
 
-  /** The live graph's two ways from the output gain to the soft clipper. */
-  function warmupPaths(created: StubNode[]) {
-    const limiter = findNode(created, 'compressor');
-    const outputGain = created.find((n) => n.outputs.includes(limiter)) as StubNode;
-    const bypassDelay = outputGain.outputs.find((n) => n.kind === 'delay') as StubNode & {
-      delayTime: StubParam;
-    };
-    const bypassGain = bypassDelay?.outputs[0] as StubNode & { gain: StubParam };
-    const limiterGain = limiter.outputs[0] as StubNode & { gain: StubParam };
-    const softClip = findNode(created, 'waveshaper');
-    const preGain = created.find((n) => n.outputs.includes(softClip)) as StubNode;
-    return { outputGain, bypassDelay, bypassGain, limiterGain, preGain };
-  }
-
-  it('goes round the limiter while it settles, as late and as loud as it passes the piano', () => {
-    // A newly made limiter ducks for its first few hundred ms: the piano goes
-    // round it meanwhile, through the look-ahead the limiter delays it by and
-    // at the makeup gain it gives it, so the two ways match exactly.
+  it('has the piano go through the limiter alone, from its first sound on', () => {
+    // No way round it and nothing switched in or out while it warms up: a
+    // loud chord is limited from the very start like any other.
     const { context, created } = createStubContext();
     createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
-    const { outputGain, bypassDelay, bypassGain, limiterGain, preGain } = warmupPaths(created);
-    expect(outputGain.outputs).toHaveLength(2);
-    expect(bypassDelay?.delayTime.value).toBe(LIMITER_LOOKAHEAD_S);
-    expect(bypassGain.gain.value).toBeCloseTo(10 ** (LIMITER_MAKEUP_DB / 20), 10);
-    expect(bypassGain.outputs).toEqual([preGain]);
-    // The limiter's own way in starts shut, and both meet at the soft clipper.
-    expect(limiterGain.kind).toBe('gain');
-    expect(limiterGain.gain.value).toBe(0);
-    expect(limiterGain.outputs).toEqual([preGain]);
+    const limiter = findNode(created, 'compressor');
+    const outputGain = created.find((n) => n.outputs.includes(limiter)) as StubNode;
+    expect(outputGain.outputs).toEqual([limiter]);
+    const softClip = findNode(created, 'waveshaper');
+    const preGain = created.find((n) => n.outputs.includes(softClip)) as StubNode;
+    expect(limiter.outputs).toEqual([preGain]);
+    // The only delay is the clicks' look-ahead.
+    const delays = created.filter((n) => n.kind === 'delay');
+    expect(delays).toHaveLength(1);
+    expect(reachable(outputGain).has(delays[0] as StubNode)).toBe(false);
   });
 
-  it('crossfades onto the limiter once it has settled, counted on the audio clock', () => {
+  it('eases a newly made limiter from a fast release to its own, on the audio clock', () => {
+    // A DynamicsCompressorNode is born ducking and recovers at its release
+    // rate, so it is born with a fast one, eased to its own over the warm-up.
     // The clock stands still until the context runs, so the warm-up starts
     // with the audio, whenever the graph was made.
     const { context, created } = createStubContext({ currentTime: 3.5 });
     createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
-    const { bypassGain, limiterGain } = warmupPaths(created);
-    expect(LIMITER_WARMUP_S).toBe(0.35);
-    expect(LIMITER_WARMUP_FADE_S).toBe(0.05);
-    const settled = 3.5 + LIMITER_WARMUP_S;
-    const faded = settled + LIMITER_WARMUP_FADE_S;
-    const makeup = 10 ** (LIMITER_MAKEUP_DB / 20);
-    expect(limiterGain.gain.events).toEqual([
-      { type: 'setValueAtTime', value: 0, time: expect.closeTo(settled, 10) },
-      { type: 'linearRampToValueAtTime', value: 1, time: expect.closeTo(faded, 10) },
-    ]);
-    expect(bypassGain.gain.events).toEqual([
+    const limiter = findNode(created, 'compressor') as StubNode & { release: StubParam };
+    expect(LIMITER_WARMUP_RELEASE_S).toBe(0.001);
+    expect(LIMITER_WARMUP_S).toBe(0.04);
+    expect(limiter.release.value).toBe(LIMITER_WARMUP_RELEASE_S);
+    expect(limiter.release.events).toEqual([
       {
-        type: 'setValueAtTime',
-        value: expect.closeTo(makeup, 10),
-        time: expect.closeTo(settled, 10),
+        type: 'exponentialRampToValueAtTime',
+        value: LIMITER_RELEASE_S,
+        time: expect.closeTo(3.5 + LIMITER_WARMUP_S, 10),
       },
-      { type: 'linearRampToValueAtTime', value: 0, time: expect.closeTo(faded, 10) },
     ]);
   });
 
   it('counts the look-ahead in whole frames, as the limiter does', () => {
     // A compressor delays by a whole number of frames — 264 at 44.1 kHz, not
     // 264.6 — and a DelayNode given a fraction interpolates between two,
-    // dulling the top octave; the way round would then neither match the
-    // limiter nor line up with it.
+    // dulling the top octave: the clicks would neither land with the piano
+    // nor sound as they should.
     const { context, created } = createStubContext({ sampleRate: 44100 });
     createPianoGraph(context, { masterVolume: 0.85, reverbMix: 0.18 });
     const delays = created.filter((n) => n.kind === 'delay') as unknown as Array<{
       delayTime: StubParam;
     }>;
-    expect(delays).toHaveLength(2);
-    for (const delay of delays) expect(delay.delayTime.value * 44100).toBeCloseTo(264, 9);
+    expect(delays).toHaveLength(1);
+    expect((delays[0] as { delayTime: StubParam }).delayTime.value * 44100).toBeCloseTo(264, 9);
   });
 
   it('pulls the dry path back as reverb comes up', () => {

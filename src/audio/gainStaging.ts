@@ -60,19 +60,37 @@ export const LIMITER_RELEASE_S = 0.3;
 export const LIMITER_LOOKAHEAD_S = 0.006;
 
 /**
- * How long the piano goes round a newly made limiter. A DynamicsCompressorNode
- * starts out as if it had just caught a peak and ducks everything while it
- * recovers, for as long as its release says: 21 dB down at first, and within
- * 0.1 dB of settled only 0.28 s in (Chromium, at 44.1 and 48 kHz alike). Live,
- * those are the first notes of a session, since the gesture that starts the
- * audio plays one. So until then the piano takes a way round, as late and as
- * loud as the settled limiter would pass it, then crossfades onto the limiter.
- * Counted on the audio clock, which stands still until the context first runs.
+ * The limiter's release when it is made: the warm start. A
+ * DynamicsCompressorNode starts out as if it had just caught a peak — it
+ * ducks everything and recovers at its release rate, which at 0.3 s takes
+ * 0.28 s — and live, those are the first notes of a session: the gesture that
+ * starts the audio plays one. Born with a 1 ms release it is back within 1 dB
+ * in 25 ms and 0.1 dB in 90 ms. It cannot do better than that, however fast
+ * the release: its own peak detector takes as long (Chromium, at 44.1 and
+ * 48 kHz alike).
  */
-export const LIMITER_WARMUP_S = 0.35;
+export const LIMITER_WARMUP_RELEASE_S = 0.001;
 
-/** How long the piano takes to cross from the way round onto the limiter. */
-export const LIMITER_WARMUP_FADE_S = 0.05;
+/**
+ * How long the release takes to ease, exponentially, from the warm-up value
+ * to its own, on the audio clock, which stands still until the context first
+ * runs. The piano keeps its one way through the limiter throughout; only how
+ * fast the limiter lets go changes.
+ *
+ * What that buys, and what it costs, measured against the same sound struck
+ * on a limiter long settled:
+ * - a quiet first note is within 1–1.75 dB over its first 50 ms and 1.1 dB
+ *   over 250 ms — the fastest-decaying, highest notes the most — where it used
+ *   to be 11–13 dB and 2–8.5 dB down;
+ * - a loud first chord bends a handful of samples at the soft clipper in its
+ *   first 25 ms — 5 on La Campanella's loudest — because a release this fast
+ *   lets go between a dense chord's peaks and catches the next a moment late;
+ *   from 100 ms on it is held within 0.15 dB of any other chord.
+ * The shorter this is, the less of the second; the longer, the more of the
+ * first note's dip is gone. A first sound held back until the limiter had
+ * settled would avoid both, at the cost of starting it late.
+ */
+export const LIMITER_WARMUP_S = 0.04;
 
 /**
  * The gain a DynamicsCompressorNode gives everything it passes, whatever its
