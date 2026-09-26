@@ -75,7 +75,24 @@ export function useExercise(
     // eventual release still has to balance the held set.
     heldRef.current = new Set(audioEngine.getActiveNotes());
 
-    return audioEngine.subscribeInput((event) => {
+    // The pedal as one pedal: whichever of the on-screen button, Space or a
+    // MIDI pedal moved it. The per-source `sustain` input events below would
+    // report a second source going down as a press while the first still
+    // held the dampers up — no change at all to the ear, so none to the
+    // lesson. The engine's combined state reports only real changes, and
+    // also a panic reset, which emits no input event at all.
+    const stopPedal = audioEngine.subscribeSustain((down) => {
+      const audioTime = audioEngine.currentTime;
+      const input: ExerciseInput = {
+        kind: 'pedal',
+        down,
+        atMs: audioTime * 1000,
+        atBeats: beatsAt?.(audioTime) ?? null,
+      };
+      setState((current) => reduceExercise(spec, current, input));
+    });
+
+    const stopKeys = audioEngine.subscribeInput((event) => {
       if (event.type === 'sustain') return;
       const atMs = event.audioTime * 1000;
       // From seconds, not from `atMs`: the grid speaks audio-clock seconds, so
@@ -101,6 +118,10 @@ export function useExercise(
       // The reducer is pure, so a double invocation under StrictMode is safe.
       setState((current) => reduceExercise(spec, current, input));
     });
+    return () => {
+      stopPedal();
+      stopKeys();
+    };
     // `beatsAt` must be referentially stable — `useLessonClick` returns a
     // ref-backed callback for exactly this reason. An unstable one would
     // resubscribe on every render and drop the held set with each rebuild.

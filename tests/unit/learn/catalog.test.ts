@@ -14,6 +14,7 @@ import { RHYTHM_AND_BEAT } from '@/features/learn/chapters/rhythmAndBeat';
 import { FIRST_MELODY } from '@/features/learn/chapters/firstMelody';
 import { C_MAJOR_SCALE } from '@/features/learn/chapters/cMajorScale';
 import { TRIADS } from '@/features/learn/chapters/triads';
+import { CHORDS_PEDAL_AND_HANDS } from '@/features/learn/chapters/chordsPedalAndHands';
 import { MAJOR_SCALE_STEPS } from '@/features/learn/drill';
 import { momentsOf } from '@/features/learn/phrase';
 import type { LearnChapter } from '@/features/learn/types';
@@ -33,6 +34,7 @@ import { loadChapterProse } from '@/features/learn/content';
 import {
   DEFAULT_RHYTHM_TOLERANCE_BEATS,
   goalTotal,
+  pitchClassOf,
   triadMidis,
   type NamedChord,
 } from '@/features/learn/exerciseSpec';
@@ -86,6 +88,7 @@ describe('learn catalog', () => {
       'firstMelody',
       'cMajorScale',
       'triads',
+      'chordsPedalAndHands',
     ]);
   });
 
@@ -107,6 +110,7 @@ describe('every authored chapter', () => {
     FIRST_MELODY,
     C_MAJOR_SCALE,
     TRIADS,
+    CHORDS_PEDAL_AND_HANDS,
   ];
 
   it('keeps the two tints of a diagram apart', () => {
@@ -844,6 +848,8 @@ function sharedChapterChecks(chapter: LearnChapter): void {
   it('parks every playing step where a phone and a computer keyboard both reach it', () => {
     for (const step of chapter.steps) {
       if (step.kind !== 'exercise' || step.spec.kind !== 'playAlong') continue;
+      // Two hands' worth of keys: turned sideways, not squeezed. See `wide`.
+      if (step.wide) continue;
       const anchor = step.anchorMidi;
       expect(anchor, step.id).toBeDefined();
       // A step that asks for a range gets that range, narrowed to fit;
@@ -866,6 +872,7 @@ function sharedChapterChecks(chapter: LearnChapter): void {
       // The keyboard's low edge is the anchor, so a fit starting anywhere else
       // would show a different range from the one asked for.
       expect(step.fit.lowMidi, step.id).toBe(step.anchorMidi);
+      if (step.wide) continue;
       const whites = whiteKeyCount(step.fit.lowMidi, step.fit.highMidi);
       expect(whites * MIN_FITTED_WHITE_KEY_PX, step.id).toBeLessThanOrEqual(NARROWEST_KEY_BED_PX);
     }
@@ -883,6 +890,24 @@ function sharedChapterChecks(chapter: LearnChapter): void {
         const spec = drillRoundAt(step.drill, 0)?.spec;
         if (spec && 'together' in spec && spec.together) {
           expect(spec.together, step.id).toEqual(MOUSE_FRIENDLY);
+        }
+      }
+    }
+  });
+
+  it('keeps two-hand and pedal steps untimed, and inside their fit', () => {
+    // A wide step is played one column at a time, like Play's Training; a
+    // pedal change is judged by its order, not its beat.
+    for (const step of chapter.steps) {
+      if (step.kind !== 'exercise' || step.spec.kind !== 'playAlong') continue;
+      if (!step.wide && !step.spec.pedal) continue;
+      expect(step.spec.timed, step.id).toBeUndefined();
+      if (!step.wide) continue;
+      expect(step.fit, step.id).toBeDefined();
+      for (const moment of momentsOf(step.spec.phrase)) {
+        for (const midi of moment.midis) {
+          expect(midi, `${step.id}: ${midi}`).toBeGreaterThanOrEqual(step.fit!.lowMidi);
+          expect(midi, `${step.id}: ${midi}`).toBeLessThanOrEqual(step.fit!.highMidi);
         }
       }
     }
@@ -1209,5 +1234,128 @@ describe('chapter nine', () => {
         expect(fifth - root, s.id).toBe(7);
       }
     }
+  });
+});
+
+describe('chapter ten', () => {
+  sharedChapterChecks(CHORDS_PEDAL_AND_HANDS);
+
+  const step = (id: string) => CHORDS_PEDAL_AND_HANDS.steps.find((s) => s.id === id);
+  const lineOf = (id: string) => {
+    const found = step(id);
+    if (found?.kind !== 'exercise' || found.spec.kind !== 'playAlong') {
+      throw new Error(`expected a playAlong line at ${id}`);
+    }
+    return found.spec;
+  };
+
+  it('plays five things, with no quiz or drill', () => {
+    const kinds = CHORDS_PEDAL_AND_HANDS.steps.map((s) => s.kind);
+    expect(kinds).toHaveLength(11);
+    expect(kinds.filter((kind) => kind === 'exercise')).toHaveLength(5);
+    expect(kinds.filter((kind) => kind === 'quiz' || kind === 'drill')).toHaveLength(0);
+  });
+
+  it('walks I–V–vi–IV in root position, in either hand', () => {
+    for (const id of ['playTheProgression', 'pedalTheProgression', 'leftHandProgression']) {
+      const moments = momentsOf(lineOf(id).phrase);
+      expect(
+        moments.map((moment) => pitchClassOf(moment.midis[0]!)),
+        id,
+      ).toEqual([0, 7, 9, 5]);
+      for (const moment of moments) {
+        const [root, third, fifth] = moment.midis as [number, number, number];
+        expect([3, 4], id).toContain(third - root);
+        expect(fifth - root, id).toBe(7);
+      }
+    }
+  });
+
+  it('asks for a pedal change after every chord of the pedal steps', () => {
+    for (const id of ['pressThePedal', 'pedalTheProgression']) {
+      const spec = lineOf(id);
+      expect(spec.pedal, id).toBe('changeEach');
+      expect(spec.together, id).toBeDefined();
+    }
+    // Everywhere else, the pedal is the player's own business.
+    for (const id of ['playTheProgression', 'leftHandProgression', 'playThePiece']) {
+      expect(lineOf(id).pedal, id).toBeUndefined();
+    }
+  });
+
+  it('keeps the chord steps within the computer keyboard, and goes wide only for the low left hand', () => {
+    const wide = CHORDS_PEDAL_AND_HANDS.steps.filter((s) => s.wide).map((s) => s.id);
+    expect(wide).toEqual([
+      'leftHandProgression',
+      'readingBothStaves',
+      'playThePiece',
+      'chapterComplete',
+    ]);
+  });
+
+  it('writes a piece with both staves sounding in every bar, never sharing a pitch', () => {
+    const piece = lineOf('playThePiece').phrase;
+    const notes = phraseToNotes(piece);
+    for (const note of notes) expect(note.staff, `${note.id}`).toBeDefined();
+    for (let bar = 0; bar < 8; bar += 1) {
+      const onDownbeat = notes.filter((note) => note.startMs === bar * 4000);
+      const staves = new Set(onDownbeat.map((note) => note.staff));
+      expect([...staves].sort(), `bar ${bar + 1}`).toEqual(['bass', 'treble']);
+    }
+    for (const moment of momentsOf(piece)) {
+      expect(new Set(moment.midis).size, `beat ${moment.beat}`).toBe(moment.notes.length);
+    }
+  });
+
+  it('engraves each downbeat as a left-hand chord under a right-hand note', () => {
+    // No pitch shared between the hands, so chord grouping never splits a
+    // column: one chord of three on the bass staff, one note on the treble.
+    const score = layoutScore(phraseToNotes(lineOf('playThePiece').phrase), {
+      bpm: 60,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+      minMeasures: 1,
+    });
+    for (let bar = 0; bar < 8; bar += 1) {
+      const column = score.chords.filter((chord) => chord.displayStartMs === bar * 4000);
+      const bass = column.filter((chord) => chord.staff === 'bass');
+      const treble = column.filter((chord) => chord.staff === 'treble');
+      expect(
+        bass.map((chord) => chord.notes.length),
+        `bar ${bar + 1}`,
+      ).toEqual([3]);
+      expect(
+        treble.map((chord) => chord.notes.length),
+        `bar ${bar + 1}`,
+      ).toEqual([1]);
+    }
+  });
+
+  it('sends a slip back two bars, not eight', () => {
+    const spec = lineOf('playThePiece');
+    const moments = momentsOf(spec.phrase);
+    expect(spec.checkpoints?.map((index) => moments[index]?.beat)).toEqual([0, 8, 16, 24]);
+  });
+
+  it('lets the blurred demo ring into the next chord, and the clean one not', () => {
+    const demo = step('changeWithTheHarmony')?.listen;
+    if (!demo) throw new Error('expected a Listen demo');
+    const notes = phraseToNotes(demo);
+    const firstEnd = Math.max(
+      ...notes.filter((n) => n.startMs === 0).map((n) => n.startMs + n.durationMs),
+    );
+    expect(firstEnd).toBeGreaterThan(4000);
+    for (const bar of [2, 3]) {
+      for (const note of notes.filter((n) => n.startMs === bar * 4000)) {
+        expect(note.startMs + note.durationMs).toBeLessThanOrEqual((bar + 1) * 4000);
+      }
+    }
+  });
+
+  it('hands off to A Beautiful Day with both hands in Training', () => {
+    expect(CHORDS_PEDAL_AND_HANDS.handoff).toEqual({
+      trackId: 'a-beautiful-day',
+      mode: 'training-both',
+    });
   });
 });

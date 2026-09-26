@@ -922,7 +922,7 @@ describe('playAlong', () => {
       };
       const reentry: ExerciseState = {
         ...initExercise(),
-        along: { index: 4, struck: new Set(), fresh: new Set(), origin: null },
+        along: { index: 4, struck: new Set(), fresh: new Set(), origin: null, pedalOwed: false },
       };
       const state = reduceExercise(spec, reentry, {
         kind: 'press',
@@ -1010,5 +1010,131 @@ describe('chord', () => {
     const range = { lowMidi: 60, highMidi: 76 };
     expect([...targetMidisFor(A_MINOR, initExercise(), range)]).toEqual([69, 72, 76]);
     expect(needsRangeShift(A_MINOR, initExercise(), { lowMidi: 60, highMidi: 72 })).toBe(true);
+  });
+});
+
+describe('playAlong with pedal changes', () => {
+  const TOGETHER = { overlap: true, onsetWindowMs: 400 };
+  const phrase: LearnPhrase = {
+    bpm: 60,
+    timeSignature: { numerator: 4, denominator: 4 },
+    events: [
+      [0, ['C4', 'E4', 'G4'], 4, 0.7],
+      [4, ['G4', 'B4', 'D5'], 4, 0.7],
+    ],
+  };
+  const PEDALLED: ExerciseSpec = {
+    kind: 'playAlong',
+    phrase,
+    together: TOGETHER,
+    pedal: 'changeEach',
+  };
+
+  /** A key, as in `run`, or the combined pedal going down or up. */
+  type Event = Beat | ['pedal', boolean, number];
+
+  function play(spec: ExerciseSpec, script: readonly Event[]): ExerciseState {
+    const held = new Set<number>();
+    let state = initExercise();
+    for (const event of script) {
+      if (event[0] === 'pedal') {
+        state = reduceExercise(spec, state, {
+          kind: 'pedal',
+          down: event[1],
+          atMs: event[2],
+          atBeats: null,
+        });
+        continue;
+      }
+      const [type, midi, atMs = 0] = event;
+      if (type === 'on') {
+        held.add(midi);
+        state = reduceExercise(spec, state, {
+          kind: 'press',
+          midi,
+          atMs,
+          atBeats: null,
+          held: new Set(held),
+        });
+      } else {
+        held.delete(midi);
+        state = reduceExercise(spec, state, {
+          kind: 'release',
+          midi,
+          atMs,
+          atBeats: null,
+          held: new Set(held),
+        });
+      }
+    }
+    return state;
+  }
+  const readout = (script: readonly Event[]): string => {
+    const { done, total, satisfied } = progressOf(PEDALLED, play(PEDALLED, script));
+    return `${done}/${total}${satisfied ? ' ok' : ''}`;
+  };
+
+  const chord = (midis: readonly number[], at: number): Event[] =>
+    midis.map((midi, i): Event => ['on', midi, at + i * 10]);
+  const lift = (midis: readonly number[], at: number): Event[] =>
+    midis.map((midi): Event => ['off', midi, at]);
+  const C = [60, 64, 67];
+  const G = [67, 71, 74];
+
+  it('holds a finished chord until the pedal goes down after it', () => {
+    const played = chord(C, 0);
+    expect(readout(played)).toBe('0/2');
+    expect(play(PEDALLED, played).along?.pedalOwed).toBe(true);
+    expect(readout([...played, ['pedal', true, 500]])).toBe('1/2');
+  });
+
+  it('changes the pedal with the harmony: up, then down again, after the new chord', () => {
+    expect(
+      readout([
+        ...chord(C, 0),
+        ['pedal', true, 500],
+        ...lift(C, 1000),
+        ...chord(G, 1500),
+        ['pedal', false, 2000],
+        ['pedal', true, 2100],
+      ]),
+    ).toBe('2/2 ok');
+  });
+
+  it('does not count a pedal held straight through the change', () => {
+    const blurred: Event[] = [
+      ...chord(C, 0),
+      ['pedal', true, 500],
+      ...lift(C, 1000),
+      ...chord(G, 1500),
+    ];
+    // The pedal never came up, so there is no fresh press to finish G with.
+    expect(readout(blurred)).toBe('1/2');
+    expect(play(PEDALLED, blurred).along?.pedalOwed).toBe(true);
+  });
+
+  it('breaks the run on a key pressed while the pedal change is owed', () => {
+    const state = play(PEDALLED, [...chord(C, 0), ['on', 71, 800]]);
+    expect(progressOf(PEDALLED, state).done).toBe(0);
+    expect(state.along?.pedalOwed).toBe(false);
+    expect(state.wrongMidi).toBe(71);
+  });
+
+  it('does not take a pedal pressed before the chord as a change after it', () => {
+    expect(readout([['pedal', true, 0], ...chord(C, 500)])).toBe('0/2');
+  });
+
+  it('keeps a finished chord owed while its keys come up', () => {
+    // Letting go before the pedal goes down is sloppy pedalling, but the notes
+    // were played: the moment still only waits on the pedal.
+    expect(readout([...chord(C, 0), ...lift(C, 400), ['pedal', true, 600]])).toBe('1/2');
+  });
+
+  it('is ignored by every spec that does not ask for pedal changes', () => {
+    const plain: ExerciseSpec = { kind: 'playAlong', phrase, together: TOGETHER };
+    const state = play(plain, [...chord(C, 0), ['pedal', true, 500]]);
+    expect(progressOf(plain, state).done).toBe(1);
+    const keys: ExerciseSpec = { kind: 'exactKeys', midis: [60] };
+    expect(progressOf(keys, play(keys, [['pedal', true, 0]])).done).toBe(0);
   });
 });

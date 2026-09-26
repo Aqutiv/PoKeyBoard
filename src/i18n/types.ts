@@ -355,6 +355,11 @@ export interface Messages {
     close: string;
     /** Shown when the exercise still needs notes but none are on screen. */
     shiftHint: string;
+    /** A chord is in and the pedal is due: pressed for the first time, or changed. */
+    pedalPress: string;
+    pedalChange: string;
+    /** A step needs more keys than a phone held upright can show. */
+    rotateHint: string;
     loadingPiano: string;
     loadingChapter: string;
     diagramLabel: string;

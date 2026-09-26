@@ -150,6 +150,14 @@ export type ExerciseSpec =
        * coming back in means coming in on a downbeat.
        */
       checkpoints?: readonly number[];
+      /**
+       * Each moment also asks for a fresh press of the sustain pedal once its
+       * notes are down — changing the pedal with the harmony. The press has to
+       * come *after* the notes: a pedal held straight through a change leaves
+       * no new press, which is exactly the blur being taught against. Untimed
+       * only — a change is judged by its order, not its beat.
+       */
+      pedal?: 'changeEach';
     }
   /**
    * A named triad as a block, in close root position, in any octave: "play A
