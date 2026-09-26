@@ -59,11 +59,13 @@ async function loadService(flush: () => Promise<void> = async () => undefined) {
     scrubController: { isActive: false, end: vi.fn() },
   }));
 
-  const [{ activateTake }, { useSettingsStore }, { useTakeStore }] = await Promise.all([
-    import('@/features/takes/takesService'),
-    import('@/state/useSettingsStore'),
-    import('@/state/useTakeStore'),
-  ]);
+  // One import at a time. vitest applies the queued doMock/doUnmock calls
+  // inside whichever imports start while they are pending, and imports started
+  // together race over them: a late replay of the previous test's doUnmock
+  // could leave takesService bound to the real persistence module.
+  const { activateTake } = await import('@/features/takes/takesService');
+  const { useSettingsStore } = await import('@/state/useSettingsStore');
+  const { useTakeStore } = await import('@/state/useTakeStore');
   return { activateTake, useSettingsStore, useTakeStore, setMetadata };
 }
 
