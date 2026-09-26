@@ -4,6 +4,7 @@ import {
   cappedRenderSeconds,
   MAX_RENDER_MINUTES,
   scheduleTakeVoices,
+  scheduleVoicesAhead,
   undampedRingOutSeconds,
 } from '@/audio/OfflineTakeRenderer';
 import { createEmptyTake } from '@/domain/noteEvents';
@@ -62,6 +63,20 @@ function setup() {
     audio: context as unknown as BaseAudioContext,
     destination: {} as GainNode,
   };
+}
+
+/** What each mock node was told to do, beyond being wired up, in the order it was told. */
+function callsTo(nodes: readonly Record<string, unknown>[]): unknown[][][] {
+  return nodes.map((node) =>
+    Object.entries(node)
+      .filter(([name, value]) => vi.isMockFunction(value) && !name.endsWith('connect'))
+      .flatMap(([name, value]) => {
+        const { calls, invocationCallOrder } = (value as ReturnType<typeof vi.fn>).mock;
+        return calls.map((args, i) => ({ order: invocationCallOrder[i]!, call: [name, ...args] }));
+      })
+      .sort((a, b) => a.order - b.order)
+      .map((entry) => entry.call),
+  );
 }
 
 describe('shared sample voice', () => {
@@ -352,22 +367,22 @@ describe('shared sample voice', () => {
 
     it('sounds the same in an export', () => {
       const { audio, destination, params } = setup();
-      const missing = scheduleTakeVoices(
+      const notes = [
+        { midi: 67, velocity: 0.7, startMs: 0, durationMs: 4000 },
+        { midi: 67, velocity: 0.7, startMs: 1500, durationMs: 1000 },
+        // Released at 1 s, long before it comes back: its tail is left alone.
+        { midi: 72, velocity: 0.7, startMs: 0, durationMs: 1000 },
+        { midi: 72, velocity: 0.7, startMs: 3000, durationMs: 500 },
+        // Shared by two voices.
+        { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 2000 },
+        { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 500 },
+      ];
+      scheduleTakeVoices(
         audio,
         destination,
-        [
-          { midi: 67, velocity: 0.7, startMs: 0, durationMs: 4000 },
-          { midi: 67, velocity: 0.7, startMs: 1500, durationMs: 1000 },
-          // Released at 1 s, long before it comes back: its tail is left alone.
-          { midi: 72, velocity: 0.7, startMs: 0, durationMs: 1000 },
-          { midi: 72, velocity: 0.7, startMs: 3000, durationMs: 500 },
-          // Shared by two voices.
-          { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 2000 },
-          { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 500 },
-        ],
-        () => plain,
-      );
-      expect(missing).toBe(0);
+        notes,
+        notes.map(() => plain),
+      )(Number.POSITIVE_INFINITY);
       expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1.5, RESTRIKE_TC);
       expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 4, RELEASE_TC);
       expect(params[2]!.setTargetAtTime).not.toHaveBeenCalledWith(0, 3, RESTRIKE_TC);
@@ -378,16 +393,135 @@ describe('shared sample voice', () => {
 
     it('damps a string still dying away in an export too', () => {
       const { audio, destination, params } = setup();
+      const notes = [
+        { midi: 64, velocity: 0.7, startMs: 0, durationMs: 100 },
+        { midi: 64, velocity: 0.7, startMs: 160, durationMs: 100 },
+      ];
       scheduleTakeVoices(
         audio,
         destination,
-        [
-          { midi: 64, velocity: 0.7, startMs: 0, durationMs: 100 },
-          { midi: 64, velocity: 0.7, startMs: 160, durationMs: 100 },
-        ],
-        () => plain,
-      );
+        notes,
+        notes.map(() => plain),
+      )(Number.POSITIVE_INFINITY);
       expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.16, RESTRIKE_TC);
+    });
+
+    it('makes the same voices for an export a stretch at a time as all at once', () => {
+      const notes = [
+        { midi: 67, velocity: 0.7, startMs: 0, durationMs: 4000 },
+        { midi: 72, velocity: 0.7, startMs: 0, durationMs: 1000 },
+        { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 2000 },
+        { midi: 76, velocity: 0.7, startMs: 1000, durationMs: 500 },
+        { midi: 67, velocity: 0.7, startMs: 1500, durationMs: 1000 },
+        { midi: 72, velocity: 0.7, startMs: 3000, durationMs: 500 },
+      ];
+      const made = (stretches: number[]) => {
+        const { audio, destination, params, sources } = setup();
+        const scheduleUntil = scheduleTakeVoices(
+          audio,
+          destination,
+          notes,
+          notes.map(() => plain),
+        );
+        for (const until of stretches) scheduleUntil(until);
+        return { params: callsTo(params), sources: callsTo(sources) };
+      };
+      expect(made([1]).sources).toHaveLength(2);
+      // The G struck again at 1.5 s still damps the one struck at 0, a stretch back.
+      expect(made([1, 1.2, 2, 3.5, Number.POSITIVE_INFINITY])).toEqual(
+        made([Number.POSITIVE_INFINITY]),
+      );
+    });
+  });
+
+  describe('an export render', () => {
+    const plain: SampleSelection = { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1 };
+    const notesAt = (...seconds: number[]) =>
+      seconds.map((at) => ({ midi: 60, velocity: 0.7, startMs: at * 1000, durationMs: 400 }));
+
+    /** The mock context as an offline one `seconds` long, pausing when asked to. */
+    function offline(seconds: number, canPause = true) {
+      const { audio, destination, sources } = setup();
+      const pauses: { at: number; resolve: () => void; reject: (error: Error) => void }[] = [];
+      const resume = vi.fn(async () => undefined);
+      const pausing = {
+        suspend: (at: number) =>
+          new Promise<void>((resolve, reject) => pauses.push({ at, resolve, reject })),
+        resume,
+      };
+      const context = Object.assign(audio, {
+        length: seconds * 48_000,
+        sampleRate: 48_000,
+        ...(canPause ? pausing : {}),
+      }) as unknown as OfflineAudioContext;
+      return { context, destination, sources, pauses, resume };
+    }
+
+    it('makes its voices a stretch or two ahead, pausing to make more', async () => {
+      const { context, destination, sources, pauses, resume } = offline(9);
+      const notes = notesAt(0, 3, 4.5, 7);
+      const done = scheduleVoicesAhead(
+        context,
+        scheduleTakeVoices(
+          context,
+          destination,
+          notes,
+          notes.map(() => plain),
+        ),
+      );
+      expect(pauses.map((pause) => pause.at)).toEqual([2, 4, 6, 8]);
+      expect(sources).toHaveLength(2); // Those before 4 s.
+      pauses[0]!.resolve();
+      await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(1));
+      expect(sources).toHaveLength(3); // Before 6 s.
+      for (const pause of pauses.slice(1)) pause.resolve();
+      await done;
+      expect(sources).toHaveLength(4);
+      expect(resume).toHaveBeenCalledTimes(4);
+    });
+
+    it('makes every voice up front where an offline render cannot pause', async () => {
+      const { context, destination, sources } = offline(60, false);
+      const notes = notesAt(0, 30, 55);
+      await scheduleVoicesAhead(
+        context,
+        scheduleTakeVoices(
+          context,
+          destination,
+          notes,
+          notes.map(() => plain),
+        ),
+      );
+      expect(sources).toHaveLength(3);
+    });
+
+    it('makes every voice still to come at once when a pause is refused', async () => {
+      const { context, destination, sources, pauses } = offline(9);
+      const notes = notesAt(0, 3, 4.5, 7);
+      const done = scheduleVoicesAhead(
+        context,
+        scheduleTakeVoices(
+          context,
+          destination,
+          notes,
+          notes.map(() => plain),
+        ),
+      );
+      pauses[0]!.reject(new Error('refused'));
+      for (const pause of pauses.slice(1)) pause.resolve();
+      await done;
+      expect(sources).toHaveLength(4);
+    });
+
+    it('lets the render go on when a voice cannot be made, and says why', async () => {
+      const { context, pauses, resume } = offline(5);
+      const failure = new Error('no voice');
+      const done = scheduleVoicesAhead(context, (until) => {
+        if (until > 4) throw failure;
+      });
+      for (const pause of pauses) pause.resolve();
+      await expect(done).rejects.toBe(failure);
+      await vi.waitFor(() => expect(resume).toHaveBeenCalledTimes(pauses.length));
     });
   });
 
