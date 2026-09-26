@@ -20,11 +20,14 @@ The piano sample packs ship in `public/piano/` (committed) — one directory per
 ```bash
 node scripts/build-sample-pack.mjs salamander-grand-v3   # Yamaha C5, the default piano
 node scripts/build-sample-pack.mjs headroom-grand-v2     # Yamaha C3, the warmer alternative
+node scripts/build-sample-pack.mjs bitklavier-grand-v1   # Steinway D (bitKlavier, Lip Cardioid)
 node scripts/build-sample-pack.mjs wurlitzer-ep203w-v1   # Wurlitzer EP203W electric piano
 node scripts/build-icons.mjs                             # PWA icons from assets/branding
 ```
 
-Acoustic pack builds download the FLAC subset they need into the gitignored `samples-staging/`, convert to stereo 16-bit FLAC (`.sample` files), and measure loudness against the default piano. Build the default piano first — it is the reference the others are matched against. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean.
+Acoustic pack builds download the recordings they need into the gitignored `samples-staging/`, convert to stereo 16-bit FLAC (`.sample` files), and measure loudness against the default piano. Build the default piano first — it is the reference the others are matched against. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean.
+
+The bitKlavier pack fetches only the part of each 48 kHz / 24-bit WAV it keeps, by HTTP Range, and checks every fetch against the sizes and SHA-256 hashes in `scripts/lib/bitklavier-grand-v1.pins.json`, stopping on any mismatch (`--pin` rewrote them from what upstream served). Its layers are raised toward Salamander's level before the 16-bit quantisation, never past −1 dBFS, so the app's later gain does not lift the dither floor.
 
 The Wurlitzer pack preserves all 42 original mono FLAC recordings (2.39 MB), four velocity layers, tuning, and embedded sustain loops. Its upstream revision is pinned; only the file extension changes. A single gain matches its level to Salamander, and its outer sample regions extend to the app's full A0–C8 range. Live playback and MP3 exports share the same loop and envelope scheduler.
 
@@ -49,7 +52,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 
 1. `npm run build && npm run preview -- --host` and open `http://<your-ip>:4173` **only for quick layout checks** (no SW on plain http), or deploy to an HTTPS host for the full experience.
 2. First visit online; the app shell caches automatically.
-3. Settings → **Piano** → **Download Salamander** (or **Download Headroom** / **Download Wurlitzer**) to pin a full sample pack — each piano card downloads on its own.
+3. Settings → **Piano** → **Download Salamander** (or **Download Headroom** / **Download bitKlavier** / **Download Wurlitzer**) to pin a full sample pack — each piano card downloads on its own.
 
 ## Installing
 

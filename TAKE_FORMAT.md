@@ -68,7 +68,7 @@ Takes are versioned JSON. Files use the extension `.pokeyboard.json` (plain `.js
   is written exactly that way. A spelling that names some other pitch is dropped on import rather
   than failing the take. Recorded takes omit it and are spelled from their key and context
   (`pitchSpelling.ts`). Never audible.
-- `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v3`, `headroom-grand-v2`, `wurlitzer-ep203w-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
+- `samplePackVersion` names the piano the take is heard through — one of the pack directories in `public/piano/` (`salamander-grand-v3`, `headroom-grand-v2`, `bitklavier-grand-v1`, `wurlitzer-ep203w-v1`, or a retired one like `salamander-grand-v1`). It is **not** honoured on load: the selected piano wins, and opening a take re-stamps it, so live playback and the exported MP3 always agree. An unknown value is therefore harmless, and a missing one repairs to the default piano. `instrument.id` is unrelated to the choice of piano and stays `grand-piano`.
 - Unknown **top-level** keys are preserved through import/export (forward compatibility).
 
 ## Import pipeline

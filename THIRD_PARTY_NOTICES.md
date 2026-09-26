@@ -43,6 +43,36 @@ Attribution is also shown in the app's About view.
 
 Attribution is also shown in the app's About view.
 
+## bitKlavier Grand Sample Library — Lip Cardioid Mic Image (piano samples)
+
+- **Title:** bitKlavier Grand Sample Library—Lip Cardioid Mic Image
+- **Authors:** Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou,
+  Christien Ayers and Daniel Trueman, Princeton University. A new Steinway D
+  concert grand in Taplin Auditorium, Princeton, recorded in January 2021 with
+  the lid fully open; the Lip Cardioid image is a pair of DPA 4011 cardioids at
+  the lip of the lid.
+- **License:** Creative Commons Attribution 4.0 International (CC BY 4.0),
+  <https://creativecommons.org/licenses/by/4.0/>
+- **Source:** Princeton Data Commons, DOI
+  [10.34770/xm18-yr83](https://doi.org/10.34770/xm18-yr83), the 48 kHz / 24-bit
+  release.
+- **Files:** `public/piano/bitklavier-grand-v1/*.sample` (FLAC audio under the
+  same neutral extension as the other packs).
+- **Modifications:** subset of the original 16 velocity layers (layers 7, 10
+  and 14) across the 30 minor-third root pitches; the hammer-release,
+  release-resonance and pedal samples are not used; each recording trimmed to
+  7–12 seconds with a 1.5-second fade-out; a gain applied to each layer
+  (+7.11, +5.80 and +0.33 dB) that brings it toward the Salamander pack's
+  loudness without letting any sample exceed −1 dBFS; reduced from 24 to 16
+  bits with triangular dither and encoded as FLAC, keeping the source's 48 kHz
+  and stereo. See `scripts/build-sample-pack.mjs` and
+  `scripts/lib/bitklavier.mjs` for the exact pipeline, and
+  `scripts/lib/bitklavier-grand-v1.pins.json` for the size and SHA-256 of every
+  source byte range used.
+
+Attribution, with links to the dataset and the license, is also shown in the
+app's About view.
+
 ## Wurlitzer EP203W (electric piano samples)
 
 - **Author:** Greg Sullivan; SFZ mapping by kinwie.
