@@ -91,10 +91,11 @@ async function loadService() {
   }));
   // resetModules gives each test a fresh registry, so the error classes must
   // come from the same graph as the service or `instanceof` will not match.
-  const [service, errors] = await Promise.all([
-    import('@/features/takes/takesService'),
-    import('@/utils/errors'),
-  ]);
+  // One import at a time: imports started together race over the queued
+  // doMock/doUnmock calls, and a late replay of the previous test's doUnmock
+  // could bind the service to the real audio engine.
+  const service = await import('@/features/takes/takesService');
+  const errors = await import('@/utils/errors');
   return { ...service, ...errors };
 }
 
