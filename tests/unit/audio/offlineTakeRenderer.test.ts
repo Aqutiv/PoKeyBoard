@@ -97,4 +97,34 @@ describe('rendering a take for export', () => {
     expect(estimateRenderMemoryMB(takeIn('cathedral'))).toBe(Math.round((6 * 48_000 * 16) / 1e6));
     expect(estimateRenderMemoryMB(takeIn(undefined))).toBe(Math.round((4 * 48_000 * 16) / 1e6));
   });
+
+  it('rings the room’s tail on from what the take plays, not from a silent note', async () => {
+    const { estimateRenderMemoryMB, estimateRenderSeconds, renderTakeForExport } =
+      await import('@/audio/OfflineTakeRenderer');
+    // A note written but not played, under a pedal held to 8 s: counted, the
+    // pedal would hold the render open to 8 s before the tail began.
+    const take = createEmptyTake({
+      instrument: {
+        id: 'grand-piano',
+        masterVolume: 0.85,
+        reverbMix: 0.3,
+        reverbRoom: 'cathedral',
+      },
+      notes: [
+        { id: 'played', midi: 60, startMs: 0, durationMs: 1000, velocity: 0.7 },
+        { id: 'silent', midi: 64, startMs: 2000, durationMs: 500, velocity: 0 },
+      ],
+      pedalEvents: [
+        { atMs: 1500, down: true },
+        { atMs: 8000, down: false },
+      ],
+      durationMs: 2500,
+    });
+    await renderTakeForExport(take, { includeMetronome: false, metronomeVolume: 0 });
+
+    // Its written length, 2.5 s, then the Cathedral's 5 s.
+    expect(rendered).toEqual([{ length: Math.ceil(7.5 * 48_000), sampleRate: 48_000 }]);
+    expect(estimateRenderSeconds(take)).toBeCloseTo(7.5, 10);
+    expect(estimateRenderMemoryMB(take)).toBe(Math.round((7.5 * 48_000 * 16) / 1e6));
+  });
 });
