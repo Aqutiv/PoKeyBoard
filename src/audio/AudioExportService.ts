@@ -26,8 +26,10 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  * 8: the reverb rebuilt as rooms — pre-delay, early reflections, a tail whose
  * treble dies first, normalised by the app rather than the browser — rendered
  * in the take's own room, with a longer room's tail given time to ring out.
+ * 9: a grand's tone follows the touch through each velocity layer, a lowpass
+ * per voice, so notes play brighter or darker than they did.
  */
-export const AUDIO_EXPORTER_VERSION = 8;
+export const AUDIO_EXPORTER_VERSION = 9;
 
 export type ExportQuality = 'share' | 'high';
 

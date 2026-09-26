@@ -10,6 +10,7 @@ import {
 } from '@/audio/OfflineTakeRenderer';
 import { createEmptyTake } from '@/domain/noteEvents';
 import {
+  ATTACK_S,
   dampSampleVoice,
   moveSampleVoiceRelease,
   RELEASE_TC,
@@ -18,6 +19,7 @@ import {
   RESTRIKE_TC,
   sampleVoiceLevel,
   startSampleVoice,
+  TONE_FILTER_Q_DB,
   UNDAMPED_FROM_MIDI,
 } from '@/audio/sampleVoice';
 import { VoiceManager } from '@/audio/VoiceManager';
@@ -25,8 +27,27 @@ import { VoiceManager } from '@/audio/VoiceManager';
 function setup() {
   const sources: Array<Record<string, unknown>> = [];
   const params: Array<Record<string, ReturnType<typeof vi.fn>>> = [];
+  const filters: Array<{
+    type: string;
+    frequency: { value: number };
+    Q: { value: number };
+    connect: ReturnType<typeof vi.fn>;
+    disconnect: ReturnType<typeof vi.fn>;
+  }> = [];
   const context = {
     currentTime: 0,
+    sampleRate: 48_000,
+    createBiquadFilter: () => {
+      const filter = {
+        type: 'lowpass',
+        frequency: { value: 350 },
+        Q: { value: 1 },
+        connect: vi.fn(),
+        disconnect: vi.fn(),
+      };
+      filters.push(filter);
+      return filter;
+    },
     createBufferSource: () => {
       const source = {
         playbackRate: { value: 1 },
@@ -60,6 +81,7 @@ function setup() {
     context,
     sources,
     params,
+    filters,
     sample,
     audio: context as unknown as BaseAudioContext,
     destination: {} as GainNode,
@@ -775,6 +797,130 @@ describe('VoiceManager when playback changes speed', () => {
         0.3125,
       );
       expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.3125, RESTRIKE_TC);
+    });
+  });
+});
+
+describe('a voice’s tone filter', () => {
+  const plain: SampleSelection = {
+    buffer: { duration: 3 } as AudioBuffer,
+    playbackRate: 1,
+    gain: 0.5,
+  };
+  const toned: SampleSelection = { ...plain, toneCutoffHz: 1234, toneMakeupDb: 0.3 };
+
+  it('is made only for a voice with a cutoff, so every other voice costs what it did', () => {
+    const { audio, destination, filters } = setup();
+    const voice = startSampleVoice(audio, destination, plain, 0);
+    expect(filters).toHaveLength(0);
+    expect(voice.filter).toBeUndefined();
+    expect(voice.source.connect).toHaveBeenCalledWith(voice.gain);
+    expect(voice.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(0.5, ATTACK_S);
+  });
+
+  it('lowpasses between the source and the envelope, its Q read as dB', () => {
+    const { audio, destination, filters } = setup();
+    const voice = startSampleVoice(audio, destination, toned, 0);
+    const filter = filters[0]!;
+    expect(voice.filter).toBe(filter);
+    // Web Audio takes a lowpass's Q in dB: −3.1 dB is a linear Q of 0.70,
+    // where 0.7 would be 1.08 and a 1.7 dB bump.
+    expect(TONE_FILTER_Q_DB).toBe(-3.1);
+    expect(filter).toMatchObject({
+      type: 'lowpass',
+      frequency: { value: 1234 },
+      Q: { value: TONE_FILTER_Q_DB },
+    });
+    expect(voice.source.connect).toHaveBeenCalledWith(filter);
+    expect(voice.source.connect).not.toHaveBeenCalledWith(voice.gain);
+    expect(filter.connect).toHaveBeenCalledWith(voice.gain);
+    expect(voice.gain.connect).toHaveBeenCalledWith(destination);
+  });
+
+  it('keeps its cutoff at or under Nyquist', () => {
+    const { audio, context, destination, filters } = setup();
+    context.sampleRate = 44_100;
+    startSampleVoice(audio, destination, { ...toned, toneCutoffHz: 22_400 }, 0);
+    expect(filters[0]!.frequency.value).toBe(22_050);
+  });
+
+  it('gives back what the filter takes in the level the envelope holds', () => {
+    const { audio, destination } = setup();
+    const voice = startSampleVoice(audio, destination, toned, 0);
+    const level = 0.5 * 10 ** (0.3 / 20);
+    expect(voice.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(level, ATTACK_S);
+    expect(sampleVoiceLevel(voice, 1)).toBeCloseTo(level, 12);
+    // Let go from where it really is, not from its gain alone.
+    releaseSampleVoice(voice, 1);
+    expect(voice.gain.gain.setValueAtTime).toHaveBeenLastCalledWith(level, 1);
+    expect(sampleVoiceLevel(voice, 1 + RELEASE_TC)).toBeCloseTo(level / Math.E, 12);
+  });
+
+  describe('is taken out of the graph however its voice ends', () => {
+    function ended(source: Record<string, unknown>): void {
+      (source.onended as () => void)();
+    }
+
+    it('let go', () => {
+      const { audio, destination, filters, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(toned, 60, 'key');
+      voices.noteOff(60, 'key');
+      expect(filters[0]!.disconnect).not.toHaveBeenCalled();
+      ended(sources[0]!);
+      expect(filters[0]!.disconnect).toHaveBeenCalled();
+      expect(sources[0]!.disconnect).toHaveBeenCalled();
+    });
+
+    it('struck again', () => {
+      const { audio, context, destination, filters, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(toned, 60, 'key');
+      context.currentTime = 0.5;
+      voices.noteOn(toned, 60, 'pointer:1');
+      ended(sources[0]!);
+      expect(filters[0]!.disconnect).toHaveBeenCalled();
+      expect(filters[1]!.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('stolen for a new note', () => {
+      const { audio, destination, filters, sources } = setup();
+      const voices = new VoiceManager(audio, destination, 1);
+      voices.noteOn(toned, 60, 'key');
+      voices.noteOn(toned, 64, 'key');
+      expect(voices.voiceCount).toBe(1);
+      ended(sources[0]!);
+      expect(filters[0]!.disconnect).toHaveBeenCalled();
+      expect(filters[1]!.disconnect).not.toHaveBeenCalled();
+    });
+
+    it('called off before it sounds', () => {
+      const { audio, context, destination, filters } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.scheduleNote(toned, 60, 'playback', 2, 1);
+      context.currentTime = 1;
+      voices.cancelPending('playback', 1);
+      // At once: it is dropped from the voices, so nothing will end it later.
+      expect(filters[0]!.disconnect).toHaveBeenCalled();
+    });
+
+    it('stopped by a panic', () => {
+      const { audio, destination, filters, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(toned, 60, 'key');
+      voices.noteOn({ ...toned, undamped: true }, 96, 'key');
+      voices.allNotesOff();
+      for (const source of sources) ended(source);
+      expect(filters).toHaveLength(2);
+      for (const filter of filters) expect(filter.disconnect).toHaveBeenCalled();
+    });
+
+    it('run out while its key is still held', () => {
+      const { audio, destination, filters, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      voices.noteOn(toned, 60, 'key');
+      ended(sources[0]!);
+      expect(filters[0]!.disconnect).toHaveBeenCalled();
     });
   });
 });

@@ -6,6 +6,8 @@ import type {
   SampleSelection,
 } from './audioTypes';
 import { releaseTcFor, UNDAMPED_FROM_MIDI } from './sampleVoice';
+import { TONE_CALIBRATIONS } from './toneCalibration';
+import { toneCalibrationCovers, voiceTone, type ToneCalibration } from './toneCalibrationMath';
 import { VELOCITY_CALIBRATIONS } from './velocityCalibration';
 import {
   calibratedGain,
@@ -113,6 +115,8 @@ export class SampleBank {
   private manifest: SamplePackManifest | null = null;
   /** The manifest's velocity calibration, when there is one covering all of it. */
   private calibration: VelocityCalibration | null = null;
+  /** Its tone calibration, likewise; only ever with a velocity calibration. */
+  private tone: ToneCalibration | null = null;
   private readonly buffers = new Map<string, AudioBuffer>();
   /** Each decoded file's onset; see `onsetOffsetOf`. */
   private readonly onsets = new Map<string, number>();
@@ -155,6 +159,7 @@ export class SampleBank {
     const manifest = (await response.json()) as SamplePackManifest;
     this.manifest = manifest;
     this.calibration = calibrationFor(manifest);
+    this.tone = this.calibration ? toneCalibrationFor(manifest) : null;
     for (const entry of manifest.files) {
       let layer = this.layers.get(entry.layer);
       if (!layer) {
@@ -294,6 +299,10 @@ export class SampleBank {
   /**
    * Resolve the buffer for a note: preferred velocity layer first, then the
    * nearest loaded root in any layer so partially loaded states still sound.
+   * On a grand with a tone calibration, the note also gets the lowpass that
+   * plays it at the brightness its velocity asks for (`voiceTone`): a
+   * recording of the layer asked for follows its ramp, and a stand-in from
+   * another layer during a partial load plays as near that tone as it can.
    */
   getSample(midi: number, velocity: number): SampleSelection | null {
     if (this.manifest?.regions) return this.getMappedSample(midi, velocity);
@@ -319,13 +328,29 @@ export class SampleBank {
       const calibrated = this.calibration
         ? calibratedGain(this.calibration, velocity, midi, layerIndex, root)
         : undefined;
+      const playbackRate = Math.pow(2, (midi - root) / 12);
+      // The table's cutoffs are at the recording's own pitch; played higher or
+      // lower, its spectrum moves with it, and so does the cutoff.
+      const tone = this.tone
+        ? voiceTone(
+            this.tone,
+            VELOCITY_LAYER_THRESHOLDS,
+            velocity,
+            preferredLayer,
+            layerIndex,
+            root,
+          )
+        : undefined;
       return {
         buffer,
-        playbackRate: Math.pow(2, (midi - root) / 12),
+        playbackRate,
         gain: calibrated ?? velocityGain(velocity, preferredLayer) * this.levelMatchFor(layerIndex),
         offset: this.onsets.get(entry.file) ?? 0,
         releaseTc: releaseTcFor(midi),
         ...(midi >= UNDAMPED_FROM_MIDI ? { undamped: true } : {}),
+        ...(tone
+          ? { toneCutoffHz: tone.cutoffHz * playbackRate, toneMakeupDb: tone.makeupDb }
+          : {}),
       };
     }
     return null;
@@ -497,6 +522,17 @@ function calibrationFor(manifest: SamplePackManifest): VelocityCalibration | nul
   if (manifest.regions) return null;
   const calibration = VELOCITY_CALIBRATIONS[manifest.version];
   return calibration && calibrationCovers(calibration, manifest.files) ? calibration : null;
+}
+
+/**
+ * The tone calibration a manifest plays by, found the same way: its pack
+ * version's entry in the generated table, when that holds every file the
+ * manifest lists. Without one the layers keep their own tones, stepping in
+ * brightness where they meet, as they always did.
+ */
+function toneCalibrationFor(manifest: SamplePackManifest): ToneCalibration | null {
+  const tone = TONE_CALIBRATIONS[manifest.version];
+  return tone && toneCalibrationCovers(tone, manifest.files) ? tone : null;
 }
 
 function nearestValue(sorted: readonly number[], target: number): number | undefined {

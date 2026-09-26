@@ -1,6 +1,7 @@
 import type { NoteSourceId, SampleSelection } from './audioTypes';
 import {
   dampSampleVoice,
+  disconnectSampleVoice,
   fadeSampleVoice,
   holdSampleVoice,
   liftSampleVoiceFade,
@@ -92,7 +93,7 @@ export class VoiceManager {
     this.voices.add(voice);
     voice.source.onended = () => {
       this.voices.delete(voice);
-      this.disconnectVoice(voice);
+      disconnectSampleVoice(voice);
       // A key still held when its sound ends — its recording run out, or
       // playback striking it again — has nothing left to light.
       if (voice.uiActive) this.emitActive();
@@ -154,7 +155,7 @@ export class VoiceManager {
       if (voice.sourceId !== sourceId || voice.startTime <= after) continue;
       this.safeStop(voice, this.context.currentTime);
       this.voices.delete(voice);
-      this.disconnectVoice(voice);
+      disconnectSampleVoice(voice);
       calledOff.push(voice);
     }
     for (const voice of this.voices) {
@@ -364,15 +365,6 @@ export class VoiceManager {
       // Already stopped — fine.
     }
     voice.stopTime = when;
-  }
-
-  private disconnectVoice(voice: Voice): void {
-    try {
-      voice.source.disconnect();
-      voice.gain.disconnect();
-    } catch {
-      // Already disconnected — fine.
-    }
   }
 
   private emitActive(): void {

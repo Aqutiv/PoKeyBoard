@@ -25,7 +25,7 @@ Either way a **look-ahead limiter** then holds the result under a **−1 dBTP** 
 
 Metronome clicks join after the level is set, at half their live level, so an accented click at full volume never has the limiter ducking the piano on its own.
 
-Each note's own level is set before any of this, exactly as live: by its velocity, on the one curve every recording of the grands is calibrated to (see ARCHITECTURE.md, Choosing a piano). Exporter version 6 is the first to render that way, so exports cached before it render again. A take played at the computer keyboard's velocity is as loud as it was; one played softer or harder spans about twice the range it did.
+Each note's own level is set before any of this, exactly as live: by its velocity, on the one curve every recording of the grands is calibrated to (see ARCHITECTURE.md, Choosing a piano). Exporter version 6 is the first to render that way, so exports cached before it render again. A take played at the computer keyboard's velocity is as loud as it was; one played softer or harder spans about twice the range it did. Its tone follows its velocity the same way, through the lowpass a grand's voice plays through live, from exporter version 9 on.
 
 ## Reverb (src/audio/reverbImpulse.ts)
 
