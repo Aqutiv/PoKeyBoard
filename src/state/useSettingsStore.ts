@@ -3,6 +3,11 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { DEFAULT_PIANO_INSTRUMENT_ID, type PianoInstrumentId } from '@/audio/instruments';
 import { DEFAULT_MASTER_VOLUME, DEFAULT_REVERB_MIX } from '@/domain/takeTypes';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
+import type {
+  MidiVelocityCurve,
+  MidiVelocityRange,
+  TouchSensitivity,
+} from '@/features/keyboard/velocityResponse';
 import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
 import type { PlaybackMode, RecordMode } from '@/features/transport/modes';
@@ -23,6 +28,12 @@ export interface SettingsState {
   reverbMix: number;
   velocityMode: VelocityMode;
   fixedVelocity: number;
+  /** How far down a key a touch has to land to play loud; see velocityResponse.ts. */
+  touchSensitivity: TouchSensitivity;
+  /** How a MIDI keyboard's own velocity is bent before it plays. */
+  midiVelocityCurve: MidiVelocityCurve;
+  /** The MIDI keyboard's calibrated softest and loudest, or null to read it as sent. */
+  midiVelocityRange: MidiVelocityRange | null;
   showNoteLabels: boolean;
   /** Slide the Play keyboard to where playback is playing. */
   keyboardFollowsPlayback: boolean;
@@ -53,6 +64,9 @@ export interface SettingsState {
   setReverbMix(value: number): void;
   setVelocityMode(mode: VelocityMode): void;
   setFixedVelocity(value: number): void;
+  setTouchSensitivity(sensitivity: TouchSensitivity): void;
+  setMidiVelocityCurve(curve: MidiVelocityCurve): void;
+  setMidiVelocityRange(range: MidiVelocityRange | null): void;
   setShowNoteLabels(show: boolean): void;
   setKeyboardFollowsPlayback(follow: boolean): void;
   setScrubAudition(enabled: boolean): void;
@@ -77,6 +91,9 @@ export const SETTINGS_DEFAULTS = {
   reverbMix: DEFAULT_REVERB_MIX,
   velocityMode: 'touch' as VelocityMode,
   fixedVelocity: 0.75,
+  touchSensitivity: 'normal' as TouchSensitivity,
+  midiVelocityCurve: 'normal' as MidiVelocityCurve,
+  midiVelocityRange: null as MidiVelocityRange | null,
   showNoteLabels: true,
   keyboardFollowsPlayback: true,
   scrubAudition: true,
@@ -112,6 +129,9 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setReverbMix: (reverbMix) => set({ reverbMix }),
   setVelocityMode: (velocityMode) => set({ velocityMode }),
   setFixedVelocity: (fixedVelocity) => set({ fixedVelocity }),
+  setTouchSensitivity: (touchSensitivity) => set({ touchSensitivity }),
+  setMidiVelocityCurve: (midiVelocityCurve) => set({ midiVelocityCurve }),
+  setMidiVelocityRange: (midiVelocityRange) => set({ midiVelocityRange }),
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
   setKeyboardFollowsPlayback: (keyboardFollowsPlayback) => set({ keyboardFollowsPlayback }),
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),

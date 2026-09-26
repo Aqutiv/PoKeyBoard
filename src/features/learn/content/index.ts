@@ -47,6 +47,9 @@ const PROSE: Partial<
   triads: {
     en: () => import('./en/triads').then((m) => m.triadsEn),
   },
+  chordsPedalAndHands: {
+    en: () => import('./en/chordsPedalAndHands').then((m) => m.chordsPedalAndHandsEn),
+  },
 };
 
 /**

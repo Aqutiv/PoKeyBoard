@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
-import { useLiveActiveNotes, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
+import {
+  useLiveActiveNotes,
+  useSampleLoadProgress,
+  useSustainDown,
+} from '@/app/hooks/useAudioEngine';
+import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useRouter } from '@/app/routerContext';
 import { whiteKeyCount } from '@/features/keyboard/keyboardGeometry';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
@@ -195,6 +200,16 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
 
   // A range the step needs shown whole: the keyboard narrows its keys to fit.
   const fitWhites = step?.fit ? whiteKeyCount(step.fit.lowMidi, step.fit.highMidi) : undefined;
+  // …down to a floor. Past it, a phone held upright cannot show the range at a
+  // playable width, and turning it sideways is the honest answer — asked for
+  // instead of the shift hint, since no shift brings two hands on screen.
+  const portrait = useMediaQuery('(orientation: portrait)');
+  const fitCutShort =
+    fitWhites !== undefined && whiteKeyCount(range.lowMidi, range.highMidi) < fitWhites;
+  const askToRotate = fitCutShort && portrait;
+
+  // A chord is in and waits on the pedal: say which way it has to go.
+  const sustainDown = useSustainDown();
 
   const goTo = useCallback(
     (next: number) => {
@@ -362,6 +377,7 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
       className="page learn-runner"
       aria-label={title}
       data-piano-ready={pianoReady ? 'true' : 'false'}
+      data-step-kind={step?.kind}
       ref={sectionRef}
     >
       <header className="learn-runner__bar">
@@ -473,7 +489,14 @@ export function ChapterRunner({ chapterId, progress, onProgress, onClose }: Chap
                   ? m.learn.exerciseDone
                   : m.learn.progress({ done: readout.done, total: readout.total })}
             </p>
-            {wantsShift && pianoReady && !readout.satisfied ? (
+            {alongSpec?.pedal && exercise.state.along?.pedalOwed && !readout.satisfied ? (
+              <p className="learn-exercise__pedal">
+                {sustainDown ? m.learn.pedalChange : m.learn.pedalPress}
+              </p>
+            ) : null}
+            {askToRotate && !readout.satisfied ? (
+              <p className="learn-exercise__shift">{m.learn.rotateHint}</p>
+            ) : wantsShift && pianoReady && !readout.satisfied ? (
               <p className="learn-exercise__shift">{m.learn.shiftHint}</p>
             ) : null}
             <div className="learn-exercise__actions">

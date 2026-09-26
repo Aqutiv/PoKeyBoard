@@ -2,6 +2,7 @@ import type { VelocityMode } from '@/state/useSettingsStore';
 import { MIDI_MAX, MIDI_MIN } from '@/utils/midi';
 import { isModalOpen } from './computerKeyboard';
 import { ensureAccessIfGranted, subscribePorts } from './midiAccess';
+import { midiVelocity, type MidiVelocityCurve, type MidiVelocityRange } from './velocityResponse';
 
 /**
  * Web MIDI input: a connected MIDI keyboard plays the piano with its own
@@ -52,6 +53,21 @@ const BEND_SHIFT_AT = 0.6;
 const BEND_RELEASE_AT = 0.3;
 const BEND_CENTER = 8192;
 
+let rawVelocityListener: ((raw: number) => void) | null = null;
+
+/**
+ * Hear the velocity of every note that plays, as the device sent it — before
+ * the curve, the calibration or the fixed velocity. Settings' inline
+ * calibration registers here for as long as it is listening; one listener at
+ * a time, and unregistering only clears its own.
+ */
+export function registerRawVelocityListener(listener: (raw: number) => void): () => void {
+  rawVelocityListener = listener;
+  return () => {
+    if (rawVelocityListener === listener) rawVelocityListener = null;
+  };
+}
+
 export class MidiInput {
   /**
    * Held pitch to the port that started it, and the ports currently holding
@@ -65,6 +81,8 @@ export class MidiInput {
   private bendLatched = false;
   private velocity = 0.75;
   private velocityMode: VelocityMode = 'touch';
+  private velocityCurve: MidiVelocityCurve = 'normal';
+  private velocityRange: MidiVelocityRange | null = null;
   private unsubscribePorts: (() => void) | null = null;
 
   attach(callbacks: MidiCallbacks): () => void {
@@ -92,6 +110,16 @@ export class MidiInput {
 
   setVelocityMode(mode: VelocityMode): void {
     this.velocityMode = mode;
+  }
+
+  /** The curve the device's own velocity is read through; unused in 'fixed' mode. */
+  setVelocityCurve(curve: MidiVelocityCurve): void {
+    this.velocityCurve = curve;
+  }
+
+  /** The calibrated span, stretched over 1..127 before the curve; unused in 'fixed' mode. */
+  setVelocityRange(range: MidiVelocityRange | null): void {
+    this.velocityRange = range;
   }
 
   /** Releases one port's notes and pedal, or everything when none is given. */
@@ -179,6 +207,7 @@ export class MidiInput {
     if (this.down.has(midi)) return;
     this.down.set(midi, port);
     this.callbacks?.noteOn(midi, this.velocityFor(rawVelocity));
+    rawVelocityListener?.(rawVelocity);
   }
 
   private stop(midi: number): void {
@@ -218,6 +247,7 @@ export class MidiInput {
   }
 
   private velocityFor(rawVelocity: number): number {
-    return this.velocityMode === 'fixed' ? this.velocity : rawVelocity / 127;
+    if (this.velocityMode === 'fixed') return this.velocity;
+    return midiVelocity(rawVelocity, this.velocityCurve, this.velocityRange);
   }
 }

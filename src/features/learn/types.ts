@@ -70,6 +70,14 @@ interface StepBase {
    */
   fit?: { lowMidi: number; highMidi: number };
   /**
+   * The step needs two hands' worth of keyboard: more white keys than a phone
+   * held upright shows at a playable width, and more than the computer
+   * keyboard's octave and a half reaches. Such a step is untimed, and its
+   * prose says what to play it with — touch, a MIDI keyboard, or the mouse
+   * one note at a time. The runner asks a portrait phone to turn sideways.
+   */
+  wide?: true;
+  /**
    * Run the lesson click through this step.
    *
    * Only ever needed to turn the click on *early* — a `rhythm` exercise brings

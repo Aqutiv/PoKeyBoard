@@ -293,6 +293,91 @@
   }
 }
 
+/* A phone turned sideways: the only way two hands' worth of keys fit on a
+   phone at a playable width. The height is what is short, so the lesson takes
+   the whole screen — the app nav would otherwise eat a third of it — and an
+   exercise keeps only what it is played from: its heading, the stave, the
+   readout and the keys. Close and Escape still leave the chapter. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .app-shell:has(.learn-runner) .app-nav {
+    display: none;
+  }
+
+  /* Back and Next move up beside the title, so the height goes to the stave
+     and the keys: a grand staff alone is nearly half of a 390px screen. */
+  .learn-runner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas:
+      'bar footer'
+      'card card'
+      'keys keys';
+    gap: 6px 12px;
+    padding-top: calc(var(--safe-top) + 6px);
+    padding-bottom: 6px;
+  }
+
+  .learn-runner__bar {
+    grid-area: bar;
+    align-items: center;
+  }
+
+  .learn-runner__title {
+    font-size: 15px;
+  }
+
+  .learn-runner__step {
+    display: none;
+  }
+
+  .learn-runner__close {
+    width: 36px;
+    height: 36px;
+  }
+
+  .learn-runner__footer {
+    grid-area: footer;
+    align-items: center;
+  }
+
+  .learn-runner__footer .btn {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding-inline: 18px;
+  }
+
+  .learn-runner__card {
+    grid-area: card;
+    padding: 6px 12px;
+  }
+
+  /* An exercise is played from the stave: the words that set it up were on
+     the card before it, and its prompt still says what to do. */
+  .learn-runner[data-step-kind='exercise'] .learn-card__heading,
+  .learn-runner[data-step-kind='exercise'] .learn-card__body,
+  .learn-runner[data-step-kind='exercise'] .learn-card__listen {
+    display: none;
+  }
+
+  .learn-runner[data-step-kind='exercise'] .learn-exercise {
+    margin-top: 0;
+  }
+
+  .learn-runner__keyboard {
+    grid-area: keys;
+    height: auto;
+  }
+
+  /* Keys this wide are easy to hit however short: the portrait floor is
+     about narrow keys, and here the height is what is scarce. */
+  .learn-runner__keyboard .piano__keys {
+    flex: 0 0 auto;
+    height: 96px;
+    min-height: 96px;
+  }
+}
+
 /* -------------------------------- */
 /* Exercise panel                    */
 /* -------------------------------- */
@@ -319,6 +404,15 @@
   margin: 6px 0 0;
   font-size: 13px;
   color: var(--text-dim);
+}
+
+/* The pedal is an instruction the chord is waiting on, not a passing hint:
+   it takes the accent, so it reads as the next thing to do. */
+.learn-exercise__pedal {
+  margin: 6px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
 }
 
 .learn-exercise__actions {

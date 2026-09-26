@@ -32,7 +32,9 @@ async function openChapter(page: Page, title: string): Promise<void> {
   // And for the chapter module itself: the keyboard is live while it is still
   // in flight, and the load handler parks the anchor on the opening step when
   // it lands — so a range shifted before that would be silently snapped back.
-  await page.locator('.learn-card__heading').waitFor({ timeout: 30_000 });
+  // Attached, not visible: a short landscape screen hides an exercise's heading
+  // by design, and all this waits for is the chapter module having landed.
+  await page.locator('.learn-card__heading').waitFor({ state: 'attached', timeout: 30_000 });
 }
 
 async function openChapterOne(page: Page): Promise<void> {
@@ -120,9 +122,13 @@ test.describe('learn outline', () => {
       'true',
     );
 
-    for (const level of ['Beginner', 'Intermediate', 'Advanced']) {
+    // Beginner is complete: all ten are open, and there is nothing upcoming.
+    await expect(chapterButtons(page)).toHaveCount(10);
+    await expect(page.getByText('Upcoming lessons', { exact: true })).toHaveCount(0);
+
+    for (const level of ['Intermediate', 'Advanced']) {
       await levels(page).getByRole('button', { name: level }).click();
-      await expect(chapterButtons(page), level).toHaveCount(level === 'Beginner' ? 9 : 0);
+      await expect(chapterButtons(page), level).toHaveCount(0);
       await page.getByText('Upcoming lessons', { exact: true }).click();
       await expect(chapterButtons(page), level).toHaveCount(10);
       await page.getByText('Upcoming lessons', { exact: true }).click();
@@ -131,12 +137,9 @@ test.describe('learn outline', () => {
 
   test('groups each level into three named parts', async ({ page }) => {
     await gotoLearn(page);
-    // Playing is split across the two lists: its first chapter has shipped
-    // and the rest are still upcoming, so each list heads its own run of it.
     await expect(page.locator('.learn-part__heading')).toHaveText([
       'The instrument',
       'Reading music',
-      'Playing',
       'Playing',
     ]);
 
@@ -176,15 +179,19 @@ test.describe('learn outline', () => {
       'Your First Melody',
       'The C Major Scale',
       'Triads: Major and Minor',
+      'Chords, Pedal & Hands Together',
     ]) {
       await expect(page.getByRole('button', { name: `Open ${title}` })).toBeEnabled();
     }
-    await expect(page.getByText('9 lessons available')).toBeVisible();
+    await expect(page.getByText('10 lessons available')).toBeVisible();
+    // The next level is still to be written: its chapters show, locked.
+    await levels(page).getByRole('button', { name: 'Intermediate' }).click();
+    await expect(page.getByText('0 lessons available')).toBeVisible();
     await page.getByText('Upcoming lessons', { exact: true }).click();
     await expect(
-      page.getByRole('button', { name: 'Chords, Pedal & Hands Together — coming soon' }),
+      page.getByRole('button', { name: 'How to Practise — coming soon' }),
     ).toBeDisabled();
-    await expect(page.getByText('Coming soon')).toHaveCount(1);
+    await expect(page.getByText('Coming soon')).toHaveCount(10);
   });
 });
 
@@ -1306,5 +1313,127 @@ test.describe('chapter nine', () => {
     await page.keyboard.down('KeyE');
     await expect(progressLine(page)).toHaveText('Nicely done.');
     for (const code of ['KeyA', 'KeyE', 'KeyG']) await page.keyboard.up(code);
+  });
+});
+
+test.describe('chapter ten', () => {
+  const CHAPTER = 'Chords, Pedal & Hands Together';
+  const openAt = (page: Page, step: number) =>
+    openChapterAt(page, CHAPTER, 'chordsPedalAndHands', step);
+
+  /** The four chords in chapter 9's register, as computer keys from a C4 base. */
+  const C = ['KeyA', 'KeyD', 'KeyG'];
+  const G = ['KeyG', 'KeyJ', 'KeyL'];
+  const AM = ['KeyH', 'KeyK', 'Semicolon'];
+  const F = ['KeyF', 'KeyH', 'KeyK'];
+
+  async function strike(page: Page, codes: readonly string[]): Promise<void> {
+    for (const code of codes) await page.keyboard.down(code);
+    for (const code of codes) await page.keyboard.up(code);
+  }
+
+  /** Lift the pedal and press it again — Space up, then down. */
+  async function changePedal(page: Page): Promise<void> {
+    await page.keyboard.up('Space');
+    await page.keyboard.down('Space');
+  }
+
+  test('pedals the progression, changing with each chord', async ({ page }) => {
+    await openAt(page, 5);
+    await expect(page.getByRole('heading', { name: 'Pedal the progression' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 4');
+
+    await strike(page, C);
+    // The chord is in, and the step now waits on the pedal.
+    await expect(page.getByText('Now press the pedal.')).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 4');
+    await page.keyboard.down('Space');
+    await expect(progressLine(page)).toHaveText('1 of 4');
+
+    for (const chord of [G, AM, F]) {
+      await strike(page, chord);
+      await expect(
+        page.getByText('Now change the pedal: lift it, then press it down again.'),
+      ).toBeVisible();
+      await changePedal(page);
+    }
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+    await page.keyboard.up('Space');
+  });
+
+  test('refuses a chord change the pedal was held straight through', async ({ page }) => {
+    await openAt(page, 5);
+    await strike(page, C);
+    await page.keyboard.down('Space');
+    await expect(progressLine(page)).toHaveText('1 of 4');
+    await strike(page, G);
+    // No change of pedal, and the harmony moves on anyway: that is the blur.
+    await strike(page, AM);
+    await expect(progressLine(page)).toHaveText('0 of 4');
+    await page.keyboard.up('Space');
+  });
+
+  test('counts two taps of the on-screen Sustain button as a change', async ({ page }) => {
+    await openAt(page, 3);
+    await expect(page.getByRole('heading', { name: 'Catch a chord' })).toBeVisible();
+    const sustain = page.getByRole('button', { name: 'Sustain' });
+    // Down first, before the chord: not a press after it.
+    await sustain.click();
+    await strike(page, C);
+    await expect(progressLine(page)).toHaveText('0 of 1');
+    // Up and down again, after the chord: a change.
+    await sustain.click();
+    await sustain.click();
+    await expect(progressLine(page)).toHaveText('Nicely done.');
+  });
+
+  test('plays the piece hands together, one column at a time', async ({ page }) => {
+    await openAt(page, 9);
+    await expect(page.getByRole('heading', { name: 'Play it, hands together' })).toBeVisible();
+    await expect(progressLine(page)).toHaveText('0 of 26');
+    // Its first column: the left hand's C chord under the right hand's G.
+    // Played by clicking, as a mouse user must — any order counts.
+    for (const name of ['G4 key', 'C3 key', 'E3 key', 'G3 key']) {
+      await page.locator(`.piano__keys [aria-label="${name}"]`).click();
+    }
+    await expect(progressLine(page)).toHaveText('1 of 26');
+    // A wrong note goes back to the start of the two bars.
+    await page.locator('.piano__keys [aria-label="B3 key"]').click();
+    await expect(progressLine(page)).toHaveText('0 of 26');
+  });
+
+  test('asks a portrait phone to turn sideways for two hands', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await openAt(page, 9);
+    await expect(
+      page.getByText('This needs more keys than fit upright — turn your phone sideways.'),
+    ).toBeVisible();
+  });
+
+  test('turned sideways, fits both hands and gives the lesson the whole screen', async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 844, height: 390 });
+    await openAt(page, 9);
+    // An exercise keeps its prompt; the heading and prose make way for the stave.
+    await expect(
+      page.getByText('Play the piece with both hands, one column at a time.'),
+    ).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Play it, hands together' })).toBeHidden();
+    // At least F2 to G4 — sideways there is room for more than the fit asks.
+    await expect(page.locator('.piano__range')).toHaveText(/^F2 – /);
+    await expect(page.locator('.app-nav')).toBeHidden();
+    await expect(page.getByText('This needs more keys than fit upright')).toHaveCount(0);
+    // The stave and the keys both on screen.
+    await expect(page.locator('.learn-staff__canvas').first()).toBeInViewport();
+    await expect(page.locator('.piano__keys')).toBeInViewport();
+  });
+
+  test('hands off to A Beautiful Day with both hands in Training', async ({ page }) => {
+    await openAt(page, 10);
+    await expect(page.getByRole('heading', { name: 'That is the Beginner course' })).toBeVisible();
+    await page.getByRole('button', { name: 'Practise A Beautiful Day on Play' }).click();
+    await expect(page.getByText('A Beautiful Day').first()).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-both');
   });
 });

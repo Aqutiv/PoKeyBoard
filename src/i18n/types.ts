@@ -355,6 +355,11 @@ export interface Messages {
     close: string;
     /** Shown when the exercise still needs notes but none are on screen. */
     shiftHint: string;
+    /** A chord is in and the pedal is due: pressed for the first time, or changed. */
+    pedalPress: string;
+    pedalChange: string;
+    /** A step needs more keys than a phone held upright can show. */
+    rotateHint: string;
     loadingPiano: string;
     loadingChapter: string;
     diagramLabel: string;
@@ -505,6 +510,26 @@ export interface Messages {
     velocityTouch: string;
     velocityFixed: string;
     fixedVelocity: string;
+    touchSensitivity: string;
+    touchSensitivityLight: string;
+    touchSensitivityNormal: string;
+    touchSensitivityFirm: string;
+    touchSensitivityHint: string;
+    accentHint: string;
+    midiVelocityCurve: string;
+    midiCurveLight: string;
+    midiCurveNormal: string;
+    midiCurveHeavy: string;
+    midiCurveHint: string;
+    midiVelocityRange: string;
+    midiRangeNone: string;
+    midiRangeSet: (p: { min: number; max: number }) => string;
+    midiCalibrate: string;
+    midiCalibrateReset: string;
+    midiCalibrateCancel: string;
+    midiCalibrateSoftest: string;
+    midiCalibrateLoudest: (p: { softest: number }) => string;
+    midiCalibrateRejected: string;
     noteLabels: string;
     followPlayback: string;
     scrubAudition: string;

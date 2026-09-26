@@ -43,9 +43,24 @@ export type ExerciseInput =
       atMs: number;
       atBeats: number | null;
       held: ReadonlySet<number>;
+    }
+  | {
+      /**
+       * The sustain pedal went down or came up — the combined pedal, whichever
+       * of the on-screen button, Space or a MIDI pedal moved it. It carries no
+       * held set because it is not a key: only a `playAlong` line asking for
+       * pedal changes reads it at all.
+       */
+      kind: 'pedal';
+      down: boolean;
+      atMs: number;
+      atBeats: number | null;
     };
 
 /** `rhythm` only: the attempt in progress. */
+/** A key going down or coming up — everything but the pedal. */
+type KeyInput = Exclude<ExerciseInput, { kind: 'pedal' }>;
+
 export interface RhythmRun {
   /** Grid beat of the bar line this attempt started from. */
   origin: number;
@@ -71,6 +86,12 @@ export interface AlongRun {
    * `null` while waiting to come in at `index`. Always `null` untimed.
    */
   origin: number | null;
+  /**
+   * `pedal: 'changeEach'` only: the moment's notes are all down and it now
+   * waits for a fresh press of the pedal. A key pressed meanwhile breaks the
+   * run — the harmony moved on without the pedal changing with it.
+   */
+  pedalOwed: boolean;
 }
 
 export interface ExerciseState {
@@ -134,6 +155,13 @@ export function reduceExercise(
   input: ExerciseInput,
 ): ExerciseState {
   if (state.satisfied) return state;
+  if (input.kind === 'pedal') {
+    // A pedal is not a key: only a line that asks for pedal changes listens,
+    // and to it a press is what completes the moment waiting on one.
+    if (spec.kind !== 'playAlong' || !spec.pedal) return state;
+    const run = pedalAlong(state.along ?? AT_START, input.down);
+    return { ...state, along: run, satisfied: run.index >= goalTotal(spec) };
+  }
 
   if (spec.kind === 'rhythm') {
     // Order is a story about onsets; a release says nothing about where in the
@@ -378,6 +406,7 @@ const AT_START: AlongRun = {
   struck: NOTHING_STRUCK,
   fresh: NOTHING_STRUCK,
   origin: null,
+  pedalOwed: false,
 };
 
 interface AlongStep {
@@ -404,10 +433,24 @@ function remainingAlong(spec: PlayAlongSpec, state: ExerciseState): readonly num
 function advanceAlong(
   spec: PlayAlongSpec,
   run: AlongRun,
-  input: ExerciseInput,
+  input: KeyInput,
   onsets: ReadonlyMap<number, number>,
 ): AlongStep {
   const moments = momentsOf(spec.phrase);
+  // Its notes are in: letting them go while the pedal change is owed undoes
+  // nothing — the pedal is what holds them now, or should.
+  if (run.pedalOwed && input.kind === 'release') return { run, wrong: false };
+  if (run.pedalOwed && input.kind === 'press') {
+    // The harmony moved on without the pedal changing with it: that is the
+    // blur, and it breaks the run like any other wrong note — re-tested from
+    // the checkpoint, where it may yet begin the line again.
+    const fallback = fallbackFrom(spec, run.index);
+    const retried = spec.together
+      ? advanceTogether(spec, moments, fallback, input, onsets, spec.together)
+      : advanceAccumulating(spec, moments, fallback, input.midi);
+    const started = retried.run.index > fallback.index || retried.run.struck.size > 0;
+    return { run: retried.run, wrong: !started };
+  }
   if (spec.timed) {
     // A release says nothing about where in the bar you are.
     return input.kind === 'press' ? advanceTimed(spec, moments, run, input) : { run, wrong: false };
@@ -429,12 +472,13 @@ function advanceAccumulating(
   run: AlongRun,
   midi: number,
 ): AlongStep {
-  const struck = strike(moments, run, midi);
+  const hold = spec.pedal === 'changeEach';
+  const struck = strike(moments, run, midi, hold);
   if (struck) return { run: struck, wrong: false };
   // Striking again a note this moment already has is not a mistake.
   if (run.struck.has(midi)) return { run, wrong: false };
   const fallback = fallbackFrom(spec, run.index);
-  const retried = strike(moments, fallback, midi);
+  const retried = strike(moments, fallback, midi, hold);
   return retried ? { run: retried, wrong: false } : { run: fallback, wrong: true };
 }
 
@@ -448,29 +492,32 @@ function advanceTogether(
   spec: PlayAlongSpec,
   moments: readonly PhraseMoment[],
   run: AlongRun,
-  input: ExerciseInput,
+  input: KeyInput,
   onsets: ReadonlyMap<number, number>,
   together: Togetherness,
 ): AlongStep {
   const moment = moments[run.index];
   if (!moment) return { run, wrong: false };
+  const hold = spec.pedal === 'changeEach';
   if (input.kind === 'press' && !moment.midis.includes(input.midi)) {
     const fallback = fallbackFrom(spec, run.index);
     const target = moments[fallback.index];
     if (!target?.midis.includes(input.midi)) return { run: fallback, wrong: true };
     const retry = { ...fallback, fresh: new Set([input.midi]) };
-    return { run: gesture(target, retry, input, onsets, together), wrong: false };
+    return { run: gesture(target, retry, input, onsets, together, hold), wrong: false };
   }
   const fresh = input.kind === 'press' ? new Set(run.fresh).add(input.midi) : run.fresh;
-  return { run: gesture(moment, { ...run, fresh }, input, onsets, together), wrong: false };
+  return { run: gesture(moment, { ...run, fresh }, input, onsets, together, hold), wrong: false };
 }
 
 function gesture(
   moment: PhraseMoment,
   run: AlongRun,
-  input: ExerciseInput,
+  input: KeyInput,
   onsets: ReadonlyMap<number, number>,
   together: Togetherness,
+  /** Keep a finished moment waiting for a pedal change instead of moving on. */
+  hold: boolean,
 ): AlongRun {
   // Keys held down still count, however long ago they were struck — that is
   // how "move one note" keeps the other two. Only the onset window is scoped.
@@ -478,7 +525,7 @@ function gesture(
   const candidate = candidateSet(input, recent, together);
   const exact =
     candidate.size === moment.midis.length && moment.midis.every((midi) => candidate.has(midi));
-  if (exact) return { ...AT_START, index: run.index + 1 };
+  if (exact) return complete(run, moment, hold);
   return { ...run, struck: new Set(moment.midis.filter((midi) => candidate.has(midi))) };
 }
 
@@ -503,7 +550,7 @@ function advanceTimed(
   if (run.origin !== null) {
     const moment = moments[run.index];
     if (moment && Math.abs(at - (run.origin + moment.beat)) <= tolerance) {
-      const struck = strike(moments, run, input.midi);
+      const struck = strike(moments, run, input.midi, false);
       if (struck) return { run: struck, wrong: false };
     }
   }
@@ -513,18 +560,44 @@ function advanceTimed(
   const entry = moments[waiting.index];
   const barBeats = spec.phrase.timeSignature.numerator;
   const origin = entry ? barOriginFor(at, entry.beat, barBeats, tolerance) : null;
-  const entered = origin === null ? null : strike(moments, { ...waiting, origin }, input.midi);
+  const entered =
+    origin === null ? null : strike(moments, { ...waiting, origin }, input.midi, false);
   return entered ? { run: entered, wrong: false } : { run: waiting, wrong: true };
 }
 
 /** Credit `midi` to the due moment, if it is one of the notes still owed. */
-function strike(moments: readonly PhraseMoment[], run: AlongRun, midi: number): AlongRun | null {
+function strike(
+  moments: readonly PhraseMoment[],
+  run: AlongRun,
+  midi: number,
+  /** Keep a finished moment waiting for a pedal change instead of moving on. */
+  hold: boolean,
+): AlongRun | null {
   const moment = moments[run.index];
   if (!moment || !moment.midis.includes(midi) || run.struck.has(midi)) return null;
   const struck = new Set(run.struck).add(midi);
   return struck.size >= moment.midis.length
-    ? { ...AT_START, index: run.index + 1, origin: run.origin }
+    ? complete({ ...run, struck }, moment, hold)
     : { ...run, struck };
+}
+
+/**
+ * A moment's notes are all in: move on to the next — or, on a line that
+ * changes the pedal with the harmony, stay and wait for that change.
+ */
+function complete(run: AlongRun, moment: PhraseMoment, hold: boolean): AlongRun {
+  if (hold) return { ...run, struck: new Set(moment.midis), pedalOwed: true };
+  return { ...AT_START, index: run.index + 1, origin: run.origin };
+}
+
+/**
+ * The pedal moved. Only a press does anything, and only for a moment that is
+ * waiting on one: the pedal coming up is half of a change, and a press with
+ * nothing owed is a player resting a foot on it.
+ */
+function pedalAlong(run: AlongRun, down: boolean): AlongRun {
+  if (!run.pedalOwed || !down) return run;
+  return { ...AT_START, index: run.index + 1 };
 }
 
 /** Back to the latest checkpoint at or before `index`, waiting to come in. */
@@ -665,7 +738,7 @@ function togethernessOf(spec: UnorderedSpec): Togetherness | undefined {
  * since a phone cannot show three Cs at once.
  */
 function candidateSet(
-  input: ExerciseInput,
+  input: KeyInput,
   onsets: ReadonlyMap<number, number>,
   together: Togetherness | undefined,
 ): ReadonlySet<number> {
