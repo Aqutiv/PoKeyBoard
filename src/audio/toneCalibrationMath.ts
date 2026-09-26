@@ -35,11 +35,11 @@ import { ATTACK_S, TONE_FILTER_Q_DB } from './sampleVoice';
  *
  * The cutoffs are per root, not per layer: they climb with pitch from half a
  * kilohertz to two in the bass, as the piano goes, to several at the top, and
- * move smoothly from one root to the next. At the very top, though, a match can fall at or under the
- * note's own fundamental: up there the measure sits close to the fundamental,
- * and only taking the note itself down moves it, with up to 4.5 dB to give
- * back. So no ramp starts below `FUNDAMENTAL_GUARD` times its root's
- * fundamental, and those keys keep a smaller correction.
+ * move smoothly from one root to the next. At the very top, though, a match can
+ * fall at or under the note's own fundamental: up there the measure sits close
+ * to the fundamental, and only taking the note itself down moves it, with up to
+ * 4.5 dB to give back. So no ramp starts below `FUNDAMENTAL_GUARD` times its
+ * root's fundamental, and those keys keep a smaller correction.
  */
 
 /** Where every ramp opens out to: a lowpass this high leaves all a piano plays alone. */
