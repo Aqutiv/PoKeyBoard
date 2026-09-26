@@ -6,6 +6,13 @@ export interface SamplePackVelocityLayer {
   sourceLayer: number;
   label: string;
   /**
+   * Gain, in dB, the build gave this layer's recordings before quantising them
+   * to 16 bits, so a quietly mastered source keeps its dither floor down.
+   * Already in the samples, so the app never applies it; a record of what was
+   * done to the source. Absent where the samples kept the source's level.
+   */
+  gainDb?: number;
+  /**
    * Gain multiplier that brings this layer up to the loudness of the same layer
    * in the reference pack, measured at build time. Absent on the reference pack
    * itself, where SampleBank's own layer trims already describe the level.

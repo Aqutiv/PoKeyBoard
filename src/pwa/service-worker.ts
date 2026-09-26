@@ -26,7 +26,7 @@ registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
 // user takes in IndexedDB from eviction pressure caused by sample audio.
 //
 // The entry cap is a safety valve, not a size budget (purgeOnQuotaError is the
-// real protection): all three pianos fully downloaded is 225 entries, and LRU
+// real protection): all four pianos fully downloaded is 316 entries, and LRU
 // eviction is silent, so it has to sit well clear of that or "available offline"
 // would quietly stop being true.
 registerRoute(

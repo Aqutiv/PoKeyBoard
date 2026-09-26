@@ -492,6 +492,7 @@ export const en: Messages = {
       'Pianos stream as you play. Download one to keep every key playable offline — each downloads and deletes on its own, and your takes are never affected.',
     pianoSalamanderDesc: 'Yamaha C5 concert grand, bright and close',
     pianoHeadroomDesc: 'Yamaha C3 grand, warm and intimate',
+    pianoBitklavierDesc: 'bitKlavier’s D concert grand, recorded at Princeton — rich and even',
     pianoWurlitzerDesc: 'EP203W electric piano',
     pianoSwitching: 'Loading the new piano…',
     pianoVolume: 'Piano volume',
@@ -643,6 +644,8 @@ export const en: Messages = {
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
     attribution:
       'Pianos: Salamander Grand Piano v3 by Alexander Holm (CC-BY 3.0) and Headroom Piano by Bengt Nilsson (CC-BY 4.0), both adapted for the web. MP3 encoding by the LAME encoder compiled to WebAssembly. Full notices ship with the source in THIRD_PARTY_NOTICES.md.',
+    bitklavierAttribution:
+      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: a Steinway D recorded at Princeton University by Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers and Daniel Trueman. Adapted for the web: three of its sixteen velocity layers, shortened with a fade-out, raised in level and re-encoded as 16-bit FLAC.',
     version: ({ version }) => `Version ${version}.`,
   },
   errors: {

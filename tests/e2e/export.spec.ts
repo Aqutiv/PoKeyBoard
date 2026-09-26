@@ -7,14 +7,12 @@ test.describe('MP3 export', () => {
   // assertions below fail on a silent or empty render.
   test.use({ samplePack: 'real' });
 
-  for (const wurlitzer of [false, true])
-    test(`renders a ${wurlitzer ? 'Wurlitzer' : 'Salamander'} take to a real MP3 and downloads it`, async ({
-      page,
-    }) => {
+  for (const piano of ['Salamander', 'Steinway', 'Wurlitzer'])
+    test(`renders a ${piano} take to a real MP3 and downloads it`, async ({ page }) => {
       await gotoAppReady(page);
-      if (wurlitzer) {
+      if (piano !== 'Salamander') {
         await nav(page).getByRole('button', { name: 'Settings' }).click();
-        await page.getByRole('radio', { name: /^Wurlitzer/ }).check();
+        await page.getByRole('radio', { name: new RegExp(`^${piano}`) }).check();
         await nav(page).getByRole('button', { name: 'Play' }).click();
         await page.locator('section[data-piano-ready="true"]').waitFor();
       }
@@ -35,6 +33,8 @@ test.describe('MP3 export', () => {
       await dialog.getByRole('button', { name: 'Share audio' }).click();
       const download = await downloadPromise;
       expect(download.suggestedFilename()).toMatch(/^PoKeyBoard - .*\.mp3$/);
+      // Named after the piano it was rendered with.
+      expect(download.suggestedFilename()).toContain(`(${piano}).mp3`);
 
       const filePath = await download.path();
       expect(filePath).not.toBeNull();

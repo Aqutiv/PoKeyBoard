@@ -1,0 +1,370 @@
+{
+  "dataset": "https://doi.org/10.34770/xm18-yr83",
+  "folder": "https://g-ef94ef.f0ad1.36fe.data.globus.org/10.34770/xm18-yr83/395/bitKlavierGrand_LipCardioid_48k24b/",
+  "renameList": {
+    "bytes": 152238,
+    "sha256": "d066eb7e9c1e214c1207bb8744840619da6cbc325b1c29667c82b1d687b29af5"
+  },
+  "files": {
+    "A0v7.wav": {
+      "bytes": 3744078,
+      "sha256": "456dd36c490efbc26589e5dfb484be169de74acfec13ddcf97ee977510dfc4e2"
+    },
+    "A0v10.wav": {
+      "bytes": 3744078,
+      "sha256": "649730c0f06b06f5205b65b5ce3e53a2a6f89facbca57758d2fe5dc7b74ffac7"
+    },
+    "A0v14.wav": {
+      "bytes": 3744078,
+      "sha256": "f212b028287b132068be769dac62f5e217d414caa79e30c3afc16c602f11a293"
+    },
+    "C1v7.wav": {
+      "bytes": 3744078,
+      "sha256": "b42735648c8d02aca081d2f4045b77f23e2ecb1e16d82f2c56a617c54130a6e8"
+    },
+    "C1v10.wav": {
+      "bytes": 3744078,
+      "sha256": "b51da35e31fba43f51c5b543d3078b49328244e81a4eda08d11a219eabf58a34"
+    },
+    "C1v14.wav": {
+      "bytes": 3744078,
+      "sha256": "ad2dfa13b963d728ed0d3852df6de9e2d56a7627b5baf4e791f8da3077cb64e4"
+    },
+    "D#1v7.wav": {
+      "bytes": 3744078,
+      "sha256": "d197f74ef2cb169f67efcde84a80e32ee1895e8f6ee15a381c87386e4e149e62"
+    },
+    "D#1v10.wav": {
+      "bytes": 3744078,
+      "sha256": "bfefc8af6a98591ce6231a788b40d9ea2c43cc0654c142a8574cbac205192774"
+    },
+    "D#1v14.wav": {
+      "bytes": 3744078,
+      "sha256": "c01630559dc1e58f2ce530e94c78faa4a11666039c7b6e2a3f4fb9f897df488c"
+    },
+    "F#1v7.wav": {
+      "bytes": 3744078,
+      "sha256": "b36a265625d788a52bda71a8bdc4f69be96d16f81807e4cfa8e7f56e5aeb0761"
+    },
+    "F#1v10.wav": {
+      "bytes": 3744078,
+      "sha256": "e8d6f96d7ddee76343a97c0f07c962add61574a5d479f9e9deefc3c298c4a5d6"
+    },
+    "F#1v14.wav": {
+      "bytes": 3744078,
+      "sha256": "c50b348bb715a92cfb474058dee7cadbfe829b94418c28ef8271bf0b563a14b1"
+    },
+    "A1v7.wav": {
+      "bytes": 3744078,
+      "sha256": "9c8b3aff734a7c1e8b4e64b85803291eea6f52f84579a9abb0b153da3ea49612"
+    },
+    "A1v10.wav": {
+      "bytes": 3744078,
+      "sha256": "eb2a6c4961e19c97a5d3193dad633dfff1306c3a92dbc7a8ceed0fdb11c0f440"
+    },
+    "A1v14.wav": {
+      "bytes": 3744078,
+      "sha256": "675ced7f77629b8749db2a98abb739a22b3c0b97a9e5ad8794d80ed25f12b786"
+    },
+    "C2v7.wav": {
+      "bytes": 3744078,
+      "sha256": "e99f835ce8532af499078089b3c8488abc6807940445f5fa5f71e47817d80c3d"
+    },
+    "C2v10.wav": {
+      "bytes": 3744078,
+      "sha256": "76d63f6cd0a52d724373bfe9077ed136fad5cfa800b30d5a2933b9a82bd6b725"
+    },
+    "C2v14.wav": {
+      "bytes": 3744078,
+      "sha256": "afabca77672ed4ae987d27050fa366da3ccb674e59ad1280349cbc5ce23cbfb2"
+    },
+    "D#2v7.wav": {
+      "bytes": 3744078,
+      "sha256": "632f91e9c246685715ee57be965565669b46e85ee084828476477f83b465fc97"
+    },
+    "D#2v10.wav": {
+      "bytes": 3744078,
+      "sha256": "0d8183f4b1b5ae8c335fa7e86cbf119206a8f207e6c05773349cfb03721d56ae"
+    },
+    "D#2v14.wav": {
+      "bytes": 3744078,
+      "sha256": "5d2becade5c344d545f4169d9dfd4be891c09a8a72c9c9f85baa74c37c847196"
+    },
+    "F#2v7.wav": {
+      "bytes": 3744078,
+      "sha256": "97f0f7ff5434ebf67f22333d31e99fcce894928937f25f47ff2b98d2a8036c63"
+    },
+    "F#2v10.wav": {
+      "bytes": 3744078,
+      "sha256": "784409b90b52cae39b38181908cb4e4a16d42d61498a56e50c31627ce3c13aed"
+    },
+    "F#2v14.wav": {
+      "bytes": 3744078,
+      "sha256": "abe5c177b6ebd721d1a6619ab725f066c5b2c97ca3562a071c054fbfef99e687"
+    },
+    "A2v7.wav": {
+      "bytes": 3744078,
+      "sha256": "211a883e395c5b66d5836af5833f3c71c4f373b07f3be90397befe6baf17f905"
+    },
+    "A2v10.wav": {
+      "bytes": 3744078,
+      "sha256": "9aeeeab74254a31931e7301526dbf0ad0db8fa8250fbeb9ea0b59b89aa506c4b"
+    },
+    "A2v14.wav": {
+      "bytes": 3744078,
+      "sha256": "389b4fafa53c056926c5ee2d839312e9068ac8d525b77f6afc36fd31f1452cf9"
+    },
+    "C3v7.wav": {
+      "bytes": 2880078,
+      "sha256": "53821646e45117aec1999e30a1ee8a01218b0ef6605e4021263814d676fd2df7"
+    },
+    "C3v10.wav": {
+      "bytes": 2880078,
+      "sha256": "2ca1862495efc06863a7c42437f345f4cb49faac5fbf3b994af7526883c05df5"
+    },
+    "C3v14.wav": {
+      "bytes": 2880078,
+      "sha256": "13d5ab0c36a912dfb2e3ccbf1a70490f791352ee738447954defb1e4333e09db"
+    },
+    "D#3v7.wav": {
+      "bytes": 2880078,
+      "sha256": "7ff31ace9c5f255450ae057b8dab54c0118623c5b24c64b08e8d33181f1fb0ea"
+    },
+    "D#3v10.wav": {
+      "bytes": 2880078,
+      "sha256": "a444d82e124764a6420c8d8af3b9a8dd0c1f3ee7cdb3918f0c08553a92d3d1bb"
+    },
+    "D#3v14.wav": {
+      "bytes": 2880078,
+      "sha256": "0e945e58715fafe6e6594c33db0a5640d640b0c4e927a4d7e63cf9eadec6184b"
+    },
+    "F#3v7.wav": {
+      "bytes": 2880078,
+      "sha256": "65736b3b6b267167892b6250c137e91c46b68743782c42d65ce061672f485570"
+    },
+    "F#3v10.wav": {
+      "bytes": 2880078,
+      "sha256": "a597938d71c251c6fa0a86554c1b82b05d732dfc2baaff4b91cc69e5e63a9572"
+    },
+    "F#3v14.wav": {
+      "bytes": 2880078,
+      "sha256": "ebbbe9328fd1b8cf854ee3790a17950c69c31458eb506255577b154d5f8510d2"
+    },
+    "A3v7.wav": {
+      "bytes": 2880078,
+      "sha256": "122f6d593a227ff0e8c73bb8c86c1fa9c3d4241cd30cbbf15c5b33b94e9bb759"
+    },
+    "A3v10.wav": {
+      "bytes": 2880078,
+      "sha256": "8c974cc947a8d4b8f04b6f8fa165a3e88f736ca04b3adb4479fc2028ec8f256c"
+    },
+    "A3v14.wav": {
+      "bytes": 2880078,
+      "sha256": "c717cc53eb43aff7c1ceda615c7d464ecd1ec492d4e8690d07d4e1facbeecf2c"
+    },
+    "C4v7.wav": {
+      "bytes": 2880078,
+      "sha256": "b40a2e52637052b75f56c9aecfff70da96a569a6ffe47cf69960bff60278b6ca"
+    },
+    "C4v10.wav": {
+      "bytes": 2880078,
+      "sha256": "5d345d2ab36af0896de8ccb4d8787588b812bca76b018c52a7a5950579a75c14"
+    },
+    "C4v14.wav": {
+      "bytes": 2880078,
+      "sha256": "613dc0b65bd9ee35804e073f6b3d43e023e28a70f5f545d3a404bad8fa2ba5fa"
+    },
+    "D#4v7.wav": {
+      "bytes": 2880078,
+      "sha256": "20504d90a78e4662a665af82113648b86e1c1067c334151c11c80da3ceff8e5a"
+    },
+    "D#4v10.wav": {
+      "bytes": 2880078,
+      "sha256": "9954ae2a0dc2a838fedfe7ad92fce0c744267a2601ea6dc75d3284d7bc68bbd0"
+    },
+    "D#4v14.wav": {
+      "bytes": 2880078,
+      "sha256": "bd3ab33a513f36515871750f00995dd6bc639306cd144ad4dd3e1606892ac848"
+    },
+    "F#4v7.wav": {
+      "bytes": 2880078,
+      "sha256": "be3a4dc1bc9a0b3be160bf745a6646e13b7d4ce332b4b6d6e407c2763e92a7c4"
+    },
+    "F#4v10.wav": {
+      "bytes": 2880078,
+      "sha256": "9a3b92f84aa61a8a57ec9d02cb6ed345d2c7cba3dc2ea97c20ae82b536a835f8"
+    },
+    "F#4v14.wav": {
+      "bytes": 2880078,
+      "sha256": "3396a3dfaf8a2c464bb7cabdccfdfadf92131efd97b07a2e02511c5a28725b65"
+    },
+    "A4v7.wav": {
+      "bytes": 2880078,
+      "sha256": "5d41591d3b007124231ca436fa14a338aa1e7432d26d6af3475bc335778e0c76"
+    },
+    "A4v10.wav": {
+      "bytes": 2880078,
+      "sha256": "23973765de28cc1f395b2133337e3ec4b8798e13442b774fee46df5f0051fa0e"
+    },
+    "A4v14.wav": {
+      "bytes": 2880078,
+      "sha256": "5108b5b86732dba2e141ab895649808e41bff36b5a9740397e021428175f6af2"
+    },
+    "C5v7.wav": {
+      "bytes": 2304078,
+      "sha256": "4a755635705880e975bde0f6bcb927c93314362663f2352f234f7aea7e204765"
+    },
+    "C5v10.wav": {
+      "bytes": 2304078,
+      "sha256": "88e5225c4e851c3fcc8ad7a9291091888980a3306bf4c606e2d30b6c7f916190"
+    },
+    "C5v14.wav": {
+      "bytes": 2304078,
+      "sha256": "81e2b05e060927103ead51e2e8bf6c345855e8a31e030b327a0d8927dcc9f590"
+    },
+    "D#5v7.wav": {
+      "bytes": 2304078,
+      "sha256": "2d301072ca60937bfe19f0130e9903212dc3916c54646275730531a57892e8f4"
+    },
+    "D#5v10.wav": {
+      "bytes": 2304078,
+      "sha256": "428b09c88c4642bfde04895199c555a42d0ea510c28b1bd4a9c3c1ec08150d39"
+    },
+    "D#5v14.wav": {
+      "bytes": 2304078,
+      "sha256": "8f5de2fb4ace18909fa0d2a10e68b9e494f571e1ae0b4e4e976cc584fa25ecac"
+    },
+    "F#5v7.wav": {
+      "bytes": 2304078,
+      "sha256": "aa7339468921f8239b2f6a4cefadc45738e02e32c63860f88102bec21a7a94ad"
+    },
+    "F#5v10.wav": {
+      "bytes": 2304078,
+      "sha256": "335c48052efb87fa8b46e85f770e9d8611c3624101e15eaf4c63473c38f7ae70"
+    },
+    "F#5v14.wav": {
+      "bytes": 2304078,
+      "sha256": "e4ca72a9068888c8cfb845cc483d873d25709cccf0b0835638b8aa13dc518f3e"
+    },
+    "A5v7.wav": {
+      "bytes": 2304078,
+      "sha256": "ac5183bb6b1aa741773bc85283e0244751b9074bdde6294c0429a6074cebdb67"
+    },
+    "A5v10.wav": {
+      "bytes": 2304078,
+      "sha256": "d8990f3ded435281dda316252a7913b9d3413441d709757b23e98dc1fdf33483"
+    },
+    "A5v14.wav": {
+      "bytes": 2304078,
+      "sha256": "8511b7c49d3caed26ab6020efc71ae6b9b7b30346ec9493c3eeeb0446cd8ba54"
+    },
+    "C6v7.wav": {
+      "bytes": 2304078,
+      "sha256": "7a6a85b139db57157fb2adefa0e0b832b4e032b89a9b60894272db0773bea685"
+    },
+    "C6v10.wav": {
+      "bytes": 2304078,
+      "sha256": "c54d71b435614afce3f17cc67f647baaf158daba83852d02d001053ba36ace8e"
+    },
+    "C6v14.wav": {
+      "bytes": 2304078,
+      "sha256": "6d4098b0dcdbe9af19a7487696b87cacf32281ee1fd878fdfc7715eb39be19e1"
+    },
+    "D#6v7.wav": {
+      "bytes": 2304078,
+      "sha256": "7d52e5ef279ae3a71866360b16da303c9b5cab6898f4fbdbef83b90536ba3dc9"
+    },
+    "D#6v10.wav": {
+      "bytes": 2304078,
+      "sha256": "eaa728fde239e2e10dc3839eb69819784df78bbd26295aa23d9c9f12154f87ef"
+    },
+    "D#6v14.wav": {
+      "bytes": 2304078,
+      "sha256": "fde5e791418d722e8854bb568f38935baa72960cff65c53c51ec71cb7de4c1eb"
+    },
+    "F#6v7.wav": {
+      "bytes": 2304078,
+      "sha256": "569ed4bf8b2015c5c9388fda4afd9a3334f7c6af414b5a2fc6667d3b4d57b5f3"
+    },
+    "F#6v10.wav": {
+      "bytes": 2304078,
+      "sha256": "0a2a936b97012946f81e2718ff55faa2f13a80f7feb0d44f509a3641b792bdf5"
+    },
+    "F#6v14.wav": {
+      "bytes": 2304078,
+      "sha256": "19f6a9a91ef72a6caee9b36b2328e20ba9b3bc8b1ef9a012b050a8e69c1e1761"
+    },
+    "A6v7.wav": {
+      "bytes": 2163822,
+      "sha256": "a4b5993af37ae0314458bdbc3dd56f872ce6f35462038f16e6795b94b840f882"
+    },
+    "A6v10.wav": {
+      "bytes": 2304078,
+      "sha256": "cddcf87b178e2b743a75a00e4ed8eebb5beecf31234da0be73fe3f1cbc686f67"
+    },
+    "A6v14.wav": {
+      "bytes": 2304078,
+      "sha256": "c811372a2282b4114186cfdcf2b3df011dd04449fdf3c2b6bbdc3366154d7569"
+    },
+    "C7v7.wav": {
+      "bytes": 1884174,
+      "sha256": "3e991b3e6320a1fa64b3e857fd8118995e819408b9e10276495ac27ed10d81bf"
+    },
+    "C7v10.wav": {
+      "bytes": 2304078,
+      "sha256": "bd2bae47fb218ff19a1e3ad31055bca9f8e3f43cdcb326995acefca7e71de28e"
+    },
+    "C7v14.wav": {
+      "bytes": 2304078,
+      "sha256": "b006d60af0fbfb30b8e43ecf169b7d5522dcd9df78a3dd027ca23569084bfbdd"
+    },
+    "D#7v7.wav": {
+      "bytes": 2269518,
+      "sha256": "da0859449596c27554a9c1e74a280e687530bb99e264db3e0a7728633547f689"
+    },
+    "D#7v10.wav": {
+      "bytes": 2304078,
+      "sha256": "82df34806d52ae44c6c71efea3ef72d650730067069c72f73534aa2931175743"
+    },
+    "D#7v14.wav": {
+      "bytes": 2208462,
+      "sha256": "642fc97a4697c386950c4e893a00285599006a02de52229f905cf03d8bd5cb3a"
+    },
+    "F#7v7.wav": {
+      "bytes": 1316814,
+      "sha256": "b70ff69be6557841e37ef2866fe7cecc557becd2295ecdd6e3eeb35ab88b6ce2"
+    },
+    "F#7v10.wav": {
+      "bytes": 1721742,
+      "sha256": "18e668b872f2f38a19b7ffde552f46746cd65d24e94b40be0d8edd65a0790aae"
+    },
+    "F#7v14.wav": {
+      "bytes": 1928814,
+      "sha256": "4930eeb7f3a455080cd4ff20d133076ed357ef3fb2073502a7f8c6cef9026fc9"
+    },
+    "A7v7.wav": {
+      "bytes": 1158126,
+      "sha256": "048d0697d0580ae4587ceaa6ecfdf08939f3abc2d79d566d1ae7f2311e441e4e"
+    },
+    "A7v10.wav": {
+      "bytes": 1005774,
+      "sha256": "2aca2db662aa649c9901de5058909760b831b2e7536ea97aae4a13f4c993d323"
+    },
+    "A7v14.wav": {
+      "bytes": 2098446,
+      "sha256": "0b6b07e1634b98c31fc19297e8c6b94194869ddbdc07ddb9efefcbfb9a204739"
+    },
+    "C8v7.wav": {
+      "bytes": 1179726,
+      "sha256": "f96a334934e86c59a67c630a97e44b9beba772e8a8760b15b82cb5f11d143e82"
+    },
+    "C8v10.wav": {
+      "bytes": 1048974,
+      "sha256": "525cd246da7efa64125914a2d3a932fa6e75a5789bd31edd0a71105fa6d9dee1"
+    },
+    "C8v14.wav": {
+      "bytes": 1530798,
+      "sha256": "dae6d8b1d1d515a9c3258724daf6862b3bd10961efea8e67a0903c2dcf6550b1"
+    }
+  }
+}

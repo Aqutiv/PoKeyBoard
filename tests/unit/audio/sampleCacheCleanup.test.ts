@@ -57,6 +57,24 @@ describe('deleting one piano’s downloaded samples', () => {
 
     expect([...entries]).toEqual([`${BASE}/salamander-grand-v3/C4v10.sample`]);
   });
+
+  it('keeps the three grands’ downloads apart', async () => {
+    const entries = stubCaches([
+      `${BASE}/salamander-grand-v3/C4v10.sample`,
+      `${BASE}/headroom-grand-v2/C4v3.sample`,
+      `${BASE}/bitklavier-grand-v1/C4v10.sample`,
+      `${BASE}/bitklavier-grand-v1/manifest.json`,
+    ]);
+
+    await audioEngine.deleteDownloadedSamples('bitklavier-grand');
+    expect([...entries].sort()).toEqual([
+      `${BASE}/headroom-grand-v2/C4v3.sample`,
+      `${BASE}/salamander-grand-v3/C4v10.sample`,
+    ]);
+
+    await audioEngine.deleteDownloadedSamples('headroom-grand');
+    expect([...entries]).toEqual([`${BASE}/salamander-grand-v3/C4v10.sample`]);
+  });
 });
 
 describe('the sample cache generation', () => {
