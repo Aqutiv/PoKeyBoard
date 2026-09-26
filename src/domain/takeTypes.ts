@@ -183,6 +183,16 @@ export interface NoteEvent {
    * takes, which are spelled from their key and context instead.
    */
   spelling?: NoteSpelling;
+  /**
+   * Played but not written: the source kept this note off the page
+   * (`print-object="no"`, or a note with no head). That is how MuseScore writes
+   * out a trill or a turn for playback beside the note that carries its sign,
+   * or completes a voice with a copy of a note another voice already holds. It
+   * sounds like any other note; the notation never draws it, and practice never
+   * stops to ask for it. The mirror of a velocity-0 note (`isSilentNote`), which
+   * is written but not played. Only an import sets it, and only ever to `true`.
+   */
+  hidden?: boolean;
 }
 
 export interface PedalEvent {

@@ -949,3 +949,72 @@ describe('beam grouping', () => {
     expect(layout.beams.map((beam) => beam.members.length)).toEqual([3, 3]);
   });
 });
+
+describe('notes a score keeps off the page', () => {
+  const hide = (n: NoteEvent): NoteEvent => ({ ...n, hidden: true });
+
+  it('draws no head for a hidden note, and no rest or voice for it either', () => {
+    // A written quarter with the trill a hidden voice plays beneath it.
+    const written = note({
+      id: 'w',
+      midi: 77,
+      startMs: 0,
+      durationMs: 500,
+      staff: 'treble',
+      voice: 0,
+    });
+    const trill = [0, 125, 250, 375].map((startMs, i) =>
+      hide(
+        note({
+          id: `t${i}`,
+          midi: i % 2 ? 77 : 79,
+          startMs,
+          durationMs: 125,
+          staff: 'treble',
+          voice: 1,
+        }),
+      ),
+    );
+    const layout = layoutScore([written, ...trill], OPTS);
+    const plain = layoutScore([written], OPTS);
+    expect(layout.chords.flatMap((c) => c.notes.map((n) => n.id))).toEqual(['w']);
+    expect(layout.chords).toEqual(plain.chords);
+    expect(layout.rests).toEqual(plain.rests);
+    expect(layout.beams).toEqual(plain.beams);
+  });
+
+  it('lets a hidden voice cast no stem vote for the voices it meets', () => {
+    // F4 stems up on its own. Met once by a voice above it, it would be
+    // committed to stems down for the whole piece — unless that voice is hidden.
+    const low = (id: string, startMs: number) =>
+      note({ id, midi: 65, startMs, durationMs: 500, staff: 'treble', voice: 0 });
+    const above = hide(
+      note({ id: 'h', midi: 79, startMs: 0, durationMs: 500, staff: 'treble', voice: 1 }),
+    );
+    const layout = layoutScore([low('a', 0), above, low('b', 1000)], OPTS);
+    expect(layout.chords.map((c) => c.stemDown)).toEqual([false, false]);
+  });
+
+  it('still reads dynamics from every note as played', () => {
+    // Soft written notes throughout, and from bar 5 a loud hidden run over them.
+    const notes: NoteEvent[] = [];
+    for (let i = 0; i < 32; i += 1) {
+      notes.push(
+        note({ id: `w${i}`, midi: 60, startMs: i * 500, durationMs: 400, velocity: 0.25 }),
+      );
+      if (i >= 16) {
+        notes.push(
+          hide(note({ id: `h${i}`, midi: 72, startMs: i * 500, durationMs: 400, velocity: 0.95 })),
+        );
+      }
+    }
+    const layout = layoutScore(notes, OPTS);
+    const unflagged = layoutScore(
+      notes.map((n) => ({ ...n, hidden: false })),
+      OPTS,
+    );
+    expect(layout.dynamics.length).toBeGreaterThan(1);
+    expect(layout.dynamics).toEqual(unflagged.dynamics);
+    expect(layout.hairpins).toEqual(unflagged.hairpins);
+  });
+});

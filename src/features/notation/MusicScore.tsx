@@ -5,6 +5,7 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { playableLoop } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
+import { writtenNotes } from '@/domain/noteEvents';
 import type { QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
 import { useTakeStore } from '@/state/useTakeStore';
 import { midiToNoteName } from '@/utils/midi';
@@ -130,6 +131,8 @@ export function MusicScore() {
     [notes, tempo.bpm, tempo.timeSignature, tempo.changes, quantization, keySignature, pedalEvents],
   );
   const geometry = useMemo(() => computeScoreGeometry(layout), [layout]);
+  // The label counts what the score shows; a hidden note plays but is not drawn.
+  const writtenCount = useMemo(() => writtenNotes(notes).length, [notes]);
   const basePxPerMs = useMemo(() => basePxPerMsFor(layout), [layout]);
 
   // Everything the rAF loop reads lives in refs, written from effects only.
@@ -620,7 +623,7 @@ export function MusicScore() {
         ref={canvasRef}
         className="score__canvas"
         role="img"
-        aria-label={m.score.label({ count: notes.length })}
+        aria-label={m.score.label({ count: writtenCount })}
         onPointerDown={onScorePointerDown}
         onPointerMove={onScorePointerMove}
         onPointerUp={onScorePointerUp}
