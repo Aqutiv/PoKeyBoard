@@ -523,6 +523,7 @@ export interface Messages {
     pianoHint: string;
     pianoSalamanderDesc: string;
     pianoHeadroomDesc: string;
+    pianoBitklavierDesc: string;
     pianoWurlitzerDesc: string;
     pianoSwitching: string;
     pianoVolume: string;
@@ -636,6 +637,8 @@ export interface Messages {
     credits: string;
     creditLine: string;
     attribution: string;
+    /** Followed by links to the dataset's DOI and to the licence. */
+    bitklavierAttribution: string;
     wurlitzerAttribution: string;
     version: (p: { version: string }) => string;
   };

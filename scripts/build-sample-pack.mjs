@@ -1,23 +1,28 @@
 /**
  * Builds a PoKeyBoard piano sample pack from a freely licensed upstream source.
  *
- * Usage: node scripts/build-sample-pack.mjs <pack-version>
+ * Usage: node scripts/build-sample-pack.mjs <pack-version> [--pin]
  *   salamander-grand-v3  Salamander Grand Piano v3 (Yamaha C5, Alexander Holm)
  *   headroom-grand-v2    Headroom Piano (Yamaha C3, Bengt Nilsson)
+ *   bitklavier-grand-v1  bitKlavier Grand, Lip Cardioid (Steinway D, Princeton)
  *   wurlitzer-ep203w-v1  Wurlitzer EP203W (Greg Sullivan), native looped FLACs
  *
  * Build the reference pack first — every other pack is level-matched against
  * its converted files on disk.
  *
- * Downloads a 3-velocity-layer, minor-third-root subset of the upstream FLACs
- * into samples-staging/<pack-version>/, converts each to a trimmed, faded
- * stereo 16-bit FLAC in public/piano/<pack-version>/ (the .sample extension
- * keeps download managers from intercepting fetches; browsers decode from the
- * bytes, never the extension or Content-Type), and writes a manifest.json
- * describing every file (midi root, layer, pack membership, size) plus the
- * per-layer level match against the reference pack.
+ * Downloads a 3-velocity-layer, minor-third-root subset of the upstream
+ * recordings into samples-staging/<pack-version>/, converts each to a trimmed,
+ * faded stereo 16-bit FLAC in public/piano/<pack-version>/ (the .sample
+ * extension keeps download managers from intercepting fetches; browsers decode
+ * from the bytes, never the extension or Content-Type), and writes a
+ * manifest.json describing every file (midi root, layer, pack membership, size)
+ * plus the per-layer level match against the reference pack.
  *
- * Idempotent: existing staged FLACs and converted samples are reused.
+ * A pack whose source fetches are pinned (bitklavier-grand-v1) checks every
+ * one against its pins; `--pin` rewrites the pins from what upstream serves
+ * now, and converts nothing.
+ *
+ * Idempotent: existing staged sources and converted samples are reused.
  * Requires: Node 20.19+ or 22.12+ and ffmpeg on PATH.
  */
 import { spawn } from 'node:child_process';
@@ -25,6 +30,8 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
+import { bitKlavierFetcher, PINS_PATH, pinBitKlavier } from './lib/bitklavier.mjs';
+import { END_WINDOW_S, endsFaded, FADE_S, fadeOut } from './lib/sampleFade.mjs';
 import { buildWurlitzer } from './lib/wurlitzer.mjs';
 
 const STAGING_ROOT = 'samples-staging';
@@ -46,7 +53,16 @@ function safeName(sourceName) {
 /**
  * Every pack we can build. `layers` maps the upstream velocity layers we sample
  * onto our fixed soft/medium/loud triple, and `sourceName` names the upstream
- * file (extension excluded) for a given root and layer.
+ * file (extension excluded) for a given root and layer. A layer's `gainDb`,
+ * where it has one, is applied before the 16-bit quantisation; see
+ * `measureSourceGains`. A pack with its own `fetcher` (and `pin`) fetches its
+ * sources that way instead of from `rawBase`.
+ *
+ * `fadeFromTrim` marks the two packs published before the fade-out learned a
+ * short recording's length (scripts/lib/sampleFade.mjs): theirs starts 1.5 s
+ * before the trim even where the recording ends sooner, so it starts past the
+ * end or is cut off partway. Kept so this script still reproduces the files
+ * they published, byte for byte; a new generation of either drops it.
  *
  * Only the *current* packs live here. Published packs are immutable (see
  * src/audio/instruments.ts), so a superseded version is never rebuilt — check
@@ -67,6 +83,7 @@ const INSTRUMENTS = {
       { index: 2, sourceLayer: 15, label: 'loud' },
     ],
     sourceName: (midi, layer) => `${midiToNoteName(midi)}v${layer.sourceLayer}`,
+    fadeFromTrim: true,
     source: 'Salamander Grand Piano v3 by Alexander Holm',
     license: 'CC-BY 3.0',
     sourceUrl: 'https://github.com/sfzinstruments/SalamanderGrandPiano',
@@ -85,9 +102,40 @@ const INSTRUMENTS = {
     // The close mic stays dry, so the app's reverb slider keeps full control;
     // the alternative Decca Tree position bakes the room into the samples.
     sourceName: (midi, layer) => `HEADROOM PIANO LEVEL${layer.sourceLayer} CLOSE ${midi}`,
+    fadeFromTrim: true,
     source: 'Headroom Piano (Yamaha C3) by Bengt Nilsson, sfz mapping by kinwie',
     license: 'CC-BY 4.0',
     sourceUrl: 'https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano',
+  },
+  'bitklavier-grand-v1': {
+    sampleRate: 48000,
+    // Sixteen layers spread over the whole Steinway D, 1.4–2.4 dB apart, so the
+    // v5/v10/v15 that Salamander ships would step 9.7 and 7.7 dB here, where
+    // Salamander's own step 5.6 and 6.2 (K-weighted, 300 ms from the onset,
+    // over ten roots A0–C8). v7/v10/v14 step 5.4 and 6.3, with each layer
+    // inside the band the app's thresholds (0.45, 0.78) cut from bitKlavier's
+    // own linear velocity map: v1–v7, v8–v12, v13–v16. v14 also keeps the loud
+    // layer clear of F♯6's v15, which clips in the source.
+    //
+    // The gains are measured (see `measureSourceGains`; the build insists on
+    // them): 7.1 and 5.8 dB bring the soft and medium layers to Salamander's
+    // level, while the loud layer's 5 dB is held to 0.33 by F♯6 v14, which
+    // peaks at −1.34 dBFS; its manifest levelMatch carries the rest.
+    layers: [
+      { index: 0, sourceLayer: 7, label: 'soft', gainDb: 7.11 },
+      { index: 1, sourceLayer: 10, label: 'medium', gainDb: 5.8 },
+      { index: 2, sourceLayer: 14, label: 'loud', gainDb: 0.33 },
+    ],
+    sourceName: (midi, layer) => `${midiToNoteName(midi)}v${layer.sourceLayer}`,
+    sourceExtension: 'wav',
+    fetcher: (stagingDir) => bitKlavierFetcher(stagingDir, trimSecondsFor),
+    pin: (jobs, stagingDir) => pinBitKlavier(jobs, stagingDir, trimSecondsFor),
+    source:
+      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image (Steinway D) by Matthew Wang, ' +
+      'Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers and Daniel Trueman, ' +
+      'Princeton University',
+    license: 'CC-BY 4.0',
+    sourceUrl: 'https://doi.org/10.34770/xm18-yr83',
   },
 };
 
@@ -114,6 +162,13 @@ const LEVEL_WINDOW_S = 2;
 
 /** Widest level correction a pack may ask for, either direction. */
 const MAX_LEVEL_MATCH = 8;
+
+/**
+ * The highest any sample may peak once its layer's gain before dither is
+ * applied, in dBFS: room for the dither itself, and for the peaks between
+ * samples that resampling to the device's rate brings out.
+ */
+const GAIN_CEILING_DB = -1;
 
 /** Roots every minor third from A0 (21) to C8 (108). */
 function rootMidis() {
@@ -181,10 +236,63 @@ function runFfmpeg(args) {
   });
 }
 
+/**
+ * A file decoded to float at `sampleRate`, in stereo: its samples, one array
+ * per channel, and how many seconds it really holds. Decoded rather than read
+ * from a header, which for a range-fetched WAV names the whole upstream file,
+ * not the bytes that were fetched.
+ */
+function decodeStereo(filePath, sampleRate) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'ffmpeg',
+      ['-v', 'error', '-i', filePath, '-ac', '2', '-ar', String(sampleRate), '-f', 'f32le', '-'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const chunks = [];
+    let errors = '';
+    child.stdout.on('data', (chunk) => chunks.push(chunk));
+    child.stderr.on('data', (chunk) => {
+      errors += String(chunk);
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`ffmpeg exited ${code} on ${filePath}: ${errors.slice(-600)}`));
+        return;
+      }
+      const bytes = Buffer.concat(chunks);
+      const frames = Math.floor(bytes.length / 8);
+      const channels = [new Float32Array(frames), new Float32Array(frames)];
+      for (let frame = 0; frame < frames; frame += 1) {
+        channels[0][frame] = bytes.readFloatLE(frame * 8);
+        channels[1][frame] = bytes.readFloatLE(frame * 8 + 4);
+      }
+      resolve({ channels, seconds: frames / sampleRate });
+    });
+  });
+}
+
+/** Seconds as ffmpeg reads them, to the microsecond, without float noise ("5.5", "1.992"). */
+function secondsArg(seconds) {
+  return String(Number(seconds.toFixed(6)));
+}
+
 async function convert(job) {
   if ((await fileSize(job.output)) > 0) return { skipped: true };
   const trim = trimSecondsFor(job.midi);
-  const fadeStart = trim - 1.5;
+  // The fade runs over the last FADE_S of what the sample keeps: the trim, or
+  // the whole recording where that is shorter.
+  const { startS, lengthS } = job.fadeFromTrim
+    ? { startS: trim - FADE_S, lengthS: FADE_S }
+    : fadeOut(trim, (await decodeStereo(job.staged, job.sampleRate)).seconds);
+  // The gain runs in float with the fade, so both land ahead of the one
+  // quantisation to 16 bits below, and its dither is added at the level the
+  // pack plays from.
+  const filters = [`afade=t=out:st=${secondsArg(startS)}:d=${secondsArg(lengthS)}`];
+  if (job.layer.gainDb !== undefined) {
+    filters.unshift(`volume=${job.layer.gainDb}dB:precision=float`);
+  }
   // ffmpeg picks the muxer from the extension, so encode to .flac and rename.
   // The temp file lives in staging, never in the published pack directory: an
   // aborted build must not leave a .partial.flac where `vite build` would copy
@@ -202,7 +310,7 @@ async function convert(job) {
     '-t',
     String(trim),
     '-af',
-    `afade=t=out:st=${fadeStart}:d=1.5`,
+    filters.join(','),
     '-ar',
     String(job.sampleRate),
     '-ac',
@@ -230,6 +338,19 @@ async function convert(job) {
   if ((await fileSize(temporary)) === 0) {
     throw new Error(`ffmpeg produced an empty temporary file for ${job.name}`);
   }
+  // A sample that stops short of silence clicks as it ends, and an undamped
+  // key plays its sample to the very end, so nothing is published that does.
+  // The packs that predate this fade are left to reproduce what they shipped.
+  if (!job.fadeFromTrim) {
+    const written = await decodeStereo(temporary, job.sampleRate);
+    const { faded, last, ceiling } = endsFaded(written.channels, job.sampleRate, lengthS);
+    if (!faded) {
+      throw new Error(
+        `${job.file} does not end faded: its last ${END_WINDOW_S * 1000} ms peak at ` +
+          `${toDb(last).toFixed(1)} dBFS, over the ${toDb(ceiling).toFixed(1)} dBFS its fade allows`,
+      );
+    }
+  }
   await rename(temporary, job.output);
   return {};
 }
@@ -251,6 +372,92 @@ async function measureRms(filePath) {
   const match = /mean_volume:\s*(-?\d+(?:\.\d+)?) dB/.exec(stderr);
   if (!match) throw new Error(`volumedetect reported no mean_volume for ${filePath}`);
   return Math.pow(10, Number(match[1]) / 20);
+}
+
+/** The largest sample magnitude over a file's first `seconds`, as a linear amplitude. */
+function samplePeak(filePath, seconds) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(
+      'ffmpeg',
+      ['-v', 'error', '-t', String(seconds), '-i', filePath, '-f', 'f32le', '-'],
+      { stdio: ['ignore', 'pipe', 'pipe'] },
+    );
+    const chunks = [];
+    let errors = '';
+    child.stdout.on('data', (chunk) => chunks.push(chunk));
+    child.stderr.on('data', (chunk) => {
+      errors += String(chunk);
+    });
+    child.on('error', reject);
+    child.on('close', (code) => {
+      if (code !== 0) {
+        reject(new Error(`ffmpeg exited ${code} on ${filePath}: ${errors.slice(-600)}`));
+        return;
+      }
+      const bytes = Buffer.concat(chunks);
+      let peak = 0;
+      for (let offset = 0; offset + 4 <= bytes.length; offset += 4) {
+        peak = Math.max(peak, Math.abs(bytes.readFloatLE(offset)));
+      }
+      resolve(peak);
+    });
+  });
+}
+
+/**
+ * Each layer's gain before dither, measured from the staged sources: the
+ * level match against the reference pack's same layer, measured exactly as
+ * the manifest's `levelMatch` is (attack RMS, averaged over the layer's
+ * roots), but held down where it would take any of the layer's samples over
+ * GAIN_CEILING_DB across the part the pack keeps.
+ *
+ * A source mastered well below the reference would otherwise be quantised to
+ * 16 bits where it sits, and every dB the app then adds at playback would lift
+ * the dither floor with it. Whatever the ceiling holds back is left to the
+ * manifest's `levelMatch`, which the app applies in float after decoding.
+ */
+async function measureSourceGains(jobs, layers) {
+  const referenceFiles = await builtPackFiles(REFERENCE_PACK);
+  if (!referenceFiles) {
+    throw new Error(`Reference pack ${REFERENCE_PACK} is not built, so gains cannot be measured.`);
+  }
+  const reference = await measurePackLevels(REFERENCE_PACK, referenceFiles);
+  const levels = new Map();
+  const failures = await runPool(
+    jobs,
+    async (job) => {
+      const rms = await measureRms(job.staged);
+      const peak = await samplePeak(job.staged, trimSecondsFor(job.midi));
+      const bucket = levels.get(job.layer.index) ?? { total: 0, count: 0, peak: 0, loudest: '' };
+      bucket.total += rms;
+      bucket.count += 1;
+      if (peak > bucket.peak) Object.assign(bucket, { peak, loudest: job.name });
+      levels.set(job.layer.index, bucket);
+    },
+    4,
+  );
+  if (failures > 0) throw new Error('Source level measurement failed.');
+  return layers.map((layer) => {
+    const bucket = levels.get(layer.index);
+    const referenceRms = reference.get(layer.index);
+    if (!bucket || !referenceRms) throw new Error(`No level for layer ${layer.index}.`);
+    const matchDb = toDb(referenceRms / (bucket.total / bucket.count));
+    const ceilingDb = GAIN_CEILING_DB - toDb(bucket.peak);
+    // Rounded to a hundredth of a dB; down, where the ceiling decides, and
+    // clear of it by more than the dither can add (2 LSB, 0.0006 dB there).
+    const gainDb = Math.min(
+      Number(matchDb.toFixed(2)),
+      Math.floor((ceilingDb - 0.001) * 100) / 100,
+    );
+    return {
+      layer,
+      matchDb,
+      ceilingDb,
+      gainDb,
+      peakDb: toDb(bucket.peak),
+      loudest: bucket.loudest,
+    };
+  });
 }
 
 /** The file list of an already-built pack, read from its manifest on disk. */
@@ -306,13 +513,39 @@ async function runPool(items, worker, concurrency) {
   return failures;
 }
 
-async function main(packVersion) {
+/**
+ * Measures every layer's gain before dither and insists it is the one the
+ * instrument names, so the numbers in INSTRUMENTS are always what the
+ * measurement gives — never a value tuned by hand, and never a stale one.
+ */
+async function verifySourceGains(jobs, layers) {
+  console.log(`Measuring each layer's gain before dither against ${REFERENCE_PACK}...`);
+  const measured = await measureSourceGains(jobs, layers);
+  const stale = [];
+  for (const { layer, matchDb, ceilingDb, gainDb, peakDb, loudest } of measured) {
+    console.log(
+      `  layer ${layer.index} (${layer.label}, v${layer.sourceLayer}): match ` +
+        `${matchDb.toFixed(3)} dB, ceiling ${ceilingDb.toFixed(3)} dB (loudest peak ` +
+        `${peakDb.toFixed(3)} dBFS, ${loudest}) -> gainDb ${gainDb}`,
+    );
+    if (Math.abs(gainDb - layer.gainDb) > 0.005) stale.push(`${layer.label} ${gainDb}`);
+  }
+  if (stale.length > 0) {
+    throw new Error(
+      `The layers' gainDb no longer match their measurement (${stale.join(', ')} dB). ` +
+        'Update them in INSTRUMENTS and rerun.',
+    );
+  }
+}
+
+async function main(packVersion, { pin = false } = {}) {
   const instrument = INSTRUMENTS[packVersion];
   const stagingDir = path.join(STAGING_ROOT, packVersion);
   const outDir = path.join('public', 'piano', packVersion);
   await mkdir(stagingDir, { recursive: true });
   await mkdir(outDir, { recursive: true });
 
+  const sourceExtension = instrument.sourceExtension ?? 'flac';
   const jobs = [];
   for (const midi of rootMidis()) {
     for (const layer of instrument.layers) {
@@ -325,13 +558,14 @@ async function main(packVersion) {
         sourceName,
         rawBase: instrument.rawBase,
         sampleRate: instrument.sampleRate,
+        fadeFromTrim: instrument.fadeFromTrim === true,
         stagingDir,
         midi,
         layer,
         file,
         staged: path.join(
           stagingDir,
-          `${safeName(midiToNoteName(midi))}v${layer.sourceLayer}.flac`,
+          `${safeName(midiToNoteName(midi))}v${layer.sourceLayer}.${sourceExtension}`,
         ),
         output: path.join(outDir, file),
       });
@@ -340,6 +574,14 @@ async function main(packVersion) {
   console.log(
     `${packVersion}: ${jobs.length} samples (${rootMidis().length} roots x ${instrument.layers.length} layers)`,
   );
+
+  if (pin) {
+    if (!instrument.pin) throw new Error(`${packVersion} has no pinned sources.`);
+    console.log('Pinning what upstream serves now...');
+    const { pinned, changed } = await instrument.pin(jobs, stagingDir);
+    console.log(`Pinned ${pinned} sources in ${PINS_PATH}; ${changed} pins changed.`);
+    return;
+  }
 
   // A sample already converted needs neither its source nor another encode, so
   // re-running over a published pack costs no network and changes no bytes.
@@ -350,11 +592,17 @@ async function main(packVersion) {
   console.log(`${jobs.length - pending.length} already converted, ${pending.length} to build.`);
 
   if (pending.length > 0) {
-    console.log('Downloading FLACs...');
-    const downloadFailures = await runPool(pending, (job) => download(job), 6);
+    const fetchSource = instrument.fetcher ? await instrument.fetcher(stagingDir) : download;
+    // A layer's gain is measured over all of its recordings, so a pack with
+    // gains needs every source at hand to convert any one of them.
+    const gained = instrument.layers.some((layer) => layer.gainDb !== undefined);
+    const needed = gained ? jobs : pending;
+    console.log(`Fetching ${needed.length} sources...`);
+    const downloadFailures = await runPool(needed, (job) => fetchSource(job), 6);
     if (downloadFailures > 0) {
       throw new Error(`${downloadFailures} downloads failed; rerun to retry.`);
     }
+    if (gained) await verifySourceGains(jobs, instrument.layers);
     console.log('Downloads complete. Converting with ffmpeg...');
 
     const convertFailures = await runPool(pending, (job) => convert(job), 4);
@@ -397,6 +645,8 @@ async function main(packVersion) {
       // below Salamander), so the range is wide; the clamp only guards against a
       // measurement gone wrong. The match is applied after decoding, in float,
       // so a large boost cannot clip — it lands ahead of the graph's limiter.
+      // A pack with gains before dither is near 1 here, except where a layer's
+      // ceiling held its gain back.
       const raw = referenceRms / ownRms;
       const levelMatch = Math.min(MAX_LEVEL_MATCH, Math.max(1 / MAX_LEVEL_MATCH, raw));
       if (raw !== levelMatch) {
@@ -452,6 +702,7 @@ if (pkg.name !== 'pokeyboard') {
 }
 
 const requested = process.argv[2];
+const pin = process.argv.slice(3).includes('--pin');
 if (requested === 'wurlitzer-ep203w-v1') {
   await buildWurlitzer().catch((error) => {
     console.error(error);
@@ -469,13 +720,13 @@ if (RETIRED_PACKS.has(requested)) {
 }
 if (!requested || !(requested in INSTRUMENTS)) {
   console.error(
-    `Usage: node scripts/build-sample-pack.mjs <pack-version>\n` +
+    `Usage: node scripts/build-sample-pack.mjs <pack-version> [--pin]\n` +
       `Known packs: ${[...Object.keys(INSTRUMENTS), 'wurlitzer-ep203w-v1'].join(', ')}`,
   );
   process.exit(1);
 }
 
-main(requested).catch((error) => {
+main(requested, { pin }).catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });

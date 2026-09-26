@@ -63,6 +63,12 @@ export function AboutPage() {
         <p className="page__hint">{m.about.creditLine}</p>
         <p className="page__hint">{m.about.attribution}</p>
         <p className="page__hint">
+          {m.about.bitklavierAttribution}{' '}
+          <a href="https://doi.org/10.34770/xm18-yr83">doi:10.34770/xm18-yr83</a>
+          {' · '}
+          <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>
+        </p>
+        <p className="page__hint">
           {m.about.wurlitzerAttribution}{' '}
           <a href="https://github.com/sfzinstruments/GregSullivan.E-Pianos">Wurlitzer EP203W</a>
           {' · '}
