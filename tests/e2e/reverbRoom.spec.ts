@@ -61,10 +61,9 @@ test.describe('reverb room', () => {
     // Both copies are written on a debounce; a reload must not outrun them.
     await expect.poll(() => storedRooms(page)).toEqual({ setting: 'hall', take: 'hall' });
 
+    // Reloaded where it was, on Settings: the select reads the restored take.
     await page.reload();
-    await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
-    await nav(page).getByRole('button', { name: 'Settings' }).click();
-    await expect(roomSelect(page)).toHaveValue('hall');
+    await expect(roomSelect(page)).toHaveValue('hall', { timeout: 15_000 });
 
     await nav(page).getByRole('button', { name: 'Takes' }).click();
     const item = page.locator('.take-item').first();
