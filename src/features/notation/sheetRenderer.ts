@@ -23,6 +23,7 @@ import {
   type SheetTie,
 } from './sheetLayout';
 import { drawAccidentalGlyph } from './accidentalGlyph';
+import type { DrawSurface } from './drawSurface';
 import {
   beamPieceXs,
   beamYAt,
@@ -40,29 +41,35 @@ import {
 import { beamCountFor, type DurationSymbol } from './quantization';
 import { drawRestGlyph } from './restGlyph';
 import { restStep } from './rests';
+import { ellipsizeRich, fillRich } from './sheetText';
 import type { ClefKind } from './staffMapping';
 
 /**
- * Draws one sheet page in engraved print style: black ink on white paper.
- * The ctx must be scaled so 1 canvas unit = 1 PDF point. All music glyphs
- * (clefs, brace, accidentals, flags, rests) are hand-drawn Béziers so the
- * output is identical on every device; fonts are used only for genuinely
- * textual elements (title, digits, page numbers). Rests and accidentals come
- * from `restGlyph.ts` and `accidentalGlyph.ts`, shared with the live score so
- * both views draw the same shapes.
+ * Draws one sheet page in engraved print style: black ink on white paper,
+ * onto any `DrawSurface` whose units are PDF points (y down). The export
+ * dialog's preview passes its scaled canvas; the PDF export passes a surface
+ * that writes the same calls as vector operators (`export/pdfSurface.ts`), so
+ * the preview shows exactly what prints.
+ *
+ * All music glyphs (clefs, brace, accidentals, flags, rests) are hand-drawn
+ * Béziers, so the page is the same on every device; fonts are used only for
+ * genuinely textual elements (title, digits, dynamics, page numbers), always
+ * Times, which is what the PDF sets. Rests and accidentals come from
+ * `restGlyph.ts` and `accidentalGlyph.ts`, shared with the live score so both
+ * views draw the same shapes.
+ *
+ * Only the canvas subset `DrawSurface` names may be used here: anything else
+ * would work in the preview and have no counterpart in the PDF.
  */
-
-/** Device pixels per PDF point for print rasterization (≈288 DPI). */
-export const RENDER_SCALE = 4;
-/** Reduced scale for very long documents to bound canvas memory. */
-export const RENDER_SCALE_LARGE_DOC = 3;
-/** Page count above which the reduced scale is used. */
-export const LARGE_DOC_PAGE_COUNT = 30;
 
 const G = SHEET_GAP_PT;
 const INK = '#000000';
 const PAPER = '#ffffff';
-const SERIF = 'Georgia, "Times New Roman", Times, serif';
+/**
+ * Times, which is what the PDF sets its text in (the standard Times fonts), so
+ * the preview measures and draws the letters the page will print.
+ */
+const SERIF = '"Times New Roman", Times, serif';
 
 const STAFF_LINE_W = 0.9;
 const BARLINE_W = 1;
@@ -72,7 +79,7 @@ const STEM_W = 1;
 const WHOLE_REST: DurationSymbol = { base: 'whole', dotted: false };
 const WHOLE_REST_STEP = restStep(WHOLE_REST);
 
-export function drawSheetPage(ctx: CanvasRenderingContext2D, page: SheetPage): void {
+export function drawSheetPage(ctx: DrawSurface, page: SheetPage): void {
   const { metrics } = page;
   ctx.save();
   ctx.fillStyle = PAPER;
@@ -87,14 +94,15 @@ export function drawSheetPage(ctx: CanvasRenderingContext2D, page: SheetPage): v
   ctx.restore();
 }
 
-function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let out = text;
-  while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) out = out.slice(0, -1);
-  return `${out}…`;
-}
+const TITLE_PX = 21;
+const SUBTITLE_PX = 10;
 
-function drawTitleBlock(ctx: CanvasRenderingContext2D, page: SheetPage): void {
+/**
+ * Title, subtitle, tempo and credit. A title can name its key — "Nocturne in
+ * E♭" — so both lines go through `sheetText`, which draws the signs as glyphs:
+ * no font the PDF can rely on has them, and the preview must show what prints.
+ */
+function drawTitleBlock(ctx: DrawSurface, page: SheetPage): void {
   const { metrics } = page;
   const block = page.titleBlock;
   if (!block) return;
@@ -102,19 +110,23 @@ function drawTitleBlock(ctx: CanvasRenderingContext2D, page: SheetPage): void {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.font = `700 21px ${SERIF}`;
-  ctx.fillText(
-    ellipsize(ctx, block.title, metrics.contentWidthPt),
+  ctx.font = `700 ${TITLE_PX}px ${SERIF}`;
+  fillRich(
+    ctx,
+    ellipsizeRich(ctx, block.title, metrics.contentWidthPt, TITLE_PX),
     centerX,
     metrics.marginTopPt + 30,
+    TITLE_PX,
   );
 
   if (block.subtitle) {
-    ctx.font = `italic 10px ${SERIF}`;
-    ctx.fillText(
-      ellipsize(ctx, block.subtitle, metrics.contentWidthPt),
+    ctx.font = `italic ${SUBTITLE_PX}px ${SERIF}`;
+    fillRich(
+      ctx,
+      ellipsizeRich(ctx, block.subtitle, metrics.contentWidthPt, SUBTITLE_PX),
       centerX,
       metrics.marginTopPt + 50,
+      SUBTITLE_PX,
     );
   }
 
@@ -128,12 +140,7 @@ function drawTitleBlock(ctx: CanvasRenderingContext2D, page: SheetPage): void {
 }
 
 /** "♩ = bpm" with a hand-drawn quarter note (no music-font dependency). */
-function drawTempoMark(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  baseline: number,
-  bpm: number,
-): void {
+function drawTempoMark(ctx: DrawSurface, x: number, baseline: number, bpm: number): void {
   const headX = x + 3;
   const headY = baseline - 2.5;
   ctx.save();
@@ -155,7 +162,7 @@ function drawTempoMark(
   ctx.fillText(`= ${bpm}`, headX + 7.5, baseline);
 }
 
-function drawFooter(ctx: CanvasRenderingContext2D, page: SheetPage): void {
+function drawFooter(ctx: DrawSurface, page: SheetPage): void {
   const { metrics } = page;
   ctx.font = `9.5px ${SERIF}`;
   ctx.textAlign = 'center';
@@ -164,7 +171,7 @@ function drawFooter(ctx: CanvasRenderingContext2D, page: SheetPage): void {
   ctx.textAlign = 'left';
 }
 
-function drawSystem(ctx: CanvasRenderingContext2D, system: SheetSystem, page: SheetPage): void {
+function drawSystem(ctx: DrawSurface, system: SheetSystem, page: SheetPage): void {
   const { metrics } = page;
   const right = system.xPt + system.widthPt;
   const bassBottom = system.bassTopPt + metrics.staffHeightPt;
@@ -219,7 +226,7 @@ function drawSystem(ctx: CanvasRenderingContext2D, system: SheetSystem, page: Sh
  * end that runs off the system has none — the passage carries on.
  */
 function drawOctave(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   octave: SheetOctave,
   system: SheetSystem,
   metrics: SheetPageMetrics,
@@ -262,7 +269,7 @@ function drawOctave(
  * about drawing its glyphs rather than typesetting them does not apply —
  * `p` and `f` are text, and always were.
  */
-function drawDynamic(ctx: CanvasRenderingContext2D, dynamic: SheetDynamic, rowY: number): void {
+function drawDynamic(ctx: DrawSurface, dynamic: SheetDynamic, rowY: number): void {
   ctx.font = `bold italic ${2.4 * G}px ${SERIF}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
@@ -275,7 +282,7 @@ function drawDynamic(ctx: CanvasRenderingContext2D, dynamic: SheetDynamic, rowY:
  * end that runs off the system stays open at full mouth, which says the swell
  * carries on rather than arriving here.
  */
-function drawHairpin(ctx: CanvasRenderingContext2D, hairpin: SheetHairpin, rowY: number): void {
+function drawHairpin(ctx: DrawSurface, hairpin: SheetHairpin, rowY: number): void {
   const mouth = HAIRPIN_MOUTH_G * G;
   // The wedge sits on the marks' own line, lifted to their middle.
   const midY = rowY - 0.8 * G;
@@ -300,7 +307,7 @@ function drawHairpin(ctx: CanvasRenderingContext2D, hairpin: SheetHairpin, rowY:
  * comes up. An end that runs off the system is left open instead of hooked,
  * which says the press carries on.
  */
-function drawPedal(ctx: CanvasRenderingContext2D, pedal: SheetPedal, rowY: number): void {
+function drawPedal(ctx: DrawSurface, pedal: SheetPedal, rowY: number): void {
   const hook = PEDAL_HOOK_G * G;
   ctx.lineWidth = 0.8;
   ctx.beginPath();
@@ -319,7 +326,7 @@ function drawPedal(ctx: CanvasRenderingContext2D, pedal: SheetPedal, rowY: numbe
  * A tie: a shallow crescent between two heads, filled so it tapers at both
  * ends the way an engraved one does rather than reading as a drawn line.
  */
-function drawTie(ctx: CanvasRenderingContext2D, tie: SheetTie): void {
+function drawTie(ctx: DrawSurface, tie: SheetTie): void {
   const dir = tie.above ? -1 : 1;
   const span = Math.max(tie.x2Pt - tie.x1Pt, 0.1);
   // Shallow over a short tie, deeper over a long one, but never a semicircle.
@@ -335,7 +342,7 @@ function drawTie(ctx: CanvasRenderingContext2D, tie: SheetTie): void {
 }
 
 function drawMeasure(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   measure: SheetMeasure,
   system: SheetSystem,
   isFinal: boolean,
@@ -410,7 +417,7 @@ function drawMeasure(
 }
 
 function drawChord(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   chord: SheetChord,
   x: number,
   staffTop: number,
@@ -519,7 +526,7 @@ function drawChord(
 }
 
 /** Filled flag curving from the stem tip back toward the notehead. */
-function drawFlag(ctx: CanvasRenderingContext2D, x: number, tipY: number, stemDown: boolean): void {
+function drawFlag(ctx: DrawSurface, x: number, tipY: number, stemDown: boolean): void {
   const d = stemDown ? -1 : 1; // flags extend from the tip toward the head
   ctx.beginPath();
   ctx.moveTo(x, tipY);
@@ -547,7 +554,7 @@ function drawFlag(ctx: CanvasRenderingContext2D, x: number, tipY: number, stemDo
  * The tuplet numeral, centred over its beam on the side away from the heads.
  * Italic, as editions set it, and small enough not to compete with the notes.
  */
-function drawTupletNumeral(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {
+function drawTupletNumeral(ctx: DrawSurface, beam: SheetBeam): void {
   if (beam.tupletCount === null) return;
   const midX = (beam.x1Pt + beam.x2Pt) / 2;
   const midY = (beam.y1Pt + beam.y2Pt) / 2;
@@ -564,7 +571,7 @@ function drawTupletNumeral(ctx: CanvasRenderingContext2D, beam: SheetBeam): void
  * The first beam runs the whole group; the ones after it join only the notes
  * that carry them, or stand as short stubs off a note that carries one alone.
  */
-function drawBeam(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {
+function drawBeam(ctx: DrawSurface, beam: SheetBeam): void {
   const t = BEAM_THICKNESS_G * G;
   const towardHeads = beam.stemDown ? -1 : 1;
   const span = { y1: beam.y1Pt, y2: beam.y2Pt };
@@ -598,7 +605,7 @@ function drawBeam(ctx: CanvasRenderingContext2D, beam: SheetBeam): void {
  * under a G clef gets the treble layout.
  */
 function drawKeySignature(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   system: SheetSystem,
   metrics: SheetPageMetrics,
   fifths: number,
@@ -618,7 +625,7 @@ function drawKeySignature(
 
 /** Time signature digits on both staffs (first system only). */
 function drawTimeSignature(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   system: SheetSystem,
   metrics: SheetPageMetrics,
   fifths: number,
@@ -636,17 +643,12 @@ function drawTimeSignature(
   ctx.textAlign = 'left';
 }
 
-function drawAccidental(
-  ctx: CanvasRenderingContext2D,
-  kind: AccidentalKind,
-  x: number,
-  y: number,
-): void {
+function drawAccidental(ctx: DrawSurface, kind: AccidentalKind, x: number, y: number): void {
   drawAccidentalGlyph(ctx, kind, x, y, G);
 }
 
 /** Curly brace joining the two staffs, drawn as a filled double curve. */
-function drawBrace(ctx: CanvasRenderingContext2D, x: number, top: number, bottom: number): void {
+function drawBrace(ctx: DrawSurface, x: number, top: number, bottom: number): void {
   const right = x - 2.5;
   const mid = (top + bottom) / 2;
   const h = bottom - top;
@@ -669,7 +671,7 @@ const CLEF_CHANGE_SCALE = 0.72;
  * top, so scaling about that point keeps them seated on their own lines.
  */
 function drawClef(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   clef: ClefKind,
   cx: number,
   staffTop: number,
@@ -693,7 +695,7 @@ function drawClef(
 }
 
 /** Stylized G clef: spiral on the G line, tall flourish, tail with a dot. */
-function drawTrebleClef(ctx: CanvasRenderingContext2D, cx: number, staffTop: number): void {
+function drawTrebleClef(ctx: DrawSurface, cx: number, staffTop: number): void {
   const gy = staffTop + 3 * G; // G4 line
   ctx.lineWidth = 1.15;
 
@@ -753,7 +755,7 @@ function drawTrebleClef(ctx: CanvasRenderingContext2D, cx: number, staffTop: num
 }
 
 /** F clef: filled head, tapered sweeping curve, two dots by the F line. */
-function drawBassClef(ctx: CanvasRenderingContext2D, cx: number, staffTop: number): void {
+function drawBassClef(ctx: DrawSurface, cx: number, staffTop: number): void {
   const fy = staffTop + G; // F3 line
   ctx.beginPath();
   ctx.arc(cx - 0.2 * G, fy, 0.45 * G, 0, Math.PI * 2);

@@ -9,8 +9,10 @@ white) — one PDF per take, shared or downloaded exactly like the MP3 export.
 getTakeForExport(id)
   → layoutScore(notes, { bpm, timeSignature, tempoChanges, quantization: grid, minMeasures: 1 })
   → layoutSheet(score, { paper, title, subtitle, bpm, … })   src/features/notation/sheetLayout.ts
-  → drawSheetPage(ctx, page) per page                        src/features/notation/sheetRenderer.ts
-  → canvas.toBlob(PNG) → pdf-lib embedPng (one image/page)   src/features/export/sheetPdfService.ts
+  → import('./sheetPdfWriter') on Generate                   src/features/export/sheetPdfService.ts
+  → drawSheetPage(surface, page) per page                    src/features/notation/sheetRenderer.ts
+      onto a vector surface writing PDF operators            src/features/export/pdfSurface.ts
+  → pdf-lib save                                             src/features/export/sheetPdfWriter.ts
   → Blob → File → shareOrDownloadFile / downloadBlob
 ```
 
@@ -23,18 +25,40 @@ getTakeForExport(id)
   gets a "♩ = n" mark where the new tempo takes over.
   All positions are in PDF points; `SHEET_GAP_PT` (staff space) scales the
   engraving.
-- `sheetRenderer.ts` draws a page onto a canvas whose ctx is scaled so
-  1 unit = 1 pt. All music glyphs (clefs, brace, accidentals, flags, beams,
+- `sheetRenderer.ts` draws a page onto a `DrawSurface` (`drawSurface.ts`, the
+  exact canvas subset it calls) in PDF points, y down: the dialog's scaled
+  preview canvas, or the vector surface the PDF is written with, so the preview
+  shows what prints. All music glyphs (clefs, brace, accidentals, flags, beams,
   rests, ties, pedal brackets, hairpins) are hand-drawn Béziers — no music font
   is required, so output is identical on every device. Fonts are used only for
-  text (serif stack), which includes dynamic marks: `p` and `f` are letters,
+  text, always Times, which includes dynamic marks: `p` and `f` are letters,
   and editions have always set them in bold italic. Rests and accidentals live in `restGlyph.ts` and
   `accidentalGlyph.ts`, shared with the live score so both views draw the same
-  shapes at their own staff-space scale.
-- `sheetPdfService.ts` rasterizes pages sequentially on one reused canvas at
-  `RENDER_SCALE` (4× ≈ 288 DPI; 3× above 30 pages) and assembles the PDF with
-  **pdf-lib** (MIT, dynamically imported so it code-splits; still precached by
-  the service worker, so export works offline).
+  shapes at their own staff-space scale. A title's own accidentals ("Nocturne
+  in E♭") are drawn with those glyphs too (`sheetText.ts`), since Times has no
+  ♭ to print; a title too long for the page is cut between whole graphemes.
+- `sheetPdfService.ts` lays out, enforces the page cap and reports progress,
+  then dynamically imports `sheetPdfWriter.ts` — the only module that reaches
+  **pdf-lib** (MIT), so pdf-lib code-splits out of the dialog and loads on
+  Generate; it is still precached by the service worker, so export works
+  offline. The writer draws each page through `pdfSurface.ts` over the pure
+  `vectorSurface.ts`, which keeps the canvas's state and path the way a canvas
+  does and hands every fill, stroke and run of text to the PDF writer:
+  - paths are **vectors**: arcs and ellipses become quarter-turn cubics,
+    quadratics exact cubics, coordinates are rounded to 0.01 pt, and stroke
+    widths follow the transform (a transform that would skew the pen throws);
+  - text is set in the **standard Times fonts, which are not embedded** — a
+    viewer substitutes its own Times, and the widths are standard. Strings are
+    measured unkerned, which is what the PDF's `Tj` advances, after folding the
+    spaces and hyphens WinAnsi lacks onto ones it has;
+  - text Times cannot encode even then (Japanese, emoji) falls back to an
+    image: the browser draws it, and it is embedded as a soft-masked image in
+    the text colour. `measureText` and drawing share one plan per string, so
+    the layout never disagrees with what is drawn.
+
+  The writer yields between pages so progress and Cancel keep working. The
+  goldens in `tests/unit/notation/__goldens__/` are page 1 of three sheets
+  written through the same vector surface as SVG (`svgSurface.ts`, test-only).
 
 ## UI
 
@@ -53,8 +77,11 @@ takes seconds and never touches the audio engine.
 
 - `MAX_SHEET_PAGES = 100` — a typed error with friendly dialog copy; the
   options phase also disables Generate when the estimate exceeds the cap.
-- Canvas memory: one page at 4× A4 is ~32 MB RGBA; pages render strictly
-  sequentially on a single reused canvas.
+- Memory: vector, one page of operators at a time. A page's operators are
+  compressed into its content stream as soon as it is drawn, so a long score
+  never holds more than one page of them; a page averages 14–20 KB in the file
+  (Moonlight: 13 pages, 179 KB; the denser Chopin Nocturne in E♭: 8 pages,
+  156 KB), against about 200 KB for the raster pages this replaced.
 - Share must run in the click handler (user activation), same as audio.
 
 ## Rests, keys, ties, pedal

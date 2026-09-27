@@ -9,12 +9,6 @@ import {
   type SheetGrid,
   type SheetLayoutResult,
 } from '@/features/notation/sheetLayout';
-import {
-  drawSheetPage,
-  LARGE_DOC_PAGE_COUNT,
-  RENDER_SCALE,
-  RENDER_SCALE_LARGE_DOC,
-} from '@/features/notation/sheetRenderer';
 import { AppError } from '@/utils/errors';
 import { takeSheetFileName } from '@/utils/filenames';
 
@@ -108,9 +102,11 @@ export function layoutTakeSheet(
 }
 
 /**
- * Render a take to a multi-page PDF: layout → one page at a time onto a
- * single reused canvas → PNG → pdf-lib assembly. pdf-lib is imported
- * dynamically so it code-splits out of the main bundle.
+ * Render a take to a multi-page PDF: layout here, then `sheetPdfWriter` draws
+ * each page as vector paths and standard-font text, one page of operators at a
+ * time. The writer is imported dynamically, and it is the only way pdf-lib is
+ * reached, so pdf-lib code-splits out of both the main bundle and the dialog
+ * and loads when Generate is pressed.
  */
 export async function generateSheetPdf(
   take: Take,
@@ -134,40 +130,25 @@ export async function generateSheetPdf(
   if (pageCount > MAX_SHEET_PAGES) throw new SheetTooManyPagesError(pageCount);
   throwIfAborted();
 
-  const { PDFDocument } = await import('pdf-lib');
+  const { writeSheetPdf } = await import('./sheetPdfWriter');
   throwIfAborted();
-  const pdfDoc = await PDFDocument.create();
-  pdfDoc.setTitle(take.title);
-  // Creator = authoring app; pdf-lib stamps itself as Producer at save time.
-  pdfDoc.setCreator(SHEET_CREDIT);
-
-  const scale = pageCount > LARGE_DOC_PAGE_COUNT ? RENDER_SCALE_LARGE_DOC : RENDER_SCALE;
-  const metrics = layout.pages[0]!.metrics;
-  const canvas = document.createElement('canvas');
-  canvas.width = Math.round(metrics.pageWidthPt * scale);
-  canvas.height = Math.round(metrics.pageHeightPt * scale);
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new SheetExportError('2D canvas context unavailable');
-
-  for (let i = 0; i < pageCount; i += 1) {
-    throwIfAborted();
-    onProgress?.({ stage: 'rendering', fraction: i / pageCount, page: i + 1, pageCount });
-    ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    drawSheetPage(ctx, layout.pages[i]!);
-    const pngBlob = await canvasToPngBlob(canvas);
-    throwIfAborted();
-    const image = await pdfDoc.embedPng(await pngBlob.arrayBuffer());
-    const pdfPage = pdfDoc.addPage([metrics.pageWidthPt, metrics.pageHeightPt]);
-    pdfPage.drawImage(image, {
-      x: 0,
-      y: 0,
-      width: metrics.pageWidthPt,
-      height: metrics.pageHeightPt,
-    });
-  }
-
-  onProgress?.({ stage: 'assembling', fraction: -1 });
-  const bytes = await pdfDoc.save();
+  const bytes = await writeSheetPdf(layout.pages, {
+    title: take.title,
+    creator: SHEET_CREDIT,
+    beforePage: (index) => {
+      throwIfAborted();
+      onProgress?.({
+        stage: 'rendering',
+        fraction: index / pageCount,
+        page: index + 1,
+        pageCount,
+      });
+    },
+    beforeSave: () => {
+      throwIfAborted();
+      onProgress?.({ stage: 'assembling', fraction: -1 });
+    },
+  });
   throwIfAborted();
   const blob = new Blob([new Uint8Array(bytes)], { type: 'application/pdf' });
   return {
@@ -176,13 +157,4 @@ export async function generateSheetPdf(
     pageCount,
     sizeBytes: blob.size,
   };
-}
-
-function canvasToPngBlob(canvas: HTMLCanvasElement): Promise<Blob> {
-  return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (blob) resolve(blob);
-      else reject(new SheetExportError('canvas.toBlob produced no data'));
-    }, 'image/png');
-  });
 }

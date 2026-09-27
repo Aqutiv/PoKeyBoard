@@ -7,3 +7,4 @@
 *.m4a binary
 *.flac binary
 *.wasm binary
+tests/unit/notation/__goldens__/*.svg linguist-generated=true

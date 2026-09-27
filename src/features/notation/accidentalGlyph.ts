@@ -1,3 +1,4 @@
+import type { DrawSurface } from './drawSurface';
 import type { AccidentalKind } from './keySignature';
 
 /**
@@ -5,10 +6,13 @@ import type { AccidentalKind } from './keySignature';
  * and the live score and the printed page show the same shapes. Everything
  * scales from `gap`, a staff space, and each glyph is centred on the line or
  * space its note sits on; the caller has set `fillStyle`/`strokeStyle`.
+ *
+ * The live score passes its canvas context; the printed sheet passes whatever
+ * surface it is drawing on, which is why these take a `DrawSurface`.
  */
 
 /** Sharp: two thin verticals crossed by two thick slanted beams. */
-function drawSharp(ctx: CanvasRenderingContext2D, x: number, y: number, gap: number): void {
+function drawSharp(ctx: DrawSurface, x: number, y: number, gap: number): void {
   ctx.lineWidth = gap * 0.102;
   ctx.beginPath();
   ctx.moveTo(x - 0.25 * gap, y - 0.95 * gap);
@@ -28,7 +32,7 @@ function drawSharp(ctx: CanvasRenderingContext2D, x: number, y: number, gap: num
 }
 
 /** Flat: a tall stem with a small bowl hung off its foot, to the right. */
-function drawFlat(ctx: CanvasRenderingContext2D, x: number, y: number, gap: number): void {
+function drawFlat(ctx: DrawSurface, x: number, y: number, gap: number): void {
   ctx.lineWidth = gap * 0.111;
   ctx.beginPath();
   ctx.moveTo(x - 0.3 * gap, y - 1.75 * gap);
@@ -63,7 +67,7 @@ function drawFlat(ctx: CanvasRenderingContext2D, x: number, y: number, gap: numb
  * left one rises and the right one falls, which is what tells it from a sharp
  * at a glance.
  */
-function drawNatural(ctx: CanvasRenderingContext2D, x: number, y: number, gap: number): void {
+function drawNatural(ctx: DrawSurface, x: number, y: number, gap: number): void {
   ctx.lineWidth = gap * 0.102;
   ctx.beginPath();
   ctx.moveTo(x - 0.25 * gap, y - 1.5 * gap);
@@ -86,7 +90,7 @@ function drawNatural(ctx: CanvasRenderingContext2D, x: number, y: number, gap: n
  * Double sharp: a small saltire with square ends, a space tall — much smaller
  * than a sharp, which is how it is told from one at a glance.
  */
-function drawDoubleSharp(ctx: CanvasRenderingContext2D, x: number, y: number, gap: number): void {
+function drawDoubleSharp(ctx: DrawSurface, x: number, y: number, gap: number): void {
   const arm = 0.36 * gap;
   ctx.lineWidth = gap * 0.15;
   ctx.beginPath();
@@ -107,13 +111,13 @@ function drawDoubleSharp(ctx: CanvasRenderingContext2D, x: number, y: number, ga
 }
 
 /** Double flat: two flats side by side, drawn a little closer than two would sit. */
-function drawDoubleFlat(ctx: CanvasRenderingContext2D, x: number, y: number, gap: number): void {
+function drawDoubleFlat(ctx: DrawSurface, x: number, y: number, gap: number): void {
   drawFlat(ctx, x - 0.27 * gap, y, gap);
   drawFlat(ctx, x + 0.27 * gap, y, gap);
 }
 
 export function drawAccidentalGlyph(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   kind: AccidentalKind,
   x: number,
   y: number,
