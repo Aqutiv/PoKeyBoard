@@ -471,14 +471,19 @@ export class SampleBank {
   ): Promise<void> {
     let lastError: unknown;
     const generation = this.generation;
+    // Released meanwhile, the load is called off: what is still to come — a
+    // decode, a retry — would only fetch and decode something to discard.
+    const released = () => generation !== this.generation;
     for (let attempt = 0; attempt <= FETCH_RETRIES; attempt += 1) {
+      if (released()) return;
       try {
         const response = await fetch(`${this.baseUrl}${entry.file}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const bytes = await response.arrayBuffer();
+        if (released()) return;
         const buffer = await context.decodeAudioData(bytes);
-        // Released mid-flight: discard rather than resurrect a freed buffer.
-        if (generation !== this.generation) return;
+        // Released mid-decode: discard rather than resurrect a freed buffer.
+        if (released()) return;
         this.buffers.set(entry.file, buffer);
         this.onsets.set(entry.file, onsetOffsetOf(buffer));
         const layer = this.layers.get(entry.layer);
@@ -493,6 +498,7 @@ export class SampleBank {
         return;
       } catch (error) {
         lastError = error;
+        if (released()) return;
         await delay(300 * (attempt + 1));
       }
     }

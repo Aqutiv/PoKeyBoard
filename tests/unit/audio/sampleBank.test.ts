@@ -259,6 +259,55 @@ describe('SampleBank.releaseBuffers', () => {
     expect(bank.isMidiPlayable(60)).toBe(false);
   });
 
+  it('stops retrying a file once released, where a retry would only be discarded', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => stubManifest() })
+      .mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', fetchMock);
+    const bank = new SampleBank('/samples/');
+
+    const loading = bank.loadCorePack(stubContext());
+    // The manifest, then the first try at the one file, which fails.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    bank.releaseBuffers();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await loading;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bank.getProgress().phase).toBe('idle');
+    expect(bank.getProgress().error).toBeUndefined();
+  });
+
+  it('does not decode a download that lands after the release', async () => {
+    let land!: () => void;
+    const landed = new Promise<void>((resolve) => {
+      land = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => stubManifest() })
+      .mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => {
+          await landed;
+          return new ArrayBuffer(16);
+        },
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const context = stubContext();
+    const bank = new SampleBank('/samples/');
+
+    const loading = bank.loadCorePack(context);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    bank.releaseBuffers();
+    land();
+    await loading;
+    expect(context.decodeAudioData).not.toHaveBeenCalled();
+  });
+
   it('decodes afresh for a load that starts after the release, not waiting on the dropped one', async () => {
     const manifest = stubManifest();
     const decodes: Array<(buffer: AudioBuffer) => void> = [];
