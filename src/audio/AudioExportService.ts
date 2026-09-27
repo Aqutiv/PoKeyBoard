@@ -6,12 +6,20 @@ import type { Take } from '@/domain/takeTypes';
 import { libraryTrackSummary } from '@/features/library/catalog';
 import { ExportError } from '@/utils/errors';
 import { takeAudioFileName } from '@/utils/filenames';
-import type { EncoderResponse } from '@/workers/mp3Encoder.worker';
+import type { EncodeRequest, EncoderResponse } from '@/workers/audioEncoder.worker';
 import { audioEngine } from './AudioEngine';
-import { id3v2Tag } from './id3';
+import { finishExportOnMainThread, type ExportPcm } from './exportEncode';
+import {
+  FORMAT_EXTENSION,
+  FORMAT_MIME_TYPE,
+  type ExportEncoding,
+  type ExportFormat,
+} from './exportFormats';
+import { readFlacStreamInfo } from './flacEncode';
+import { tagFlac } from './flacTags';
+import { id3v2Tag, type AudioTags } from './id3';
 import { instrumentForPackVersion } from './instruments';
 import type { LoudnessMode } from './loudness';
-import { finishMp3OnMainThread, type ExportBitrateKbps, type ExportPcm } from './mp3Encode';
 import { renderTakeForExport, type RenderedTake } from './OfflineTakeRenderer';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
 
@@ -33,15 +41,8 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  */
 export const AUDIO_EXPORTER_VERSION = 9;
 
-export type ExportQuality = 'share' | 'high';
-
-export const QUALITY_BITRATE: Record<ExportQuality, ExportBitrateKbps> = {
-  share: 128,
-  high: 192,
-};
-
 export interface ExportOptions {
-  quality: ExportQuality;
+  encoding: ExportEncoding;
   includeMetronome: boolean;
   metronomeVolume: number;
   loudness: LoudnessMode;
@@ -67,10 +68,12 @@ export interface ExportProgress {
 export interface ExportResult {
   blob: Blob;
   fileName: string;
-  hash: string;
+  format: ExportFormat;
   durationMs: number;
   sizeBytes: number;
   fromCache: boolean;
+  /** Whether the take's export cache now holds this file; only MP3s are kept. */
+  cached: boolean;
 }
 
 export class ExportCancelledError extends ExportError {
@@ -90,10 +93,12 @@ interface ActiveExportJob {
 
 /**
  * The full export pipeline: snapshot+save → offline render → worker mastering
- * and MP3 encode → validate → cache under a deterministic hash → tag. Cached
- * results are reused only while the hash still matches. The cache holds the
- * bare MP3 and the tag is written on the way out, so a renamed take never
- * carries its old title.
+ * and encode (MP3 or FLAC) → validate → tag. An MP3 is cached under a
+ * deterministic hash and reused only while the hash still matches; the cache
+ * holds the bare MP3 and the tag is written on the way out, so a renamed take
+ * never carries its old title. A FLAC is several times the size and renders
+ * again in seconds, so it is never cached — and never takes the place of the
+ * take's cached MP3, the cache holding one file a take.
  */
 class AudioExportService {
   private activeJob: ActiveExportJob | null = null;
@@ -127,44 +132,56 @@ class AudioExportService {
       await this.awaitJob(job, audioEngine.whenSwitchSettled());
       const open = useTakeStore.getState().take;
       const take = open.id === requested.id ? open : requested;
-      const bitrateKbps = QUALITY_BITRATE[options.quality];
-      const hash = await this.awaitJob(
-        job,
-        computeExportHash({
-          take,
-          exporterVersion: AUDIO_EXPORTER_VERSION,
-          bitrateKbps,
-          includeMetronome: options.includeMetronome,
-          metronomeVolume: options.metronomeVolume,
-          loudness: options.loudness,
-          toneFollowsTouch: options.toneFollowsTouch,
-        }),
-      );
+      const { encoding } = options;
+      const { format } = encoding;
       // Every export names the piano it was rendered with; a library track is
       // credited to its composer as well.
       const composer = libraryTrackSummary(take.id)?.composer;
       const piano = instrumentForPackVersion(take.samplePackVersion).name;
-      const fileName = takeAudioFileName(take.title, { composer, piano });
-      const tag = id3v2Tag({
+      const fileName = takeAudioFileName(take.title, {
+        composer,
+        piano,
+        extension: FORMAT_EXTENSION[format],
+      });
+      const tags: AudioTags = {
         title: take.title,
         artist: composer,
         composer,
         album: 'PoKeyBoard',
         encodedWith: `PoKeyBoard (${piano})`,
+      };
+      const tagged = (bare: Blob) =>
+        format === 'mp3'
+          ? new Blob([id3v2Tag(tags), bare], { type: FORMAT_MIME_TYPE.mp3 })
+          : tagFlac(bare, tags);
+      const result = (blob: Blob, fromCache: boolean): ExportResult => ({
+        blob,
+        fileName,
+        format,
+        durationMs: effectivePlaybackDurationMs(take),
+        sizeBytes: blob.size,
+        fromCache,
+        cached: format === 'mp3',
       });
-      const tagged = (mp3: Blob) => new Blob([tag, mp3], { type: 'audio/mpeg' });
 
-      const cached = await this.awaitJob(job, getCachedAudio(take.id));
-      if (cached && cached.hash === hash) {
-        const blob = tagged(cached.blob);
-        return {
-          blob,
-          fileName,
-          hash,
-          durationMs: effectivePlaybackDurationMs(take),
-          sizeBytes: blob.size,
-          fromCache: true,
-        };
+      const hash =
+        encoding.format === 'mp3'
+          ? await this.awaitJob(
+              job,
+              computeExportHash({
+                take,
+                exporterVersion: AUDIO_EXPORTER_VERSION,
+                bitrateKbps: encoding.kbps,
+                includeMetronome: options.includeMetronome,
+                metronomeVolume: options.metronomeVolume,
+                loudness: options.loudness,
+                toneFollowsTouch: options.toneFollowsTouch,
+              }),
+            )
+          : null;
+      if (hash !== null) {
+        const cached = await this.awaitJob(job, getCachedAudio(take.id));
+        if (cached && cached.hash === hash) return result(tagged(cached.blob), true);
       }
 
       report({ stage: 'saving', fraction: -1 });
@@ -192,49 +209,32 @@ class AudioExportService {
       // thread masters over again, and its first percents must not pull the bar
       // back from where the worker left it.
       let compressed = 0;
-      const mp3 = await this.awaitJob(
+      const parts = await this.awaitJob(
         job,
-        this.encode(job, rendered, options.loudness, bitrateKbps, (fraction) => {
+        this.encode(job, rendered, options.loudness, encoding, (fraction) => {
           if (fraction <= compressed) return;
           compressed = fraction;
           report({ stage: 'encoding', fraction });
         }),
       );
 
-      const bare = new Blob([mp3], { type: 'audio/mpeg' });
-      const minimumPlausible = Math.max(
-        2_000,
-        (rendered.piano.duration * bitrateKbps * 1000 * 0.3) / 8,
-      );
-      if (bare.size < minimumPlausible) {
-        throw new ExportError(
-          `Encoded MP3 implausibly small (${bare.size} bytes)`,
-          'Encoding produced an invalid file. Please try again.',
-          'exportEncodingInvalid',
+      const bare = new Blob(parts, { type: FORMAT_MIME_TYPE[format] });
+      checkEncoded(encoding, parts, bare.size, rendered);
+
+      if (hash !== null) {
+        await this.awaitJob(
+          job,
+          putCachedAudio({
+            takeId: take.id,
+            hash,
+            blob: bare,
+            mimeType: FORMAT_MIME_TYPE.mp3,
+            fileName,
+            createdAt: new Date().toISOString(),
+          }),
         );
       }
-
-      await this.awaitJob(
-        job,
-        putCachedAudio({
-          takeId: take.id,
-          hash,
-          blob: bare,
-          mimeType: 'audio/mpeg',
-          fileName,
-          createdAt: new Date().toISOString(),
-        }),
-      );
-
-      const blob = tagged(bare);
-      return {
-        blob,
-        fileName,
-        hash,
-        durationMs: effectivePlaybackDurationMs(take),
-        sizeBytes: blob.size,
-        fromCache: false,
-      };
+      return result(tagged(bare), false);
     } finally {
       if (this.activeJob === job) this.activeJob = null;
       job.rejectCancellation = null;
@@ -297,29 +297,29 @@ class AudioExportService {
     job: ActiveExportJob,
     rendered: RenderedTake,
     loudness: LoudnessMode,
-    bitrateKbps: ExportBitrateKbps,
+    encoding: ExportEncoding,
     onFraction: (fraction: number) => void,
-  ): Promise<ArrayBuffer> {
+  ): Promise<ArrayBuffer[]> {
     try {
-      return await this.encodeViaWorker(job, rendered, loudness, bitrateKbps, onFraction);
+      return await this.encodeViaWorker(job, rendered, loudness, encoding, onFraction);
     } catch (workerError) {
       if (job.cancelled) throw new ExportCancelledError();
-      console.error('[export] MP3 worker failed, falling back to main thread:', workerError);
+      console.error('[export] Encoder worker failed, falling back to main thread:', workerError);
       try {
         // Worker transfers detach the PCM buffers; re-extract from the render.
-        const out = await finishMp3OnMainThread(
+        const parts = await finishExportOnMainThread(
           extractPcm(rendered, loudness),
-          bitrateKbps,
+          encoding,
           onFraction,
           job.controller.signal,
         );
-        return out.buffer as ArrayBuffer;
+        return parts.map((part) => part.buffer);
       } catch (fallbackError) {
         if (job.cancelled || job.controller.signal.aborted) throw new ExportCancelledError();
         const reason =
           fallbackError instanceof Error ? fallbackError.message : String(fallbackError);
         throw new ExportError(
-          `MP3 encode failed on worker and main thread: ${reason}`,
+          `Audio encode failed on worker and main thread: ${reason}`,
           `Audio export failed: ${reason}`,
           'exportFailed',
           { cause: fallbackError },
@@ -333,22 +333,22 @@ class AudioExportService {
     job: ActiveExportJob,
     rendered: RenderedTake,
     loudness: LoudnessMode,
-    bitrateKbps: ExportBitrateKbps,
+    encoding: ExportEncoding,
     onFraction: (fraction: number) => void,
-  ): Promise<ArrayBuffer> {
+  ): Promise<ArrayBuffer[]> {
     // Transfer channel copies; the render itself stays untouched.
     const pcm = extractPcm(rendered, loudness);
 
-    return new Promise<ArrayBuffer>((resolve, reject) => {
+    return new Promise<ArrayBuffer[]>((resolve, reject) => {
       let worker: Worker;
       try {
-        worker = new Worker(new URL('../workers/mp3Encoder.worker.ts', import.meta.url), {
+        worker = new Worker(new URL('../workers/audioEncoder.worker.ts', import.meta.url), {
           type: 'module',
         });
       } catch (constructError) {
         reject(
           new Error(
-            `MP3 worker could not be created: ${
+            `Encoder worker could not be created: ${
               constructError instanceof Error ? constructError.message : String(constructError)
             }`,
           ),
@@ -375,30 +375,66 @@ class AudioExportService {
           onFraction(message.fraction);
         } else if (message.type === 'done') {
           cleanup();
-          resolve(message.mp3);
+          resolve(message.parts);
         } else {
           cleanup();
-          reject(new Error(`MP3 encoder reported: ${message.message}`));
+          reject(new Error(`Audio encoder reported: ${message.message}`));
         }
       };
       worker.onerror = (event) => {
         if (job.cancelled || job.worker !== worker) return;
         cleanup();
-        reject(new Error(`MP3 worker crashed: ${event.message || 'unknown error'}`));
+        reject(new Error(`Encoder worker crashed: ${event.message || 'unknown error'}`));
       };
       worker.postMessage(
         {
           type: 'encode',
+          encoding,
           sampleRate: pcm.sampleRate,
-          bitrateKbps,
           left: pcm.left.buffer,
           right: pcm.right.buffer,
           clicks: pcm.clicks,
           loudness,
-        },
+        } satisfies EncodeRequest,
         [pcm.left.buffer, pcm.right.buffer],
       );
     });
+  }
+}
+
+/**
+ * Throw where the encoder's output cannot be the file it should be. An MP3
+ * must be at least a plausible size for its length and bitrate. A FLAC stream
+ * must start with its own header, saying it holds every sample of the render
+ * at its rate and depth — which the encoder writes only once it has coded them
+ * all.
+ */
+function checkEncoded(
+  encoding: ExportEncoding,
+  parts: readonly ArrayBuffer[],
+  size: number,
+  rendered: RenderedTake,
+): void {
+  const { piano } = rendered;
+  let plausible: boolean;
+  if (encoding.format === 'mp3') {
+    plausible = size >= Math.max(2_000, (piano.duration * encoding.kbps * 1000 * 0.3) / 8);
+  } else {
+    const info = readFlacStreamInfo(new Uint8Array(parts[0] ?? new ArrayBuffer(0)));
+    plausible =
+      info !== null &&
+      info.onlyBlock &&
+      info.sampleRate === piano.sampleRate &&
+      info.bits === encoding.bits &&
+      info.channels === 2 &&
+      info.totalSamples === piano.length;
+  }
+  if (!plausible) {
+    throw new ExportError(
+      `Encoded ${encoding.format} implausible (${size} bytes)`,
+      'Encoding produced an invalid file. Please try again.',
+      'exportEncodingInvalid',
+    );
   }
 }
 

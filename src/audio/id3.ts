@@ -7,7 +7,8 @@
  * encodings 2.3 knows.
  */
 
-export interface Id3Tags {
+/** What an exported file says of itself, in whichever tag its format carries. */
+export interface AudioTags {
   title: string;
   /** Shown as the artist; a library track's composer. */
   artist?: string;
@@ -62,7 +63,7 @@ function synchsafe(size: number): number[] {
 }
 
 /** The tag to put in front of an MP3's first frame. Empty fields are left out. */
-export function id3v2Tag(tags: Id3Tags): Uint8Array<ArrayBuffer> {
+export function id3v2Tag(tags: AudioTags): Uint8Array<ArrayBuffer> {
   const fields: readonly (readonly [string, string | undefined])[] = [
     ['TIT2', tags.title],
     ['TPE1', tags.artist],

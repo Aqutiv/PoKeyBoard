@@ -445,9 +445,14 @@ export interface Messages {
   };
   exportDialog: {
     title: string;
+    format: string;
+    formatMp3: string;
+    formatFlac: string;
     quality: string;
     shareable: (p: { kbps: number }) => string;
     high: (p: { kbps: number }) => string;
+    bitsStandard: (p: { bits: number }) => string;
+    bitsStudio: (p: { bits: number }) => string;
     loudness: string;
     loudnessNormalized: string;
     loudnessAsPlayed: string;
@@ -463,7 +468,8 @@ export interface Messages {
     ready: (p: { fromCache: boolean; size: string; duration: string }) => string;
     playPreview: string;
     deleteCached: string;
-    downloadMp3: string;
+    /** The button that saves the file, naming its format: "MP3", "FLAC". */
+    download: (p: { format: string }) => string;
     shareAudio: string;
     close: string;
     back: string;

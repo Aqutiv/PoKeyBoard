@@ -60,6 +60,8 @@ export interface TakeAudioNameParts {
   composer?: string;
   /** The piano the take sounds on, e.g. 'Salamander'. */
   piano?: string;
+  /** The file's extension without its dot; `mp3` unless said otherwise. */
+  extension?: string;
 }
 
 /**
@@ -69,7 +71,12 @@ export interface TakeAudioNameParts {
 export function takeAudioFileName(title: string, parts: TakeAudioNameParts = {}): string {
   const credit = parts.composer ? `${sanitizeFileNamePart(parts.composer)} - ` : '';
   const piano = parts.piano ? ` (${sanitizeFileNamePart(parts.piano)})` : '';
-  return composeFileName(`PoKeyBoard - ${credit}`, sanitizeFileNamePart(title), `${piano}.mp3`);
+  const extension = parts.extension ?? 'mp3';
+  return composeFileName(
+    `PoKeyBoard - ${credit}`,
+    sanitizeFileNamePart(title),
+    `${piano}.${extension}`,
+  );
 }
 
 /** Credited like the audio: `PoKeyBoard - Erik Satie - Gymnopedie No. 1.mid`. */

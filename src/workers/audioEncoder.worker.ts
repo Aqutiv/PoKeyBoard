@@ -1,16 +1,18 @@
+import { finishExport } from '@/audio/exportEncode';
+import type { ExportEncoding } from '@/audio/exportFormats';
 import type { ClickTrack, LoudnessMode } from '@/audio/loudness';
-import { finishMp3, type ExportBitrateKbps } from '@/audio/mp3Encode';
 
 /**
- * Mastering and MP3 encoding off the main thread. PCM arrives as transferred
- * ArrayBuffers (never cloned); the finished MP3 transfers back the same way.
- * The work lives in mp3Encode, shared with the main-thread fallback in
- * AudioExportService, which runs the same code a slice at a time.
+ * Mastering and encoding, MP3 or FLAC, off the main thread. PCM arrives as
+ * transferred ArrayBuffers (never cloned); the finished file transfers back
+ * the same way, in the parts it was written in. The work lives in
+ * exportEncode, shared with the main-thread fallback in AudioExportService,
+ * which runs the same code a slice at a time.
  */
 export interface EncodeRequest {
   type: 'encode';
+  encoding: ExportEncoding;
   sampleRate: number;
-  bitrateKbps: ExportBitrateKbps;
   left: ArrayBuffer;
   right: ArrayBuffer;
   /** Small enough to copy; only the PCM is transferred. */
@@ -20,7 +22,7 @@ export interface EncodeRequest {
 
 export type EncoderResponse =
   | { type: 'progress'; fraction: number }
-  | { type: 'done'; mp3: ArrayBuffer }
+  | { type: 'done'; parts: ArrayBuffer[] }
   | { type: 'error'; message: string };
 
 const scope = self as unknown as {
@@ -40,7 +42,7 @@ scope.onmessage = (event: MessageEvent<EncodeRequest>) => {
 };
 
 async function run(request: EncodeRequest): Promise<void> {
-  const out = await finishMp3(
+  const out = await finishExport(
     {
       sampleRate: request.sampleRate,
       left: new Float32Array(request.left),
@@ -48,9 +50,9 @@ async function run(request: EncodeRequest): Promise<void> {
       clicks: request.clicks,
       loudness: request.loudness,
     },
-    request.bitrateKbps,
+    request.encoding,
     (fraction) => scope.postMessage({ type: 'progress', fraction }),
   );
-  const mp3 = out.buffer as ArrayBuffer;
-  scope.postMessage({ type: 'done', mp3 }, [mp3]);
+  const parts = out.map((part) => part.buffer);
+  scope.postMessage({ type: 'done', parts }, parts);
 }

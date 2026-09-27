@@ -59,10 +59,11 @@ async function exportService() {
 
 const notes = [{ id: 'n', midi: 60, startMs: 0, durationMs: 100, velocity: 0.7 }];
 const options = {
-  quality: 'share',
+  encoding: { format: 'mp3', kbps: 128 },
   includeMetronome: false,
   metronomeVolume: 0.6,
   loudness: 'normalized',
+  toneFollowsTouch: true,
 } as const;
 
 describe('exporting while the piano is changing', () => {

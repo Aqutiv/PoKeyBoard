@@ -1,6 +1,8 @@
 import { create } from 'zustand';
 import { audioEngine } from '@/audio/AudioEngine';
+import type { ExportBitrateKbps, ExportFormat, FlacBitDepth } from '@/audio/exportFormats';
 import { DEFAULT_PIANO_INSTRUMENT_ID, type PianoInstrumentId } from '@/audio/instruments';
+import type { LoudnessMode } from '@/audio/loudness';
 import {
   DEFAULT_MASTER_VOLUME,
   DEFAULT_REVERB_MIX,
@@ -61,6 +63,12 @@ export interface SettingsState {
   metronomeVolume: number;
   keyboardAnchorMidi: number;
   sheetPaperSize: PaperSize;
+  /** The audio export's format, and each format's quality, as last chosen. */
+  audioExportFormat: ExportFormat;
+  audioExportMp3Kbps: ExportBitrateKbps;
+  audioExportFlacBits: FlacBitDepth;
+  /** The audio export's level, as last chosen; see src/audio/loudness.ts. */
+  audioExportLoudness: LoudnessMode;
   /** The library folder last opened, restored on the next visit. */
   libraryFolder: LibraryFolderId;
   /** The Learn level last browsed, restored on the next visit. */
@@ -91,6 +99,10 @@ export interface SettingsState {
   setMetronomeVolume(value: number): void;
   setKeyboardAnchorMidi(midi: number): void;
   setSheetPaperSize(size: PaperSize): void;
+  setAudioExportFormat(format: ExportFormat): void;
+  setAudioExportMp3Kbps(kbps: ExportBitrateKbps): void;
+  setAudioExportFlacBits(bits: FlacBitDepth): void;
+  setAudioExportLoudness(loudness: LoudnessMode): void;
   setLibraryFolder(folder: LibraryFolderId): void;
   setLearnLevel(level: LearnLevelId): void;
   setRecordMode(mode: RecordMode): void;
@@ -120,6 +132,10 @@ export const SETTINGS_DEFAULTS = {
   metronomeVolume: 0.6,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
   sheetPaperSize: 'a4' as PaperSize,
+  audioExportFormat: 'mp3' as ExportFormat,
+  audioExportMp3Kbps: 128 as ExportBitrateKbps,
+  audioExportFlacBits: 16 as FlacBitDepth,
+  audioExportLoudness: 'normalized' as LoudnessMode,
   libraryFolder: DEFAULT_LIBRARY_FOLDER,
   learnLevel: DEFAULT_LEARN_LEVEL,
   recordMode: 'overdub' as RecordMode,
@@ -160,6 +176,10 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setMetronomeVolume: (metronomeVolume) => set({ metronomeVolume }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),
+  setAudioExportFormat: (audioExportFormat) => set({ audioExportFormat }),
+  setAudioExportMp3Kbps: (audioExportMp3Kbps) => set({ audioExportMp3Kbps }),
+  setAudioExportFlacBits: (audioExportFlacBits) => set({ audioExportFlacBits }),
+  setAudioExportLoudness: (audioExportLoudness) => set({ audioExportLoudness }),
   setLibraryFolder: (libraryFolder) => set({ libraryFolder }),
   setLearnLevel: (learnLevel) => set({ learnLevel }),
   setRecordMode: (recordMode) => set({ recordMode }),

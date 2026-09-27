@@ -48,7 +48,7 @@ const take = createEmptyTake({
 });
 
 const options = {
-  quality: 'share',
+  encoding: { format: 'mp3', kbps: 128 },
   includeMetronome: false,
   metronomeVolume: 0.6,
   loudness: 'normalized',

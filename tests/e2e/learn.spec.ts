@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { nav } from './helpers';
+import { nav, persistedSetting } from './helpers';
 
 function levels(page: Page) {
   return page.getByRole('group', { name: 'Learn level' });
@@ -57,36 +57,6 @@ const nextButton = (page: Page) => page.getByRole('button', { name: 'Next' });
  */
 const DRILL_HOLD_MS = 500;
 const settleDrillHold = (page: Page) => page.waitForTimeout(DRILL_HOLD_MS + 150);
-
-/**
- * A persisted setting, read straight out of IndexedDB. Settings writes are
- * debounced, so a reload-based test waits for the write itself rather than for
- * a guessed interval to elapse.
- */
-function persistedSetting(page: Page, key: string): Promise<unknown> {
-  return page.evaluate(
-    (settingKey) =>
-      new Promise<unknown>((resolve, reject) => {
-        const open = indexedDB.open('pokeyboard');
-        open.onerror = () => reject(open.error);
-        open.onsuccess = () => {
-          const database = open.result;
-          if (!database.objectStoreNames.contains('settings')) {
-            database.close();
-            resolve(undefined);
-            return;
-          }
-          const request = database.transaction('settings').objectStore('settings').get(settingKey);
-          request.onerror = () => reject(request.error);
-          request.onsuccess = () => {
-            resolve((request.result as { value?: unknown } | undefined)?.value);
-            database.close();
-          };
-        };
-      }),
-    key,
-  );
-}
 
 /**
  * Press and release a computer-keyboard note.

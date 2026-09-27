@@ -76,6 +76,46 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).reverbRoom).toBe('hall');
   });
 
+  it('remembers the audio export’s choices, MP3 at 128 kbps and Even until one is made', async () => {
+    expect(SETTINGS_DEFAULTS).toMatchObject({
+      audioExportFormat: 'mp3',
+      audioExportMp3Kbps: 128,
+      audioExportFlacBits: 16,
+      audioExportLoudness: 'normalized',
+    });
+    const settings = useSettingsStore.getState();
+    settings.setAudioExportFormat('flac');
+    settings.setAudioExportMp3Kbps(192);
+    settings.setAudioExportFlacBits(24);
+    settings.setAudioExportLoudness('asPlayed');
+    await saveSettings(useSettingsStore.getState());
+    expect(await loadSettings()).toMatchObject({
+      audioExportFormat: 'flac',
+      audioExportMp3Kbps: 192,
+      audioExportFlacBits: 24,
+      audioExportLoudness: 'asPlayed',
+    });
+
+    // A format, rate, depth or level the export does not offer loads as the default.
+    await db.settings.bulkPut([
+      { key: 'audioExportFormat', value: 'wav' },
+      { key: 'audioExportMp3Kbps', value: 320 },
+      { key: 'audioExportFlacBits', value: '24' },
+      { key: 'audioExportLoudness', value: 'loud' },
+    ]);
+    const loaded = await loadSettings();
+    expect(loaded.audioExportFormat).toBeUndefined();
+    expect(loaded.audioExportMp3Kbps).toBeUndefined();
+    expect(loaded.audioExportFlacBits).toBeUndefined();
+    expect(loaded.audioExportLoudness).toBeUndefined();
+
+    await restoreSettingsFromBackup({ audioExportFormat: 'flac', audioExportFlacBits: 24 });
+    expect(await loadSettings()).toMatchObject({
+      audioExportFormat: 'flac',
+      audioExportFlacBits: 24,
+    });
+  });
+
   it('keeps Tone follows touch, on unless it was switched off, and drops a value that is not one', async () => {
     expect(SETTINGS_DEFAULTS.toneFollowsTouch).toBe(true);
 

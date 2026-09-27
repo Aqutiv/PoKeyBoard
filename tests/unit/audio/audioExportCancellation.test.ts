@@ -39,7 +39,7 @@ const take = createEmptyTake({
 });
 
 const options = {
-  quality: 'share',
+  encoding: { format: 'mp3', kbps: 128 },
   includeMetronome: false,
   metronomeVolume: 0.6,
   loudness: 'normalized',
@@ -209,5 +209,92 @@ describe('audio export progress', () => {
       true,
     );
     expect(compressing.at(-1)).toBe(1);
+  });
+});
+
+describe('audio export formats', () => {
+  /** The service over storage whose cache calls are kept, rendering `seconds` of a quiet tone. */
+  async function service(seconds: number) {
+    vi.resetModules();
+    const cache = {
+      getCachedAudio: vi.fn(async () => null),
+      invalidateCachedAudio: vi.fn(async () => undefined),
+      putCachedAudio: vi.fn(async () => undefined),
+    };
+    vi.doMock('@/data/audioCacheRepository', () => cache);
+    vi.doMock('@/data/persistence', () => ({
+      persistenceService: { flushSaveOrThrow: vi.fn(async () => undefined) },
+    }));
+    const length = 48_000 * seconds;
+    const tone = Float32Array.from({ length }, (_, i) => 0.1 * Math.sin(i / 7));
+    vi.doMock('@/audio/OfflineTakeRenderer', () => ({
+      renderTakeForExport: vi.fn(async () => ({
+        piano: {
+          length,
+          sampleRate: 48_000,
+          numberOfChannels: 2,
+          duration: seconds,
+          copyFromChannel: (destination: Float32Array) => destination.set(tone),
+        },
+        clicks: null,
+      })),
+    }));
+    vi.doMock('wasm-media-encoders', () => ({
+      createMp3Encoder: async () => ({
+        configure: vi.fn(),
+        encode: vi.fn(() => new Uint8Array(0)),
+        finalize: vi.fn(() => new Uint8Array(20_000)),
+      }),
+    }));
+    // The main thread, falling back from the worker jsdom lacks, says so.
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const module = await import('@/audio/AudioExportService');
+    return { ...module, cache, length };
+  }
+
+  const titled = createEmptyTake({
+    title: 'Évening',
+    durationMs: 100,
+    notes: [{ id: 'n', midi: 60, startMs: 0, durationMs: 100, velocity: 0.7 }],
+  });
+
+  it('writes FLAC without reading or filling the MP3 cache, tagged and named for it', async () => {
+    const { audioExportService, cache, length } = await service(2);
+    const result = await audioExportService.exportTake(
+      titled,
+      { ...options, encoding: { format: 'flac', bits: 24 } },
+      () => undefined,
+    );
+    expect(cache.getCachedAudio).not.toHaveBeenCalled();
+    expect(cache.putCachedAudio).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ format: 'flac', fromCache: false, cached: false });
+    expect(result.fileName).toMatch(/^PoKeyBoard - Évening \(.+\)\.flac$/);
+    expect(result.blob.type).toBe('audio/flac');
+    expect(result.sizeBytes).toBe(result.blob.size);
+
+    const bytes = new Uint8Array(await result.blob.arrayBuffer());
+    const { readFlacStreamInfo } = await import('@/audio/flacEncode');
+    expect(readFlacStreamInfo(bytes)).toMatchObject({
+      onlyBlock: false,
+      bits: 24,
+      totalSamples: length,
+    });
+    // Then the tags, the last metadata block, naming the take in UTF-8.
+    expect(bytes[42]).toBe(0x84);
+    expect(new TextDecoder().decode(bytes.subarray(42, 200))).toContain('TITLE=Évening');
+  });
+
+  it('caches an MP3 as before, and hands it over behind its ID3 tag', async () => {
+    const { audioExportService, cache } = await service(2);
+    const result = await audioExportService.exportTake(titled, options, () => undefined);
+    expect(cache.getCachedAudio).toHaveBeenCalledOnce();
+    expect(cache.putCachedAudio).toHaveBeenCalledOnce();
+    expect(cache.putCachedAudio).toHaveBeenCalledWith(
+      expect.objectContaining({ takeId: titled.id, mimeType: 'audio/mpeg' }),
+    );
+    expect(result).toMatchObject({ format: 'mp3', fromCache: false, cached: true });
+    expect(result.fileName).toMatch(/\.mp3$/);
+    const head = new Uint8Array(await result.blob.slice(0, 3).arrayBuffer());
+    expect(new TextDecoder().decode(head)).toBe('ID3');
   });
 });
