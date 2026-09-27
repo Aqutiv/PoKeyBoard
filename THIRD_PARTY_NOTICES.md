@@ -132,8 +132,9 @@ Attribution and source/license links are also shown in the app's About view.
   `licenses/music-glyphs-OFL.txt`.
 - **Source:** <https://github.com/steinbergmedia/bravura>, tag `bravura-1.482`,
   commit `37b194378b710cc40e406ab6c4b07608bb9548ae`
-- **Use:** the music symbols on the printed sheet — the sheet-music PDF export
-  and its preview.
+- **Use:** the music symbols of the live score and of the printed sheet — the
+  score on the Play page and in Learn, and the sheet-music PDF export and its
+  preview.
 - **Modifications:** the outlines of 60 glyphs are extracted ahead of the
   build by `scripts/extract-music-glyphs.mjs` (run by hand, from sources
   pinned by size and SHA-256 in `scripts/lib/music-glyphs.pins.json`) into a

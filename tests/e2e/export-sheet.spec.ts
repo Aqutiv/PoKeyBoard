@@ -175,7 +175,7 @@ test.describe('Sheet music export', () => {
     await expect.poll(() => pdfLibChunks).toEqual([expect.stringMatching(WRITER_CHUNK)]);
   });
 
-  test('ships the music glyphs with their font licence, and only once the dialog opens', async ({
+  test('ships the music glyphs with their font licence, with the score that draws them', async ({
     page,
   }) => {
     // Every script whose code carries the glyph outlines, by its own content.
@@ -187,14 +187,19 @@ test.describe('Sheet music export', () => {
       if (body.includes('accidentalDoubleFlat')) glyphChunks.push({ url, body });
     });
 
+    // The live score draws the glyphs, so they arrive with the Play page.
     await gotoAppReady(page);
+    await expect.poll(() => glyphChunks.length).toBeGreaterThan(0);
+    const withTheScore = glyphChunks.length;
     await recordShortTake(page);
-    // Nothing the app starts with carries them.
-    expect(glyphChunks).toEqual([]);
 
+    // The sheet draws the same ones, and brings no second copy of them.
     const dialog = await openSheetDialog(page);
     await expect(dialog.locator('.sheet-preview__canvas')).toBeVisible();
-    await expect.poll(() => glyphChunks.length).toBeGreaterThan(0);
+    await expect
+      .poll(() => dialog.locator('.sheet-preview__canvas').evaluate((c) => c.clientWidth))
+      .toBeGreaterThan(0);
+    expect(glyphChunks).toHaveLength(withTheScore);
     for (const chunk of glyphChunks) {
       // The legal comment survives minification, in the chunk the glyphs are in.
       expect(chunk.body, chunk.url).toContain('SIL OPEN FONT LICENSE Version 1.1');

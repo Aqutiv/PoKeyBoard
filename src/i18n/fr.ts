@@ -684,7 +684,7 @@ export const fr: Messages = {
       lame: 'encodage MP3, compilé en WebAssembly',
       pdfLib: 'export des partitions en PDF',
       fraunces: 'police de titres par Undercase Type',
-      musicFont: 'police musicale par Steinberg, adaptée aux partitions imprimées',
+      musicFont: 'police musicale par Steinberg, adaptée',
     },
     notices: 'Les mentions de licence complètes accompagnent le code source :',
     version: ({ version }) => `Version ${version}.`,

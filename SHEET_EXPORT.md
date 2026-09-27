@@ -38,8 +38,8 @@ getTakeForExport(id)
   in Times.
   A title's own accidentals ("Nocturne in E♭") are the same glyphs
   (`sheetText.ts`), since Times has no ♭ to print; a title too long for the
-  page is cut between whole graphemes. The live score still draws its own
-  shapes (`restGlyph.ts`, `accidentalGlyph.ts`) until it moves to the font too.
+  page is cut between whole graphemes. The live score draws the same glyphs
+  (`scoreRenderer.ts`; see _Music font_).
 - `sheetPdfService.ts` lays out, enforces the page cap and reports progress,
   then dynamically imports `sheetPdfWriter.ts` — the only module that reaches
   **pdf-lib** (MIT), so pdf-lib code-splits out of the dialog and loads on
@@ -71,11 +71,12 @@ getTakeForExport(id)
 
 ## Music font
 
-The printed sheet's symbols are Bravura 1.482, Steinberg's SMuFL font, under
-the SIL Open Font License 1.1 with the Reserved Font Name "Bravura".
+The music symbols of the printed sheet and of the live score are Bravura
+1.482, Steinberg's SMuFL font, under the SIL Open Font License 1.1 with the
+Reserved Font Name "Bravura".
 
 - `scripts/extract-music-glyphs.mjs` (run by hand; `--pin` re-pins) reads the
-  60 glyphs the sheet draws out of the font and writes two generated modules
+  60 glyphs the sheet and the score draw out of the font and writes two generated modules
   with neutral names: `glyphs/musicGlyphMetrics.ts` (advances, bounding boxes,
   the stem, flag and optical-centre anchors, the engraving defaults, in staff
   spaces) and `glyphs/musicGlyphOutlines.ts` (each outline as integer deltas in
@@ -92,8 +93,8 @@ the SIL Open Font License 1.1 with the Reserved Font Name "Bravura".
   line, that statement and the whole licence; the build keeps legal comments,
   so it ships in the chunk that carries the glyphs, and the licence is also
   served verbatim at `licenses/music-glyphs-OFL.txt`. The font file itself is
-  never shipped. The glyphs reach the app only through the lazily loaded sheet
-  chunks.
+  never shipped. The glyphs load with the notation code the live score and the
+  sheet share, so they arrive with the Play page's score.
 - `glyphs/drawGlyph.ts` places a glyph by its SMuFL origin at a staff space of
   its own and fills it once (nonzero), in the caller's colour;
   `glyphs/engravingGlyphs.ts` says which glyph draws what and does the
@@ -108,6 +109,12 @@ the SIL Open Font License 1.1 with the Reserved Font Name "Bravura".
   chord; time signatures and tuplet numerals as digit runs centred by their
   advances; dynamics by their optical centre, with a hairpin stopping half a
   space clear of a mark's ink.
+- The live score (`scoreRenderer.ts`, on Play and in Learn) places the same
+  glyphs by the same rules at 9 px to the staff space, taking every width and
+  reach from the metrics. It keeps what the screen asks for: stems 1.6 px wide,
+  so a second is displaced by a head less that stem, and a gutter of fixed
+  width, so a time signature too wide for it — the 12 of 12/8 — is set smaller
+  rather than the gutter growing and Learn's bars per line moving.
 
 ## UI
 
@@ -183,12 +190,11 @@ takes seconds and never touches the audio engine.
   bar line forgets it, so repeats are unmarked and a return to the key takes a
   natural.
   Accidentals that would foul each other stack into columns left of the chord,
-  topmost nearest. The live score shares a column at five steps apart, about
-  the height of its own glyphs; the printed sheet re-stacks by the font's glyph
-  boxes (`accidentalStacking.ts`), sharing one only where the lower sign's top
-  and the upper one's bottom fit between their lines — six steps for two
-  sharps, seven for a flat under a sharp, five for two flats — and gives a
-  double flat, wider than a column, two.
+  topmost nearest. The layout stacks them by the font's glyph boxes
+  (`accidentalStacking.ts`), for the live score and the printed sheet alike,
+  sharing a column only where the lower sign's top and the upper one's bottom
+  fit between their lines — six steps for two sharps, seven for a flat under a
+  sharp, five for two flats — and gives a double flat, wider than a column, two.
 - **Ties** cut a note at every bar line it crosses, and again wherever no
   single value covers the remainder, so a note longer than a whole note is
   written rather than clamped and a ring-out past the bar line is engraved

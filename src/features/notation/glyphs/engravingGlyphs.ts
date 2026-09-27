@@ -272,6 +272,17 @@ export function drawAccidentalEndingAt(
 const REST_DOT_GAP_G = 0.3;
 
 /**
+ * How far a rest's ink reaches either side of the x it is centred on, in staff
+ * spaces: half the glyph each way, and its dot on the right where it has one —
+ * as `drawRestSymbol` sets them.
+ */
+export function restInkG(symbol: DurationSymbol): { left: number; right: number } {
+  const half = glyphWidth(restGlyphFor(symbol.base)) / 2;
+  const dot = symbol.dotted ? REST_DOT_GAP_G + glyphWidth('augmentationDot') : 0;
+  return { left: half, right: half + dot };
+}
+
+/**
  * A rest with its ink centred on `x`, for a staff whose top line is at
  * `staffTop`, at `gap` to the staff space. `step` is the staff position the
  * glyph is registered on — 6, the line a whole rest hangs from, or the middle

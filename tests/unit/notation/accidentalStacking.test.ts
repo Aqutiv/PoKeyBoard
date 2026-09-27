@@ -87,7 +87,7 @@ describe('assignAccidentalColumns', () => {
   });
 });
 
-describe('the printed sheet', () => {
+describe('the layout', () => {
   function note(midi: number, step: 'F' | 'A', startMs = 0): NoteEvent {
     return {
       id: `${step}${midi}`,
@@ -99,8 +99,9 @@ describe('the printed sheet', () => {
     };
   }
 
-  it("stacks a chord's accidentals by the font's boxes, and leaves the live score's alone", () => {
-    // F♯5 over A♯4: two sharps five steps apart.
+  it("stacks a chord's accidentals by the font's boxes, on screen and on paper alike", () => {
+    // F♯5 over A♯4: two sharps five steps apart. The live score used to share
+    // a column at five steps; the font's sharps need six.
     const notes = [note(78, 'F'), note(70, 'A')];
     const score = layoutScore(notes, {
       bpm: 60,
@@ -109,8 +110,9 @@ describe('the printed sheet', () => {
       minMeasures: 1,
     });
     const live = score.chords.flatMap((chord) => chord.notes);
+    // Five steps is too close for two of the font's sharps: the lower moves out.
     expect(live.map((n) => [n.midi, n.accidental, n.accidentalColumn])).toEqual([
-      [70, '#', 0],
+      [70, '#', 1],
       [78, '#', 0],
     ]);
 
@@ -124,12 +126,10 @@ describe('the printed sheet', () => {
     });
     const column = sheet.pages[0]!.systems[0]!.measures[0]!.columns[0]!;
     const printed = column.treble.flatMap((chord) => chord.notes);
-    // Five steps is too close for two of the font's sharps: the lower moves out.
+    // The sheet takes the layout's columns as they are.
     expect(printed.map((n) => [n.midi, n.accidentalColumn])).toEqual([
       [70, 1],
       [78, 0],
     ]);
-    // And the live layout's notes are not the sheet's to change.
-    expect(live.map((n) => n.accidentalColumn)).toEqual([0, 0]);
   });
 });
