@@ -6,6 +6,12 @@ import type { LibraryTrackDef, TrackEvent } from '../trackBuilder';
  * swung eighths at an explicit 2:1 triplet feel, 104 bpm. The bass lives at
  * C2–F3, leaving the whole upper keyboard free to improvise over — try the
  * C blues scale (C, Eb, F, F#, G, Bb).
+ *
+ * The score opens on the eighth-note grid, which writes the swing the way
+ * swing is written: as plain eighths, each offbeat drawn on the half beat
+ * while it still sounds two thirds of the way through. With no grid the same
+ * line was drawn as eighths and sixteenths with 32nd and 64th rests between
+ * them, packed too tightly to read.
  */
 
 const events: TrackEvent[] = [];
@@ -69,6 +75,6 @@ export const BLUES_IN_C: LibraryTrackDef = {
   descriptionKey: 'bluesInC',
   bpm: 104,
   timeSignature: { numerator: 4, denominator: 4 },
-  quantization: 'off',
+  quantization: '1/8',
   events,
 };
