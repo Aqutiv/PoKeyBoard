@@ -41,6 +41,7 @@ import {
 import { beamCountFor, type DurationSymbol } from './quantization';
 import { drawRestGlyph } from './restGlyph';
 import { restStep } from './rests';
+import { ellipsizeRich, fillRich } from './sheetText';
 import type { ClefKind } from './staffMapping';
 
 /**
@@ -63,7 +64,11 @@ export const LARGE_DOC_PAGE_COUNT = 30;
 const G = SHEET_GAP_PT;
 const INK = '#000000';
 const PAPER = '#ffffff';
-const SERIF = 'Georgia, "Times New Roman", Times, serif';
+/**
+ * Times, which is what the PDF sets its text in (the standard Times fonts), so
+ * the preview measures and draws the letters the page will print.
+ */
+const SERIF = '"Times New Roman", Times, serif';
 
 const STAFF_LINE_W = 0.9;
 const BARLINE_W = 1;
@@ -88,13 +93,14 @@ export function drawSheetPage(ctx: DrawSurface, page: SheetPage): void {
   ctx.restore();
 }
 
-function ellipsize(ctx: DrawSurface, text: string, maxWidth: number): string {
-  if (ctx.measureText(text).width <= maxWidth) return text;
-  let out = text;
-  while (out.length > 1 && ctx.measureText(`${out}…`).width > maxWidth) out = out.slice(0, -1);
-  return `${out}…`;
-}
+const TITLE_PX = 21;
+const SUBTITLE_PX = 10;
 
+/**
+ * Title, subtitle, tempo and credit. A title can name its key — "Nocturne in
+ * E♭" — so both lines go through `sheetText`, which draws the signs as glyphs:
+ * no font the PDF can rely on has them, and the preview must show what prints.
+ */
 function drawTitleBlock(ctx: DrawSurface, page: SheetPage): void {
   const { metrics } = page;
   const block = page.titleBlock;
@@ -103,19 +109,23 @@ function drawTitleBlock(ctx: DrawSurface, page: SheetPage): void {
 
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.font = `700 21px ${SERIF}`;
-  ctx.fillText(
-    ellipsize(ctx, block.title, metrics.contentWidthPt),
+  ctx.font = `700 ${TITLE_PX}px ${SERIF}`;
+  fillRich(
+    ctx,
+    ellipsizeRich(ctx, block.title, metrics.contentWidthPt, TITLE_PX),
     centerX,
     metrics.marginTopPt + 30,
+    TITLE_PX,
   );
 
   if (block.subtitle) {
-    ctx.font = `italic 10px ${SERIF}`;
-    ctx.fillText(
-      ellipsize(ctx, block.subtitle, metrics.contentWidthPt),
+    ctx.font = `italic ${SUBTITLE_PX}px ${SERIF}`;
+    fillRich(
+      ctx,
+      ellipsizeRich(ctx, block.subtitle, metrics.contentWidthPt, SUBTITLE_PX),
       centerX,
       metrics.marginTopPt + 50,
+      SUBTITLE_PX,
     );
   }
 
