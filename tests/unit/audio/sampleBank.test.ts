@@ -210,9 +210,138 @@ describe('SampleBank.releaseBuffers', () => {
     bank.releaseBuffers();
     decodes[0]?.({ duration: 1 } as AudioBuffer);
 
-    // The core never completes, because the buffer that arrived was dropped.
-    await expect(loading).rejects.toThrow(/incomplete/i);
+    // The buffer that arrived is dropped. A load called off like this — a piano
+    // switch overtaken by another — is no failure, so it reports none.
+    await expect(loading).resolves.toBeUndefined();
     expect(bank.isMidiPlayable(60)).toBe(false);
+    expect(bank.isCoreReady()).toBe(false);
+    expect(bank.getProgress().phase).toBe('idle');
+    expect(bank.getProgress().error).toBeUndefined();
+  });
+
+  it('stops a released load before the files still queued, which would keep what they decode', async () => {
+    const manifest = {
+      ...stubManifest(),
+      // More files than the bank fetches at once, so some wait in the queue.
+      files: [48, 51, 54, 57, 60, 63, 66, 69].map((midi) => ({
+        file: `m${midi}.sample`,
+        midi,
+        layer: 0,
+        pack: 'core' as const,
+        bytes: 1,
+      })),
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => manifest })
+      .mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(16) });
+    vi.stubGlobal('fetch', fetchMock);
+    const decodes: Array<(buffer: AudioBuffer) => void> = [];
+    const context = {
+      decodeAudioData: vi.fn(
+        () =>
+          new Promise<AudioBuffer>((resolve) => {
+            decodes.push(resolve);
+          }),
+      ),
+    } as unknown as BaseAudioContext;
+    const bank = new SampleBank('/samples/');
+
+    const loading = bank.loadCorePack(context);
+    await vi.waitFor(() => expect(decodes).toHaveLength(4));
+    bank.releaseBuffers();
+    for (const decode of decodes) decode({ duration: 1 } as AudioBuffer);
+    await loading;
+
+    // The manifest and the four under way; the four queued are never fetched.
+    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(bank.getProgress().loadedFiles).toBe(0);
+    expect(bank.isMidiPlayable(60)).toBe(false);
+  });
+
+  it('stops retrying a file once released, where a retry would only be discarded', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => stubManifest() })
+      .mockRejectedValue(new Error('offline'));
+    vi.stubGlobal('fetch', fetchMock);
+    const bank = new SampleBank('/samples/');
+
+    const loading = bank.loadCorePack(stubContext());
+    // The manifest, then the first try at the one file, which fails.
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    bank.releaseBuffers();
+    await vi.advanceTimersByTimeAsync(5_000);
+    await loading;
+
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(bank.getProgress().phase).toBe('idle');
+    expect(bank.getProgress().error).toBeUndefined();
+  });
+
+  it('does not decode a download that lands after the release', async () => {
+    let land!: () => void;
+    const landed = new Promise<void>((resolve) => {
+      land = resolve;
+    });
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => stubManifest() })
+      .mockResolvedValue({
+        ok: true,
+        arrayBuffer: async () => {
+          await landed;
+          return new ArrayBuffer(16);
+        },
+      });
+    vi.stubGlobal('fetch', fetchMock);
+    const context = stubContext();
+    const bank = new SampleBank('/samples/');
+
+    const loading = bank.loadCorePack(context);
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    bank.releaseBuffers();
+    land();
+    await loading;
+    expect(context.decodeAudioData).not.toHaveBeenCalled();
+  });
+
+  it('decodes afresh for a load that starts after the release, not waiting on the dropped one', async () => {
+    const manifest = stubManifest();
+    const decodes: Array<(buffer: AudioBuffer) => void> = [];
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValueOnce({ ok: true, json: async () => manifest })
+        .mockResolvedValue({ ok: true, arrayBuffer: async () => new ArrayBuffer(16) }),
+    );
+    const context = {
+      decodeAudioData: vi.fn(
+        () =>
+          new Promise<AudioBuffer>((resolve) => {
+            decodes.push(resolve);
+          }),
+      ),
+    } as unknown as BaseAudioContext;
+    const bank = new SampleBank('/samples/');
+
+    // Chosen, called off, and chosen again before the first decode lands.
+    const first = bank.loadCorePack(context);
+    await vi.waitFor(() => expect(decodes).toHaveLength(1));
+    bank.releaseBuffers();
+    const second = bank.loadCorePack(context);
+    await vi.waitFor(() => expect(decodes).toHaveLength(2));
+
+    decodes[0]?.({ duration: 1 } as AudioBuffer);
+    await first;
+    expect(bank.isCoreReady()).toBe(false);
+    decodes[1]?.({ duration: 1 } as AudioBuffer);
+    await second;
+    expect(bank.isCoreReady()).toBe(true);
+    expect(bank.getProgress().phase).toBe('core-ready');
   });
 });
 

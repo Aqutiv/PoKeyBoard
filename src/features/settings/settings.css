@@ -109,6 +109,8 @@
 }
 
 .piano-card {
+  /* Holds the ring a change of piano draws round the card. */
+  position: relative;
   flex-direction: column;
   align-items: stretch;
   gap: 6px;
@@ -124,6 +126,14 @@
 .piano-card--active {
   border-color: var(--accent);
   background: var(--surface-2);
+}
+
+/* While it loads, the ring round the card is its accent; its own border
+   would only blur how far the ring has got. Doubled up to outrank the
+   selected card's hover, which the pointer is usually still over. */
+.piano-card.piano-card--loading,
+.piano-card.piano-card--loading:hover {
+  border-color: var(--border);
 }
 
 /* Mouse only: on touch, :hover would stick to the last-tapped card.

@@ -178,8 +178,24 @@ describe('the audio export’s choices', () => {
       includeMetronome: false,
       metronomeVolume: SETTINGS_DEFAULTS.metronomeVolume,
       loudness: 'asPlayed',
+      toneFollowsTouch: SETTINGS_DEFAULTS.toneFollowsTouch,
     });
   });
+
+  it.each([true, false])(
+    'renders with the tone as Settings has it (toneFollowsTouch: %s)',
+    async (toneFollowsTouch) => {
+      useSettingsStore.setState({ toneFollowsTouch });
+      await startExport();
+      expect(mock.options).toEqual({
+        encoding: { format: 'mp3', kbps: 128 },
+        includeMetronome: false,
+        metronomeVolume: SETTINGS_DEFAULTS.metronomeVolume,
+        loudness: 'normalized',
+        toneFollowsTouch,
+      });
+    },
+  );
 
   it('names the format it downloads, and offers to delete only a cached file', async () => {
     const finish = async (result: Partial<ExportResult>) => {

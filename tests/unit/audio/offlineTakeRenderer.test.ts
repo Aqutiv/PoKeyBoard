@@ -7,8 +7,9 @@ import type { InstrumentSettings, ReverbRoom, Take } from '@/domain/takeTypes';
  * offline context are stubs, so what is under test is what the renderer asks of
  * them — which room its graph is built in, and how long it renders for.
  */
-const { createPianoGraph, rendered } = vi.hoisted(() => ({
+const { createPianoGraph, getSample, rendered } = vi.hoisted(() => ({
   createPianoGraph: vi.fn(() => ({ voiceDestination: {} })),
+  getSample: vi.fn(() => ({ buffer: { duration: 4 }, playbackRate: 1, gain: 1 })),
   rendered: [] as Array<{ length: number; sampleRate: number }>,
 }));
 
@@ -16,9 +17,7 @@ vi.mock('@/audio/PianoGraphFactory', () => ({ createPianoGraph }));
 vi.mock('@/audio/AudioEngine', () => ({
   audioEngine: {
     ensurePlayableRange: vi.fn(async () => undefined),
-    bank: {
-      getSample: vi.fn(() => ({ buffer: { duration: 4 }, playbackRate: 1, gain: 1 })),
-    },
+    bank: { getSample },
   },
 }));
 vi.mock('@/audio/sampleVoice', () => ({
@@ -46,6 +45,7 @@ class StubOfflineContext {
 beforeEach(() => {
   vi.stubGlobal('OfflineAudioContext', StubOfflineContext);
   createPianoGraph.mockClear();
+  getSample.mockClear();
   rendered.length = 0;
 });
 
@@ -77,7 +77,11 @@ describe('rendering a take for export', () => {
       const { estimateRenderSeconds, renderTakeForExport } =
         await import('@/audio/OfflineTakeRenderer');
       const take = takeIn(stored);
-      await renderTakeForExport(take, { includeMetronome: false, metronomeVolume: 0 });
+      await renderTakeForExport(take, {
+        includeMetronome: false,
+        metronomeVolume: 0,
+        toneFollowsTouch: true,
+      });
 
       expect(createPianoGraph).toHaveBeenCalledTimes(1);
       expect(createPianoGraph).toHaveBeenCalledWith(
@@ -88,6 +92,28 @@ describe('rendering a take for export', () => {
       // RT60 and half a second more where that is longer.
       expect(rendered).toEqual([{ length: Math.ceil((1 + tailS) * 48_000), sampleRate: 48_000 }]);
       expect(estimateRenderSeconds(take)).toBeCloseTo(1 + tailS, 10);
+    },
+  );
+
+  it.each([
+    ['on', true],
+    ['off', false],
+  ] as const)(
+    'chooses its samples with the tone %s, as the export was asked for',
+    async (_, toneFollowsTouch) => {
+      const { renderTakeForExport } = await import('@/audio/OfflineTakeRenderer');
+      await renderTakeForExport(takeIn('room'), {
+        includeMetronome: false,
+        metronomeVolume: 0,
+        toneFollowsTouch,
+      });
+
+      // The setting the export was given, not whatever the engine plays live
+      // by now: the hash that keys the cached file was worked out from it.
+      expect(getSample).toHaveBeenCalled();
+      for (const call of getSample.mock.calls as unknown[][]) {
+        expect(call).toEqual([60, 0.7, { tone: toneFollowsTouch }]);
+      }
     },
   );
 
@@ -120,7 +146,11 @@ describe('rendering a take for export', () => {
       ],
       durationMs: 2500,
     });
-    await renderTakeForExport(take, { includeMetronome: false, metronomeVolume: 0 });
+    await renderTakeForExport(take, {
+      includeMetronome: false,
+      metronomeVolume: 0,
+      toneFollowsTouch: true,
+    });
 
     // Its written length, 2.5 s, then the Cathedral's 5 s.
     expect(rendered).toEqual([{ length: Math.ceil(7.5 * 48_000), sampleRate: 48_000 }]);

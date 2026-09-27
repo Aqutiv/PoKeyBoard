@@ -22,6 +22,7 @@ const {
   setMasterVolume,
   setReverbMix,
   setReverbRoom,
+  setToneFollowsTouch,
   invalidateCachedAudio,
   getTake,
   getMetadata,
@@ -30,6 +31,7 @@ const {
   setMasterVolume: vi.fn(),
   setReverbMix: vi.fn(),
   setReverbRoom: vi.fn(),
+  setToneFollowsTouch: vi.fn(),
   invalidateCachedAudio: vi.fn<(takeId: string) => Promise<void>>(async () => undefined),
   getTake: vi.fn<(id: string) => Promise<Take | null>>(async () => null),
   getMetadata: vi.fn<(key: string) => Promise<unknown>>(async () => undefined),
@@ -58,8 +60,11 @@ vi.mock('@/audio/AudioEngine', async () => {
       setMasterVolume,
       setReverbMix,
       setReverbRoom,
+      setToneFollowsTouch,
       setInstrument: vi.fn(async () => undefined),
       markInstrumentRestored: vi.fn(),
+      subscribeSwitch: vi.fn(() => () => undefined),
+      getSwitchState: vi.fn(() => ({ pending: null, failed: null })),
       activeInstrument: pianoInstrument(DEFAULT_PIANO_INSTRUMENT_ID),
     },
   };
@@ -84,6 +89,7 @@ async function launch() {
   setMasterVolume.mockClear();
   setReverbMix.mockClear();
   setReverbRoom.mockClear();
+  setToneFollowsTouch.mockClear();
 
   // Sequential, not Promise.all: persistence imports both stores itself, and
   // racing that against the direct imports gives the module runner a second
@@ -102,6 +108,7 @@ async function bootPersistence() {
   setMasterVolume.mockClear();
   setReverbMix.mockClear();
   setReverbRoom.mockClear();
+  setToneFollowsTouch.mockClear();
   return stores;
 }
 
@@ -182,6 +189,7 @@ describe('settings-driven audio levels', () => {
     expect(setMasterVolume).not.toHaveBeenCalled();
     expect(setReverbMix).not.toHaveBeenCalled();
     expect(setReverbRoom).not.toHaveBeenCalled();
+    expect(setToneFollowsTouch).not.toHaveBeenCalled();
   });
 
   /**
@@ -329,5 +337,57 @@ describe('the reverb room at launch', () => {
     expect(useSettingsStore.getState().reverbRoom).toBe('room');
     expect(useTakeStore.getState().take.instrument).not.toHaveProperty('reverbRoom');
     expect(useTakeStore.getState().dirty).toBe(false);
+  });
+});
+
+describe('Tone follows touch', () => {
+  it('reaches the engine at launch as it was stored', async () => {
+    loadSettings.mockResolvedValueOnce({ toneFollowsTouch: false });
+
+    const { useSettingsStore } = await launch();
+
+    expect(setToneFollowsTouch).toHaveBeenLastCalledWith(false);
+    expect(useSettingsStore.getState().toneFollowsTouch).toBe(false);
+  });
+
+  it('starts the engine with the tone on when nothing is stored', async () => {
+    await launch();
+
+    expect(setToneFollowsTouch).toHaveBeenLastCalledWith(true);
+  });
+
+  it('follows the setter, a restored backup and a reset', async () => {
+    const { useSettingsStore } = await bootPersistence();
+
+    useSettingsStore.getState().setToneFollowsTouch(false);
+    expect(setToneFollowsTouch).toHaveBeenLastCalledWith(false);
+
+    // A backup writes the store with setState, bypassing the setter.
+    useSettingsStore.setState({ toneFollowsTouch: true });
+    expect(setToneFollowsTouch).toHaveBeenLastCalledWith(true);
+
+    useSettingsStore.setState({ toneFollowsTouch: false });
+    useSettingsStore.getState().resetSettings();
+    expect(setToneFollowsTouch).toHaveBeenLastCalledWith(true);
+    expect(setToneFollowsTouch).toHaveBeenCalledTimes(4);
+  });
+
+  it('leaves the take and its cached export alone, being the player’s and not the take’s', async () => {
+    const { persistenceService, useSettingsStore, useTakeStore } = await bootPersistence();
+    await persistenceService.flushSave();
+    invalidateCachedAudio.mockClear();
+    const before = useTakeStore.getState().take;
+
+    useSettingsStore.getState().setToneFollowsTouch(false);
+    await persistenceService.flushSave();
+
+    expect(useTakeStore.getState().take).toBe(before);
+    expect(useTakeStore.getState().dirty).toBe(false);
+    // An export hashes the setting it renders with instead.
+    expect(invalidateCachedAudio).not.toHaveBeenCalled();
+    // Nor does it move the levels or the room.
+    expect(setMasterVolume).not.toHaveBeenCalled();
+    expect(setReverbMix).not.toHaveBeenCalled();
+    expect(setReverbRoom).not.toHaveBeenCalled();
   });
 });

@@ -504,6 +504,8 @@ export const mg: Messages = {
       'Piano fanao an-tsehatra D an’ny bitKlavier, noraketina tao Princeton — feno sy mirindra',
     pianoWurlitzerDesc: 'piano elektrika EP203W',
     pianoSwitching: 'Mampiditra ny piano vaovao…',
+    pianoSwitchFailed: ({ piano, current }) =>
+      `Tsy nety nampidirina ny ${piano} — ${current} no mbola maneno.`,
     pianoVolume: 'Feon’ny piano',
     reverb: 'Reverb',
     reverbRoom: 'Efitra ho an’ny reverb',
@@ -513,6 +515,9 @@ export const mg: Messages = {
       hall: 'Efitrano fampisehoana',
       cathedral: 'Katedraly',
     },
+    toneFollowsTouch: 'Manaraka ny fikasihana ny feo',
+    toneFollowsTouchHint:
+      'Amin’ny piano rehetra afa-tsy ny Wurlitzer, maizina kokoa ny naoty malefaka ary mazava kokoa ny naoty mafy, ka miova tsikelikely ny feo manomboka amin’ny malefaka ka hatramin’ny mafy fa tsy mitsambikina. Raha vonoina, dia ny firaketana tsotra no andrenesana ny naoty tsirairay.',
     velocity: 'Hafainganam-pandeha',
     velocityTouch: 'Araka ny toeran’ny fikasihana amin’ny kitendry',
     velocityFixed: 'Raikitra',

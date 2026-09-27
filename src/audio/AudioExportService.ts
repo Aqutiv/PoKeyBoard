@@ -1,11 +1,13 @@
 import { getCachedAudio, invalidateCachedAudio, putCachedAudio } from '@/data/audioCacheRepository';
 import { persistenceService } from '@/data/persistence';
+import { useTakeStore } from '@/state/useTakeStore';
 import { computeExportHash } from '@/domain/takeHash';
 import type { Take } from '@/domain/takeTypes';
 import { libraryTrackSummary } from '@/features/library/catalog';
 import { ExportError } from '@/utils/errors';
 import { takeAudioFileName } from '@/utils/filenames';
 import type { EncodeRequest, EncoderResponse } from '@/workers/audioEncoder.worker';
+import { audioEngine } from './AudioEngine';
 import { finishExportOnMainThread, type ExportPcm } from './exportEncode';
 import {
   FORMAT_EXTENSION,
@@ -44,6 +46,11 @@ export interface ExportOptions {
   includeMetronome: boolean;
   metronomeVolume: number;
   loudness: LoudnessMode;
+  /**
+   * The Tone follows touch setting, taken once for the export so its hash and
+   * its render agree.
+   */
+  toneFollowsTouch: boolean;
 }
 
 export type ExportStage = 'saving' | 'rendering' | 'encoding';
@@ -97,7 +104,7 @@ class AudioExportService {
   private activeJob: ActiveExportJob | null = null;
 
   async exportTake(
-    take: Take,
+    requested: Take,
     options: ExportOptions,
     onProgress: (progress: ExportProgress) => void,
   ): Promise<ExportResult> {
@@ -117,6 +124,14 @@ class AudioExportService {
       if (!job.cancelled && this.activeJob === job) onProgress(progress);
     };
     try {
+      // A piano chosen a moment ago may still be decoding while the previous
+      // one plays on. The export is rendered, named, tagged and cached as one
+      // piano, so wait for it to settle; then read the open take again, whose
+      // stamp follows the choice — back to the piano that plays on, if the new
+      // one could not be loaded. `requested` was read before that happened.
+      await this.awaitJob(job, audioEngine.whenSwitchSettled());
+      const open = useTakeStore.getState().take;
+      const take = open.id === requested.id ? open : requested;
       const { encoding } = options;
       const { format } = encoding;
       // Every export names the piano it was rendered with; a library track is
@@ -160,6 +175,7 @@ class AudioExportService {
                 includeMetronome: options.includeMetronome,
                 metronomeVolume: options.metronomeVolume,
                 loudness: options.loudness,
+                toneFollowsTouch: options.toneFollowsTouch,
               }),
             )
           : null;
@@ -179,6 +195,7 @@ class AudioExportService {
           {
             includeMetronome: options.includeMetronome,
             metronomeVolume: options.metronomeVolume,
+            toneFollowsTouch: options.toneFollowsTouch,
           },
           (fraction) => report({ stage: 'rendering', fraction }),
         ),

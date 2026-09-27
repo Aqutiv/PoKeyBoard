@@ -177,7 +177,12 @@ export class SampleBank {
    * keyboard range becomes playable as early as possible.
    */
   async loadCorePack(context: BaseAudioContext): Promise<void> {
+    // A release calls a load off, from wherever it has got to — even its
+    // manifest — and a load called off like that is no failure: it reports
+    // nothing, and leaves nothing decoded behind it.
+    const generation = this.generation;
     const manifest = await this.loadManifest();
+    if (generation !== this.generation) return;
     this.lastError = undefined;
     this.setPhase('loading-core');
     const core = manifest.files
@@ -188,11 +193,13 @@ export class SampleBank {
           Math.abs(a.layer - 1) - Math.abs(b.layer - 1),
       );
     try {
-      await this.loadEntries(context, core);
+      await this.loadEntries(context, core, generation);
+      if (generation !== this.generation) return;
       if (!this.isCoreReady()) throw new Error('Core sample pack is incomplete.');
       this.lastError = undefined;
       this.setPhase('core-ready');
     } catch (error) {
+      if (generation !== this.generation) return;
       this.fail(
         error instanceof Error ? error.message : 'The core piano samples could not be loaded.',
       );
@@ -210,34 +217,41 @@ export class SampleBank {
     lowMidi: number,
     highMidi: number,
   ): Promise<void> {
+    const generation = this.generation;
     const manifest = await this.loadManifest();
-    const mappedFiles = manifest.regions
-      ? new Set(
-          manifest.regions
-            .filter((region) => region.lowKey <= highMidi && region.highKey >= lowMidi)
-            .map((region) => region.file),
-        )
-      : null;
-    const needed = manifest.files.filter(
-      (entry) =>
-        !this.buffers.has(entry.file) &&
-        (mappedFiles
-          ? mappedFiles.has(entry.file)
-          : entry.midi >= lowMidi - MAX_ROOT_DISTANCE_SEMITONES &&
-            entry.midi <= highMidi + MAX_ROOT_DISTANCE_SEMITONES),
-    );
+    if (generation !== this.generation) return;
+    const plays = playsRange(manifest, lowMidi, highMidi);
+    const needed = manifest.files.filter((entry) => !this.buffers.has(entry.file) && plays(entry));
     if (needed.length === 0) return;
     if (this.phase === 'core-ready') this.setPhase('loading-extra');
     try {
-      await this.loadEntries(context, needed);
+      await this.loadEntries(context, needed, generation);
+      if (generation !== this.generation) return;
       if (this.isCoreReady()) {
         this.lastError = undefined;
         this.setPhase('core-ready');
       }
     } catch (error) {
+      if (generation !== this.generation) return;
       this.fail(error instanceof Error ? error.message : 'Piano samples could not be loaded.');
       throw error;
     }
+  }
+
+  /**
+   * What loading the core and the keys of `span` decodes in all, counted in
+   * file bytes as `loadedBytes` is — so the two make a load's progress. Null
+   * until the manifest is in.
+   */
+  bytesFor(span: { low: number; high: number } | null): number | null {
+    const manifest = this.manifest;
+    if (!manifest) return null;
+    const plays = span ? playsRange(manifest, span.low, span.high) : () => false;
+    let total = 0;
+    for (const entry of manifest.files) {
+      if (entry.pack === 'core' || plays(entry)) total += entry.bytes;
+    }
+    return total;
   }
 
   /**
@@ -248,6 +262,9 @@ export class SampleBank {
    */
   releaseBuffers(): void {
     this.generation += 1;
+    // The decodes still under way will drop what they bring, so a load after
+    // this one must not wait on them: it would wait for nothing.
+    this.inFlight.clear();
     this.buffers.clear();
     this.onsets.clear();
     for (const layer of this.layers.values()) layer.loadedRoots.length = 0;
@@ -303,8 +320,15 @@ export class SampleBank {
    * plays it at the brightness its velocity asks for (`voiceTone`): a
    * recording of the layer asked for follows its ramp, and a stand-in from
    * another layer during a partial load plays as near that tone as it can.
+   * With `tone: false` (Settings → Piano → Tone follows touch, off) it gets
+   * neither the lowpass nor its make-up, and plays its recording open, as every
+   * note did before the ramps.
    */
-  getSample(midi: number, velocity: number): SampleSelection | null {
+  getSample(
+    midi: number,
+    velocity: number,
+    { tone: toneFollowsTouch = true }: { tone?: boolean } = {},
+  ): SampleSelection | null {
     if (this.manifest?.regions) return this.getMappedSample(midi, velocity);
     const preferredLayer = velocityToLayer(velocity);
     const order = [preferredLayer, 1, 0, 2].filter((v, i, arr) => arr.indexOf(v) === i);
@@ -331,16 +355,17 @@ export class SampleBank {
       const playbackRate = Math.pow(2, (midi - root) / 12);
       // The table's cutoffs are at the recording's own pitch; played higher or
       // lower, its spectrum moves with it, and so does the cutoff.
-      const tone = this.tone
-        ? voiceTone(
-            this.tone,
-            VELOCITY_LAYER_THRESHOLDS,
-            velocity,
-            preferredLayer,
-            layerIndex,
-            root,
-          )
-        : undefined;
+      const tone =
+        this.tone && toneFollowsTouch
+          ? voiceTone(
+              this.tone,
+              VELOCITY_LAYER_THRESHOLDS,
+              velocity,
+              preferredLayer,
+              layerIndex,
+              root,
+            )
+          : undefined;
       return {
         buffer,
         playbackRate,
@@ -420,14 +445,19 @@ export class SampleBank {
     return () => this.listeners.delete(listener);
   }
 
+  /** Load `entries`, stopping at the next file once `generation` is released. */
   private async loadEntries(
     context: BaseAudioContext,
     entries: SamplePackFileEntry[],
+    generation: number,
   ): Promise<void> {
     const queue = [...entries];
     const failures: unknown[] = [];
     const workers = Array.from({ length: FETCH_CONCURRENCY }, async () => {
       for (;;) {
+        // Files still queued would start after the release, and keep what they
+        // decode; a release has to stop them too, not only those under way.
+        if (generation !== this.generation) return;
         const entry = queue.shift();
         if (!entry) return;
         try {
@@ -450,13 +480,20 @@ export class SampleBank {
     if (this.buffers.has(entry.file)) return Promise.resolve();
     const existing = this.inFlight.get(entry.file);
     if (existing) return existing;
-    const task = this.fetchAndDecode(context, entry)
+    const generation = this.generation;
+    const task: Promise<void> = this.fetchAndDecode(context, entry)
       .catch((error: unknown) => {
-        this.lastError = `Could not load piano sample ${entry.file}.`;
-        console.error('Sample load failed:', entry.file, error);
+        // A load released mid-flight has no one left to tell.
+        if (generation === this.generation) {
+          this.lastError = `Could not load piano sample ${entry.file}.`;
+          console.error('Sample load failed:', entry.file, error);
+        }
         throw error;
       })
-      .finally(() => this.inFlight.delete(entry.file));
+      .finally(() => {
+        // Only its own entry: after a release, a newer load may hold the key.
+        if (this.inFlight.get(entry.file) === task) this.inFlight.delete(entry.file);
+      });
     this.inFlight.set(entry.file, task);
     return task;
   }
@@ -467,14 +504,19 @@ export class SampleBank {
   ): Promise<void> {
     let lastError: unknown;
     const generation = this.generation;
+    // Released meanwhile, the load is called off: what is still to come — a
+    // decode, a retry — would only fetch and decode something to discard.
+    const released = () => generation !== this.generation;
     for (let attempt = 0; attempt <= FETCH_RETRIES; attempt += 1) {
+      if (released()) return;
       try {
         const response = await fetch(`${this.baseUrl}${entry.file}`);
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const bytes = await response.arrayBuffer();
+        if (released()) return;
         const buffer = await context.decodeAudioData(bytes);
-        // Released mid-flight: discard rather than resurrect a freed buffer.
-        if (generation !== this.generation) return;
+        // Released mid-decode: discard rather than resurrect a freed buffer.
+        if (released()) return;
         this.buffers.set(entry.file, buffer);
         this.onsets.set(entry.file, onsetOffsetOf(buffer));
         const layer = this.layers.get(entry.layer);
@@ -489,6 +531,7 @@ export class SampleBank {
         return;
       } catch (error) {
         lastError = error;
+        if (released()) return;
         await delay(300 * (attempt + 1));
       }
     }
@@ -510,6 +553,28 @@ export class SampleBank {
     const progress = this.getProgress();
     for (const listener of this.listeners) listener(progress);
   }
+}
+
+/**
+ * Whether a file plays some key of [lowMidi, highMidi]: a mapped region over
+ * it, or a root near enough to stand in for one of its keys.
+ */
+function playsRange(
+  manifest: SamplePackManifest,
+  lowMidi: number,
+  highMidi: number,
+): (entry: SamplePackFileEntry) => boolean {
+  if (manifest.regions) {
+    const mapped = new Set(
+      manifest.regions
+        .filter((region) => region.lowKey <= highMidi && region.highKey >= lowMidi)
+        .map((region) => region.file),
+    );
+    return (entry) => mapped.has(entry.file);
+  }
+  return (entry) =>
+    entry.midi >= lowMidi - MAX_ROOT_DISTANCE_SEMITONES &&
+    entry.midi <= highMidi + MAX_ROOT_DISTANCE_SEMITONES;
 }
 
 /**

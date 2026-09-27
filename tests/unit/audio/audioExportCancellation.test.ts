@@ -43,6 +43,7 @@ const options = {
   includeMetronome: false,
   metronomeVolume: 0.6,
   loudness: 'normalized',
+  toneFollowsTouch: true,
 } as const;
 
 describe('audio export cancellation', () => {
@@ -267,7 +268,7 @@ describe('audio export formats', () => {
     expect(cache.getCachedAudio).not.toHaveBeenCalled();
     expect(cache.putCachedAudio).not.toHaveBeenCalled();
     expect(result).toMatchObject({ format: 'flac', fromCache: false, cached: false });
-    expect(result.fileName).toMatch(/^PoKeyBoard - Évening (.+).flac$/);
+    expect(result.fileName).toMatch(/^PoKeyBoard - Évening \(.+\)\.flac$/);
     expect(result.blob.type).toBe('audio/flac');
     expect(result.sizeBytes).toBe(result.blob.size);
 
@@ -292,7 +293,7 @@ describe('audio export formats', () => {
       expect.objectContaining({ takeId: titled.id, mimeType: 'audio/mpeg' }),
     );
     expect(result).toMatchObject({ format: 'mp3', fromCache: false, cached: true });
-    expect(result.fileName).toMatch(/.mp3$/);
+    expect(result.fileName).toMatch(/\.mp3$/);
     const head = new Uint8Array(await result.blob.slice(0, 3).arrayBuffer());
     expect(new TextDecoder().decode(head)).toBe('ID3');
   });

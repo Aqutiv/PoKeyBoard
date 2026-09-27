@@ -500,6 +500,8 @@ export const fr: Messages = {
       'Piano de concert D de bitKlavier, enregistré à Princeton — riche et homogène',
     pianoWurlitzerDesc: 'piano électrique EP203W',
     pianoSwitching: 'Chargement du nouveau piano…',
+    pianoSwitchFailed: ({ piano, current }) =>
+      `Impossible de charger ${piano} — ${current} continue de jouer.`,
     pianoVolume: 'Volume du piano',
     reverb: 'Réverbération',
     reverbRoom: 'Salle de la réverbération',
@@ -509,6 +511,9 @@ export const fr: Messages = {
       hall: 'Salle de concert',
       cathedral: 'Cathédrale',
     },
+    toneFollowsTouch: 'Le timbre suit le toucher',
+    toneFollowsTouchHint:
+      'Sur les pianos à queue, les notes plus douces sonnent plus sombres et les plus fortes plus brillantes : le timbre passe ainsi du doux au fort progressivement, sans à-coups. Désactivé, chaque note joue son enregistrement sans filtre.',
     velocity: 'Vélocité',
     velocityTouch: 'Selon la position du toucher sur la touche',
     velocityFixed: 'Fixe',

@@ -9,10 +9,6 @@ export function useTransportState(): TransportState {
   return useSyncExternalStore(subscribe, () => transportController.getState());
 }
 
-export function usePianoSwitching(): boolean {
-  return useSyncExternalStore(subscribe, () => transportController.isPianoSwitching());
-}
-
 /** Playback is holding for the user to play the keys training has lit. */
 export function useTrainingWaiting(): boolean {
   return useSyncExternalStore(subscribe, () => transportController.isWaitingForTraining());

@@ -498,6 +498,8 @@ export const es: Messages = {
       'Piano de concierto D de bitKlavier, grabado en Princeton: rico y homogéneo',
     pianoWurlitzerDesc: 'piano eléctrico EP203W',
     pianoSwitching: 'Cargando el piano nuevo…',
+    pianoSwitchFailed: ({ piano, current }) =>
+      `No se pudo cargar ${piano}; sigue sonando ${current}.`,
     pianoVolume: 'Volumen del piano',
     reverb: 'Reverberación',
     reverbRoom: 'Sala de la reverberación',
@@ -507,6 +509,9 @@ export const es: Messages = {
       hall: 'Auditorio',
       cathedral: 'Catedral',
     },
+    toneFollowsTouch: 'El timbre sigue al toque',
+    toneFollowsTouchHint:
+      'En los pianos de cola, las notas más suaves suenan más oscuras y las más fuertes, más brillantes, así que el timbre pasa de suave a fuerte de forma gradual, sin saltos. Desactivado, cada nota suena con su grabación sin filtrar.',
     velocity: 'Velocidad',
     velocityTouch: 'Según la posición del toque en la tecla',
     velocityFixed: 'Fija',

@@ -50,7 +50,7 @@ src/
                 (pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
     settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
                 reset), PianoSection (piano choice with its own offline pack,
-                levels)
+                levels, room, tone)
     play/       PlayPage, SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
@@ -105,16 +105,47 @@ pack directory under `public/piano/`: three grands (Salamander, a Yamaha C5, the
 default; Headroom, a Yamaha C3; Steinway, the bitKlavier Grand's Steinway D,
 whose id and pack keep the library's name) and the Wurlitzer electric piano.
 The engine keeps a `SampleBank` per
-instrument but lets only the active one hold decoded buffers — a full pack of
-stereo float32 PCM is ~312 MB, so two resident packs is not an option on a phone.
+instrument but lets only the sounding one hold decoded buffers — plus, for the
+moment a switch takes, the one about to replace it. A full pack of stereo float32
+PCM is ~300 MB (its core ~130 MB), so resident packs are not an option on a phone,
+and a downloaded piano still has to be decoded before it can play.
 
-Switching (`AudioEngine.setInstrument`) releases sounding notes rather than
-cross-fading two different pianos, re-points the load-progress fan-out at the new
-bank (which is why `data-piano-ready` drops to false), decodes the new core pack,
-replays the last requested keyboard range, and only then frees the outgoing
-bank's buffers — so a rapid A→B→A toggle never re-decodes, and there is no window
-where nothing is playable. A generation counter stops an out-of-order switch from
-freeing the bank that just became active.
+Switching (`AudioEngine.setInstrument`) keeps two ids: the piano _selected_
+(`activeInstrument`, which takes are stamped with, synchronously) and the one
+_sounding_ (`bank`, which every note is struck from). While the sounding piano is
+ready the switch is seamless: it plays on while the new bank decodes its core, the
+remembered keyboard range, and the `cover` the transport passes — the loaded
+take's key span, so every note it plays sounds on the new piano from its first.
+The range is re-read after each load, so a keyboard that moves meanwhile is
+covered too. Then the new piano takes over in one synchronous step, and plays from
+the next note struck: nothing is released or cross-faded, because a voice holds a
+buffer of the piano it began on and finishes there — notes ringing, and those
+already queued in playback's 150 ms look-ahead. Only then are every other bank's
+buffers freed, so a rapid A→B→A toggle never re-decodes (choosing the sounding
+piano again just calls the switch off). If the new core cannot be loaded, the
+sounding piano is selected again, `getSwitchState().failed` names the one that
+failed, and persistence writes the store back so the pickers and the take's stamp
+follow. With nothing playable to keep — the first load, or a failed piano — the
+switch is immediate as before: sounding notes are released and the progress
+fan-out points at the new bank (which is why `data-piano-ready` drops to false).
+A generation counter stops an out-of-order switch from taking over or freeing the
+bank that just became active, and `SampleBank.releaseBuffers` calls off a load
+wherever it has got to — its manifest, the files in flight and those still queued
+— so a switch called off leaves nothing decoded behind.
+
+The transport never pauses for a switch. Play and Resume need only the sounding
+piano (`isPianoPlayable`); Record waits for the selected one (`isPianoReady`), so a
+pass is played on one piano. An export awaits `whenSwitchSettled()`, then reads the
+open take again, so it renders, names and caches the piano the take is stamped
+with — the one that plays on, if the new one failed.
+
+The pickers draw a switch on themselves (`PianoSwitchRing`): an SVG ring over the
+control's border, its dash a percentage via `pathLength`, run from
+`getSwitchState().progress` — the pending bank's decoded bytes over what the
+switch must decode (`SampleBank.bytesFor`: the core and every key it must cover),
+never running back if that widens. It glows once when `sounding` becomes the
+pending piano, flashes red when it fails, and simply goes when a switch is called
+off or overtaken. The words ("Loading the new piano…") are for screen readers only.
 
 Progress subscription lives on the engine, not the bank: `useSyncExternalStore`
 captures its subscribe callback once, so a per-bank subscription would go deaf
@@ -159,7 +190,11 @@ match would take the note's own fundamental, so no ramp starts below 2.5 times
 it, and the top keys keep a smaller correction. A stand-in from a brighter layer
 plays at its ramp's bottom, and one from a darker layer open. The cutoff is
 scaled by the playback rate, so a note pitched from its root keeps the root's
-tone.
+tone. Settings → Piano → Tone follows touch, on by default, switches the ramps
+off: `getSample` with `tone: false` leaves out the cutoff and its make-up
+together, and every recording plays open, as all of them did before exporter
+version 9. The engine takes the setting from the next note it plays, and an
+export from its own options, which its hash carries too.
 
 The selected piano is authoritative everywhere, including export: `setTake`
 stamps the take's `samplePackVersion` from the active instrument, so live
@@ -221,7 +256,7 @@ read and therefore device-local rather than part of the settings backup.
 
 Dexie v1: `takes` (denormalized summary columns + full JSON — lists never parse takes), `audioCache` (MP3 blobs in a separate table so lists never load audio), `settings`, `metadata`. Schema versions are the migration mechanism. The persistence service debounces autosaves (800 ms), forces saves on recording stop / page hide / before export, restores the last take + playhead, and requests persistent storage after the first meaningful save.
 
-Export caching (MP3 only; a FLAC export is never cached): `takeHash` hashes only audible content (notes/pedals/tempo/reverb mix and room/pack + bitrate + metronome + loudness + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
+Export caching (MP3 only; a FLAC export is never cached): `takeHash` hashes only audible content (notes/pedals/tempo/reverb mix and room/pack + bitrate + metronome + loudness + exporter version, and Tone follows touch when it is off, so an export with the tone on keeps the key it always had); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
 
 ## Theming
 

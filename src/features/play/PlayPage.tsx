@@ -4,7 +4,11 @@ import { useState, useSyncExternalStore } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { useTrainingTargets, useTrainingWrongMidis } from '@/app/hooks/useActiveMidis';
-import { useEngineStatus, useSampleLoadProgress } from '@/app/hooks/useAudioEngine';
+import {
+  useEngineStatus,
+  usePianoSwitching,
+  useSampleLoadProgress,
+} from '@/app/hooks/useAudioEngine';
 import { lifecycleService } from '@/app/lifecycle';
 import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
@@ -30,6 +34,7 @@ export function PlayPage() {
   const interruption = useSyncExternalStore(subscribeLifecycle, getLifecycle);
   const status = useEngineStatus();
   const progress = useSampleLoadProgress();
+  const pianoSwitching = usePianoSwitching();
   const percent =
     progress.coreTotalBytes > 0
       ? Math.round((progress.coreLoadedBytes / progress.coreTotalBytes) * 100)
@@ -50,7 +55,8 @@ export function PlayPage() {
     <section
       className="page page--play"
       aria-label={m.play.pageLabel}
-      data-piano-ready={progress.phase === 'core-ready' ? 'true' : 'false'}
+      // The piano chosen is ready — not merely one playing while it decodes.
+      data-piano-ready={progress.phase === 'core-ready' && !pianoSwitching ? 'true' : 'false'}
     >
       <div className="play-layout" data-compact-view={compactView}>
         <header className="play-header">

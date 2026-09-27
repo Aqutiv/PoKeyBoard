@@ -31,6 +31,7 @@ const SETTING_SCHEMAS = {
   masterVolume: z.number().min(0).max(1),
   reverbMix: z.number().min(0).max(1),
   reverbRoom: z.enum(REVERB_ROOMS),
+  toneFollowsTouch: z.boolean(),
   velocityMode: z.enum(['touch', 'fixed']),
   fixedVelocity: z.number().min(0.2).max(1),
   touchSensitivity: z.enum(TOUCH_SENSITIVITIES),

@@ -35,6 +35,12 @@ export interface SettingsState {
   reverbMix: number;
   /** The room the reverb models; see src/audio/reverbImpulse.ts. */
   reverbRoom: ReverbRoom;
+  /**
+   * A grand's tone follows the touch through each velocity layer, live and in
+   * exports, rather than stepping where one recording hands over to the next;
+   * see SampleBank.getSample.
+   */
+  toneFollowsTouch: boolean;
   velocityMode: VelocityMode;
   fixedVelocity: number;
   /** How far down a key a touch has to land to play loud; see velocityResponse.ts. */
@@ -78,6 +84,7 @@ export interface SettingsState {
   setMasterVolume(value: number): void;
   setReverbMix(value: number): void;
   setReverbRoom(room: ReverbRoom): void;
+  setToneFollowsTouch(enabled: boolean): void;
   setVelocityMode(mode: VelocityMode): void;
   setFixedVelocity(value: number): void;
   setTouchSensitivity(sensitivity: TouchSensitivity): void;
@@ -110,6 +117,7 @@ export const SETTINGS_DEFAULTS = {
   masterVolume: DEFAULT_MASTER_VOLUME,
   reverbMix: DEFAULT_REVERB_MIX,
   reverbRoom: DEFAULT_REVERB_ROOM,
+  toneFollowsTouch: true,
   velocityMode: 'touch' as VelocityMode,
   fixedVelocity: 0.75,
   touchSensitivity: 'normal' as TouchSensitivity,
@@ -137,9 +145,9 @@ export const SETTINGS_DEFAULTS = {
 /**
  * App settings. Persistence to Dexie is layered on by the data slice; the
  * store itself stays synchronous for render use. Nothing here talks to the
- * audio engine for the levels or the room — src/data/persistence.ts subscribes
- * and pushes them, so a restored backup (which writes the store with setState)
- * is carried over too.
+ * audio engine for the levels, the room or the tone — src/data/persistence.ts
+ * subscribes and pushes them, so a restored backup (which writes the store
+ * with setState) is carried over too.
  */
 export const useSettingsStore = create<SettingsState>()((set) => ({
   ...SETTINGS_DEFAULTS,
@@ -153,6 +161,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setMasterVolume: (masterVolume) => set({ masterVolume }),
   setReverbMix: (reverbMix) => set({ reverbMix }),
   setReverbRoom: (reverbRoom) => set({ reverbRoom }),
+  setToneFollowsTouch: (toneFollowsTouch) => set({ toneFollowsTouch }),
   setVelocityMode: (velocityMode) => set({ velocityMode }),
   setFixedVelocity: (fixedVelocity) => set({ fixedVelocity }),
   setTouchSensitivity: (touchSensitivity) => set({ touchSensitivity }),

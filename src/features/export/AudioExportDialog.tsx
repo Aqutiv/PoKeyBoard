@@ -59,6 +59,7 @@ export function AudioExportDialog() {
   const requestedTakeId = useExportUiStore((s) => s.requestedTakeId);
   const closeExport = useExportUiStore((s) => s.closeExport);
   const metronomeVolume = useSettingsStore((s) => s.metronomeVolume);
+  const toneFollowsTouch = useSettingsStore((s) => s.toneFollowsTouch);
   // Format, quality and level are remembered from one export to the next; the
   // metronome, which suits one take and not another, starts off every time.
   const format = useSettingsStore((s) => s.audioExportFormat);
@@ -167,8 +168,9 @@ export function AudioExportDialog() {
         format === 'mp3' ? { format, kbps: mp3Kbps } : { format, bits: flacBits };
       const show = (progress: ExportProgress) =>
         setPhase((current) => (current?.kind === 'working' ? { ...current, progress } : current));
+      const options = { encoding, includeMetronome, metronomeVolume, loudness, toneFollowsTouch };
       audioExportService
-        .exportTake(take, { encoding, includeMetronome, metronomeVolume, loudness }, (progress) => {
+        .exportTake(take, options, (progress) => {
           if (progress.stage === 'encoding') {
             transportController.sendExportEvent('RENDER_DONE');
           }
@@ -205,7 +207,17 @@ export function AudioExportDialog() {
           }
         });
     },
-    [format, mp3Kbps, flacBits, includeMetronome, metronomeVolume, loudness, m, releaseHeldRender],
+    [
+      format,
+      mp3Kbps,
+      flacBits,
+      includeMetronome,
+      metronomeVolume,
+      loudness,
+      toneFollowsTouch,
+      m,
+      releaseHeldRender,
+    ],
   );
 
   const cancelRender = useCallback(() => {
