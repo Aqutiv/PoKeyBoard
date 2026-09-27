@@ -46,10 +46,18 @@ export interface KeySpan {
  * only when a field changes, as useSyncExternalStore requires.
  */
 export interface InstrumentSwitchState {
+  /** The piano playing: behind the one chosen while a switch decodes it. */
+  sounding: PianoInstrumentId;
   /** The piano decoding while the previous one plays on; see `setInstrument`. */
   pending: PianoInstrumentId | null;
   /** The piano that last could not be loaded, until the next switch starts. */
   failed: PianoInstrumentId | null;
+  /**
+   * How much of what the pending piano has to decode is decoded, 0–1: its
+   * core and every key it must cover. Never goes back within one switch, and
+   * is 0 when none is under way.
+   */
+  progress: number;
 }
 
 interface PendingSwitch {
@@ -104,8 +112,14 @@ export class AudioEngine {
   private soundingId: PianoInstrumentId = DEFAULT_PIANO_INSTRUMENT_ID;
   private switchGeneration = 0;
   private pendingSwitch: PendingSwitch | null = null;
-  private switchState: InstrumentSwitchState = { pending: null, failed: null };
+  private switchState: InstrumentSwitchState = {
+    sounding: DEFAULT_PIANO_INSTRUMENT_ID,
+    pending: null,
+    failed: null,
+    progress: 0,
+  };
   private readonly switchListeners = new Set<() => void>();
+  private unsubscribeSwitchProgress: (() => void) | null = null;
 
   /** Last range the keyboard asked for, replayed after an instrument switch. */
   private lastRange: KeySpan | null = null;
@@ -190,7 +204,7 @@ export class AudioEngine {
     this.selectedId = id;
     if (id === this.soundingId) {
       // Back to the piano still playing: a switch under way is simply called off.
-      if (pending) this.setSwitchState({ pending: null, failed: null });
+      if (pending) this.setSwitchState({ pending: null, failed: null, progress: 0 });
       return Promise.resolve();
     }
     if (!this.context || !this.bank.isCoreReady()) return this.switchNow(id, generation);
@@ -231,7 +245,7 @@ export class AudioEngine {
     // drops data-piano-ready back to false while the new pack decodes.
     this.watchBankProgress();
     this.coreLoadStarted = false;
-    this.setSwitchState({ pending: null, failed: null });
+    this.setSwitchState({ pending: null, failed: null, progress: 0 });
 
     const promise = (async () => {
       this.markInstrumentRestored();
@@ -288,8 +302,23 @@ export class AudioEngine {
       this.takeOver(id);
     })().finally(() => this.clearPendingSwitch(generation));
     this.pendingSwitch = { id, generation, seamless: true, cover, promise };
-    this.setSwitchState({ pending: id, failed: null });
+    this.setSwitchState({ pending: id, failed: null, progress: 0 });
+    this.unsubscribeSwitchProgress = next.subscribe(() => this.updateSwitchProgress());
     return promise;
+  }
+
+  /** Carry the pending bank's decode into the switch state, for the pickers. */
+  private updateSwitchProgress(): void {
+    const pending = this.pendingSwitch;
+    if (!pending?.seamless || this.switchState.pending !== pending.id) return;
+    const bank = this.bankFor(pending.id);
+    const total = bank.bytesFor(this.switchSpan());
+    const fraction = total ? Math.min(1, bank.getProgress().loadedBytes / total) : 0;
+    // The keys to cover can widen as the keyboard moves; the ring never runs back.
+    const progress = Math.max(this.switchState.progress, fraction);
+    if (progress !== this.switchState.progress) {
+      this.setSwitchState({ pending: pending.id, failed: null, progress });
+    }
   }
 
   /** What a seamless switch must have decoded before it takes over. */
@@ -304,8 +333,9 @@ export class AudioEngine {
     this.coreLoadStarted = true;
     this.watchBankProgress();
     this.pendingSwitch = null;
+    this.stopWatchingSwitchProgress();
     this.releaseIdleBanks();
-    this.setSwitchState({ pending: null, failed: null });
+    this.setSwitchState({ pending: null, failed: null, progress: 0 });
   }
 
   /** The new piano could not be loaded: the one playing stays, and is chosen again. */
@@ -313,8 +343,9 @@ export class AudioEngine {
     console.error(`Could not switch to ${id}:`, error);
     this.selectedId = this.soundingId;
     this.pendingSwitch = null;
+    this.stopWatchingSwitchProgress();
     this.releaseIdleBanks();
-    this.setSwitchState({ pending: null, failed: id });
+    this.setSwitchState({ pending: null, failed: id, progress: 0 });
   }
 
   /** Drop a switch a newer choice replaces; a seamless one's bank never played. */
@@ -322,7 +353,13 @@ export class AudioEngine {
     const pending = this.pendingSwitch;
     if (!pending) return;
     this.pendingSwitch = null;
+    this.stopWatchingSwitchProgress();
     if (pending.seamless) this.bankFor(pending.id).releaseBuffers();
+  }
+
+  private stopWatchingSwitchProgress(): void {
+    this.unsubscribeSwitchProgress?.();
+    this.unsubscribeSwitchProgress = null;
   }
 
   private clearPendingSwitch(generation: number): void {
@@ -341,10 +378,18 @@ export class AudioEngine {
     }
   }
 
-  private setSwitchState(next: InstrumentSwitchState): void {
+  /** Publish where a switch stands, with the piano playing as it is now. */
+  private setSwitchState(next: Omit<InstrumentSwitchState, 'sounding'>): void {
     const current = this.switchState;
-    if (next.pending === current.pending && next.failed === current.failed) return;
-    this.switchState = next;
+    if (
+      current.sounding === this.soundingId &&
+      next.pending === current.pending &&
+      next.failed === current.failed &&
+      next.progress === current.progress
+    ) {
+      return;
+    }
+    this.switchState = { sounding: this.soundingId, ...next };
     for (const listener of this.switchListeners) listener();
   }
 
@@ -656,7 +701,8 @@ export class AudioEngine {
     // A switch still decoding has no context left to take over in.
     this.switchGeneration += 1;
     this.pendingSwitch = null;
-    this.setSwitchState({ pending: null, failed: null });
+    this.stopWatchingSwitchProgress();
+    this.setSwitchState({ pending: null, failed: null, progress: 0 });
     this.schedulerTicker?.disconnect();
     this.schedulerTicker = null;
     this.voices?.dispose();

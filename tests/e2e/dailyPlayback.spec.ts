@@ -113,7 +113,11 @@ test.describe('switching piano during playback', () => {
         if (origin === 'Settings') {
           await nav(page).getByRole('button', { name: 'Settings' }).click();
           await page.getByRole('radio', { name: /^Headroom/ }).check();
-          await expect(page.getByText('Loading the new piano…')).toBeVisible();
+          // The card of the piano loading draws its progress round itself.
+          const card = page
+            .locator('.piano-card')
+            .filter({ has: page.locator('strong', { hasText: /^Headroom$/ }) });
+          await expect(card.locator('.switch-ring[data-ring-state="loading"]')).toBeVisible();
           // Nothing is locked while it loads: the music plays on, and another
           // piano can still be chosen.
           await expect(page.getByRole('radio', { name: /^Salamander/ })).toBeEnabled();
@@ -128,7 +132,14 @@ test.describe('switching piano during playback', () => {
         const picker = page.getByRole('combobox', { name: 'Piano', exact: true });
         await expect(picker).toBeEnabled();
         await expect(picker).toHaveValue('headroom-grand');
-        await expect(page.getByText('Loading the new piano…')).toBeVisible();
+        // Loading is drawn on the picker itself, and said to screen readers.
+        await expect(picker).toHaveAttribute('aria-busy', 'true');
+        await expect(
+          page.locator('.piano-picker .switch-ring[data-ring-state="loading"]'),
+        ).toBeVisible();
+        await expect(
+          page.getByRole('status').filter({ hasText: 'Loading the new piano…' }),
+        ).toHaveCount(1);
         await expect(
           transport(page).getByRole('button', { name: 'Pause', exact: true }),
         ).toBeVisible();
@@ -145,7 +156,7 @@ test.describe('switching piano during playback', () => {
 
         release();
         // The real pack decodes some seventy files here: its core and the take's keys.
-        await expect(page.getByText('Loading the new piano…')).toBeHidden({ timeout: 30_000 });
+        await expect(picker).not.toHaveAttribute('aria-busy', 'true', { timeout: 30_000 });
         await expect(
           transport(page).getByRole('button', { name: 'Record, inactive' }),
         ).toBeEnabled();

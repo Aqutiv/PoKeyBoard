@@ -215,21 +215,8 @@ export class SampleBank {
     const generation = this.generation;
     const manifest = await this.loadManifest();
     if (generation !== this.generation) return;
-    const mappedFiles = manifest.regions
-      ? new Set(
-          manifest.regions
-            .filter((region) => region.lowKey <= highMidi && region.highKey >= lowMidi)
-            .map((region) => region.file),
-        )
-      : null;
-    const needed = manifest.files.filter(
-      (entry) =>
-        !this.buffers.has(entry.file) &&
-        (mappedFiles
-          ? mappedFiles.has(entry.file)
-          : entry.midi >= lowMidi - MAX_ROOT_DISTANCE_SEMITONES &&
-            entry.midi <= highMidi + MAX_ROOT_DISTANCE_SEMITONES),
-    );
+    const plays = playsRange(manifest, lowMidi, highMidi);
+    const needed = manifest.files.filter((entry) => !this.buffers.has(entry.file) && plays(entry));
     if (needed.length === 0) return;
     if (this.phase === 'core-ready') this.setPhase('loading-extra');
     try {
@@ -244,6 +231,22 @@ export class SampleBank {
       this.fail(error instanceof Error ? error.message : 'Piano samples could not be loaded.');
       throw error;
     }
+  }
+
+  /**
+   * What loading the core and the keys of `span` decodes in all, counted in
+   * file bytes as `loadedBytes` is — so the two make a load's progress. Null
+   * until the manifest is in.
+   */
+  bytesFor(span: { low: number; high: number } | null): number | null {
+    const manifest = this.manifest;
+    if (!manifest) return null;
+    const plays = span ? playsRange(manifest, span.low, span.high) : () => false;
+    let total = 0;
+    for (const entry of manifest.files) {
+      if (entry.pack === 'core' || plays(entry)) total += entry.bytes;
+    }
+    return total;
   }
 
   /**
@@ -511,6 +514,28 @@ export class SampleBank {
     const progress = this.getProgress();
     for (const listener of this.listeners) listener(progress);
   }
+}
+
+/**
+ * Whether a file plays some key of [lowMidi, highMidi]: a mapped region over
+ * it, or a root near enough to stand in for one of its keys.
+ */
+function playsRange(
+  manifest: SamplePackManifest,
+  lowMidi: number,
+  highMidi: number,
+): (entry: SamplePackFileEntry) => boolean {
+  if (manifest.regions) {
+    const mapped = new Set(
+      manifest.regions
+        .filter((region) => region.lowKey <= highMidi && region.highKey >= lowMidi)
+        .map((region) => region.file),
+    );
+    return (entry) => mapped.has(entry.file);
+  }
+  return (entry) =>
+    entry.midi >= lowMidi - MAX_ROOT_DISTANCE_SEMITONES &&
+    entry.midi <= highMidi + MAX_ROOT_DISTANCE_SEMITONES;
 }
 
 /**

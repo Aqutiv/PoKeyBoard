@@ -9,6 +9,7 @@ import { usePianoSwitchState } from '@/app/hooks/useAudioEngine';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { transportController } from '@/features/transport/transportController';
 import { formatMB } from './formatBytes';
+import { PianoSwitchRing } from './PianoSwitchRing';
 import { PianoSwitchStatus } from './PianoSwitchStatus';
 
 /** Descriptions only — the piano's name comes from the registry, untranslated. */
@@ -146,7 +147,9 @@ export function PianoSection() {
             // offline row is a sibling within the card.
             <div
               key={piano.id}
-              className={`setting-row piano-card${active ? ' piano-card--active' : ''}`}
+              className={`setting-row piano-card${active ? ' piano-card--active' : ''}${
+                switchState.pending === piano.id ? ' piano-card--loading' : ''
+              }`}
             >
               <label className="piano-card__choice">
                 <input
@@ -169,6 +172,7 @@ export function PianoSection() {
                 </span>
               </label>
 
+              <PianoSwitchRing state={switchState} piano={piano.id} />
               <div className="piano-card__offline">
                 {pack.kind === 'checking' ? (
                   <span className="settings__hint">{m.settings.checking}</span>

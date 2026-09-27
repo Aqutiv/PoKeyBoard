@@ -134,8 +134,17 @@ wherever it has got to — its manifest, the files in flight and those still que
 
 The transport never pauses for a switch. Play and Resume need only the sounding
 piano (`isPianoPlayable`); Record waits for the selected one (`isPianoReady`), so a
-pass is played on one piano. An export awaits `whenSwitchSettled()` so it renders
-the piano the take is stamped with.
+pass is played on one piano. An export awaits `whenSwitchSettled()`, then reads the
+open take again, so it renders, names and caches the piano the take is stamped
+with — the one that plays on, if the new one failed.
+
+The pickers draw a switch on themselves (`PianoSwitchRing`): an SVG ring over the
+control's border, its dash a percentage via `pathLength`, run from
+`getSwitchState().progress` — the pending bank's decoded bytes over what the
+switch must decode (`SampleBank.bytesFor`: the core and every key it must cover),
+never running back if that widens. It glows once when `sounding` becomes the
+pending piano, flashes red when it fails, and simply goes when a switch is called
+off or overtaken. The words ("Loading the new piano…") are for screen readers only.
 
 Progress subscription lives on the engine, not the bank: `useSyncExternalStore`
 captures its subscribe callback once, so a per-bank subscription would go deaf

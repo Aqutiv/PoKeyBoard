@@ -602,6 +602,100 @@ button {
 .piano-switch-status--failed {
   color: var(--record);
 }
+
+/* The picker, positioned for the ring a change of piano draws on it. */
+.piano-picker {
+  position: relative;
+  display: inline-flex;
+  border-radius: var(--radius-m);
+}
+
+/*
+ * The ring a change of piano draws on its control (PianoSwitchRing): drawn
+ * 2px outside the control's box, round from its top-left corner as the new
+ * piano decodes. A faint track shows the way still to go.
+ */
+.switch-ring {
+  --ring-glow: 5px;
+  position: absolute;
+  top: -2px;
+  left: -2px;
+  overflow: visible;
+  pointer-events: none;
+}
+html[data-theme='light'] .switch-ring {
+  /* A wide glow reads as a smudge on paper. */
+  --ring-glow: 2px;
+}
+.switch-ring rect {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 3px;
+}
+.switch-ring__track {
+  stroke-opacity: 0.22;
+}
+.switch-ring__arc {
+  stroke-dasharray: 100 100;
+  transition: stroke-dashoffset 160ms linear;
+  filter: drop-shadow(0 0 var(--ring-glow) var(--accent));
+}
+.switch-ring[data-ring-state='loading'] .switch-ring__arc {
+  animation: switch-ring-breathe 0.9s ease-in-out infinite alternate;
+}
+.switch-ring[data-ring-state='done'] {
+  animation: switch-ring-done 700ms ease-out forwards;
+}
+.switch-ring[data-ring-state='done'] .switch-ring__track {
+  stroke-opacity: 0;
+}
+.switch-ring[data-ring-state='failed'] rect {
+  stroke: var(--record);
+}
+.switch-ring[data-ring-state='failed'] .switch-ring__arc {
+  filter: drop-shadow(0 0 var(--ring-glow) var(--record));
+}
+.switch-ring[data-ring-state='failed'] {
+  animation: switch-ring-failed 700ms ease-out forwards;
+}
+@keyframes switch-ring-breathe {
+  from {
+    stroke-opacity: 0.7;
+  }
+  to {
+    stroke-opacity: 1;
+  }
+}
+@keyframes switch-ring-done {
+  0% {
+    opacity: 1;
+  }
+  30% {
+    opacity: 1;
+    filter: brightness(1.4);
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@keyframes switch-ring-failed {
+  0%,
+  45% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* The ring still shows how far the load has got; it just does not move. */
+  .switch-ring,
+  .switch-ring__arc,
+  .switch-ring[data-ring-state] .switch-ring__arc {
+    animation: none;
+    transition: none;
+  }
+}
 .take-title {
   min-width: 0;
   flex: 1;

@@ -134,7 +134,12 @@ describe('changing piano while one is playing', () => {
     expect(engine.activeInstrument.id).toBe('headroom-grand');
     expect(engine.soundingInstrument.id).toBe('salamander-grand');
     expect(engine.isSwitching()).toBe(true);
-    expect(engine.getSwitchState()).toEqual({ pending: 'headroom-grand', failed: null });
+    expect(engine.getSwitchState()).toEqual({
+      sounding: 'salamander-grand',
+      pending: 'headroom-grand',
+      failed: null,
+      progress: 0,
+    });
     expect(packHeard(engine)).toBe('salamander-grand-v3');
     // What the page reports is the piano playing, which is ready.
     expect(engine.getLoadProgress().phase).toBe('core-ready');
@@ -158,6 +163,32 @@ describe('changing piano while one is playing', () => {
     expect(allNotesOff).not.toHaveBeenCalled();
     expect(bank(engine, 'salamander-grand').isCoreReady()).toBe(false);
     await vi.waitFor(() => expect(settled).toBe(true));
+  });
+
+  it('reports how far the new piano has decoded, never running back', async () => {
+    const engine = await playingEngine();
+    const lowC = hold('/headroom-grand-v2/c2.sample');
+    const seen: number[] = [];
+    engine.subscribeSwitch(() => seen.push(engine.getSwitchState().progress));
+
+    // The core C4 and the take's C2 are one byte each.
+    const switching = engine.setInstrument('headroom-grand', { cover: { low: 36, high: 62 } });
+    await vi.waitFor(() => expect(engine.getSwitchState().progress).toBe(0.5));
+    // The keyboard reaches up to C7 meanwhile: there is more to do now, but the
+    // ring holds where it was rather than running back to a third.
+    await engine.ensurePlayableRange(90, 100);
+    lowC.open();
+    await switching;
+
+    expect(Math.max(...seen)).toBe(1);
+    const whileSwitching = seen.slice(0, seen.indexOf(1) + 1);
+    expect(whileSwitching).toEqual([...whileSwitching].sort((a, b) => a - b));
+    expect(engine.getSwitchState()).toEqual({
+      sounding: 'headroom-grand',
+      pending: null,
+      failed: null,
+      progress: 0,
+    });
   });
 
   it('decodes a range the keyboard asks for while it waits, before taking over', async () => {
@@ -237,7 +268,12 @@ describe('changing piano while one is playing', () => {
     await switching;
     expect(engine.soundingInstrument.id).toBe('salamander-grand');
     expect(engine.activeInstrument.id).toBe('salamander-grand');
-    expect(engine.getSwitchState()).toEqual({ pending: null, failed: 'headroom-grand' });
+    expect(engine.getSwitchState()).toEqual({
+      sounding: 'salamander-grand',
+      pending: null,
+      failed: 'headroom-grand',
+      progress: 0,
+    });
     expect(onSwitch).toHaveBeenCalled();
     expect(engine.bank.isCoreReady()).toBe(true);
     expect(packHeard(engine)).toBe('salamander-grand-v3');
