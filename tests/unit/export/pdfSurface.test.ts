@@ -19,6 +19,8 @@ import {
   type TextRasterizer,
 } from '@/features/export/vectorSurface';
 import type { DrawSurface } from '@/features/notation/drawSurface';
+import { drawGlyph, glyphOutline } from '@/features/notation/glyphs/drawGlyph';
+import { glyphControlBox } from '@/features/notation/glyphs/glyphOutline';
 
 const PAGE_H = 100;
 
@@ -700,5 +702,135 @@ describe('the PDF surface: text', () => {
       s.fillText('音', 10, 50);
     }, rasterizer);
     expect(ops).toContain('4 0 0 2 10 50 cm');
+  });
+});
+
+describe('the PDF surface: music glyphs', () => {
+  /** Draw each page's calls onto a page of one document, and hand back every page's operators. */
+  async function drawPages(
+    pages: ((surface: DrawSurface) => void)[],
+  ): Promise<{ doc: PDFDocument; pdfPages: PDFPage[]; ops: string[][] }> {
+    const doc = await PDFDocument.create();
+    const fonts = new PdfStandardFonts(doc);
+    const pdfPages: PDFPage[] = [];
+    for (const draw of pages) {
+      const page = doc.addPage([200, PAGE_H]);
+      const target = beginPdfPage(doc, page, fonts, { rasterizer: NO_RASTER });
+      draw(target.surface);
+      target.finishPage();
+      pdfPages.push(page);
+    }
+    return { doc, pdfPages, ops: pdfPages.map((page) => contentOf(doc, page).split('\n')) };
+  }
+
+  function formsIn(doc: PDFDocument): PDFRawStream[] {
+    const forms: PDFRawStream[] = [];
+    for (const [, object] of doc.context.enumerateIndirectObjects()) {
+      if (
+        object instanceof PDFRawStream &&
+        object.dict.get(PDFName.of('Subtype')) === PDFName.of('Form')
+      ) {
+        forms.push(object);
+      }
+    }
+    return forms;
+  }
+
+  function xObjectsOf(page: PDFPage): PDFDict {
+    return page.node.Resources()!.lookup(PDFName.of('XObject'), PDFDict);
+  }
+
+  it('writes each glyph once per document as a Form XObject, and places it with Do', async () => {
+    const { doc, pdfPages, ops } = await drawPages([
+      (s) => {
+        drawGlyph(s, 'accidentalSharp', 10, 20, 5.4);
+        drawGlyph(s, 'accidentalSharp', 30, 20, 5.4);
+        drawGlyph(s, 'accidentalFlat', 50, 20, 5.4);
+        drawGlyph(s, 'accidentalSharp', 70, 20, 5.4);
+      },
+      (s) => {
+        drawGlyph(s, 'accidentalSharp', 10, 30, 5.4);
+      },
+    ]);
+    // Two glyphs, two forms, however many pages and uses.
+    expect(formsIn(doc)).toHaveLength(2);
+
+    const [one, two] = ops as [string[], string[]];
+    expect(count(one, (op) => op === '/G1 Do')).toBe(3);
+    expect(count(one, (op) => op === '/G2 Do')).toBe(1);
+    expect(count(two, (op) => op === '/G1 Do')).toBe(1);
+    // A use is the glyph's frame — font units, y up — put on the page and
+    // bracketed so it leaves no trace: here 5.4 pt to 250 units.
+    expect(
+      indexOfRun(one, ['q', '0.0216 0 0 0.0216 10 80 cm', '/G1 Do', 'Q']),
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      indexOfRun(two, ['q', '0.0216 0 0 0.0216 10 70 cm', '/G1 Do', 'Q']),
+    ).toBeGreaterThanOrEqual(0);
+    // No path is written on the page itself: every glyph is a Do.
+    expect(one.some((op) => op.endsWith(' c') || op === 'f')).toBe(false);
+
+    // Each page names what it uses, and both pages name the one sharp form.
+    const sharpOnOne = xObjectsOf(pdfPages[0]!).get(PDFName.of('G1'));
+    expect(sharpOnOne).toBeInstanceOf(PDFRef);
+    expect(xObjectsOf(pdfPages[0]!).get(PDFName.of('G2'))).toBeInstanceOf(PDFRef);
+    expect(xObjectsOf(pdfPages[1]!).get(PDFName.of('G1'))).toBe(sharpOnOne);
+    expect(xObjectsOf(pdfPages[1]!).get(PDFName.of('G2'))).toBeUndefined();
+  });
+
+  it('draws the form as the outline in font units, boxed by its control points', async () => {
+    const { doc } = await drawPages([(s) => drawGlyph(s, 'noteheadBlack', 10, 20, 5.4)]);
+    const [form] = formsIn(doc) as [PDFRawStream];
+    expect(form.dict.get(PDFName.of('Type'))).toBe(PDFName.of('XObject'));
+    const bbox = form.dict.lookup(PDFName.of('BBox'), PDFArray).asArray().map(String);
+    expect(bbox).toEqual(glyphControlBox(glyphOutline('noteheadBlack')).map(String));
+    const content = latin1(decodePDFRawStream(form).decode()).split('\n');
+    const outline = glyphOutline('noteheadBlack');
+    expect(content[0]).toBe(`${outline.xy[0]} ${outline.xy[1]} m`);
+    expect(content.filter((op) => op.endsWith(' c'))).toHaveLength(4);
+    expect(content.at(-2)).toBe('h');
+    // Filled with the nonzero rule, and in no colour of its own.
+    expect(content.at(-1)).toBe('f');
+    expect(content.some((op) => / (rg|RG|g|G|k|K|sc|scn|cs)$/.test(op))).toBe(false);
+  });
+
+  it('fills a glyph in the colour current where it is drawn', async () => {
+    const { ops } = await drawPages([
+      (s) => {
+        s.fillStyle = '#336699';
+        drawGlyph(s, 'augmentationDot', 10, 20, 5.4);
+        s.fillStyle = '#000000';
+        drawGlyph(s, 'augmentationDot', 20, 20, 5.4);
+      },
+    ]);
+    const [page] = ops as [string[]];
+    const first = page.indexOf('/G1 Do');
+    const blue = page.indexOf('0.2 0.4 0.6 rg');
+    const black = page.indexOf('0 0 0 rg');
+    expect(blue).toBeGreaterThanOrEqual(0);
+    expect(blue).toBeLessThan(first);
+    expect(black).toBeGreaterThan(first);
+    expect(black).toBeLessThan(page.lastIndexOf('/G1 Do'));
+  });
+
+  it('places a glyph through the current transform, and leaves the path being built alone', async () => {
+    const { ops } = await drawPages([
+      (s) => {
+        s.beginPath();
+        s.moveTo(0, 0);
+        s.lineTo(10, 10);
+        s.save();
+        s.translate(40, 10);
+        s.scale(2, 2);
+        drawGlyph(s, 'augmentationDot', 5, 5, 5.4, 2.7);
+        s.restore();
+        s.stroke();
+      },
+    ]);
+    const [page] = ops as [string[]];
+    // x: 40 + 2·5 = 50, y: 10 + 2·5 = 20 → 80 on the page; scales doubled.
+    expect(page).toContain('0.0432 0 0 0.0216 50 80 cm');
+    const stroked = page.indexOf('S');
+    expect(page.slice(stroked - 2, stroked)).toEqual(['0 100 m', '10 90 l']);
   });
 });

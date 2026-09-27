@@ -42,9 +42,16 @@ describe('DrawSurface', () => {
       | 'fillText'
       | 'measureText'
       | 'setLineDash'
+      | 'fillGlyph'
     >();
     expectTypeOf<ReturnType<DrawSurface['measureText']>>().toEqualTypeOf<{
       readonly width: number;
     }>();
+  });
+
+  it('lets a surface fill a whole glyph at once without asking it of a canvas', () => {
+    // Optional: a canvas has no such method, and glyphs reach it as paths.
+    expectTypeOf<undefined>().toExtend<DrawSurface['fillGlyph']>();
+    expectTypeOf<CanvasRenderingContext2D>().not.toHaveProperty('fillGlyph');
   });
 });

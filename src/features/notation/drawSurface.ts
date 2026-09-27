@@ -1,7 +1,17 @@
+import type { GlyphOutline } from './glyphs/glyphOutline';
+
+/**
+ * Where a glyph's outline lands: a 2D affine transform `[a, b, c, d, e, f]`, as
+ * a canvas writes one, from the glyph's font units (y up) onto the surface
+ * (y down).
+ */
+export type GlyphMatrix = readonly [number, number, number, number, number, number];
+
 /**
  * What the printed sheet draws with: exactly the part of
- * `CanvasRenderingContext2D` that `sheetRenderer.ts`, `accidentalGlyph.ts` and
- * `restGlyph.ts` call, and nothing more.
+ * `CanvasRenderingContext2D` that `sheetRenderer.ts` and the helpers it draws
+ * through (`sheetText.ts`, `accidentalGlyph.ts`, `restGlyph.ts`,
+ * `glyphs/drawGlyph.ts`) call, and nothing more.
  *
  * A real canvas context satisfies it as it stands, which is how the export
  * dialog's preview draws a page. The PDF export draws the same calls onto a
@@ -61,4 +71,13 @@ export interface DrawSurface {
   fillText(text: string, x: number, y: number): void;
   measureText(text: string): { readonly width: number };
   setLineDash(segments: number[]): void;
+
+  /**
+   * Fill a whole music glyph in the current fill colour, placed by `matrix` —
+   * as `drawGlyph` would with path calls, but in one go, so a surface that
+   * writes a file can store each glyph once and refer to it for every use.
+   * Leaves the path being built alone, as `fillRect` does. Optional: a canvas
+   * has no such thing, and `drawGlyph` draws on it with paths instead.
+   */
+  fillGlyph?(name: string, outline: GlyphOutline, matrix: GlyphMatrix): void;
 }
