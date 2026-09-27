@@ -36,8 +36,9 @@ Attribution is also shown in the app's About view.
   and LEVEL5) across the 30 minor-third root pitches, close-mic position only
   (the Decca Tree position is not shipped); kept at the source's 44.1 kHz,
   16-bit and stereo — no resampling and no channel downmix — and re-encoded as
-  FLAC; trimmed to 7–12 seconds with a fade-out (dithered, because the fade
-  itself requantizes); a per-layer gain is applied at playback time so the pack
+  FLAC; trimmed to 7–12 seconds with a fade-out (the audio ahead of the fade is
+  bit-identical to the source; the fade itself is requantized to 16 bits, without
+  dither); a per-layer gain is applied at playback time so the pack
   sits at the Salamander pack's loudness (see `scripts/build-sample-pack.mjs`
   for the exact pipeline and the measured values in the pack's `manifest.json`).
 
