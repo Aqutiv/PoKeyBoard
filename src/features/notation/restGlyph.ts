@@ -1,3 +1,4 @@
+import type { DrawSurface } from './drawSurface';
 import type { DurationSymbol } from './quantization';
 
 /**
@@ -5,7 +6,8 @@ import type { DurationSymbol } from './quantization';
  * live score and the printed page show the same shapes. Both renderers scale
  * everything from their own staff space, so one set of proportions serves both:
  * `gap` is a staff space, `staffTop` the staff's top line, and the caller has
- * already set `fillStyle`/`strokeStyle`.
+ * already set `fillStyle`/`strokeStyle`. The live score passes its canvas
+ * context and the printed sheet its own surface — see `DrawSurface`.
  */
 
 /** y of a staff step relative to the staff's top line (down is +). */
@@ -15,7 +17,7 @@ function yFor(step: number, gap: number): number {
 
 /** Whole and half rests are the same block, one hanging and one sitting. */
 function drawBlock(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   x: number,
   lineY: number,
   gap: number,
@@ -27,7 +29,7 @@ function drawBlock(
 }
 
 /** Quarter rest: the four-stroke zigzag, ending in a hook toward the stem side. */
-function drawQuarter(ctx: CanvasRenderingContext2D, x: number, midY: number, gap: number): void {
+function drawQuarter(ctx: DrawSurface, x: number, midY: number, gap: number): void {
   const u = gap * 0.5; // half a space, the zigzag's step
   ctx.beginPath();
   ctx.moveTo(x - 0.5 * u, midY - 3 * u);
@@ -68,7 +70,7 @@ function drawQuarter(ctx: CanvasRenderingContext2D, x: number, midY: number, gap
  * the eighth and the sixteenth are untouched by that and read exactly as before.
  */
 function drawHooked(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   x: number,
   midY: number,
   gap: number,
@@ -120,7 +122,7 @@ function drawHooked(
  * under, 4 (the middle line) for everything else.
  */
 export function drawRestGlyph(
-  ctx: CanvasRenderingContext2D,
+  ctx: DrawSurface,
   symbol: DurationSymbol,
   x: number,
   staffTop: number,
