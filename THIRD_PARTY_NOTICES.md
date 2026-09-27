@@ -108,9 +108,10 @@ Attribution and source/license links are also shown in the app's About view.
 
 - **Package:** `pdf-lib` (MIT license), <https://pdf-lib.js.org/>
 - **Use:** client-side assembly of the sheet-music PDF export; pages are
-  drawn locally as vector paths and text in the standard PDF Times fonts
-  (which are not embedded). The library is still loaded on demand
-  (code-split, when a PDF is generated) and is not modified.
+  drawn locally as vector paths — each music glyph written once per file and
+  placed by reference — and text in the standard PDF Times fonts (which are
+  not embedded). The library is still loaded on demand (code-split, when a PDF
+  is generated) and is not modified.
 
 ## Fraunces (display typeface)
 
@@ -121,6 +122,27 @@ Attribution and source/license links are also shown in the app's About view.
   `@fontsource/fraunces` npm package (latin 600 subset only)
 - **Use:** display headings and titles; served self-hosted and precached by
   the service worker for offline use. The font is not modified.
+
+## Bravura (music font)
+
+- **Author:** Steinberg Media Technologies GmbH
+- **License:** SIL Open Font License 1.1 (OFL), with the Reserved Font Name
+  "Bravura", <https://openfontlicense.org/>. The full license is included in
+  `public/licenses/music-glyphs-OFL.txt`, which the app serves at
+  `licenses/music-glyphs-OFL.txt`.
+- **Source:** <https://github.com/steinbergmedia/bravura>, tag `bravura-1.482`,
+  commit `37b194378b710cc40e406ab6c4b07608bb9548ae`
+- **Use:** the music symbols on the printed sheet — the sheet-music PDF export
+  and its preview.
+- **Modifications:** the outlines of 60 glyphs are extracted ahead of the
+  build by `scripts/extract-music-glyphs.mjs` (run by hand, from sources
+  pinned by size and SHA-256 in `scripts/lib/music-glyphs.pins.json`) into a
+  subset that is a Modified Version under the OFL and is not named Bravura
+  (`src/features/notation/glyphs/`); each of its modules opens with the
+  copyright notice and the license, which the production build keeps. The
+  font file itself is not shipped.
+
+Attribution is also shown in the app's About view.
 
 ## Reverb impulse response
 

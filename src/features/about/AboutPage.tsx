@@ -66,6 +66,12 @@ const SOFTWARE_CREDITS: readonly {
     href: 'https://github.com/undercasetype/Fraunces',
     license: 'OFL',
   },
+  {
+    key: 'musicFont',
+    name: 'Bravura',
+    href: 'https://github.com/steinbergmedia/bravura',
+    license: 'OFL',
+  },
 ];
 
 const NOTICES_URL = 'https://github.com/Aqutiv/PoKeyBoard/blob/main/THIRD_PARTY_NOTICES.md';
