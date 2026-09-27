@@ -1,4 +1,10 @@
 import { z } from 'zod';
+import {
+  EXPORT_FORMATS,
+  FLAC_BIT_DEPTHS,
+  LOUDNESS_MODES,
+  MP3_BITRATES,
+} from '@/audio/exportFormats';
 import { PIANO_INSTRUMENT_IDS } from '@/audio/instruments';
 import { REVERB_ROOMS } from '@/domain/takeTypes';
 import {
@@ -44,6 +50,10 @@ const SETTING_SCHEMAS = {
   metronomeVolume: z.number().min(0).max(1),
   keyboardAnchorMidi: z.number().int().min(21).max(108),
   sheetPaperSize: z.enum(['a4', 'letter']),
+  audioExportFormat: z.enum(EXPORT_FORMATS),
+  audioExportMp3Kbps: z.literal(MP3_BITRATES),
+  audioExportFlacBits: z.literal(FLAC_BIT_DEPTHS),
+  audioExportLoudness: z.enum(LOUDNESS_MODES),
   libraryFolder: z.enum(LIBRARY_FOLDER_IDS),
   learnLevel: z.enum(LEARN_LEVEL_IDS),
   recordMode: z.enum(RECORD_MODES),

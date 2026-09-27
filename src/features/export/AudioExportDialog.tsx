@@ -2,12 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   audioExportService,
   ExportCancelledError,
-  QUALITY_BITRATE,
   type ExportProgress,
-  type ExportQuality,
   type ExportResult,
 } from '@/audio/AudioExportService';
-import type { LoudnessMode } from '@/audio/loudness';
+import { FORMAT_MIME_TYPE, FORMAT_NAME, type ExportEncoding } from '@/audio/exportFormats';
 import {
   estimateRenderMemoryMB,
   estimateRenderSeconds,
@@ -61,11 +59,19 @@ export function AudioExportDialog() {
   const requestedTakeId = useExportUiStore((s) => s.requestedTakeId);
   const closeExport = useExportUiStore((s) => s.closeExport);
   const metronomeVolume = useSettingsStore((s) => s.metronomeVolume);
+  // Format, quality and level are remembered from one export to the next; the
+  // metronome, which suits one take and not another, starts off every time.
+  const format = useSettingsStore((s) => s.audioExportFormat);
+  const mp3Kbps = useSettingsStore((s) => s.audioExportMp3Kbps);
+  const flacBits = useSettingsStore((s) => s.audioExportFlacBits);
+  const loudness = useSettingsStore((s) => s.audioExportLoudness);
+  const setFormat = useSettingsStore((s) => s.setAudioExportFormat);
+  const setMp3Kbps = useSettingsStore((s) => s.setAudioExportMp3Kbps);
+  const setFlacBits = useSettingsStore((s) => s.setAudioExportFlacBits);
+  const setLoudness = useSettingsStore((s) => s.setAudioExportLoudness);
 
   const [phase, setPhase] = useState<Phase | null>(null);
   const [lastRequestedId, setLastRequestedId] = useState<string | null>(null);
-  const [quality, setQuality] = useState<ExportQuality>('share');
-  const [loudness, setLoudness] = useState<LoudnessMode>('normalized');
   const [includeMetronome, setIncludeMetronome] = useState(false);
   const previewUrlRef = useRef<string | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -157,10 +163,12 @@ export function AudioExportDialog() {
       }
       releaseHeldRender();
       setPhase({ kind: 'working', take, progress: { stage: 'saving', fraction: -1 } });
+      const encoding: ExportEncoding =
+        format === 'mp3' ? { format, kbps: mp3Kbps } : { format, bits: flacBits };
       const show = (progress: ExportProgress) =>
         setPhase((current) => (current?.kind === 'working' ? { ...current, progress } : current));
       audioExportService
-        .exportTake(take, { quality, includeMetronome, metronomeVolume, loudness }, (progress) => {
+        .exportTake(take, { encoding, includeMetronome, metronomeVolume, loudness }, (progress) => {
           if (progress.stage === 'encoding') {
             transportController.sendExportEvent('RENDER_DONE');
           }
@@ -197,7 +205,7 @@ export function AudioExportDialog() {
           }
         });
     },
-    [quality, includeMetronome, metronomeVolume, loudness, m, releaseHeldRender],
+    [format, mp3Kbps, flacBits, includeMetronome, metronomeVolume, loudness, m, releaseHeldRender],
   );
 
   const cancelRender = useCallback(() => {
@@ -228,25 +236,71 @@ export function AudioExportDialog() {
               })}
             </p>
             <fieldset className="export-options">
+              <legend>{m.exportDialog.format}</legend>
+              <label>
+                <input
+                  type="radio"
+                  name="format"
+                  checked={format === 'mp3'}
+                  onChange={() => setFormat('mp3')}
+                />
+                {m.exportDialog.formatMp3}
+              </label>
+              <label>
+                <input
+                  type="radio"
+                  name="format"
+                  checked={format === 'flac'}
+                  onChange={() => setFormat('flac')}
+                />
+                {m.exportDialog.formatFlac}
+              </label>
+            </fieldset>
+            <fieldset className="export-options">
               <legend>{m.exportDialog.quality}</legend>
-              <label>
-                <input
-                  type="radio"
-                  name="quality"
-                  checked={quality === 'share'}
-                  onChange={() => setQuality('share')}
-                />
-                {m.exportDialog.shareable({ kbps: QUALITY_BITRATE.share })}
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="quality"
-                  checked={quality === 'high'}
-                  onChange={() => setQuality('high')}
-                />
-                {m.exportDialog.high({ kbps: QUALITY_BITRATE.high })}
-              </label>
+              {format === 'mp3' ? (
+                <>
+                  <label>
+                    <input
+                      type="radio"
+                      name="quality"
+                      checked={mp3Kbps === 128}
+                      onChange={() => setMp3Kbps(128)}
+                    />
+                    {m.exportDialog.shareable({ kbps: 128 })}
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="quality"
+                      checked={mp3Kbps === 192}
+                      onChange={() => setMp3Kbps(192)}
+                    />
+                    {m.exportDialog.high({ kbps: 192 })}
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label>
+                    <input
+                      type="radio"
+                      name="quality"
+                      checked={flacBits === 16}
+                      onChange={() => setFlacBits(16)}
+                    />
+                    {m.exportDialog.bitsStandard({ bits: 16 })}
+                  </label>
+                  <label>
+                    <input
+                      type="radio"
+                      name="quality"
+                      checked={flacBits === 24}
+                      onChange={() => setFlacBits(24)}
+                    />
+                    {m.exportDialog.bitsStudio({ bits: 24 })}
+                  </label>
+                </>
+              )}
             </fieldset>
             <fieldset className="export-options">
               <legend>{m.exportDialog.loudness}</legend>
@@ -366,17 +420,21 @@ export function AudioExportDialog() {
               >
                 {m.exportDialog.playPreview}
               </button>
-              <button
-                type="button"
-                className="btn"
-                onClick={() => {
-                  void audioExportService
-                    .deleteCachedExport(phase.take.id)
-                    .then(() => setPhase({ ...phase, deliveredHow: m.exportDialog.cachedDeleted }));
-                }}
-              >
-                {m.exportDialog.deleteCached}
-              </button>
+              {phase.result.cached ? (
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={() => {
+                    void audioExportService
+                      .deleteCachedExport(phase.take.id)
+                      .then(() =>
+                        setPhase({ ...phase, deliveredHow: m.exportDialog.cachedDeleted }),
+                      );
+                  }}
+                >
+                  {m.exportDialog.deleteCached}
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn"
@@ -385,14 +443,14 @@ export function AudioExportDialog() {
                   setPhase({ ...phase, deliveredHow: m.takes.downloaded });
                 }}
               >
-                {m.exportDialog.downloadMp3}
+                {m.exportDialog.download({ format: FORMAT_NAME[phase.result.format] })}
               </button>
               <button
                 type="button"
                 className="btn btn--primary"
                 onClick={() => {
                   const file = new File([phase.result.blob], phase.result.fileName, {
-                    type: 'audio/mpeg',
+                    type: FORMAT_MIME_TYPE[phase.result.format],
                   });
                   void shareOrDownloadFile(file).then((how) => {
                     if (how === 'cancelled') return;

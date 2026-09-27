@@ -1,27 +1,36 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { ExportProgress } from '@/audio/AudioExportService';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { ExportOptions, ExportProgress, ExportResult } from '@/audio/AudioExportService';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { AudioExportDialog } from '@/features/export/AudioExportDialog';
 import { en } from '@/i18n/en';
 import { I18nContext } from '@/i18n/i18nContext';
 import { useExportUiStore } from '@/state/useExportUiStore';
+import { SETTINGS_DEFAULTS, useSettingsStore } from '@/state/useSettingsStore';
 
 const mock = vi.hoisted(() => ({
   onProgress: null as ((progress: ExportProgress) => void) | null,
+  options: null as ExportOptions | null,
+  finish: null as ((result: ExportResult) => void) | null,
   sendExportEvent: vi.fn<(event: string) => boolean>(() => true),
 }));
 vi.mock('@/audio/AudioExportService', () => ({
   audioExportService: {
-    exportTake: (_take: unknown, _options: unknown, onProgress: (p: ExportProgress) => void) => {
+    exportTake: (
+      _take: unknown,
+      options: ExportOptions,
+      onProgress: (p: ExportProgress) => void,
+    ) => {
       mock.onProgress = onProgress;
-      return new Promise(() => undefined);
+      mock.options = options;
+      return new Promise<ExportResult>((resolve) => {
+        mock.finish = resolve;
+      });
     },
     cancel: vi.fn(),
     deleteCachedExport: vi.fn(),
   },
   ExportCancelledError: class extends Error {},
-  QUALITY_BITRATE: { share: 128, high: 192 },
 }));
 vi.mock('@/audio/OfflineTakeRenderer', () => ({
   estimateRenderMemoryMB: () => 10,
@@ -37,26 +46,32 @@ vi.mock('@/features/transport/transportController', () => ({
     releaseExport: vi.fn(),
   },
 }));
-vi.mock('@/state/useSettingsStore', () => ({
-  useSettingsStore: (select: (state: { metronomeVolume: number }) => unknown) =>
-    select({ metronomeVolume: 0.6 }),
-}));
+beforeEach(() => {
+  useSettingsStore.setState({ ...SETTINGS_DEFAULTS });
+});
 
 afterEach(() => {
   cleanup();
   act(() => useExportUiStore.getState().closeExport());
   mock.onProgress = null;
+  mock.options = null;
+  mock.finish = null;
   mock.sendExportEvent.mockClear();
 });
 
-async function startExport() {
+async function openDialog() {
   render(
     <I18nContext.Provider value={{ language: 'en', locale: 'en-US', m: en }}>
       <AudioExportDialog />
     </I18nContext.Provider>,
   );
   act(() => useExportUiStore.getState().openExport('take-1'));
-  fireEvent.click(await screen.findByRole('button', { name: en.exportDialog.renderAudio }));
+  await screen.findByRole('button', { name: en.exportDialog.renderAudio });
+}
+
+async function startExport() {
+  await openDialog();
+  fireEvent.click(screen.getByRole('button', { name: en.exportDialog.renderAudio }));
   expect(mock.onProgress).not.toBeNull();
 }
 
@@ -120,5 +135,80 @@ describe('the audio export progress bar', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+const radio = (name: string) => screen.getByRole<HTMLInputElement>('radio', { name });
+
+describe('the audio export’s choices', () => {
+  it('offers FLAC beside MP3, with bit depths for its quality, and remembers each', async () => {
+    await openDialog();
+    const d = en.exportDialog;
+    expect(radio(d.formatMp3).checked).toBe(true);
+    expect(radio(d.shareable({ kbps: 128 })).checked).toBe(true);
+    expect(radio(d.loudnessNormalized).checked).toBe(true);
+
+    fireEvent.click(radio(d.formatFlac));
+    expect(useSettingsStore.getState().audioExportFormat).toBe('flac');
+    expect(screen.queryByRole('radio', { name: d.shareable({ kbps: 128 }) })).toBeNull();
+    expect(radio(d.bitsStandard({ bits: 16 })).checked).toBe(true);
+    fireEvent.click(radio(d.bitsStudio({ bits: 24 })));
+    expect(useSettingsStore.getState().audioExportFlacBits).toBe(24);
+    fireEvent.click(radio(d.loudnessAsPlayed));
+    expect(useSettingsStore.getState().audioExportLoudness).toBe('asPlayed');
+
+    // Each format keeps its own quality.
+    fireEvent.click(radio(d.formatMp3));
+    expect(radio(d.shareable({ kbps: 128 })).checked).toBe(true);
+    fireEvent.click(radio(d.high({ kbps: 192 })));
+    fireEvent.click(radio(d.formatFlac));
+    expect(radio(d.bitsStudio({ bits: 24 })).checked).toBe(true);
+    expect(useSettingsStore.getState().audioExportMp3Kbps).toBe(192);
+  });
+
+  it('exports with the choices remembered from last time, the metronome off', async () => {
+    useSettingsStore.setState({
+      audioExportFormat: 'flac',
+      audioExportFlacBits: 24,
+      audioExportLoudness: 'asPlayed',
+    });
+    await startExport();
+    expect(mock.options).toEqual({
+      encoding: { format: 'flac', bits: 24 },
+      includeMetronome: false,
+      metronomeVolume: SETTINGS_DEFAULTS.metronomeVolume,
+      loudness: 'asPlayed',
+    });
+  });
+
+  it('names the format it downloads, and offers to delete only a cached file', async () => {
+    const finish = async (result: Partial<ExportResult>) => {
+      await startExport();
+      await act(async () =>
+        mock.finish!({
+          blob: new Blob(['x']),
+          fileName: 'PoKeyBoard - A take.flac',
+          format: 'flac',
+          durationMs: 1000,
+          sizeBytes: 1,
+          fromCache: false,
+          cached: false,
+          ...result,
+        }),
+      );
+    };
+    await finish({ format: 'flac', cached: false });
+    expect(
+      screen.getByRole('button', { name: en.exportDialog.download({ format: 'FLAC' }) }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: en.exportDialog.deleteCached })).toBeNull();
+    cleanup();
+    act(() => useExportUiStore.getState().closeExport());
+
+    await finish({ format: 'mp3', fileName: 'PoKeyBoard - A take.mp3', cached: true });
+    expect(
+      screen.getByRole('button', { name: en.exportDialog.download({ format: 'MP3' }) }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: en.exportDialog.deleteCached })).toBeInTheDocument();
   });
 });

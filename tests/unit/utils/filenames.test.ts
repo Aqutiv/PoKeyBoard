@@ -61,6 +61,9 @@ describe('file name builders', () => {
     expect(takeAudioFileName('My Take', { composer: 'A/B', piano: 'Headroom' })).toBe(
       'PoKeyBoard - A B - My Take (Headroom).mp3',
     );
+    expect(takeAudioFileName('My Take', { piano: 'Steinway', extension: 'flac' })).toBe(
+      'PoKeyBoard - My Take (Steinway).flac',
+    );
     expect(backupFileName(new Date('2026-07-17T12:00:00Z'))).toBe(
       'PoKeyBoard Backup - 2026-07-17.json',
     );
@@ -75,6 +78,7 @@ describe('file name builders', () => {
       takeSheetFileName(cjk),
       takeAudioFileName(cjk),
       takeAudioFileName(cjk, { composer: 'Erik Satie', piano: 'Salamander' }),
+      takeAudioFileName(cjk, { composer: 'Erik Satie', piano: 'Salamander', extension: 'flac' }),
     ]) {
       expect(bytes(name)).toBeLessThanOrEqual(255);
     }

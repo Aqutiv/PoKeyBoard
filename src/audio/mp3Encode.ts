@@ -1,8 +1,5 @@
 import { createMp3Encoder } from 'wasm-media-encoders';
-import { masterExport, masterExportInSlices, type ClickTrack, type LoudnessMode } from './loudness';
-
-/** The only bitrates the app offers; matches the encoder's CBR union type. */
-export type ExportBitrateKbps = 128 | 192;
+import type { ExportBitrateKbps } from './exportFormats';
 
 /** Samples per progress tick (~2s at 48kHz); also the main-thread yield step. */
 const CHUNK_SAMPLES = 96_000;
@@ -22,7 +19,7 @@ export async function encodePcmToMp3(
   right: Float32Array,
   onProgress?: (fraction: number) => void,
   signal?: AbortSignal,
-): Promise<Uint8Array> {
+): Promise<Uint8Array<ArrayBuffer>> {
   signal?.throwIfAborted();
   const encoder = await createMp3Encoder();
   signal?.throwIfAborted();
@@ -54,84 +51,4 @@ export async function encodePcmToMp3(
     cursor += part.length;
   }
   return out;
-}
-
-/** A rendered take as the encoder receives it; see `RenderedTake`. */
-export interface ExportPcm {
-  sampleRate: number;
-  left: Float32Array;
-  right: Float32Array;
-  /** The metronome, or null; see `ClickTrack`. */
-  clicks: ClickTrack | null;
-  loudness: LoudnessMode;
-}
-
-/**
- * How much of the compress stage's bar mastering fills before the encoder
- * starts: the share of the stage it takes in desktop Chrome, 15 to 16% alike
- * on the 11-minute Chopin Ballade, La Campanella and A Beautiful Day.
- */
-export const MASTERING_SHARE = 0.15;
-
-/**
- * How far the compress stage has got, mastering and then encoding, told to
- * `onProgress` in whole percents and only as they rise. Mastering a long take
- * is tens of thousands of steps, and from the worker every report is a message
- * and a render of the dialog. It starts past 0, which the export says itself.
- */
-function compressProgress(onProgress?: (fraction: number) => void) {
-  let percent = 0;
-  const report = (fraction: number) => {
-    const next = Math.round(fraction * 100);
-    if (next <= percent) return;
-    percent = next;
-    onProgress?.(next / 100);
-  };
-  return {
-    mastering: (fraction: number) => report(fraction * MASTERING_SHARE),
-    encoding: (fraction: number) => report(MASTERING_SHARE + fraction * (1 - MASTERING_SHARE)),
-  };
-}
-
-/**
- * Everything after the render, in the worker: set the level and hold the peaks
- * (`masterExport`, in place), then encode. Mastering runs straight through,
- * since nothing waits on a worker's thread.
- */
-export async function finishMp3(
-  pcm: ExportPcm,
-  bitrateKbps: ExportBitrateKbps,
-  onProgress?: (fraction: number) => void,
-): Promise<Uint8Array> {
-  const progress = compressProgress(onProgress);
-  masterExport(pcm.left, pcm.right, pcm.clicks, pcm.loudness, pcm.sampleRate, progress.mastering);
-  return encodePcmToMp3(pcm.sampleRate, bitrateKbps, pcm.left, pcm.right, progress.encoding);
-}
-
-/**
- * The same on the main thread, for when the worker cannot run. Straight
- * through, mastering a long take would freeze the page for seconds and leave a
- * click on Cancel waiting until it was done; so it runs a slice at a time, as
- * the encoder does, and a cancelled export stops at the next slice. The file
- * comes out exactly as the worker's would.
- */
-export async function finishMp3OnMainThread(
-  pcm: ExportPcm,
-  bitrateKbps: ExportBitrateKbps,
-  onProgress: (fraction: number) => void,
-  signal: AbortSignal,
-): Promise<Uint8Array> {
-  const progress = compressProgress(onProgress);
-  await masterExportInSlices(pcm.left, pcm.right, pcm.clicks, pcm.loudness, pcm.sampleRate, {
-    signal,
-    onProgress: progress.mastering,
-  });
-  return encodePcmToMp3(
-    pcm.sampleRate,
-    bitrateKbps,
-    pcm.left,
-    pcm.right,
-    progress.encoding,
-    signal,
-  );
 }

@@ -20,9 +20,9 @@ interface PreparedMidi {
 }
 
 /**
- * One "Share" button opening a menu with Audio (MP3) / Sheet music (PDF) /
- * MIDI. The first two open a dialog of options; MIDI has none to ask, so it is
- * written as the menu opens and handed over the moment it is chosen.
+ * One "Share" button opening a menu with Audio (MP3, FLAC) / Sheet music
+ * (PDF) / MIDI. The first two open a dialog of options; MIDI has none to ask,
+ * so it is written as the menu opens and handed over the moment it is chosen.
  */
 export function ShareMenu({ takeId, disabled, triggerClassName, align = 'right' }: ShareMenuProps) {
   const m = useMessages();

@@ -36,7 +36,7 @@ PoKeyBoard deploys to **any static HTTPS host** (no backend). The reference CI i
 - [ ] Reload offline: shell loads
 - [ ] Settings → Piano: the download completes for **each** piano; airplane-mode launch plays all keys
 - [ ] Settings → Piano: switching sounds different, survives a reload, and leaves no stuck key when a note is held across the switch
-- [ ] Record → Share audio → MP3 renders; share sheet (mobile) or download (desktop)
+- [ ] Record → Share → Audio → an MP3 and a FLAC render; share sheet (mobile) or download (desktop); the FLAC plays in the OS's own player
 - [ ] Second deploy later: "Update available" appears and applies on request
 
 ## App version

@@ -20,7 +20,7 @@ src/
                 OfflineTakeRenderer, AudioExportService, loudness (BS.1770
                 loudness, true peak, look-ahead limiter), id3,
                 audioCapabilities, iosAudioSession
-  workers/      mp3Encoder.worker (mastering + LAME wasm, transferred PCM)
+  workers/      audioEncoder.worker (mastering + LAME wasm or the FLAC encoder, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
                 tempoMap (piecewise beats↔ms; shared by import, library, score),
@@ -221,15 +221,15 @@ read and therefore device-local rather than part of the settings backup.
 
 Dexie v1: `takes` (denormalized summary columns + full JSON — lists never parse takes), `audioCache` (MP3 blobs in a separate table so lists never load audio), `settings`, `metadata`. Schema versions are the migration mechanism. The persistence service debounces autosaves (800 ms), forces saves on recording stop / page hide / before export, restores the last take + playhead, and requests persistent storage after the first meaningful save.
 
-Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/reverb mix and room/pack + bitrate + metronome + loudness + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
+Export caching (MP3 only; a FLAC export is never cached): `takeHash` hashes only audible content (notes/pedals/tempo/reverb mix and room/pack + bitrate + metronome + loudness + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
 
 ## Theming
 
 Two named themes share one token vocabulary in `src/themes.css`: Conservatory (dark) is the default on `:root`, Ivory recital (light) overrides colors under `html[data-theme='light']`; `color-scheme` flips with them so native controls follow. The preference (`dark | light | system`, default dark) is an ordinary setting (store + zod schema + Dexie row). `src/app/theme.ts` resolves preference × `prefers-color-scheme`, stamps `html[data-theme]`, updates the `theme-color` meta, and mirrors the preference to `localStorage['pokeyboard.theme']`; a tiny inline script in `index.html` reads that mirror **before first paint** so a light-theme user never flashes dark while Dexie loads (the controller deliberately applies nothing at init — the first store emit after hydration reconciles mirror vs Dexie truth, Dexie winning). The live score canvas can't read CSS variables at draw time, so `SCORE_PALETTES` in `scoreRenderer.ts` duplicates both palettes (kept in sync by comment convention) and the theme joins `MusicScore`'s redraw signature; sheet/PDF engraving stays print-monochrome and is untouched by theming. Display type is a self-hosted Fraunces 600 latin subset (`@fontsource/fraunces`), precached by the existing `woff2` glob.
 
-## MP3 encoding
+## Audio encoding
 
-The export service copies the rendered buffer's channels, **transfers** them to a Worker running LAME (wasm-media-encoders), streams progress (mastering's steps, then each ~2 s chunk; the render's own progress comes from its pauses), validates plausibility (size vs duration·bitrate), stores the blob in `audioCache`, and hands the UI a `File` for `navigator.share` — called only from a fresh click, with download as the universal fallback.
+The export service copies the rendered buffer's channels, **transfers** them to a Worker that masters them and encodes MP3 (LAME via wasm-media-encoders) or FLAC (the app's own encoder, `flacEncode.ts`: fixed predictors, adaptive stereo, partitioned Rice, MD5 — see AUDIO_EXPORT.md), streams progress (mastering's steps, then each ~2 s chunk or 4096-sample frame; the render's own progress comes from its pauses), validates plausibility (an MP3's size vs duration·bitrate, a FLAC's STREAMINFO vs the render), stores an MP3 in `audioCache`, tags the file (ID3 or Vorbis comments), and hands the UI a `File` for `navigator.share` — called only from a fresh click, with download as the universal fallback. The same encoders run on the main thread, a slice at a time, where the worker cannot.
 
 ## PWA
 
