@@ -19,14 +19,13 @@ export interface ExportPcm {
  * How much of the compress stage's bar mastering fills before the encoder
  * starts: the share of the stage it takes in desktop Chrome. For MP3, 15 to
  * 16% alike on the 11-minute Chopin Ballade, La Campanella and A Beautiful
- * Day. FLAC codes two to three times faster than LAME, and slower at 24 bits
- * than at 16, their bottom eight bits being noise to code: on those three and
- * Arabesque No. 1, mastering took 35 to 39% of the stage at 16 bits, and 21
- * to 36% at 24.
+ * Day. FLAC codes faster than LAME, and slower at 24 bits than at 16, their
+ * bottom eight bits being noise to code: on those three and Arabesque No. 1,
+ * mastering took 24 to 26% of the stage at 16 bits, and 16 to 23% at 24.
  */
 export function masteringShare(encoding: ExportEncoding): number {
   if (encoding.format === 'mp3') return 0.15;
-  return encoding.bits === 16 ? 0.38 : 0.28;
+  return encoding.bits === 16 ? 0.25 : 0.2;
 }
 
 /**

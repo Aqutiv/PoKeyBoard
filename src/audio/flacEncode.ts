@@ -14,18 +14,15 @@ import type { Steps } from '@/utils/steps';
  *   difference (side), or as their average (mid) with side: whichever is
  *   smallest for the frame. A piano's two channels are much alike, so the
  *   difference is usually far smaller than either.
- * - Each channel as the prediction error of the best of FLAC's five fixed
- *   predictors (none, or the last sample carried on straight or along a
- *   curve of order two to four), Rice-coded in up to 256 partitions, each
- *   with its own parameter. A channel that never changes is one number; one
- *   that prediction cannot shrink is stored as it is.
+ * - Each channel as the error of a prediction from the samples before: a
+ *   linear predictor of up to twelve of them fitted to the frame (as libFLAC
+ *   fits one), or the best of FLAC's five fixed predictors (none, or the last
+ *   sample carried on straight or along a curve of order two to four),
+ *   whichever codes smaller. The error is Rice-coded in up to 256
+ *   partitions, each with its own parameter. A channel that never changes is
+ *   one number; one that prediction cannot shrink is stored as it is.
  * - The MD5 of the samples in the stream's header, so `flac -t` and players
  *   that check can tell the file is intact.
- *
- * What it leaves out is what makes libFLAC's and ffmpeg's files about a
- * tenth smaller on the library's pieces: linear prediction fitted to each
- * frame. With only fixed predictors, ffmpeg's come out the same size as
- * these; see AUDIO_EXPORT.md.
  */
 
 /** Samples in a frame: libFLAC's own choice at 44.1 and 48 kHz. */
@@ -39,6 +36,21 @@ const MAX_PARTITION_ORDER = 8;
 
 /** The parameter a 4-bit Rice partition can carry; 15 is the escape code. */
 const MAX_RICE4 = 14;
+
+/** The longest linear predictor tried, as long as libFLAC's slowest setting tries. */
+const MAX_LPC_ORDER = 12;
+
+/** Frames shorter than this — only ever a stream's last — keep to the fixed predictors. */
+const MIN_LPC_SAMPLES = 64;
+
+/**
+ * The bits of each linear predictor coefficient, sign included: libFLAC's
+ * choice for frames of 4096 samples at each depth.
+ */
+const LPC_PRECISION: Readonly<Record<FlacBitDepth, number>> = { 16: 12, 24: 15 };
+
+/** A residual this large or larger cannot be folded for Rice coding in 32 bits. */
+const RESIDUAL_LIMIT = 2 ** 30;
 
 /** Output is handed over in parts about this big, each holding whole frames. */
 const PART_BYTES = 1 << 20;
@@ -257,6 +269,206 @@ function planSubframe(x: Int32Array, n: number, depth: number): SubframePlan {
 }
 
 /**
+ * The Tukey window with half its length in its tapers, libFLAC's tukey(0.5),
+ * for a frame of `n` samples. A frame is weighed by it before its
+ * autocorrelation, so the predictor fits the music in the frame rather than
+ * the edges where the frame was cut from it.
+ */
+function tukeyWindow(n: number): Float64Array {
+  const window = new Float64Array(n);
+  const taper = 0.25 * (n - 1);
+  for (let i = 0; i < n; i += 1) {
+    const fromEdge = Math.min(i, n - 1 - i);
+    window[i] = fromEdge < taper ? 0.5 * (1 - Math.cos((Math.PI * fromEdge) / taper)) : 1;
+  }
+  return window;
+}
+
+const FULL_FRAME_WINDOW = tukeyWindow(FLAC_BLOCK_SIZE);
+
+/** Linear predictors fitted to a channel, one of each order up to the longest tried. */
+interface LinearFit {
+  /** `coefficients[order - 1][j]` weighs the sample `j + 1` before the one predicted. */
+  coefficients: Float64Array[];
+  /** What each order leaves unpredicted, by the windowed autocorrelation. */
+  errors: number[];
+}
+
+/**
+ * Fit linear predictors of every order up to `maxOrder` to a channel:
+ * Levinson–Durbin on the autocorrelation of the windowed samples, each order
+ * built from the one before. `weighed` is scratch room for the window's
+ * work. Null for silence, where there is nothing to fit.
+ */
+function fitLinearPredictors(
+  x: Int32Array,
+  n: number,
+  maxOrder: number,
+  weighed: Float64Array,
+): LinearFit | null {
+  const window = n === FLAC_BLOCK_SIZE ? FULL_FRAME_WINDOW : tukeyWindow(n);
+  for (let i = 0; i < n; i += 1) weighed[i] = (x[i] as number) * (window[i] as number);
+  const autocorrelation = new Float64Array(maxOrder + 1);
+  for (let lag = 0; lag <= maxOrder; lag += 1) {
+    let sum = 0;
+    for (let i = lag; i < n; i += 1) sum += (weighed[i] as number) * (weighed[i - lag] as number);
+    autocorrelation[lag] = sum;
+  }
+  let error = autocorrelation[0] as number;
+  if (!(error > 0)) return null;
+
+  const a = new Float64Array(maxOrder + 1);
+  const coefficients: Float64Array[] = [];
+  const errors: number[] = [];
+  for (let order = 1; order <= maxOrder; order += 1) {
+    let reflection = autocorrelation[order] as number;
+    for (let j = 1; j < order; j += 1) {
+      reflection -= (a[j] as number) * (autocorrelation[order - j] as number);
+    }
+    reflection /= error;
+    for (let j = 1; j <= order >> 1; j += 1) {
+      const low = a[j] as number;
+      const high = a[order - j] as number;
+      a[j] = low - reflection * high;
+      a[order - j] = high - reflection * low;
+    }
+    a[order] = reflection;
+    error *= 1 - reflection * reflection;
+    // Rounding can leave nothing, or less, to predict: the orders so far will do.
+    if (!(error > 0)) break;
+    coefficients.push(a.slice(1, order + 1));
+    errors.push(error);
+  }
+  return coefficients.length > 0 ? { coefficients, errors } : null;
+}
+
+/**
+ * The order whose predictor should code smallest, as libFLAC picks it: the
+ * bits a residual sample is expected to take, from the fit's error, over the
+ * samples it predicts, plus what the order costs in warm-up samples and
+ * coefficients.
+ */
+function bestLpcOrder(fit: LinearFit, n: number, bitsPerOrder: number): number {
+  const scale = 0.5 / n;
+  let best = 1;
+  let bestBits = Number.POSITIVE_INFINITY;
+  fit.errors.forEach((error, index) => {
+    const order = index + 1;
+    const perSample = Math.max(0, 0.5 * Math.log2(error * scale));
+    const bits = perSample * (n - order) + order * bitsPerOrder;
+    if (bits < bestBits) {
+      best = order;
+      bestBits = bits;
+    }
+  });
+  return best;
+}
+
+/**
+ * The coefficients as the `precision`-bit integers a frame stores, into
+ * `out`, and the right shift that scales their sum back down; null where no
+ * shift FLAC allows fits them. Each is rounded with what rounding the one
+ * before it lost carried in, as libFLAC does, so the errors do not pile up.
+ */
+function quantizeCoefficients(
+  coefficients: Float64Array,
+  precision: number,
+  out: Int32Array,
+): number | null {
+  const bits = precision - 1;
+  const max = (1 << bits) - 1;
+  const min = -(1 << bits);
+  let largest = 0;
+  for (const coefficient of coefficients) largest = Math.max(largest, Math.abs(coefficient));
+  if (!(largest > 0)) return null;
+  const shift = Math.min(15, bits - 1 - Math.floor(Math.log2(largest)));
+  if (shift < 0) return null;
+  const scale = 2 ** shift;
+  let carried = 0;
+  for (let j = 0; j < coefficients.length; j += 1) {
+    carried += (coefficients[j] as number) * scale;
+    const q = Math.min(max, Math.max(min, Math.round(carried)));
+    carried -= q;
+    out[j] = q;
+  }
+  return shift;
+}
+
+/**
+ * The residual a quantized linear predictor leaves, folded for Rice coding,
+ * into `folded` from its first predicted sample; false where a residual is
+ * too large to code, and the predictor not worth having. The sum is exact —
+ * at most twelve products of a 15-bit coefficient and a 25-bit sample — and
+ * shifted right as the decoder shifts it, rounding down.
+ */
+function lpcResidual(
+  x: Int32Array,
+  n: number,
+  coefficients: Int32Array,
+  order: number,
+  shift: number,
+  folded: Int32Array,
+): boolean {
+  const scale = 2 ** -shift;
+  for (let i = order; i < n; i += 1) {
+    let sum = 0;
+    for (let j = 0; j < order; j += 1) {
+      sum += (coefficients[j] as number) * (x[i - 1 - j] as number);
+    }
+    const residual = (x[i] as number) - Math.floor(sum * scale);
+    if (residual >= RESIDUAL_LIMIT || residual <= -RESIDUAL_LIMIT) return false;
+    folded[i - order] = fold(residual);
+  }
+  return true;
+}
+
+/** The residual of FLAC's fixed predictor of `order`, folded, into `folded`. */
+function fixedResidual(x: Int32Array, n: number, order: number, folded: Int32Array): void {
+  for (let i = order; i < n; i += 1) {
+    const s = x[i] as number;
+    let residual: number;
+    switch (order) {
+      case 0:
+        residual = s;
+        break;
+      case 1:
+        residual = s - (x[i - 1] as number);
+        break;
+      case 2:
+        residual = s - 2 * (x[i - 1] as number) + (x[i - 2] as number);
+        break;
+      case 3:
+        residual = s - 3 * (x[i - 1] as number) + 3 * (x[i - 2] as number) - (x[i - 3] as number);
+        break;
+      default:
+        residual =
+          s -
+          4 * (x[i - 1] as number) +
+          6 * (x[i - 2] as number) -
+          4 * (x[i - 3] as number) +
+          (x[i - 4] as number);
+    }
+    folded[i - order] = fold(residual);
+  }
+}
+
+/** How to Rice-code a residual; see `FlacEncoder.partition`. */
+interface RicePlan {
+  order: number;
+  parameters: number[];
+  bits: number;
+}
+
+/** A linear predictor as a subframe would carry it, and the size it would come to. */
+interface LpcPlan {
+  order: number;
+  precision: number;
+  shift: number;
+  rice: RicePlan;
+  bits: number;
+}
+
+/**
  * Writes a FLAC stream frame by frame. Give it every block of samples in
  * order through `writeFrame`, then take the stream from `finish`.
  */
@@ -274,6 +486,9 @@ export class FlacEncoder {
   private readonly mid = new Int32Array(FLAC_BLOCK_SIZE);
   private readonly side = new Int32Array(FLAC_BLOCK_SIZE);
   private readonly folded = new Int32Array(FLAC_BLOCK_SIZE);
+  private readonly lpcFolded = new Int32Array(FLAC_BLOCK_SIZE);
+  private readonly weighed = new Float64Array(FLAC_BLOCK_SIZE);
+  private readonly lpcCoefficients = new Int32Array(MAX_LPC_ORDER);
   private readonly partitionSums = new Float64Array(1 << MAX_PARTITION_ORDER);
   private frames = 0;
   private samples = 0;
@@ -453,7 +668,11 @@ export class FlacEncoder {
     w.write(crc, 8);
   }
 
-  /** One channel's subframe, as planned, or stored as it is if that is smaller. */
+  /**
+   * One channel's subframe: the fixed predictor planned, or a linear one
+   * fitted to it, whichever codes smaller — or the samples as they are, if
+   * that is smaller still.
+   */
   private subframe(x: Int32Array, n: number, depth: number, plan: SubframePlan): void {
     const w = this.frame;
     if (plan.order < 0) {
@@ -461,42 +680,59 @@ export class FlacEncoder {
       w.writeWide(x[0] as number, depth);
       return;
     }
-    const order = plan.order;
-    const folded = this.folded;
-    for (let i = order; i < n; i += 1) {
-      const s = x[i] as number;
-      let residual: number;
-      switch (order) {
-        case 0:
-          residual = s;
-          break;
-        case 1:
-          residual = s - (x[i - 1] as number);
-          break;
-        case 2:
-          residual = s - 2 * (x[i - 1] as number) + (x[i - 2] as number);
-          break;
-        case 3:
-          residual = s - 3 * (x[i - 1] as number) + 3 * (x[i - 2] as number) - (x[i - 3] as number);
-          break;
-        default:
-          residual =
-            s -
-            4 * (x[i - 1] as number) +
-            6 * (x[i - 2] as number) -
-            4 * (x[i - 3] as number) +
-            (x[i - 4] as number);
-      }
-      folded[i - order] = fold(residual);
-    }
-    const rice = this.partition(n, order);
-    if (8 + order * depth + rice.bits >= 8 + n * depth) {
+    const fixedOrder = plan.order;
+    fixedResidual(x, n, fixedOrder, this.folded);
+    const fixed = this.partition(n, fixedOrder, this.folded);
+    const fixedBits = 8 + fixedOrder * depth + fixed.bits;
+    const lpc = n >= MIN_LPC_SAMPLES ? this.fitLpc(x, n, depth) : null;
+    const bestBits = Math.min(fixedBits, lpc?.bits ?? Number.POSITIVE_INFINITY);
+    if (bestBits >= 8 + n * depth) {
       w.write(0b10, 8); // VERBATIM
       for (let i = 0; i < n; i += 1) w.writeWide(x[i] as number, depth);
       return;
     }
-    w.write((0b1000 | order) << 1, 8); // FIXED, of this order
-    for (let i = 0; i < order; i += 1) w.writeWide(x[i] as number, depth);
+    if (lpc && lpc.bits < fixedBits) {
+      w.write((0b100000 | (lpc.order - 1)) << 1, 8); // LPC, of this order
+      for (let i = 0; i < lpc.order; i += 1) w.writeWide(x[i] as number, depth);
+      w.write(lpc.precision - 1, 4);
+      w.write(lpc.shift, 5);
+      for (let j = 0; j < lpc.order; j += 1) {
+        w.write(this.lpcCoefficients[j] as number, lpc.precision);
+      }
+      this.residual(n, lpc.order, lpc.rice, this.lpcFolded);
+      return;
+    }
+    w.write((0b1000 | fixedOrder) << 1, 8); // FIXED, of this order
+    for (let i = 0; i < fixedOrder; i += 1) w.writeWide(x[i] as number, depth);
+    this.residual(n, fixedOrder, fixed, this.folded);
+  }
+
+  /**
+   * The linear predictor of the order that should code smallest, quantized as
+   * the frame will store it, with its residual left in `lpcFolded` and its
+   * coefficients in `lpcCoefficients`; null where none can be had. On a
+   * channel of 17 bits or fewer the coefficients are narrowed, as libFLAC
+   * narrows them, so that a decoder summing in 32 bits never overflows.
+   */
+  private fitLpc(x: Int32Array, n: number, depth: number): LpcPlan | null {
+    const fit = fitLinearPredictors(x, n, MAX_LPC_ORDER, this.weighed);
+    if (!fit) return null;
+    const widest = LPC_PRECISION[this.depth];
+    const order = bestLpcOrder(fit, n, depth + widest);
+    const precision =
+      depth <= 17 ? Math.min(widest, 32 - depth - Math.floor(Math.log2(order))) : widest;
+    const coefficients = fit.coefficients[order - 1] as Float64Array;
+    const shift = quantizeCoefficients(coefficients, precision, this.lpcCoefficients);
+    if (shift === null) return null;
+    if (!lpcResidual(x, n, this.lpcCoefficients, order, shift, this.lpcFolded)) return null;
+    const rice = this.partition(n, order, this.lpcFolded);
+    const bits = 8 + order * depth + 4 + 5 + order * precision + rice.bits;
+    return { order, precision, shift, rice, bits };
+  }
+
+  /** A subframe's residual section, as `partition` planned it. */
+  private residual(n: number, order: number, rice: RicePlan, folded: Int32Array): void {
+    const w = this.frame;
     const wide = rice.parameters.some((k) => k > MAX_RICE4);
     const parameterBits = wide ? 5 : 4;
     w.write(wide ? 1 : 0, 2);
@@ -519,10 +755,7 @@ export class FlacEncoder {
    * partition starts after the predictor's warm-up samples, so it holds that
    * many fewer; every partition must hold at least one.
    */
-  private partition(
-    n: number,
-    order: number,
-  ): { order: number; parameters: number[]; bits: number } {
+  private partition(n: number, order: number, folded: Int32Array): RicePlan {
     let maxOrder = 0;
     while (
       maxOrder < MAX_PARTITION_ORDER &&
@@ -531,7 +764,6 @@ export class FlacEncoder {
     ) {
       maxOrder += 1;
     }
-    const folded = this.folded;
     const sums = this.partitionSums;
     const finest = 1 << maxOrder;
     const span = n >> maxOrder;
