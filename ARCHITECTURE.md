@@ -40,14 +40,16 @@ src/
                 (key and mode), quantization, notationLayout, scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
                 scrubController, sheetLayout (pure paginated engraving),
-                sheetRenderer (print-style page canvas)
+                sheetRenderer (print-style page on a DrawSurface), sheetText
+                (title accidentals as glyphs)
     transport/  transportMachine (pure), transportClock, transportController,
                 sustainPedal, modes, TransportControls, ModeMenu
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportTakeDialog, ImportUrlDialog,
                 remoteImportMessage
-    export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService
-                (pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
+    export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService,
+                sheetPdfWriter (vector PDF via pdfSurface/vectorSurface and
+                pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
     settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
                 reset), PianoSection (piano choice with its own offline pack,
                 levels, room, tone)

@@ -107,8 +107,9 @@ Attribution and source/license links are also shown in the app's About view.
 
 - **Package:** `pdf-lib` (MIT license), <https://pdf-lib.js.org/>
 - **Use:** client-side assembly of the sheet-music PDF export; pages are
-  rendered locally to canvas and embedded as images. The library is loaded
-  on demand (code-split) and is not modified.
+  drawn locally as vector paths and text in the standard PDF Times fonts
+  (which are not embedded). The library is still loaded on demand
+  (code-split, when a PDF is generated) and is not modified.
 
 ## Fraunces (display typeface)
 
