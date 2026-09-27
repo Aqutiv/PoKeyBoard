@@ -11,6 +11,7 @@ import {
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
+import { accidentalSlots, assignAccidentalColumns } from './accidentalStacking';
 import { beamSpanFor, BEAM_THICKNESS_G, type BeamPiece } from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
 import {
@@ -448,15 +449,32 @@ function advanceG(deltaMs: number, wholeMs: number): number {
   return clamp(10 * Math.pow(Math.max(deltaMs, 0) / wholeMs, 0.47), MIN_ADV_G, MAX_ADV_G);
 }
 
-/** How many accidental columns the widest chord here needs (0 if none). */
+/**
+ * How many accidental column slots the widest stack here needs (0 if none): a
+ * double flat fills two.
+ */
 function accidentalColumnsIn(column: WorkColumn): number {
   let columns = 0;
   for (const chord of [...column.treble, ...column.bass]) {
     for (const note of chord.notes) {
-      if (note.accidental !== null) columns = Math.max(columns, note.accidentalColumn + 1);
+      if (note.accidental === null) continue;
+      columns = Math.max(columns, note.accidentalColumn + accidentalSlots(note.accidental));
     }
   }
   return columns;
+}
+
+/**
+ * Stack each staff's accidentals again by the printed glyphs' own boxes. The
+ * layout stacked them by one step count for every pair, which the live score
+ * still draws by; the sheet's glyphs are taller, and a sharp over a sharp or
+ * a flat under one needs more room than that count gives. The sheet's notes
+ * are its own copies, so the live score's columns are left as they were.
+ */
+function restackAccidentals(column: WorkColumn): void {
+  for (const chords of [column.treble, column.bass]) {
+    assignAccidentalColumns(chords.flatMap((chord) => chord.notes));
+  }
 }
 
 function toSheetChord(chord: ChordGroup): SheetChord {
@@ -537,6 +555,7 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
       else column.bassRest = entry;
     }
     const columns = [...byTime.values()].sort((a, b) => a.timeMs - b.timeMs);
+    for (const column of columns) restackAccidentals(column);
     if (columns.length === 0) {
       return {
         index: measure.index,

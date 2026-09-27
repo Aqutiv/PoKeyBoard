@@ -240,65 +240,65 @@
 <use href="#accidentalFlat" transform="matrix(0.0216 0 0 -0.0216 78.66 722.3)" fill="#000000"/>
 <use href="#accidentalFlat" transform="matrix(0.0216 0 0 -0.0216 84.87 714.2)" fill="#000000"/>
 <text x="41" y="649.9" font-family="Times" font-size="8" font-weight="normal" font-style="normal" fill="#000000" xml:space="preserve">10</text>
-<path d="M272.65 655.9 L272.65 733.1" fill="none" stroke="#000000" stroke-width="1"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 131.38 674.8)" fill="#000000"/>
-<use href="#accidentalDoubleSharp" transform="matrix(0.0216 0 0 -0.0216 124.7 674.8)" fill="#000000"/>
-<path d="M137.43 673.89 L137.43 655.9" fill="none" stroke="#000000" stroke-width="0.648"/>
-<path d="M129.22 738.5 L139.91 738.5" fill="none" stroke="#000000" stroke-width="0.864"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 131.38 738.5)" fill="#000000"/>
-<path d="M137.43 737.59 L137.43 719.6" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 161.06 672.1)" fill="#000000"/>
-<path d="M167.11 671.19 L167.11 653.2" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 161.06 735.8)" fill="#000000"/>
-<path d="M167.11 734.89 L167.11 716.9" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 200.42 666.7)" fill="#000000"/>
-<use href="#accidentalDoubleFlat" transform="matrix(0.0216 0 0 -0.0216 190.19 666.7)" fill="#000000"/>
-<path d="M200.75 667.61 L200.75 685.6" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 200.42 733.1)" fill="#000000"/>
-<path d="M206.47 732.19 L206.47 714.2" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 239.78 666.7)" fill="#000000"/>
-<use href="#accidentalFlat" transform="matrix(0.0216 0 0 -0.0216 233.55 666.7)" fill="#000000"/>
-<path d="M240.1 667.61 L240.1 685.6" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 239.78 730.4)" fill="#000000"/>
-<path d="M245.83 729.49 L245.83 711.5" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#fClefChange" transform="matrix(0.0216 0 0 -0.0216 275.89 716.9)" fill="#000000"/>
+<path d="M277.46 655.9 L277.46 733.1" fill="none" stroke="#000000" stroke-width="1"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 130.71 674.8)" fill="#000000"/>
+<use href="#accidentalDoubleSharp" transform="matrix(0.0216 0 0 -0.0216 124.03 674.8)" fill="#000000"/>
+<path d="M136.76 673.89 L136.76 655.9" fill="none" stroke="#000000" stroke-width="0.648"/>
+<path d="M128.55 738.5 L139.25 738.5" fill="none" stroke="#000000" stroke-width="0.864"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 130.71 738.5)" fill="#000000"/>
+<path d="M136.76 737.59 L136.76 719.6" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 159.89 672.1)" fill="#000000"/>
+<path d="M165.94 671.19 L165.94 653.2" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 159.89 735.8)" fill="#000000"/>
+<path d="M165.94 734.89 L165.94 716.9" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 206.41 666.7)" fill="#000000"/>
+<use href="#accidentalDoubleFlat" transform="matrix(0.0216 0 0 -0.0216 196.18 666.7)" fill="#000000"/>
+<path d="M206.74 667.61 L206.74 685.6" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 206.41 733.1)" fill="#000000"/>
+<path d="M212.46 732.19 L212.46 714.2" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 245.1 666.7)" fill="#000000"/>
+<use href="#accidentalFlat" transform="matrix(0.0216 0 0 -0.0216 238.87 666.7)" fill="#000000"/>
+<path d="M245.42 667.61 L245.42 685.6" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 245.1 730.4)" fill="#000000"/>
+<path d="M251.15 729.49 L251.15 711.5" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#fClefChange" transform="matrix(0.0216 0 0 -0.0216 280.7 716.9)" fill="#000000"/>
 <path d="M555.28 655.9 L555.28 733.1" fill="none" stroke="#000000" stroke-width="1"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 299.07 666.7)" fill="#000000"/>
-<path d="M299.39 667.61 L299.39 689.65" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadWhole" transform="matrix(0.0216 0 0 -0.0216 297.7 716.9)" fill="#000000"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 312.73 664)" fill="#000000"/>
-<path d="M313.06 664.91 L313.06 689.4" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 326.4 661.3)" fill="#000000"/>
-<path d="M326.72 662.21 L326.72 689.16" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 340.07 658.6)" fill="#000000"/>
-<path d="M340.39 659.51 L340.39 688.91" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 353.73 655.9)" fill="#000000"/>
-<path d="M354.05 656.81 L354.05 688.67" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 367.4 653.2)" fill="#000000"/>
-<path d="M367.72 654.11 L367.72 688.42" fill="none" stroke="#000000" stroke-width="0.648"/>
-<path d="M378.9 650.5 L389.59 650.5" fill="none" stroke="#000000" stroke-width="0.864"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 381.06 650.5)" fill="#000000"/>
-<path d="M381.39 651.41 L381.39 688.18" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 394.73 653.2)" fill="#000000"/>
-<path d="M395.05 654.11 L395.05 687.93" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 408.39 655.9)" fill="#000000"/>
-<path d="M408.72 656.81 L408.72 687.69" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 422.06 658.6)" fill="#000000"/>
-<path d="M422.38 659.51 L422.38 687.44" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 435.73 661.3)" fill="#000000"/>
-<path d="M436.05 662.21 L436.05 687.2" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 449.39 664)" fill="#000000"/>
-<path d="M449.71 664.91 L449.71 686.95" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 463.06 666.7)" fill="#000000"/>
-<path d="M463.38 667.61 L463.38 685.6" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 492.74 661.3)" fill="#000000"/>
-<path d="M493.06 662.21 L493.06 680.2" fill="none" stroke="#000000" stroke-width="0.648"/>
-<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 522.41 655.9)" fill="#000000"/>
-<path d="M522.74 656.81 L522.74 674.8" fill="none" stroke="#000000" stroke-width="0.648"/>
-<path d="M299.39 688.3 L449.71 685.6 L449.71 688.3 L299.39 691 Z" fill="#000000"/>
-<path d="M299.39 684.25 L449.71 681.55 L449.71 684.25 L299.39 686.95 Z" fill="#000000"/>
-<path d="M299.39 680.2 L449.71 677.5 L449.71 680.2 L299.39 682.9 Z" fill="#000000"/>
-<use href="#tuplet1" transform="matrix(0.01728 0 0 -0.01728 369.67 698.02)" fill="#000000"/>
-<use href="#tuplet2" transform="matrix(0.01728 0 0 -0.01728 373.92 698.02)" fill="#000000"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 303.38 666.7)" fill="#000000"/>
+<path d="M303.7 667.61 L303.7 689.65" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadWhole" transform="matrix(0.0216 0 0 -0.0216 302.01 716.9)" fill="#000000"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 316.81 664)" fill="#000000"/>
+<path d="M317.14 664.91 L317.14 689.4" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 330.24 661.3)" fill="#000000"/>
+<path d="M330.57 662.21 L330.57 689.16" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 343.68 658.6)" fill="#000000"/>
+<path d="M344 659.51 L344 688.91" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 357.11 655.9)" fill="#000000"/>
+<path d="M357.43 656.81 L357.43 688.67" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 370.54 653.2)" fill="#000000"/>
+<path d="M370.87 654.11 L370.87 688.42" fill="none" stroke="#000000" stroke-width="0.648"/>
+<path d="M381.82 650.5 L392.51 650.5" fill="none" stroke="#000000" stroke-width="0.864"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 383.98 650.5)" fill="#000000"/>
+<path d="M384.3 651.41 L384.3 688.18" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 397.41 653.2)" fill="#000000"/>
+<path d="M397.73 654.11 L397.73 687.93" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 410.84 655.9)" fill="#000000"/>
+<path d="M411.17 656.81 L411.17 687.69" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 424.27 658.6)" fill="#000000"/>
+<path d="M424.6 659.51 L424.6 687.44" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 437.71 661.3)" fill="#000000"/>
+<path d="M438.03 662.21 L438.03 687.2" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 451.14 664)" fill="#000000"/>
+<path d="M451.46 664.91 L451.46 686.95" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 464.57 666.7)" fill="#000000"/>
+<path d="M464.9 667.61 L464.9 685.6" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 493.75 661.3)" fill="#000000"/>
+<path d="M494.07 662.21 L494.07 680.2" fill="none" stroke="#000000" stroke-width="0.648"/>
+<use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 522.92 655.9)" fill="#000000"/>
+<path d="M523.24 656.81 L523.24 674.8" fill="none" stroke="#000000" stroke-width="0.648"/>
+<path d="M303.7 688.3 L451.46 685.6 L451.46 688.3 L303.7 691 Z" fill="#000000"/>
+<path d="M303.7 684.25 L451.46 681.55 L451.46 684.25 L303.7 686.95 Z" fill="#000000"/>
+<path d="M303.7 680.2 L451.46 677.5 L451.46 680.2 L303.7 682.9 Z" fill="#000000"/>
+<use href="#tuplet1" transform="matrix(0.01728 0 0 -0.01728 372.7 698.02)" fill="#000000"/>
+<use href="#tuplet2" transform="matrix(0.01728 0 0 -0.01728 376.95 698.02)" fill="#000000"/>
 <text x="295.27" y="823.89" font-family="Times" font-size="9.5" font-weight="normal" font-style="normal" fill="#000000" xml:space="preserve">1</text>
 </svg>
