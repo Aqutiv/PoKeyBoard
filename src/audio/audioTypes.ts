@@ -89,7 +89,8 @@ export interface SampleSelection {
    * The cutoff of the lowpass that plays this note at the brightness its
    * velocity asks for, in Hz at the note's own pitch (toneCalibrationMath.ts).
    * Absent, the voice has no filter at all: the soft layer, the top of the loud
-   * one, the Wurlitzer, and any pack without a tone calibration.
+   * one, the Wurlitzer, any pack without a tone calibration, and every note
+   * while Tone follows touch is off.
    */
   toneCutoffHz?: number;
   /**

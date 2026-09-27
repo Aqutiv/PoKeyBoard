@@ -9,11 +9,14 @@ import { useExportUiStore } from '@/state/useExportUiStore';
 
 const mock = vi.hoisted(() => ({
   onProgress: null as ((progress: ExportProgress) => void) | null,
+  options: null as unknown,
   sendExportEvent: vi.fn<(event: string) => boolean>(() => true),
+  settings: { metronomeVolume: 0.6, toneFollowsTouch: true },
 }));
 vi.mock('@/audio/AudioExportService', () => ({
   audioExportService: {
-    exportTake: (_take: unknown, _options: unknown, onProgress: (p: ExportProgress) => void) => {
+    exportTake: (_take: unknown, options: unknown, onProgress: (p: ExportProgress) => void) => {
+      mock.options = options;
       mock.onProgress = onProgress;
       return new Promise(() => undefined);
     },
@@ -38,14 +41,15 @@ vi.mock('@/features/transport/transportController', () => ({
   },
 }));
 vi.mock('@/state/useSettingsStore', () => ({
-  useSettingsStore: (select: (state: { metronomeVolume: number }) => unknown) =>
-    select({ metronomeVolume: 0.6 }),
+  useSettingsStore: (select: (state: typeof mock.settings) => unknown) => select(mock.settings),
 }));
 
 afterEach(() => {
   cleanup();
   act(() => useExportUiStore.getState().closeExport());
   mock.onProgress = null;
+  mock.options = null;
+  mock.settings = { metronomeVolume: 0.6, toneFollowsTouch: true };
   mock.sendExportEvent.mockClear();
 });
 
@@ -121,4 +125,21 @@ describe('the audio export progress bar', () => {
       vi.useRealTimers();
     }
   });
+});
+
+describe('the audio export options', () => {
+  it.each([true, false])(
+    'render with the tone as Settings has it (toneFollowsTouch: %s)',
+    async (toneFollowsTouch) => {
+      mock.settings = { ...mock.settings, toneFollowsTouch };
+      await startExport();
+      expect(mock.options).toEqual({
+        quality: 'share',
+        includeMetronome: false,
+        metronomeVolume: 0.6,
+        loudness: 'normalized',
+        toneFollowsTouch,
+      });
+    },
+  );
 });

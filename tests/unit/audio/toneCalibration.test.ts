@@ -73,8 +73,38 @@ function rampOf(table: ToneCalibration, layer: number, midi: number): ToneRamp {
   return ramp;
 }
 
+/** A selection as it was before the tone ramps: the same, less its tone. */
+function withoutTone(sample: SampleSelection): SampleSelection {
+  const open: SampleSelection = { ...sample };
+  delete open.toneCutoffHz;
+  delete open.toneMakeupDb;
+  return open;
+}
+
 const KEYS = Array.from({ length: 88 }, (_, index) => 21 + index);
 const [MEDIUM_FROM, LOUD_FROM] = VELOCITY_LAYER_THRESHOLDS;
+
+/**
+ * With the tone switched off (Settings → Piano → Tone follows touch), every
+ * note of `bank` is the selection it would be with it on, less the filter and
+ * the make-up that goes with it — so a voice plays its recording open, at the
+ * gain the velocity asks for, exactly as before the ramps. Returns how many of
+ * those notes would have had a filter, so a test can tell it checked some.
+ */
+function expectOpenWithToneOff(bank: SampleBank): number {
+  let toned = 0;
+  for (const midi of KEYS) {
+    for (const velocity of [0.05, 0.3, MEDIUM_FROM, 0.6, LOUD_FROM - 0.001, LOUD_FROM, 0.9, 1]) {
+      const on = bank.getSample(midi, velocity)!;
+      if (on.toneCutoffHz !== undefined) toned += 1;
+      expect(
+        bank.getSample(midi, velocity, { tone: false }),
+        `${midi} at ${velocity}`,
+      ).toStrictEqual(withoutTone(on));
+    }
+  }
+  return toned;
+}
 
 describe('the tone calibration table', () => {
   it('covers every recording of every grand, and nothing else', () => {
@@ -283,6 +313,19 @@ describe.each(GRANDS)('the tone of the calibrated $packVersion', ({ packVersion 
       expect(softOnly.getSample(midi, 0.95)!.toneCutoffHz).toBeUndefined();
     }
   });
+
+  it('plays every note open with the tone switched off, as it did before the ramps', async () => {
+    const bank = await loadedBank(manifest);
+    expect(expectOpenWithToneOff(bank)).toBeGreaterThan(KEYS.length);
+    // A partial load too: a stand-in from a brighter layer, filtered with the
+    // tone on, plays open with it off.
+    vi.unstubAllGlobals();
+    const mediumOnly = await loadedBank(
+      manifest,
+      manifest.files.filter((entry) => entry.layer === 1 && (entry.midi - 21) % 6 === 0),
+    );
+    expect(expectOpenWithToneOff(mediumOnly)).toBeGreaterThan(KEYS.length);
+  });
 });
 
 describe('no tone filter', () => {
@@ -294,6 +337,8 @@ describe('no tone filter', () => {
         const sample = bank.getSample(midi, velocity)!;
         expect(sample.toneCutoffHz).toBeUndefined();
         expect(sample.toneMakeupDb).toBeUndefined();
+        // Nor does switching the tone off change anything there.
+        expect(bank.getSample(midi, velocity, { tone: false })).toStrictEqual(sample);
       }
     }
   });

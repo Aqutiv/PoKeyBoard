@@ -61,6 +61,7 @@ export function AudioExportDialog() {
   const requestedTakeId = useExportUiStore((s) => s.requestedTakeId);
   const closeExport = useExportUiStore((s) => s.closeExport);
   const metronomeVolume = useSettingsStore((s) => s.metronomeVolume);
+  const toneFollowsTouch = useSettingsStore((s) => s.toneFollowsTouch);
 
   const [phase, setPhase] = useState<Phase | null>(null);
   const [lastRequestedId, setLastRequestedId] = useState<string | null>(null);
@@ -159,8 +160,9 @@ export function AudioExportDialog() {
       setPhase({ kind: 'working', take, progress: { stage: 'saving', fraction: -1 } });
       const show = (progress: ExportProgress) =>
         setPhase((current) => (current?.kind === 'working' ? { ...current, progress } : current));
+      const options = { quality, includeMetronome, metronomeVolume, loudness, toneFollowsTouch };
       audioExportService
-        .exportTake(take, { quality, includeMetronome, metronomeVolume, loudness }, (progress) => {
+        .exportTake(take, options, (progress) => {
           if (progress.stage === 'encoding') {
             transportController.sendExportEvent('RENDER_DONE');
           }
@@ -197,7 +199,7 @@ export function AudioExportDialog() {
           }
         });
     },
-    [quality, includeMetronome, metronomeVolume, loudness, m, releaseHeldRender],
+    [quality, includeMetronome, metronomeVolume, loudness, toneFollowsTouch, m, releaseHeldRender],
   );
 
   const cancelRender = useCallback(() => {

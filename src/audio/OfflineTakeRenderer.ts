@@ -49,6 +49,11 @@ export const RENDER_WARN_MINUTES = 8;
 export interface OfflineRenderOptions {
   includeMetronome: boolean;
   metronomeVolume: number;
+  /**
+   * Whether a grand's tone follows the touch, as the player has it set; see
+   * `SampleBank.getSample`.
+   */
+  toneFollowsTouch: boolean;
 }
 
 /**
@@ -279,7 +284,8 @@ export async function renderTakeForExport(
     }
     await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
   }
-  const sampleFor = (midi: number, velocity: number) => audioEngine.bank.getSample(midi, velocity);
+  const sampleFor = (midi: number, velocity: number) =>
+    audioEngine.bank.getSample(midi, velocity, { tone: options.toneFollowsTouch });
   // Every sample is chosen before the render starts, though most voices are
   // made during it: the piano a render begins with is the one it ends with.
   const samples = effectiveNotes.map((note) => sampleFor(note.midi, note.velocity));

@@ -43,6 +43,11 @@ export interface ExportOptions {
   includeMetronome: boolean;
   metronomeVolume: number;
   loudness: LoudnessMode;
+  /**
+   * The Tone follows touch setting, taken once for the export so its hash and
+   * its render agree.
+   */
+  toneFollowsTouch: boolean;
 }
 
 export type ExportStage = 'saving' | 'rendering' | 'encoding';
@@ -122,6 +127,7 @@ class AudioExportService {
           includeMetronome: options.includeMetronome,
           metronomeVolume: options.metronomeVolume,
           loudness: options.loudness,
+          toneFollowsTouch: options.toneFollowsTouch,
         }),
       );
       // Every export names the piano it was rendered with; a library track is
@@ -162,6 +168,7 @@ class AudioExportService {
           {
             includeMetronome: options.includeMetronome,
             metronomeVolume: options.metronomeVolume,
+            toneFollowsTouch: options.toneFollowsTouch,
           },
           (fraction) => report({ stage: 'rendering', fraction }),
         ),

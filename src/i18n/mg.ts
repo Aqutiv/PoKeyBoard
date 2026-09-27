@@ -508,6 +508,9 @@ export const mg: Messages = {
       hall: 'Efitrano fampisehoana',
       cathedral: 'Katedraly',
     },
+    toneFollowsTouch: 'Manaraka ny fikasihana ny feo',
+    toneFollowsTouchHint:
+      'Amin’ny piano rehetra afa-tsy ny Wurlitzer, maizina kokoa ny naoty malefaka ary mazava kokoa ny naoty mafy, ka miova tsikelikely ny feo manomboka amin’ny malefaka ka hatramin’ny mafy fa tsy mitsambikina. Raha vonoina, dia ny firaketana tsotra no andrenesana ny naoty tsirairay.',
     velocity: 'Hafainganam-pandeha',
     velocityTouch: 'Araka ny toeran’ny fikasihana amin’ny kitendry',
     velocityFixed: 'Raikitra',

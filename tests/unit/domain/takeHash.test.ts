@@ -23,6 +23,7 @@ const baseInput = {
   includeMetronome: false,
   metronomeVolume: 0.6,
   loudness: 'normalized',
+  toneFollowsTouch: true,
 };
 
 describe('stableStringify', () => {
@@ -175,6 +176,28 @@ describe('computeExportHash', () => {
         metronomeVolume: 0.2,
       }),
     ).not.toBe(withClicks);
+  });
+
+  it('keeps the key an export had before the tone could be switched off, and gives one without it its own', async () => {
+    const take = takeWithNotes();
+    const toneOn = await computeExportHash({ ...baseInput, take });
+    // The key as it was worked out before the setting existed: every MP3
+    // cached since the tone ramps (exporter version 9) is still found by it.
+    const beforeTheSetting = await sha256Hex(
+      stableStringify({
+        exporterVersion: baseInput.exporterVersion,
+        bitrateKbps: baseInput.bitrateKbps,
+        includeMetronome: baseInput.includeMetronome,
+        metronomeVolume: null,
+        loudness: baseInput.loudness,
+        content: canonicalAudioContent(take),
+      }),
+    );
+    expect(toneOn).toBe(beforeTheSetting);
+    // With the tone off every grand note plays open, so it is another export.
+    expect(await computeExportHash({ ...baseInput, take, toneFollowsTouch: false })).not.toBe(
+      toneOn,
+    );
   });
 
   it('is independent of note array order', async () => {
