@@ -536,6 +536,9 @@ export interface Messages {
       hall: string;
       cathedral: string;
     };
+    /** The switch for the grands' tone ramps, and what it does. */
+    toneFollowsTouch: string;
+    toneFollowsTouchHint: string;
     velocity: string;
     velocityTouch: string;
     velocityFixed: string;

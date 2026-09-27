@@ -49,6 +49,8 @@ export class AudioEngine {
   private masterVolume = DEFAULT_MASTER_VOLUME;
   private reverbMix = DEFAULT_REVERB_MIX;
   private reverbRoom: ReverbRoom = DEFAULT_REVERB_ROOM;
+  /** Whether a grand's tone follows the touch; see `SampleBank.getSample`. */
+  private toneFollowsTouch = true;
 
   private readonly statusListeners = new Set<(status: EngineStatus) => void>();
   private readonly activeNoteListeners = new Set<(midis: ReadonlySet<number>) => void>();
@@ -331,7 +333,7 @@ export class AudioEngine {
       // noteOn always originates from a gesture; resume opportunistically.
       void this.unlockFromUserGesture();
     }
-    const sample = this.bank.getSample(midi, velocity);
+    const sample = this.bank.getSample(midi, velocity, { tone: this.toneFollowsTouch });
     if (!sample) return false;
     this.voices.noteOn(sample, midi, sourceId);
     this.emitInput({ type: 'on', midi, velocity, audioTime: this.currentTime, sourceId });
@@ -395,7 +397,9 @@ export class AudioEngine {
     sourceId: NoteSourceId = 'playback',
   ): void {
     if (!this.voices) return;
-    const sample = this.bank.getSample(event.midi, event.velocity);
+    const sample = this.bank.getSample(event.midi, event.velocity, {
+      tone: this.toneFollowsTouch,
+    });
     if (!sample) return;
     this.voices.scheduleNote(sample, event.midi, sourceId, audioTime, event.durationMs / 1000);
   }
@@ -424,6 +428,16 @@ export class AudioEngine {
   setReverbRoom(room: ReverbRoom): void {
     this.reverbRoom = room;
     this.graph?.setReverbRoom(room);
+  }
+
+  /**
+   * Let a grand's tone follow the touch through each velocity layer, or play
+   * every recording open. It takes from the next note: one already sounding
+   * keeps the tone it started with, as do the few notes of playback already
+   * scheduled. An export takes the setting in its own options instead.
+   */
+  setToneFollowsTouch(enabled: boolean): void {
+    this.toneFollowsTouch = enabled;
   }
 
   getMasterVolume(): number {

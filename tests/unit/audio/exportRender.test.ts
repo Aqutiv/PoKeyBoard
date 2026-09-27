@@ -62,7 +62,7 @@ function note(id: string, midi: number, velocity: number): NoteEvent {
   return { id, midi, velocity, startMs: 0, durationMs: 500 };
 }
 
-const OPTIONS = { includeMetronome: false, metronomeVolume: 0 };
+const OPTIONS = { includeMetronome: false, metronomeVolume: 0, toneFollowsTouch: true };
 
 describe('an export render', () => {
   beforeEach(() => {

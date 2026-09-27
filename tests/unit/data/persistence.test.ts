@@ -76,6 +76,20 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).reverbRoom).toBe('hall');
   });
 
+  it('keeps Tone follows touch, on unless it was switched off, and drops a value that is not one', async () => {
+    expect(SETTINGS_DEFAULTS.toneFollowsTouch).toBe(true);
+
+    useSettingsStore.getState().setToneFollowsTouch(false);
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).toneFollowsTouch).toBe(false);
+
+    // Anything else loads as nothing, so the default stands: the tone on.
+    await db.settings.put({ key: 'toneFollowsTouch', value: 'no' });
+    expect((await loadSettings()).toneFollowsTouch).toBeUndefined();
+    await restoreSettingsFromBackup({ toneFollowsTouch: false });
+    expect((await loadSettings()).toneFollowsTouch).toBe(false);
+  });
+
   it('restores only known keys from a backup blob', async () => {
     await restoreSettingsFromBackup({ fixedVelocity: 0.9, metronomeVolume: -1, evil: 'x' });
     const loaded = await loadSettings();

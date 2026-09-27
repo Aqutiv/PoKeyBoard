@@ -82,6 +82,8 @@ export interface ExportHashInput {
   metronomeVolume: number;
   /** Normalized or as played; see `LoudnessMode`. */
   loudness: string;
+  /** Whether a grand's tone follows the touch (Settings → Piano). */
+  toneFollowsTouch: boolean;
 }
 
 /**
@@ -96,6 +98,10 @@ export async function computeExportHash(input: ExportHashInput): Promise<string>
       includeMetronome: input.includeMetronome,
       metronomeVolume: input.includeMetronome ? input.metronomeVolume : null,
       loudness: input.loudness,
+      // Hashed only when off: an export with the tone on, the default, keeps
+      // the key it had before the setting existed, so every MP3 cached since
+      // exporter version 9 is still found.
+      toneFollowsTouch: input.toneFollowsTouch ? undefined : false,
       content: canonicalAudioContent(input.take),
     }),
   );

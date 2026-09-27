@@ -303,8 +303,15 @@ export class SampleBank {
    * plays it at the brightness its velocity asks for (`voiceTone`): a
    * recording of the layer asked for follows its ramp, and a stand-in from
    * another layer during a partial load plays as near that tone as it can.
+   * With `tone: false` (Settings → Piano → Tone follows touch, off) it gets
+   * neither the lowpass nor its make-up, and plays its recording open, as every
+   * note did before the ramps.
    */
-  getSample(midi: number, velocity: number): SampleSelection | null {
+  getSample(
+    midi: number,
+    velocity: number,
+    { tone: toneFollowsTouch = true }: { tone?: boolean } = {},
+  ): SampleSelection | null {
     if (this.manifest?.regions) return this.getMappedSample(midi, velocity);
     const preferredLayer = velocityToLayer(velocity);
     const order = [preferredLayer, 1, 0, 2].filter((v, i, arr) => arr.indexOf(v) === i);
@@ -331,16 +338,17 @@ export class SampleBank {
       const playbackRate = Math.pow(2, (midi - root) / 12);
       // The table's cutoffs are at the recording's own pitch; played higher or
       // lower, its spectrum moves with it, and so does the cutoff.
-      const tone = this.tone
-        ? voiceTone(
-            this.tone,
-            VELOCITY_LAYER_THRESHOLDS,
-            velocity,
-            preferredLayer,
-            layerIndex,
-            root,
-          )
-        : undefined;
+      const tone =
+        this.tone && toneFollowsTouch
+          ? voiceTone(
+              this.tone,
+              VELOCITY_LAYER_THRESHOLDS,
+              velocity,
+              preferredLayer,
+              layerIndex,
+              root,
+            )
+          : undefined;
       return {
         buffer,
         playbackRate,

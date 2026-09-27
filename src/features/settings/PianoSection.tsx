@@ -263,6 +263,15 @@ export function PianoSection() {
           ))}
         </select>
       </label>
+      <label className="setting-row">
+        <span>{m.settings.toneFollowsTouch}</span>
+        <input
+          type="checkbox"
+          checked={settings.toneFollowsTouch}
+          onChange={(e) => settings.setToneFollowsTouch(e.target.checked)}
+        />
+      </label>
+      <p className="settings__hint">{m.settings.toneFollowsTouchHint}</p>
     </>
   );
 }

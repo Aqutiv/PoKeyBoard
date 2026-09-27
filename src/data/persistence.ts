@@ -68,6 +68,7 @@ class PersistenceService {
       audioEngine.setMasterVolume(settings.masterVolume);
       audioEngine.setReverbMix(settings.reverbMix);
       audioEngine.setReverbRoom(settings.reverbRoom);
+      audioEngine.setToneFollowsTouch(settings.toneFollowsTouch);
       void audioEngine.setInstrument(settings.pianoInstrument);
       // Default to the OS language unless the user has pinned one. Runs before
       // the autosave subscription below so an unpinned language isn't written
@@ -172,6 +173,12 @@ class PersistenceService {
             reverbRoom: state.reverbRoom,
           });
         }
+      }
+      // The tone is the player's, not the take's: it goes to the engine alone,
+      // leaving the take and its cached export as they are. An export hashes
+      // the setting it renders with, so a cached one is reused only for it.
+      if (state.toneFollowsTouch !== previous.toneFollowsTouch) {
+        audioEngine.setToneFollowsTouch(state.toneFollowsTouch);
       }
       this.scheduleSettingsSave();
     });

@@ -43,6 +43,7 @@ const options = {
   includeMetronome: false,
   metronomeVolume: 0.6,
   loudness: 'normalized',
+  toneFollowsTouch: true,
 } as const;
 
 describe('audio export cancellation', () => {
