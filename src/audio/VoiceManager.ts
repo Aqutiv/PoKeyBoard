@@ -6,6 +6,7 @@ import {
   holdSampleVoice,
   liftSampleVoiceFade,
   moveSampleVoiceRelease,
+  nearestFrameTime,
   releaseSampleVoice,
   startSampleVoice,
   stillSoundingAt,
@@ -70,17 +71,21 @@ export class VoiceManager {
     when: number,
     uiActive: boolean,
   ): { voice: Voice; heldUntil: number } {
-    const heldUntil = this.restrike(midi, when);
+    // The frame the voice will really start on, so that strikes are compared
+    // at the times they sound: two copies of a key struck together must still
+    // meet at one instant, and the first give way to the second.
+    const at = nearestFrameTime(this.context, when);
+    const heldUntil = this.restrike(midi, at);
     this.stealIfNeeded();
 
-    const playback = startSampleVoice(this.context, this.destination, sample, when);
+    const playback = startSampleVoice(this.context, this.destination, sample, at);
 
     const voice: Voice = {
       ...playback,
       id: this.nextVoiceId++,
       midi,
       sourceId,
-      startTime: when,
+      startTime: at,
       releasing: false,
       heldByPedal: false,
       uiActive,
@@ -88,7 +93,7 @@ export class VoiceManager {
     // Playback schedules ahead, so a key struck by hand can land before a
     // strike of it that playback has already queued: this sound gives way to
     // that one when it comes, as the queued one would have to this.
-    const struckAgainAt = this.nextStrikeAfter(midi, when);
+    const struckAgainAt = this.nextStrikeAfter(midi, at);
     if (struckAgainAt !== undefined) dampSampleVoice(voice, struckAgainAt);
     this.voices.add(voice);
     voice.source.onended = () => {

@@ -38,8 +38,10 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  * in the take's own room, with a longer room's tail given time to ring out.
  * 9: a grand's tone follows the touch through each velocity layer, a lowpass
  * per voice, so notes play brighter or darker than they did.
+ * 10: every voice starts on a whole frame, so a key at its recording's own
+ * pitch renders sample for sample instead of losing treble to interpolation.
  */
-export const AUDIO_EXPORTER_VERSION = 9;
+export const AUDIO_EXPORTER_VERSION = 10;
 
 export interface ExportOptions {
   encoding: ExportEncoding;
