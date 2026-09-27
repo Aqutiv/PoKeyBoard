@@ -79,8 +79,9 @@ takes seconds and never touches the audio engine.
   options phase also disables Generate when the estimate exceeds the cap.
 - Memory: vector, one page of operators at a time. A page's operators are
   compressed into its content stream as soon as it is drawn, so a long score
-  never holds more than one page of them; a page averages about 14 KB in the
-  file (Moonlight: 13 pages, 179 KB).
+  never holds more than one page of them; a page averages 14–20 KB in the file
+  (Moonlight: 13 pages, 179 KB; the denser Chopin Nocturne in E♭: 8 pages,
+  156 KB), against about 200 KB for the raster pages this replaced.
 - Share must run in the click handler (user activation), same as audio.
 
 ## Rests, keys, ties, pedal

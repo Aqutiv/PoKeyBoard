@@ -13,9 +13,10 @@ import { expect, test } from './fixtures';
 import { gotoAppReady, nav, recordShortTake } from './helpers';
 
 /**
- * The most a page of the vector sheet may take on average: 1.5× the largest
- * measured (Moonlight, 13,781 bytes a page), rounded up to a multiple of 10 KB.
- * The raster pages this replaced were about 200 KB each.
+ * The most a page of the vector sheet may take on average: 1.5× the densest
+ * measured, rounded up to a multiple of 10 KB. That is Chopin's Nocturne in E♭
+ * at 19,560 bytes a page; Moonlight, exported here, takes 13,781. The raster
+ * pages this replaced were about 200 KB each.
  */
 const PAGE_BUDGET_BYTES = 30 * 1024;
 
