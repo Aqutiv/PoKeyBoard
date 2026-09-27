@@ -63,6 +63,8 @@ vi.mock('@/audio/AudioEngine', async () => {
       setToneFollowsTouch,
       setInstrument: vi.fn(async () => undefined),
       markInstrumentRestored: vi.fn(),
+      subscribeSwitch: vi.fn(() => () => undefined),
+      getSwitchState: vi.fn(() => ({ pending: null, failed: null })),
       activeInstrument: pianoInstrument(DEFAULT_PIANO_INSTRUMENT_ID),
     },
   };

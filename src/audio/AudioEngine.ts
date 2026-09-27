@@ -35,6 +35,45 @@ export type InputNoteEvent =
   | { type: 'off'; midi: number; audioTime: number; sourceId: NoteSourceId }
   | { type: 'sustain'; down: boolean; audioTime: number; sourceId: NoteSourceId };
 
+/** A stretch of the keyboard: its lowest and highest keys, as MIDI notes. */
+export interface KeySpan {
+  low: number;
+  high: number;
+}
+
+/**
+ * Where a change of piano stands, for the pickers. A snapshot: a new object
+ * only when a field changes, as useSyncExternalStore requires.
+ */
+export interface InstrumentSwitchState {
+  /** The piano playing: behind the one chosen while a switch decodes it. */
+  sounding: PianoInstrumentId;
+  /** The piano decoding while the previous one plays on; see `setInstrument`. */
+  pending: PianoInstrumentId | null;
+  /** The piano that last could not be loaded, until the next switch starts. */
+  failed: PianoInstrumentId | null;
+  /**
+   * How much of what the pending piano has to decode is decoded, 0–1: its
+   * core and every key it must cover. Never goes back within one switch, and
+   * is 0 when none is under way.
+   */
+  progress: number;
+}
+
+interface PendingSwitch {
+  id: PianoInstrumentId;
+  generation: number;
+  /**
+   * Whether the previous piano plays on until this one is ready. The other
+   * kind, taken when there is nothing playable to keep, points the engine at
+   * the new bank at once.
+   */
+  seamless: boolean;
+  /** Keys the new piano must sound from its first note, besides `lastRange`. */
+  cover: KeySpan | null;
+  promise: Promise<void>;
+}
+
 /**
  * The stable piano service. A module singleton created outside React render
  * cycles; components call methods and subscribe to its events. The audio
@@ -64,16 +103,28 @@ export class AudioEngine {
 
   /**
    * One bank per instrument. The objects are cached (their manifests are worth
-   * keeping) but only the active one holds decoded buffers — two full packs of
-   * stereo float32 PCM would be ~620MB.
+   * keeping) but only the sounding one holds decoded buffers, and while a switch
+   * decodes, the one about to take over — two full packs of stereo float32 PCM
+   * would be ~620MB.
    */
   private readonly banks = new Map<PianoInstrumentId, SampleBank>();
-  private instrumentId: PianoInstrumentId = DEFAULT_PIANO_INSTRUMENT_ID;
+  /** The piano the user chose, which takes are stamped with. */
+  private selectedId: PianoInstrumentId = DEFAULT_PIANO_INSTRUMENT_ID;
+  /** The piano that plays: behind `selectedId` while a seamless switch decodes. */
+  private soundingId: PianoInstrumentId = DEFAULT_PIANO_INSTRUMENT_ID;
   private switchGeneration = 0;
-  private pendingSwitch: { id: PianoInstrumentId; promise: Promise<void> } | null = null;
+  private pendingSwitch: PendingSwitch | null = null;
+  private switchState: InstrumentSwitchState = {
+    sounding: DEFAULT_PIANO_INSTRUMENT_ID,
+    pending: null,
+    failed: null,
+    progress: 0,
+  };
+  private readonly switchListeners = new Set<() => void>();
+  private unsubscribeSwitchProgress: (() => void) | null = null;
 
   /** Last range the keyboard asked for, replayed after an instrument switch. */
-  private lastRange: { low: number; high: number } | null = null;
+  private lastRange: KeySpan | null = null;
 
   /**
    * Progress fan-out lives on the engine, not the bank: useSyncExternalStore
@@ -94,13 +145,23 @@ export class AudioEngine {
     this.watchBankProgress();
   }
 
-  /** The bank of the selected piano. */
+  /** The bank of the piano that is sounding. */
   get bank(): SampleBank {
-    return this.bankFor(this.instrumentId);
+    return this.bankFor(this.soundingId);
   }
 
+  /**
+   * The piano the user chose. It changes the moment they choose, so a take can
+   * be stamped with it at once, though for as long as the new piano takes to
+   * decode the previous one may still be the one heard (`soundingInstrument`).
+   */
   get activeInstrument(): PianoInstrument {
-    return pianoInstrument(this.instrumentId);
+    return pianoInstrument(this.selectedId);
+  }
+
+  /** The piano whose samples are played right now. */
+  get soundingInstrument(): PianoInstrument {
+    return pianoInstrument(this.soundingId);
   }
 
   bankFor(id: PianoInstrumentId): SampleBank {
@@ -112,38 +173,226 @@ export class AudioEngine {
   }
 
   /**
-   * Swap the piano. Sounding notes are released rather than cross-faded — the
-   * old buffers stay alive through their source nodes, so nothing clicks — and
-   * the outgoing bank is only freed once the new core is playable, which keeps a
-   * rapid A→B→A toggle from re-decoding anything.
+   * Choose the piano.
+   *
+   * While the piano playing now is ready, the change is seamless: it plays on
+   * while the new one decodes in the background — its core, the keys the
+   * player can reach (`lastRange`) and `cover`, the notes a take will play —
+   * and the new one takes over from the next note struck. Nothing is released:
+   * a note sounding, or queued in playback's look-ahead, finishes on the piano
+   * it began on, which its voice holds a buffer of. If the new piano cannot be
+   * loaded, the one playing is chosen again and `getSwitchState` says so.
+   *
+   * With nothing playable to keep — the first load, or a piano that failed —
+   * the switch is immediate: sounding notes are released, and the engine points
+   * at the new bank, progress and all, while it decodes.
+   *
+   * Either way, once the new piano plays every other bank's buffers are freed;
+   * not before, so a rapid A→B→A toggle never re-decodes anything.
    */
-  setInstrument(id: PianoInstrumentId): Promise<void> {
-    if (this.pendingSwitch?.id === id) return this.pendingSwitch.promise;
-    if (id === this.instrumentId && !this.pendingSwitch) return Promise.resolve();
-
-    const previous = this.bankFor(this.instrumentId);
+  setInstrument(
+    id: PianoInstrumentId,
+    { cover = null }: { cover?: KeySpan | null } = {},
+  ): Promise<void> {
+    const pending = this.pendingSwitch;
+    if (pending?.id === id) {
+      // The store's setter, persistence and the transport all ask for the one
+      // change; whichever knows what the take needs widens it.
+      if (cover) pending.cover = spanUnion(pending.cover, cover);
+      return pending.promise;
+    }
     const generation = ++this.switchGeneration;
+    this.abandonPendingSwitch();
+    this.selectedId = id;
+    if (id === this.soundingId) {
+      // Back to the piano still playing: a switch under way is simply called off.
+      if (pending) this.setSwitchState({ pending: null, failed: null, progress: 0 });
+      return Promise.resolve();
+    }
+    if (!this.context || !this.bank.isCoreReady()) return this.switchNow(id, generation);
+    return this.switchSeamlessly(id, generation, cover);
+  }
+
+  /** True while a new piano decodes and the previous one plays on. */
+  isSwitching(): boolean {
+    return this.switchState.pending !== null;
+  }
+
+  /** Stable snapshot: the same object until something changes (React-safe). */
+  getSwitchState(): InstrumentSwitchState {
+    return this.switchState;
+  }
+
+  /** Change subscription only, like subscribeActiveNotes. */
+  subscribeSwitch(listener: () => void): () => void {
+    this.switchListeners.add(listener);
+    return () => this.switchListeners.delete(listener);
+  }
+
+  /**
+   * Resolves once no switch is under way, so work that has to use the chosen
+   * piano — an export, named after it — never starts on the one it replaces.
+   */
+  async whenSwitchSettled(): Promise<void> {
+    while (this.pendingSwitch) {
+      await this.pendingSwitch.promise.catch(() => undefined);
+    }
+  }
+
+  /** The switch for when nothing playable is left to keep; see `setInstrument`. */
+  private switchNow(id: PianoInstrumentId, generation: number): Promise<void> {
     this.allNotesOff();
-    this.instrumentId = id;
+    this.soundingId = id;
     // Re-points progress at the new bank, whose phase is 'idle' — which is what
     // drops data-piano-ready back to false while the new pack decodes.
     this.watchBankProgress();
     this.coreLoadStarted = false;
+    this.setSwitchState({ pending: null, failed: null, progress: 0 });
 
     const promise = (async () => {
       this.markInstrumentRestored();
       await this.loadCoreSamples();
       if (generation !== this.switchGeneration) return;
       if (this.lastRange) {
-        await this.ensurePlayableRange(this.lastRange.low, this.lastRange.high);
+        try {
+          await this.ensurePlayableRange(this.lastRange.low, this.lastRange.high);
+        } catch {
+          // Optional roots: the core plays, and progress shows the error.
+        }
       }
       if (generation !== this.switchGeneration) return;
-      if (previous !== this.bank) previous.releaseBuffers();
-    })().finally(() => {
-      if (this.pendingSwitch?.id === id) this.pendingSwitch = null;
-    });
-    this.pendingSwitch = { id, promise };
+      this.releaseIdleBanks();
+    })().finally(() => this.clearPendingSwitch(generation));
+    this.pendingSwitch = { id, generation, seamless: false, cover: null, promise };
     return promise;
+  }
+
+  /** The switch that keeps the piano playing until the new one is ready. */
+  private switchSeamlessly(
+    id: PianoInstrumentId,
+    generation: number,
+    cover: KeySpan | null,
+  ): Promise<void> {
+    const context = this.context!;
+    const next = this.bankFor(id);
+    const stale = () => generation !== this.switchGeneration;
+
+    const promise = (async () => {
+      try {
+        await next.loadCorePack(context);
+        if (!stale() && !next.isCoreReady()) throw new Error('Core sample pack is incomplete.');
+      } catch (error) {
+        if (!stale()) this.failSwitch(id, error);
+        return;
+      }
+      // Every key that has to sound from the new piano's first note: those the
+      // player can reach, and the take's. Asked again after each load, since the
+      // keyboard can move while it runs.
+      let span = this.switchSpan();
+      while (span && !stale()) {
+        try {
+          await next.ensureRangeLoaded(context, span.low, span.high);
+        } catch {
+          // Optional roots, as for the first load: the core is ready, and plays.
+          break;
+        }
+        const wanted = this.switchSpan();
+        if (!wanted || (wanted.low === span.low && wanted.high === span.high)) break;
+        span = wanted;
+      }
+      if (stale()) return;
+      this.takeOver(id);
+    })().finally(() => this.clearPendingSwitch(generation));
+    this.pendingSwitch = { id, generation, seamless: true, cover, promise };
+    this.setSwitchState({ pending: id, failed: null, progress: 0 });
+    this.unsubscribeSwitchProgress = next.subscribe(() => this.updateSwitchProgress());
+    return promise;
+  }
+
+  /** Carry the pending bank's decode into the switch state, for the pickers. */
+  private updateSwitchProgress(): void {
+    const pending = this.pendingSwitch;
+    if (!pending?.seamless || this.switchState.pending !== pending.id) return;
+    const bank = this.bankFor(pending.id);
+    const total = bank.bytesFor(this.switchSpan());
+    const fraction = total ? Math.min(1, bank.getProgress().loadedBytes / total) : 0;
+    // The keys to cover can widen as the keyboard moves; the ring never runs back.
+    const progress = Math.max(this.switchState.progress, fraction);
+    if (progress !== this.switchState.progress) {
+      this.setSwitchState({ pending: pending.id, failed: null, progress });
+    }
+  }
+
+  /** What a seamless switch must have decoded before it takes over. */
+  private switchSpan(): KeySpan | null {
+    return spanUnion(this.lastRange, this.pendingSwitch?.cover ?? null);
+  }
+
+  /** The new piano plays from the next note struck. */
+  private takeOver(id: PianoInstrumentId): void {
+    this.soundingId = id;
+    // Its core is decoded, so a retry from the UI has nothing left to start.
+    this.coreLoadStarted = true;
+    this.watchBankProgress();
+    this.pendingSwitch = null;
+    this.stopWatchingSwitchProgress();
+    this.releaseIdleBanks();
+    this.setSwitchState({ pending: null, failed: null, progress: 0 });
+  }
+
+  /** The new piano could not be loaded: the one playing stays, and is chosen again. */
+  private failSwitch(id: PianoInstrumentId, error: unknown): void {
+    console.error(`Could not switch to ${id}:`, error);
+    this.selectedId = this.soundingId;
+    this.pendingSwitch = null;
+    this.stopWatchingSwitchProgress();
+    this.releaseIdleBanks();
+    this.setSwitchState({ pending: null, failed: id, progress: 0 });
+  }
+
+  /** Drop a switch a newer choice replaces; a seamless one's bank never played. */
+  private abandonPendingSwitch(): void {
+    const pending = this.pendingSwitch;
+    if (!pending) return;
+    this.pendingSwitch = null;
+    this.stopWatchingSwitchProgress();
+    if (pending.seamless) this.bankFor(pending.id).releaseBuffers();
+  }
+
+  private stopWatchingSwitchProgress(): void {
+    this.unsubscribeSwitchProgress?.();
+    this.unsubscribeSwitchProgress = null;
+  }
+
+  private clearPendingSwitch(generation: number): void {
+    if (this.pendingSwitch?.generation === generation) this.pendingSwitch = null;
+  }
+
+  /**
+   * Free every bank but the sounding one, and one a switch is decoding. A voice
+   * still sounding holds its own buffer, so nothing it plays is cut short.
+   */
+  private releaseIdleBanks(): void {
+    const keep = new Set<SampleBank>([this.bank]);
+    if (this.pendingSwitch) keep.add(this.bankFor(this.pendingSwitch.id));
+    for (const bank of this.banks.values()) {
+      if (!keep.has(bank)) bank.releaseBuffers();
+    }
+  }
+
+  /** Publish where a switch stands, with the piano playing as it is now. */
+  private setSwitchState(next: Omit<InstrumentSwitchState, 'sounding'>): void {
+    const current = this.switchState;
+    if (
+      current.sounding === this.soundingId &&
+      next.pending === current.pending &&
+      next.failed === current.failed &&
+      next.progress === current.progress
+    ) {
+      return;
+    }
+    this.switchState = { sounding: this.soundingId, ...next };
+    for (const listener of this.switchListeners) listener();
   }
 
   /**
@@ -268,7 +517,7 @@ export class AudioEngine {
    * Shares PIANO_SAMPLE_CACHE with the service worker's runtime caching.
    */
   async downloadFullSamplePack(
-    instrumentId: PianoInstrumentId = this.instrumentId,
+    instrumentId: PianoInstrumentId = this.selectedId,
     onProgress?: (loadedBytes: number, totalBytes: number) => void,
   ): Promise<void> {
     const bank = this.bankFor(instrumentId);
@@ -290,7 +539,7 @@ export class AudioEngine {
     }
   }
 
-  async isFullPackOffline(instrumentId: PianoInstrumentId = this.instrumentId): Promise<boolean> {
+  async isFullPackOffline(instrumentId: PianoInstrumentId = this.selectedId): Promise<boolean> {
     if (!('caches' in globalThis)) return false;
     const bank = this.bankFor(instrumentId);
     const manifest = await bank.loadManifest();
@@ -463,6 +712,11 @@ export class AudioEngine {
   }
 
   dispose(): void {
+    // A switch still decoding has no context left to take over in.
+    this.switchGeneration += 1;
+    this.pendingSwitch = null;
+    this.stopWatchingSwitchProgress();
+    this.setSwitchState({ pending: null, failed: null, progress: 0 });
     this.schedulerTicker?.disconnect();
     this.schedulerTicker = null;
     this.voices?.dispose();
@@ -539,7 +793,7 @@ export class AudioEngine {
     return () => this.sustainListeners.delete(listener);
   }
 
-  /** Progress for the selected piano; survives instrument switches. */
+  /** Progress for the piano that is sounding; survives instrument switches. */
   getLoadProgress(): SampleLoadProgress {
     return this.bank.getProgress();
   }
@@ -555,6 +809,13 @@ export class AudioEngine {
     this.status = status;
     for (const listener of this.statusListeners) listener(status);
   }
+}
+
+/** The smallest span holding both; either may be missing. */
+function spanUnion(a: KeySpan | null, b: KeySpan | null): KeySpan | null {
+  if (!a) return b;
+  if (!b) return a;
+  return { low: Math.min(a.low, b.low), high: Math.max(a.high, b.high) };
 }
 
 /** The app-wide piano engine instance. */
