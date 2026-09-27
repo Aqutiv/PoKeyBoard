@@ -680,7 +680,7 @@ export const en: Messages = {
       lame: 'MP3 encoding, compiled to WebAssembly',
       pdfLib: 'sheet-music PDF export',
       fraunces: 'display typeface by Undercase Type',
-      musicFont: 'music font by Steinberg, adapted for printed sheets',
+      musicFont: 'music font by Steinberg, adapted',
     },
     notices: 'Full license notices ship with the source code:',
     version: ({ version }) => `Version ${version}.`,

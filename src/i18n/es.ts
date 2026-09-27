@@ -682,7 +682,7 @@ export const es: Messages = {
       lame: 'codificación MP3, compilado a WebAssembly',
       pdfLib: 'exportación de partituras en PDF',
       fraunces: 'tipografía de títulos de Undercase Type',
-      musicFont: 'tipografía musical de Steinberg, adaptada a las partituras impresas',
+      musicFont: 'tipografía musical de Steinberg, adaptada',
     },
     notices: 'Los avisos de licencia completos se incluyen con el código fuente:',
     version: ({ version }) => `Versión ${version}.`,

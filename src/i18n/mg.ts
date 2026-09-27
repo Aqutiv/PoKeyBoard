@@ -691,8 +691,7 @@ export const mg: Messages = {
       lame: 'fanovana MP3, natao WebAssembly',
       pdfLib: 'famoahana partition ho PDF',
       fraunces: 'endri-tsoratra lohateny nataon’i Undercase Type',
-      musicFont:
-        'endri-tsoratra mozika nataon’i Steinberg, nampifanaraka ho an’ny partition natonta',
+      musicFont: 'endri-tsoratra mozika nataon’i Steinberg, nampifanaraka',
     },
     notices: 'Ny fanamarihana feno momba ny fahazoan-dalana dia miaraka amin’ny loharano:',
     version: ({ version }) => `Kinova ${version}.`,
