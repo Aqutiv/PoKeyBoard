@@ -23,7 +23,7 @@ const SIGNS: Record<string, AccidentalKind> = {
 };
 
 /** Emoji and text presentation selectors, which mean nothing to a drawn sign. */
-const PRESENTATION_SELECTORS = new Set(['︎', '️']);
+const PRESENTATION_SELECTORS = new Set(['\ufe0e', '\ufe0f']);
 
 /** Split text into runs of plain text and the accidental signs between them. */
 export function splitRich(text: string): RichRun[] {

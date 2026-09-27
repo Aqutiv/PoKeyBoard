@@ -114,7 +114,7 @@ describe('splitRich', () => {
   });
 
   it('drops a presentation selector riding on a sign it replaces', () => {
-    expect(splitRich('E♭️ major')).toEqual([
+    expect(splitRich('E♭\ufe0f major')).toEqual([
       { kind: 'text', text: 'E' },
       { kind: 'accidental', accidental: 'b' },
       { kind: 'text', text: ' major' },
@@ -210,7 +210,7 @@ describe('ellipsizeRich', () => {
   });
 
   it('keeps a joined emoji sequence whole', () => {
-    const family = '👨‍👩‍👧';
+    const family = '👨\u200d👩\u200d👧';
     const out = ellipsizeRich(surface, `${family}${family}${family}`, 10 * UNIT_W, 10);
     expect(out).toBe(`${family}…`);
     expect(out).not.toMatch(LONE_SURROGATE);

@@ -282,8 +282,8 @@ export function normalizePdfText(text: string): string {
     ) {
       out += ' ';
     } else if (code === 0x2010 || code === 0x2011 || code === 0x2212) out += '-';
-    else if (code === 0x2012) out += '–';
-    else if (code === 0x2015) out += '—';
+    else if (code === 0x2012) out += '\u2013';
+    else if (code === 0x2015) out += '\u2014';
     else out += character;
   }
   // Dropping an invisible character can leave a mark next to its base.

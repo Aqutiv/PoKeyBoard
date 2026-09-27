@@ -597,16 +597,16 @@ describe('the PDF surface: text', () => {
   });
 
   it.each([
-    ['é', 'é'],
-    ['a b c　d e f g', 'a b c d e f g'],
-    ['a b', 'a b'],
-    ['soft­hyphen', 'softhyphen'],
-    ['zero​width‌join‍word⁠﻿', 'zerowidthjoinword'],
+    ['e\u0301', '\u00e9'],
+    ['a\u2009b\u202fc\u3000d\u205fe\u2000f\u200ag', 'a b c d e f g'],
+    ['a\u00a0b', 'a\u00a0b'],
+    ['soft\u00adhyphen', 'softhyphen'],
+    ['zero\u200bwidth\u200cjoin\u200dword\u2060\ufeff', 'zerowidthjoinword'],
     ['tab\tcr\rlf\n', 'tab cr lf '],
     ['bell\u0007del\u007fnel\u0085end', 'belldelnelend'],
-    ['a‐b‑c−d', 'a-b-c-d'],
-    ['1‒2', '1–2'],
-    ['a―b', 'a—b'],
+    ['a\u2010b\u2011c\u2212d', 'a-b-c-d'],
+    ['1\u20122', '1\u20132'],
+    ['a\u2015b', 'a\u2014b'],
   ])('normalizes %j for a WinAnsi font', (input, expected) => {
     expect(normalizePdfText(input)).toBe(expected);
   });
@@ -614,7 +614,7 @@ describe('the PDF surface: text', () => {
   it('sets normalized text as vector text rather than an image', async () => {
     const { ops } = await drawOnPage((s) => {
       s.font = '10px serif';
-      s.fillText('27 septembre — “8va” – é−', 10, 10);
+      s.fillText('27\u202fseptembre\u00a0— “8va” – é\u2212', 10, 10);
     });
     expect(ops.some((op) => op.endsWith(' Tj'))).toBe(true);
     expect(ops.some((op) => op.endsWith(' Do'))).toBe(false);
@@ -673,7 +673,7 @@ describe('the PDF surface: text', () => {
         baselineY: 2,
       })),
     };
-    const coder = '👩‍💻';
+    const coder = '👩\u200d💻';
     const { ops } = await drawOnPage((s) => {
       s.fillText(coder, 0, 50);
     }, rasterizer);
