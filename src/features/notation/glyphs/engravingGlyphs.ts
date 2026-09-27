@@ -73,6 +73,16 @@ export function dynamicOpticalCentre(mark: DynamicMark): number {
 }
 
 /**
+ * How far a dynamic's ink reaches either side of the x it is centred on, in
+ * staff spaces: an `ff` leans well left of its optical centre, a `p` right.
+ */
+export function dynamicInkG(mark: DynamicMark): { left: number; right: number } {
+  const [left, , right] = MUSIC_GLYPH_METRICS[DYNAMIC_GLYPHS[mark]].bbox;
+  const centre = dynamicOpticalCentre(mark);
+  return { left: centre - left, right: right - centre };
+}
+
+/**
  * The clef glyph for a staff: full size where a system opens, and the smaller
  * change glyph where one turns over inside the staff. A G clef is placed on
  * its G line and an F clef on its F line.

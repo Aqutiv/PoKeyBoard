@@ -3,9 +3,12 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { PdfStandardFonts } from '@/features/export/pdfSurface';
 import { beginSvgPage } from '@/features/export/svgSurface';
 import type { TextRasterizer } from '@/features/export/vectorSurface';
+import { dynamicOpticalCentre, DYNAMIC_GLYPHS } from '@/features/notation/glyphs/engravingGlyphs';
 import { MUSIC_GLYPH_METRICS } from '@/features/notation/glyphs/musicGlyphMetrics';
 import { signatureSteps } from '@/features/notation/keySignature';
+import { layoutScore } from '@/features/notation/notationLayout';
 import {
+  layoutSheet,
   metricsFor,
   SHEET_GAP_PT,
   staffYRel,
@@ -532,5 +535,52 @@ describe('the key signature', () => {
     // An empty bar's whole rest hangs from the fourth line, centred in the bar.
     const whole = bbox('restWhole');
     expectUse(keyDrawn, 'restWhole', 150 + 150 - whole.centre * G, y(TREBLE, 6));
+  });
+});
+
+describe('a hairpin between two dynamics', () => {
+  it('keeps clear of the ink of the mark at either end, however wide the mark', () => {
+    // Four bars of quarters, a crescendo from mp in bar 1 to ff in bar 3.
+    const notes = Array.from({ length: 16 }, (_, i) => ({
+      id: `n${i}`,
+      midi: 76,
+      startMs: i * 500,
+      durationMs: 500,
+      velocity: 0.5,
+    }));
+    const score = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+      minMeasures: 1,
+    });
+    score.dynamics = [
+      { atMs: 0, mark: 'mp' },
+      { atMs: 4000, mark: 'ff' },
+    ];
+    score.hairpins = [{ fromMs: 0, toMs: 4000, grow: true }];
+    const [sheetSystem] = layoutSheet(score, {
+      paper: 'a4',
+      timeSignature: { numerator: 4, denominator: 4 },
+      bpm: 120,
+      title: 'Swell',
+      subtitle: '',
+      credit: 'PoKeyBoard',
+    }).pages[0]!.systems;
+    const [start, end] = sheetSystem!.dynamics;
+    const [wedge] = sheetSystem!.hairpins;
+    expect(start?.mark).toBe('mp');
+    expect(end?.mark).toBe('ff');
+    expect(wedge).toBeDefined();
+
+    // Where each mark's ink reaches, placed as the renderer places it.
+    const ink = (mark: 'mp' | 'ff', x: number) => {
+      const [left, , right] = MUSIC_GLYPH_METRICS[DYNAMIC_GLYPHS[mark]].bbox;
+      const origin = x - dynamicOpticalCentre(mark) * G;
+      return { left: origin + left * G, right: origin + right * G };
+    };
+    const gap = 0.5 * G;
+    expect(wedge!.x1Pt - ink('mp', start!.xPt).right).toBeCloseTo(gap, 6);
+    expect(ink('ff', end!.xPt).left - wedge!.x2Pt).toBeCloseTo(gap, 6);
   });
 });

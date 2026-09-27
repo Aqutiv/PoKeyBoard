@@ -13,7 +13,12 @@ import {
 } from './notationLayout';
 import { beamSpanFor, BEAM_THICKNESS_G, type BeamPiece } from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
-import { flaggedStemReachG, noteheadHalfWidth, STEM_THICKNESS_G } from './glyphs/engravingGlyphs';
+import {
+  dynamicInkG,
+  flaggedStemReachG,
+  noteheadHalfWidth,
+  STEM_THICKNESS_G,
+} from './glyphs/engravingGlyphs';
 import { MUSIC_GLYPH_ANCHORS } from './glyphs/musicGlyphMetrics';
 import { normalizeFifths, type AccidentalKind } from './keySignature';
 import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
@@ -696,7 +701,9 @@ export const PEDAL_HOOK_G = 0.75;
 export const DYNAMICS_ROW_PT = 12;
 /** Half-height of a hairpin's open end. */
 export const HAIRPIN_MOUTH_G = 0.55;
-/** Clear space kept between a hairpin and the mark at either end of it. */
+/** Clear space kept between a hairpin and the ink of the mark at either end of it. */
+const HAIRPIN_GAP_G = 0.5;
+/** How far a hairpin's end stands off from its note where no mark is written there. */
 const HAIRPIN_CLEARANCE_G = 1.2;
 
 /**
@@ -820,9 +827,12 @@ function buildDynamics(
   const toMs = last.endMs;
 
   const dynamics: SheetDynamic[] = [];
+  /** The marks this system writes, by when they fall. */
+  const markAt = new Map<number, DynamicMark>();
   for (const mark of marks) {
     if (mark.atMs < fromMs || mark.atMs >= toMs) continue;
     dynamics.push({ xPt: xAtTime(anchors, mark.atMs), mark: mark.mark });
+    markAt.set(mark.atMs, mark.mark);
   }
 
   const wedges: SheetHairpin[] = [];
@@ -830,10 +840,21 @@ function buildDynamics(
     if (hairpin.toMs <= fromMs || hairpin.fromMs >= toMs) continue;
     const continuesLeft = hairpin.fromMs < fromMs;
     const continuesRight = hairpin.toMs > toMs;
-    // Where an end carries a mark of its own, start clear of it; where the
+    // Where an end carries a mark of its own, keep clear of the mark's ink,
+    // which reaches further from its note for an ff than for a p; where the
     // wedge runs off the system there is nothing to avoid.
-    const lead = continuesLeft ? 0 : HAIRPIN_CLEARANCE_G * G;
-    const trail = continuesRight ? 0 : HAIRPIN_CLEARANCE_G * G;
+    const startMark = markAt.get(hairpin.fromMs);
+    const endMark = markAt.get(hairpin.toMs);
+    const lead = continuesLeft
+      ? 0
+      : startMark
+        ? (dynamicInkG(startMark).right + HAIRPIN_GAP_G) * G
+        : HAIRPIN_CLEARANCE_G * G;
+    const trail = continuesRight
+      ? 0
+      : endMark
+        ? (dynamicInkG(endMark).left + HAIRPIN_GAP_G) * G
+        : HAIRPIN_CLEARANCE_G * G;
     const x1Pt = xAtTime(anchors, Math.max(hairpin.fromMs, fromMs)) + lead;
     const x2Pt = xAtTime(anchors, Math.min(hairpin.toMs, toMs)) - trail;
     // A wedge with no room left to open in says less than nothing.
