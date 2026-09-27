@@ -9,6 +9,7 @@ import type {
   TimeSignature,
 } from '@/domain/takeTypes';
 import { barDurationMs, beatDurationMs } from '@/utils/timing';
+import { assignAccidentalColumns } from './accidentalStacking';
 import type { BeamPiece } from './beamGeometry';
 import {
   beamCountFor,
@@ -512,38 +513,15 @@ function chordsInStack(stack: LaidOutNote[]): ChordGroup[] {
   });
 }
 
-/** Steps closer than this leave two sharps overlapping in one column. */
-const ACCIDENTAL_CLEARANCE_STEPS = 5;
-
 /**
- * Give each accidental in a chord a column, working down from the top. A sharp
- * stands about two and a half staff spaces tall — five steps — so two of them
- * any closer than that cannot share a column and the lower one moves out a
- * place. Most chords need only column 0.
+ * Give each accidental in a stack a column, working down from the top, by the
+ * music font's own glyph boxes (see `assignAccidentalColumns`): two share a
+ * column only where their ink cannot meet, and a double flat, wider than a
+ * column, takes two. The live score and the printed sheet both draw from
+ * these columns. Most chords need only column 0.
  */
 function stackAccidentals(voices: ChordGroup[]): void {
-  const marked = [];
-  for (const chord of voices) {
-    for (const note of chord.notes) {
-      if (note.accidental !== null) marked.push(note);
-    }
-  }
-  if (marked.length < 2) return;
-  marked.sort((a, b) => b.step - a.step);
-
-  /** The lowest step already placed in each column, top-down. */
-  const lowestInColumn: number[] = [];
-  for (const note of marked) {
-    let column = 0;
-    while (
-      lowestInColumn[column] !== undefined &&
-      (lowestInColumn[column] as number) - note.step < ACCIDENTAL_CLEARANCE_STEPS
-    ) {
-      column += 1;
-    }
-    lowestInColumn[column] = note.step;
-    note.accidentalColumn = column;
-  }
+  assignAccidentalColumns(voices.flatMap((chord) => chord.notes));
 }
 
 /**

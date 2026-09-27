@@ -11,7 +11,7 @@ import {
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
-import { accidentalSlots, assignAccidentalColumns } from './accidentalStacking';
+import { accidentalSlots } from './accidentalStacking';
 import { beamSpanFor, BEAM_THICKNESS_G, type BeamPiece } from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
 import {
@@ -464,19 +464,6 @@ function accidentalColumnsIn(column: WorkColumn): number {
   return columns;
 }
 
-/**
- * Stack each staff's accidentals again by the printed glyphs' own boxes. The
- * layout stacked them by one step count for every pair, which the live score
- * still draws by; the sheet's glyphs are taller, and a sharp over a sharp or
- * a flat under one needs more room than that count gives. The sheet's notes
- * are its own copies, so the live score's columns are left as they were.
- */
-function restackAccidentals(column: WorkColumn): void {
-  for (const chords of [column.treble, column.bass]) {
-    assignAccidentalColumns(chords.flatMap((chord) => chord.notes));
-  }
-}
-
 function toSheetChord(chord: ChordGroup): SheetChord {
   return {
     staff: chord.staff,
@@ -555,7 +542,6 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
       else column.bassRest = entry;
     }
     const columns = [...byTime.values()].sort((a, b) => a.timeMs - b.timeMs);
-    for (const column of columns) restackAccidentals(column);
     if (columns.length === 0) {
       return {
         index: measure.index,

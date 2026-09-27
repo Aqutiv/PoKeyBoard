@@ -183,12 +183,11 @@ takes seconds and never touches the audio engine.
   bar line forgets it, so repeats are unmarked and a return to the key takes a
   natural.
   Accidentals that would foul each other stack into columns left of the chord,
-  topmost nearest. The live score shares a column at five steps apart, about
-  the height of its own glyphs; the printed sheet re-stacks by the font's glyph
-  boxes (`accidentalStacking.ts`), sharing one only where the lower sign's top
-  and the upper one's bottom fit between their lines — six steps for two
-  sharps, seven for a flat under a sharp, five for two flats — and gives a
-  double flat, wider than a column, two.
+  topmost nearest. The layout stacks them by the font's glyph boxes
+  (`accidentalStacking.ts`), for the live score and the printed sheet alike,
+  sharing a column only where the lower sign's top and the upper one's bottom
+  fit between their lines — six steps for two sharps, seven for a flat under a
+  sharp, five for two flats — and gives a double flat, wider than a column, two.
 - **Ties** cut a note at every bar line it crosses, and again wherever no
   single value covers the remainder, so a note longer than a whole note is
   written rather than clamped and a ring-out past the bar line is engraved
