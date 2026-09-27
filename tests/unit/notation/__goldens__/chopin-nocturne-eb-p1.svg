@@ -84,7 +84,7 @@
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 352.77 177.5)" fill="#000000"/>
 <path d="M353.09 178.41 L353.09 196.4" fill="none" stroke="#000000" stroke-width="0.648"/>
 <use href="#flag8thDown" transform="matrix(0.0216 0 0 -0.0216 352.77 197.11)" fill="#000000"/>
-<path d="M344.88 242.4 L361.3 242.4" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M346.23 242.4 L361.3 242.4" fill="none" stroke="#000000" stroke-width="0.864"/>
 <path d="M350.61 237 L361.3 237" fill="none" stroke="#000000" stroke-width="0.864"/>
 <path d="M350.61 231.6 L361.3 231.6" fill="none" stroke="#000000" stroke-width="0.864"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 347.04 242.4)" fill="#000000"/>
@@ -167,8 +167,8 @@
 <path d="M144.67 439.87 L155.36 439.87" fill="none" stroke="#000000" stroke-width="0.864"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 146.83 439.87)" fill="#000000"/>
 <path d="M147.15 440.78 L147.15 454.99" fill="none" stroke="#000000" stroke-width="0.648"/>
-<path d="M194.09 402.07 L204.78 402.07" fill="none" stroke="#000000" stroke-width="0.864"/>
-<path d="M194.09 396.67 L204.78 396.67" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M195.44 402.07 L204.78 402.07" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M195.44 396.67 L204.78 396.67" fill="none" stroke="#000000" stroke-width="0.864"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 196.25 410.17)" fill="#000000"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 196.25 396.67)" fill="#000000"/>
 <use href="#accidentalNatural" transform="matrix(0.0216 0 0 -0.0216 191.27 396.67)" fill="#000000"/>
@@ -211,7 +211,7 @@
 <path d="M366.81 344.68 L366.81 362.67" fill="none" stroke="#000000" stroke-width="0.648"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 366.48 431.77)" fill="#000000"/>
 <path d="M366.81 432.68 L366.81 446.89" fill="none" stroke="#000000" stroke-width="0.648"/>
-<path d="M413.75 402.07 L424.44 402.07" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M415.1 402.07 L424.44 402.07" fill="none" stroke="#000000" stroke-width="0.864"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 415.91 412.87)" fill="#000000"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 415.91 399.37)" fill="#000000"/>
 <use href="#accidentalFlat" transform="matrix(0.0216 0 0 -0.0216 409.68 399.37)" fill="#000000"/>
@@ -325,7 +325,7 @@
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 471.36 589.24)" fill="#000000"/>
 <use href="#accidentalNatural" transform="matrix(0.0216 0 0 -0.0216 466.38 589.24)" fill="#000000"/>
 <path d="M471.68 590.14 L471.68 604.36" fill="none" stroke="#000000" stroke-width="0.648"/>
-<path d="M517 564.94 L527.7 564.94" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M518.35 564.94 L527.7 564.94" fill="none" stroke="#000000" stroke-width="0.864"/>
 <path d="M517 559.54 L527.7 559.54" fill="none" stroke="#000000" stroke-width="0.864"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 519.16 573.04)" fill="#000000"/>
 <use href="#accidentalFlat" transform="matrix(0.0216 0 0 -0.0216 512.93 573.04)" fill="#000000"/>
@@ -362,7 +362,7 @@
 <path d="M125.77 659.61 L125.77 679.23" fill="none" stroke="#000000" stroke-width="0.648"/>
 <path d="M123.29 700.81 L133.98 700.81" fill="none" stroke="#000000" stroke-width="0.864"/>
 <path d="M123.29 695.41 L133.98 695.41" fill="none" stroke="#000000" stroke-width="0.864"/>
-<path d="M123.29 690.01 L133.98 690.01" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M124.64 690.01 L133.98 690.01" fill="none" stroke="#000000" stroke-width="0.864"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 125.45 700.81)" fill="#000000"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 125.45 695.41)" fill="#000000"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 125.45 690.01)" fill="#000000"/>
@@ -433,8 +433,8 @@
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 414.3 695.41)" fill="#000000"/>
 <path d="M414.62 696.31 L414.62 750.54" fill="none" stroke="#000000" stroke-width="0.648"/>
 <path d="M457.07 700.81 L467.77 700.81" fill="none" stroke="#000000" stroke-width="0.864"/>
-<path d="M457.07 695.41 L467.77 695.41" fill="none" stroke="#000000" stroke-width="0.864"/>
-<path d="M457.07 690.01 L467.77 690.01" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M458.42 695.41 L467.77 695.41" fill="none" stroke="#000000" stroke-width="0.864"/>
+<path d="M458.42 690.01 L467.77 690.01" fill="none" stroke="#000000" stroke-width="0.864"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 459.23 703.51)" fill="#000000"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 459.23 695.41)" fill="#000000"/>
 <use href="#noteheadBlack" transform="matrix(0.0216 0 0 -0.0216 459.23 690.01)" fill="#000000"/>

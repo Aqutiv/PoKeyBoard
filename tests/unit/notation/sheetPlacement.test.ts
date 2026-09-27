@@ -303,6 +303,14 @@ const PAGE: SheetPage = {
               treble: [
                 chord([note(-2, { ledger: [-2] })], { symbol: { base: 'whole', dotted: false } }),
               ],
+              // C♮4 on the ledger line above the bass staff.
+              bass: [
+                chord([note(10, { ledger: [10], accidental: 'natural' })], {
+                  staff: 'bass',
+                  clef: 'bass',
+                  stemDown: true,
+                }),
+              ],
             }),
           ],
         }),
@@ -440,6 +448,25 @@ describe('where the sheet puts its glyphs', () => {
     const ledger = lineAt(drawn, WHOLE_X - reach, y(TREBLE, -2), WHOLE_X + reach, y(TREBLE, -2));
     expect(ledger).toBeDefined();
     expect(ledger!.width).toBeCloseTo(0.16 * G, 3);
+  });
+
+  it('stops a ledger line short of an accidental beside it', () => {
+    const natural = bbox('accidentalNatural');
+    const accidentalRight = WHOLE_X - (0.59 + 0.25) * G;
+    expectUse(drawn, 'accidentalNatural', accidentalRight - natural.right * G, y(BASS, 10));
+    // Its right end reaches out as usual; its left stops a tenth of a space
+    // clear of the natural's ink instead of running into it.
+    const ledger = lineAt(
+      drawn,
+      accidentalRight + 0.1 * G,
+      y(BASS, 10),
+      WHOLE_X + (0.59 + 0.4) * G,
+      y(BASS, 10),
+    );
+    expect(
+      ledger,
+      JSON.stringify(drawn.strokes.filter((s) => near(s.points[1]!, y(BASS, 10)))),
+    ).toBeDefined();
   });
 
   it('centres a rest on its column, on its registered line, its dot in the space above', () => {

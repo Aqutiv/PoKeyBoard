@@ -25,6 +25,7 @@ import type { DrawSurface } from './drawSurface';
 import { beamPieceXs, beamYAt, BEAM_SPACING_G, BEAM_THICKNESS_G } from './beamGeometry';
 import { drawGlyph } from './glyphs/drawGlyph';
 import {
+  ACCIDENTAL_GLYPHS,
   clefGlyphFor,
   drawAccidentalCentred,
   drawAccidentalEndingAt,
@@ -87,6 +88,8 @@ const LEDGER_EXTENSION = ENGRAVING_DEFAULTS.legerLineExtension * G;
 
 /** Clear space between an accidental and the head it stands before. */
 const ACCIDENTAL_GAP_G = 0.25;
+/** Clear space a ledger line leaves before an accidental beside it. */
+const LEDGER_ACCIDENTAL_GAP_G = 0.1;
 /** Clear space between the rightmost head and its dot. */
 const DOT_GAP_G = 0.4;
 /** Where a system's clefs start, after its opening bar line. */
@@ -434,6 +437,12 @@ function drawChord(
   const shifts = chord.notes.map((note) => note.headShift);
   const leftHeadX = x + Math.min(...shifts) * shift;
   const rightHeadX = x + Math.max(...shifts) * shift;
+  /**
+   * Where an accidental's ink ends on the right: right-aligned, so accidentals
+   * of different widths line up on the chord.
+   */
+  const accidentalRight = (note: SheetNote): number =>
+    leftHeadX - half - ACCIDENTAL_GAP_G * G - note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G;
 
   // Ledger lines behind the heads, each long enough to carry every head on its
   // step — a displaced head needs the line to reach out to it.
@@ -454,8 +463,18 @@ function drawChord(
   }
   for (const [step, span] of ledgerSpans) {
     const y = staffTop + staffYRel(step);
+    // An accidental stands closer to its head than a ledger line reaches, so
+    // a line that would run into one stops short of its ink instead.
+    let left = span.left;
+    for (const note of chord.notes) {
+      if (!note.accidental) continue;
+      const noteY = staffTop + staffYRel(note.step);
+      const [, bottom, , top] = MUSIC_GLYPH_METRICS[ACCIDENTAL_GLYPHS[note.accidental]].bbox;
+      const reaches = y >= noteY - top * G - LEDGER_W && y <= noteY - bottom * G + LEDGER_W;
+      if (reaches) left = Math.max(left, accidentalRight(note) + LEDGER_ACCIDENTAL_GAP_G * G);
+    }
     ctx.beginPath();
-    ctx.moveTo(span.left, y);
+    ctx.moveTo(left, y);
     ctx.lineTo(span.right, y);
     ctx.stroke();
   }
@@ -464,12 +483,7 @@ function drawChord(
     const y = staffTop + staffYRel(note.step);
     drawGlyph(ctx, head, headX(note) - glyphCentre(head) * G, y, G);
 
-    if (note.accidental) {
-      // Right-aligned, so accidentals of different widths line up on the head.
-      const right =
-        leftHeadX - half - ACCIDENTAL_GAP_G * G - note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G;
-      drawAccidentalEndingAt(ctx, note.accidental, right, y, G);
-    }
+    if (note.accidental) drawAccidentalEndingAt(ctx, note.accidental, accidentalRight(note), y, G);
     if (chord.symbol.dotted) {
       // Dots sit in a space: shift line-notes up half a space.
       const dotY = y - (note.step % 2 === 0 ? G / 2 : 0);
