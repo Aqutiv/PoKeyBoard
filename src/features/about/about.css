@@ -45,3 +45,71 @@
   line-height: 1.5;
   color: var(--text-dim);
 }
+
+.about__scroll a {
+  color: var(--accent-strong);
+  text-underline-offset: 2px;
+}
+
+/* Credits: a group per kind — the pianos, then the software. */
+.about__subsection {
+  margin: 18px 0 8px;
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--text);
+}
+
+/* One card per piano, the same four the Settings picker shows as cards. */
+.about__credits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+@media (min-width: 700px) {
+  .about__credits {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.about__credit {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+}
+
+.about__credit .about__feature-body + .about__feature-body {
+  margin-top: 4px;
+}
+
+.about__links {
+  margin: 6px 0 0;
+  font-size: 13px;
+}
+
+.about__software {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+.about__notices {
+  margin: 12px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-dim);
+}
+
+/* Not a credit: set apart from the notices above it. Scoped to outrank
+   .page__hint's margin whatever order the stylesheets load in. */
+.about__scroll .about__version {
+  margin-top: 18px;
+}

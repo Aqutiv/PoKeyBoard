@@ -649,13 +649,39 @@ export const en: Messages = {
     installBody:
       'Add PoKeyBoard to your home screen or desktop and it launches full-screen, starts without a connection, and stays out of the browser’s way. Install before you record anything you want to keep, since the installed app can use storage separate from the browser tab.',
     credits: 'Credits',
-    wurlitzerAttribution:
-      'Wurlitzer EP203W samples by Greg Sullivan; SFZ mapping by kinwie. Adapted for the web with sustain loops, tuning, and an extended 88-key range.',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
-    attribution:
-      'Pianos: Salamander Grand Piano v3 by Alexander Holm (CC-BY 3.0) and Headroom Piano by Bengt Nilsson (CC-BY 4.0), both adapted for the web. MP3 encoding by the LAME encoder compiled to WebAssembly. Full notices ship with the source in THIRD_PARTY_NOTICES.md.',
-    bitklavierAttribution:
-      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: a Steinway D recorded at Princeton University by Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers and Daniel Trueman. Adapted for the web: three of its sixteen velocity layers, shortened with a fade-out, raised in level and re-encoded as 16-bit FLAC.',
+    pianosTitle: 'Pianos',
+    pianoCredits: {
+      salamander: {
+        credit: 'Salamander Grand Piano v3 by Alexander Holm.',
+        adapted:
+          'Adapted for the web: 3 of its 16 velocity layers, shortened to 7–12 seconds with a fade-out, and reduced from 24-bit to 16-bit.',
+      },
+      headroom: {
+        credit: 'Headroom Piano by Bengt Nilsson; SFZ mapping by kinwie.',
+        adapted:
+          'Adapted for the web: 3 of its 5 velocity layers, close microphones only, shortened to 7–12 seconds with a fade-out.',
+      },
+      bitklavier: {
+        credit:
+          'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: a Steinway D recorded at Princeton University by Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers and Daniel Trueman.',
+        adapted:
+          'Adapted for the web: 3 of its 16 velocity layers, shortened to 7–12 seconds with a fade-out, raised in level, and reduced from 24-bit to 16-bit.',
+      },
+      wurlitzer: {
+        credit: 'Wurlitzer EP203W samples by Greg Sullivan; SFZ mapping by kinwie.',
+        adapted:
+          'Adapted for the web: the recordings are unchanged, and their mapping is extended to all 88 keys.',
+      },
+    },
+    source: 'Source',
+    softwareTitle: 'Software',
+    software: {
+      lame: 'MP3 encoding, compiled to WebAssembly',
+      pdfLib: 'sheet-music PDF export',
+      fraunces: 'display typeface by Undercase Type',
+    },
+    notices: 'Full license notices ship with the source code:',
     version: ({ version }) => `Version ${version}.`,
   },
   errors: {
