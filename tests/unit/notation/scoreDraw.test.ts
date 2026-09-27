@@ -1121,6 +1121,152 @@ describe('drawScore octave lines', () => {
   });
 });
 
+describe('drawScore rests', () => {
+  /** Clear space a rest keeps from the ink either side of it. */
+  const CLEAR = 0.25 * GAP;
+  const onsetX = (ms: number, pxPerMs: number): number =>
+    gutterWidthFor(0) + SCORE_LEAD_IN + ms * pxPerMs;
+  const inks = (drawn: Drawn, name: MusicGlyphName): Ink[] =>
+    named(drawn, name)
+      .map(inkOf)
+      .sort((a, b) => a.left - b.left);
+  /** Where a glyph's ink is centred across. */
+  const middle = (ink: Ink): number => (ink.left + ink.right) / 2;
+
+  /** E4 eighths, one on each beat, each with the eighth rest that finishes its beat. */
+  const eighthsAndRests = (): ScoreLayout =>
+    written([
+      [0, 0.5, 64],
+      [1, 0.5, 64],
+      [2, 0.5, 64],
+      [3, 0.5, 64],
+    ]);
+
+  it('keeps a rest clear of the flag before it when the music is packed', () => {
+    // 17 px from each eighth to its rest: the flag swings 13.2 px right of the
+    // head's centre, and the rest reaches 4.4 px back — they touched.
+    const layout = eighthsAndRests();
+    expect(layout.chords.every((chord) => chord.beamId === null && !chord.stemDown)).toBe(true);
+    const drawn = render(layout, {}, 'treble', null, { widthPx: 800, pxPerMs: 17 / 500 });
+    const flags = inks(drawn, 'flag8thUp');
+    const rests = inks(drawn, 'rest8th');
+    const next = heads(drawn).slice(1);
+    expect(flags).toHaveLength(4);
+    expect(rests).toHaveLength(4);
+    rests.forEach((restInk, i) => {
+      expect(restInk.left - (flags[i] as Ink).right).toBeGreaterThanOrEqual(CLEAR - 1e-6);
+      const head = next[i];
+      if (head) expect(head.x - head.half - restInk.right).toBeGreaterThanOrEqual(CLEAR - 1e-6);
+    });
+  });
+
+  it('leaves a rest on its time where the music gives it room', () => {
+    const pxPerMs = 25 / 500;
+    const drawn = render(eighthsAndRests(), {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const rests = inks(drawn, 'rest8th');
+    expect(rests.map(middle)).toEqual(
+      [500, 1500, 2500, 3500].map((ms) => expect.closeTo(onsetX(ms, pxPerMs), 6)),
+    );
+  });
+
+  /**
+   * The clear space before each of the first three rests, after its eighth's
+   * flag, and after it, before the next eighth's head; and before it, after
+   * the eighth's own head.
+   */
+  const gaps = (pxPerMs: number) => {
+    const drawn = render(eighthsAndRests(), {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const flags = inks(drawn, 'flag8thUp');
+    const rests = inks(drawn, 'rest8th');
+    const all = heads(drawn);
+    return [0, 1, 2].map((i) => {
+      const restInk = rests[i] as Ink;
+      const own = all[i] as Head;
+      const next = all[i + 1] as Head;
+      return {
+        flag: restInk.left - (flags[i] as Ink).right,
+        head: own.x + own.half - restInk.left,
+        next: next.x - next.half - restInk.right,
+      };
+    });
+  };
+
+  it('stands a rest in the middle of the gap when it cannot keep its clear space', () => {
+    // 14 px apart: room for the rest between the flag and the next head, but
+    // not for its clear space either side as well.
+    for (const gap of gaps(14 / 500)) {
+      expect(gap.flag).toBeGreaterThanOrEqual(0);
+      expect(gap.flag).toBeLessThan(CLEAR);
+      expect(gap.flag).toBeCloseTo(gap.next, 6);
+    }
+  });
+
+  it('keeps a rest off the next head rather than share the overlap with it', () => {
+    // 12 px apart the flag swings out past the rest's own onset. Halving the
+    // overlap would tuck the rest under the next head, which is drawn over it;
+    // crossed by the flag instead, it still reads.
+    for (const gap of gaps(12 / 500)) {
+      expect(gap.flag).toBeLessThan(0);
+      expect(gap.next).toBeCloseTo(0, 6);
+    }
+  });
+
+  it('stands a rest midway between the heads when even they leave it no room', () => {
+    for (const gap of gaps(8 / 500)) {
+      expect(gap.next).toBeLessThan(0);
+      expect(gap.head).toBeCloseTo(-gap.next, 6);
+    }
+  });
+
+  it('keeps a rest clear of the accidental after it', () => {
+    // An F♯ eighth half a beat after the rest: packed, its sharp hangs back
+    // over where the rest stands.
+    const layout = written([
+      [0, 1, 64],
+      [1.5, 0.5, 66],
+    ]);
+    const pxPerMs = 16 / 500;
+    const drawn = render(layout, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const [sharp] = inks(drawn, 'accidentalSharp');
+    const [restInk] = inks(drawn, 'rest8th');
+    const [first] = heads(drawn);
+    expect((sharp as Ink).left).toBeLessThan(onsetX(1000, pxPerMs) + 4);
+    expect((sharp as Ink).left - (restInk as Ink).right).toBeGreaterThanOrEqual(CLEAR - 1e-6);
+    expect(
+      (restInk as Ink).left - ((first as Head).x + (first as Head).half),
+    ).toBeGreaterThanOrEqual(CLEAR - 1e-6);
+  });
+
+  it('stands a bar line clear of a rest where the rest was moved to', () => {
+    // An eighth's flag pushes the rest after it on toward the bar line, and
+    // the next bar opens on a quarter rest.
+    const layout = written([
+      [0, 3],
+      [3, 0.5, 64],
+      [5, 1],
+    ]);
+    const pxPerMs = 15 / 500;
+    const drawn = render(layout, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const [eighthRest] = inks(drawn, 'rest8th');
+    const [quarterRest] = inks(drawn, 'restQuarter');
+    const lines = drawn.paths
+      .filter((path) => path.style === SCORE_PALETTES.dark.barLine && path.width === 1)
+      .map((path) => (path.points[0] as Point).x)
+      .filter((x) => Math.abs(x - onsetX(4000, pxPerMs)) < 20);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toBeGreaterThan((eighthRest as Ink).right);
+    expect(lines[0]).toBeLessThan((quarterRest as Ink).left);
+  });
+
+  it('draws the rhythm lesson’s rest on its beat, as it always stood', () => {
+    // The densest line a lesson draws: 20 px to the beat.
+    const pxPerMs = 20 / 1000;
+    const drawn = render(bar([0, 2, 3]), {}, 'treble', 'lesson', { widthPx: 800, pxPerMs });
+    const [restInk] = inks(drawn, 'restQuarter');
+    expect(middle(restInk as Ink)).toBeCloseTo(onsetX(1000, pxPerMs), 6);
+  });
+});
+
 describe('drawScore bar lines', () => {
   const { barLine, gutterBg, loopEdge, loopWash, playhead, noteDim } = SCORE_PALETTES.dark;
   /** Three bars of 4/4 across, a beat to 50 px. */
@@ -1278,10 +1424,11 @@ describe('drawScore bar lines', () => {
   });
 
   it('crosses a rest rather than a head when a rest overlaps the downbeat', () => {
-    // A sixteenth rest 10 px before the downbeat overlaps its head, and a
-    // flagged, dotted eighth leaves no gap before the rest either. The note
-    // heads decide, and a rest is not one.
-    const pxPerMs = 10 / 250;
+    // A sixteenth rest 7 px before the downbeat, after a flagged, dotted
+    // eighth: too little room for it either side, so it stands in the middle
+    // of the gap, over the downbeat's head and the flag alike. The note heads
+    // decide, and a rest is not one.
+    const pxPerMs = 7 / 250;
     const packed = written([
       [0, 3],
       [3, 0.75],
@@ -1289,7 +1436,11 @@ describe('drawScore bar lines', () => {
     ]);
     expect(packed.rests.some((rest) => rest.displayStartMs === 3750)).toBe(true);
     const drawn = render(packed, {}, 'treble', null, { widthPx: 800, pxPerMs });
+    const [sixteenthRest] = named(drawn, 'rest16th').map(inkOf);
+    expect(sixteenthRest?.right).toBeGreaterThan(onsetX(4000, pxPerMs) - HEAD_HALF);
     const line = lineNear(drawn, 4000, pxPerMs);
+    expect(line).toBeGreaterThan(sixteenthRest?.left ?? 0);
+    expect(line).toBeLessThan(sixteenthRest?.right ?? 0);
     expect(line).toBeGreaterThan(onsetX(3000, pxPerMs) + HEAD_HALF);
     expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_HALF);
   });

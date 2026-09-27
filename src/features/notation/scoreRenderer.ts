@@ -999,6 +999,34 @@ function chordReachRight(chord: ChordGroup): number {
 }
 
 /**
+ * How far each chord's ink reaches left and right of its onset, by index into
+ * `layout.chords`: all of it (`chordReachLeft`, `chordReachRight`), and its
+ * heads alone. Built once per layout, which is immutable: the rests are placed
+ * against it again whenever the spacing changes.
+ */
+interface ChordReaches {
+  left: Float64Array;
+  right: Float64Array;
+  headLeft: Float64Array;
+  headRight: Float64Array;
+}
+
+const chordReaches = new WeakMap<ScoreLayout, ChordReaches>();
+
+function chordReachesFor(layout: ScoreLayout): ChordReaches {
+  const cached = chordReaches.get(layout);
+  if (cached) return cached;
+  const reaches = {
+    left: Float64Array.from(layout.chords, (chord) => chordReachLeft(chord)),
+    right: Float64Array.from(layout.chords, (chord) => chordReachRight(chord)),
+    headLeft: Float64Array.from(layout.chords, (chord) => headsReachLeft(chord)),
+    headRight: Float64Array.from(layout.chords, (chord) => headsReachRight(chord)),
+  };
+  chordReaches.set(layout, reaches);
+  return reaches;
+}
+
+/**
  * The furthest any ink in `layout` reaches from its onset, either way — how far
  * `dividerX` has to look. Accidentals stack into as many columns as a chord
  * needs, so no fixed bound covers them all. Built once per layout, which is
@@ -1010,8 +1038,9 @@ function widestReachPx(layout: ScoreLayout): number {
   const cached = widestReaches.get(layout);
   if (cached !== undefined) return cached;
   let widest = 0;
-  for (const chord of layout.chords) {
-    widest = Math.max(widest, chordReachLeft(chord), chordReachRight(chord));
+  const { left, right } = chordReachesFor(layout);
+  for (let i = 0; i < left.length; i += 1) {
+    widest = Math.max(widest, left[i] as number, right[i] as number);
   }
   for (const rest of layout.rests) {
     const ink = restReachPx(rest.symbol);
@@ -1019,6 +1048,175 @@ function widestReachPx(layout: ScoreLayout): number {
   }
   widestReaches.set(layout, widest);
   return widest;
+}
+
+/** Clear space a rest keeps from the ink either side of it, as an accidental keeps from its head. */
+const REST_CLEAR_PX = GAP * 0.25;
+
+/**
+ * Where the rests are drawn at one spacing: each one's shift off its onset, in
+ * pixels, by index into `layout.rests`, and the largest either way.
+ */
+interface RestPlacement {
+  pxPerMs: number;
+  shifts: Float64Array;
+  widest: number;
+}
+
+const restPlacements = new WeakMap<ScoreLayout, RestPlacement>();
+
+/** How far a rest's ink reaches either side of where it is centred; see `restReachPx`. */
+interface RestInk {
+  left: number;
+  right: number;
+}
+
+/** Where a run of rests may stand: after ink ending at `from`, before ink starting at `to`. */
+interface Gap {
+  from: number;
+  to: number;
+}
+
+/**
+ * A run of rests set in `gap`, each as near its onset as it can stand
+ * `REST_CLEAR_PX` clear of the gap's ends and of the rest beside it. A run the
+ * gap cannot hold that way is set as close as it goes, in the middle of it, and
+ * does not `fit`.
+ */
+function packRests(
+  onsets: readonly number[],
+  inks: readonly RestInk[],
+  gap: Gap,
+): { at: number[]; fits: boolean } {
+  const at = [...onsets];
+  // Pushed on past the ink before, each rest clear of the last...
+  let wall = gap.from + REST_CLEAR_PX;
+  at.forEach((x, k) => {
+    const ink = inks[k] as RestInk;
+    at[k] = Math.max(x, wall + ink.left);
+    wall = (at[k] as number) + ink.right + REST_CLEAR_PX;
+  });
+  // ...then back off the ink after.
+  wall = gap.to - REST_CLEAR_PX;
+  for (let k = at.length - 1; k >= 0; k -= 1) {
+    const ink = inks[k] as RestInk;
+    at[k] = Math.min(at[k] as number, wall - ink.right);
+    wall = (at[k] as number) - ink.left - REST_CLEAR_PX;
+  }
+  // Pushed back past where the ink before ends: there is no room.
+  if (wall >= gap.from - 1e-9) return { at, fits: true };
+  const width = inks.reduce(
+    (sum, ink) => sum + ink.left + ink.right + REST_CLEAR_PX,
+    -REST_CLEAR_PX,
+  );
+  let x = (gap.from + gap.to - width) / 2;
+  inks.forEach((ink, k) => {
+    at[k] = x + ink.left;
+    x += ink.left + ink.right + REST_CLEAR_PX;
+  });
+  return { at, fits: false };
+}
+
+/**
+ * Where the rests stand at `pxPerMs`.
+ *
+ * A rest is drawn on its onset, as a note is, wherever the music leaves it
+ * `REST_CLEAR_PX` clear of the ink either side: the flag of the note before it,
+ * which swings out right past its head, the accidental of the note after it,
+ * which hangs back, and the rest beside it. Where the music is packed tighter
+ * than that — a fast passage, or any passage zoomed far enough out — the rest
+ * moves off its onset, as little as it must. It can: a rest says where the
+ * music is not, and nothing reads its x as a time, as the playhead, beams and
+ * ties read a note's.
+ *
+ * Where there is no room at all, the rests go in the middle of what gap there
+ * is, and come as near the ink either side alike. Unless that puts one over a
+ * head: a rest crossed by a flag or an accidental still reads, and one tucked
+ * under a head (the notes are drawn over the rests) does not, so the heads
+ * decide, as they do for a bar line in `dividerX`.
+ *
+ * Only a staff's own music counts. A rest stands where nothing on its staff is
+ * sounding, so the notes either side of it on that staff are what it can run
+ * into. Built again only when the spacing changes.
+ */
+function restPlacementFor(layout: ScoreLayout, pxPerMs: number): RestPlacement {
+  const cached = restPlacements.get(layout);
+  if (cached?.pxPerMs === pxPerMs) return cached;
+  const { chords, rests } = layout;
+  const reaches = chordReachesFor(layout);
+  const shifts = new Float64Array(rests.length);
+
+  /** Place the run of rests `run`: between all the ink either side, or between its heads. */
+  const place = (run: readonly number[], ink: Gap, heads: Gap): void => {
+    const onsets = run.map((i) => (rests[i] as LaidOutRest).displayStartMs * pxPerMs);
+    const inks = run.map((i) => restReachPx((rests[i] as LaidOutRest).symbol));
+    const packed = packRests(onsets, inks, ink);
+    let { at } = packed;
+    if (!packed.fits) {
+      // Off whichever head it would cover, where the heads leave the room.
+      const least = heads.from - ((at[0] as number) - (inks[0] as RestInk).left);
+      const most =
+        heads.to - ((at[at.length - 1] as number) + (inks[inks.length - 1] as RestInk).right);
+      if (least <= most) {
+        const shift = Math.min(Math.max(0, least), most);
+        at = at.map((x) => x + shift);
+      } else {
+        ({ at } = packRests(onsets, inks, heads));
+      }
+    }
+    run.forEach((i, k) => {
+      shifts[i] = (at[k] as number) - (onsets[k] as number);
+    });
+  };
+
+  for (const staff of ['treble', 'bass'] as const) {
+    const own = chords.flatMap((chord, i) => (chord.staff === staff ? [i] : []));
+    const ownRests = rests.flatMap((rest, i) => (rest.staff === staff ? [i] : []));
+    // Where the ink of this staff's chords starts, and their heads, from each
+    // one on: a later chord's accidentals can reach back past an earlier one's.
+    const inkFrom = new Float64Array(own.length + 1).fill(Number.POSITIVE_INFINITY);
+    const headFrom = new Float64Array(own.length + 1).fill(Number.POSITIVE_INFINITY);
+    for (let j = own.length - 1; j >= 0; j -= 1) {
+      const i = own[j] as number;
+      const x = (chords[i] as ChordGroup).displayStartMs * pxPerMs;
+      inkFrom[j] = Math.min(inkFrom[j + 1] as number, x - (reaches.left[i] as number));
+      headFrom[j] = Math.min(headFrom[j + 1] as number, x - (reaches.headLeft[i] as number));
+    }
+    let next = 0;
+    const until = { ink: Number.NEGATIVE_INFINITY, heads: Number.NEGATIVE_INFINITY };
+    for (let r = 0; r < ownRests.length;) {
+      const onset = (rests[ownRests[r] as number] as LaidOutRest).displayStartMs;
+      for (; next < own.length; next += 1) {
+        const i = own[next] as number;
+        const ms = (chords[i] as ChordGroup).displayStartMs;
+        if (ms >= onset) break;
+        until.ink = Math.max(until.ink, ms * pxPerMs + (reaches.right[i] as number));
+        until.heads = Math.max(until.heads, ms * pxPerMs + (reaches.headRight[i] as number));
+      }
+      // The run: every rest before the next chord.
+      const nextMs =
+        next < own.length ? (chords[own[next] as number] as ChordGroup).displayStartMs : Infinity;
+      let end = r + 1;
+      while (
+        end < ownRests.length &&
+        (rests[ownRests[end] as number] as LaidOutRest).displayStartMs < nextMs
+      ) {
+        end += 1;
+      }
+      place(
+        ownRests.slice(r, end),
+        { from: until.ink, to: inkFrom[next] as number },
+        { from: until.heads, to: headFrom[next] as number },
+      );
+      r = end;
+    }
+  }
+
+  let widest = 0;
+  for (const shift of shifts) widest = Math.max(widest, Math.abs(shift));
+  const placement = { pxPerMs, shifts, widest };
+  restPlacements.set(layout, placement);
+  return placement;
 }
 
 /**
@@ -1043,9 +1241,12 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
   // A clef the bar changes to stands just before its line, and needs room.
   const room = clefChangesAt(view, layout, ms) ? INLINE_CLEF_ROOM : 0;
   // The line can stand a reach plus its lead and room off its time, and ink a
-  // further reach off that can still touch it; nothing further out can.
+  // further reach off that can still touch it; nothing further out can. A rest
+  // is measured where it is drawn, which can be off its onset.
   const widest = widestReachPx(layout);
-  const searchMs = (widest * 2 + BAR_LINE_LEAD_PX + BAR_LINE_TRAIL_PX + room) / view.pxPerMs;
+  const rested = restPlacementFor(layout, view.pxPerMs);
+  const searchMs =
+    (widest * 2 + rested.widest + BAR_LINE_LEAD_PX + BAR_LINE_TRAIL_PX + room) / view.pxPerMs;
   const opens = ms - ON_THE_BAR_MS;
   /**
    * The rightmost ink of what starts before `ms` and the leftmost of the rest:
@@ -1090,7 +1291,7 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     if (!drawsStaff(view, rest.staff)) continue;
     // Ink, but not a head: packed tight, a line through a rest still reads.
     const ink = restReachPx(rest.symbol);
-    reach(rest.displayStartMs, ink.left, ink.right);
+    reach(rest.displayStartMs, ink.left, ink.right, undefined, rested.shifts[i] as number);
   }
 
   // Room for the clef first, where the music leaves it: clear of all the ink,
@@ -1292,7 +1493,8 @@ function drawTempoMark(
 
 /**
  * Rests go under the notes, in the dimmer rest ink: they say where the music
- * is not, and a head that happens to land on one should win the pixel.
+ * is not, and a head that happens to land on one should win the pixel. Each
+ * stands on its onset where the music leaves it room; see `restPlacementFor`.
  */
 function drawRests(
   ctx: CanvasRenderingContext2D,
@@ -1304,10 +1506,11 @@ function drawRests(
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
   ctx.fillStyle = palette.rest;
   const { rests } = layout;
+  const { shifts } = restPlacementFor(layout, view.pxPerMs);
   for (let i = firstAtOrAfter(rests, fromMs, (rest) => rest.displayStartMs); ; i += 1) {
     const rest = rests[i];
     if (!rest || rest.displayStartMs > toMs) break; // sorted by display start
-    const x = xForMs(view, rest.displayStartMs);
+    const x = xForMs(view, rest.displayStartMs) + (shifts[i] as number);
     if (x < view.gutterPx) continue;
     // A rest for a staff this view is not drawing would otherwise land on the
     // one it *is*, measured from the wrong clef.
