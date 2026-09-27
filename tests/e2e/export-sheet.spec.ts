@@ -15,7 +15,7 @@ import { gotoAppReady, nav, recordShortTake } from './helpers';
 /**
  * The most a page of the vector sheet may take on average: 1.5× the densest
  * measured, rounded up to a multiple of 10 KB. That is Chopin's Nocturne in E♭
- * at 7,338 bytes a page; Moonlight, exported here, takes 4,300. Each music
+ * at 7,349 bytes a page; Moonlight, exported here, takes 4,302. Each music
  * glyph is written once per file and placed by reference, which took those
  * down from 19,560 and 13,781; the raster pages before that were about 200 KB.
  */
