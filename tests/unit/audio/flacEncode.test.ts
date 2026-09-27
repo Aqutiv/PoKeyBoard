@@ -209,6 +209,26 @@ function noise(length: number, amplitude: number, seed: number): Int32Array {
   return Int32Array.from({ length }, () => Math.floor((random() * 2 - 1) * amplitude));
 }
 
+/** How each frame codes its first channel, read from the subframe header after the frame's. */
+function firstSubframeKinds(stream: Uint8Array): string[] {
+  return frames(stream).map((frame) => {
+    // Sync, then a byte each of block size and rate, and of channels and
+    // depth; then the frame number, coded as UTF-8 codes a character, whose
+    // first byte says how many follow.
+    const lead = frame[4]!;
+    const numberBytes =
+      lead < 0x80 ? 1 : lead < 0xe0 ? 2 : lead < 0xf0 ? 3 : lead < 0xf8 ? 4 : lead < 0xfc ? 5 : 6;
+    const sizeCode = frame[2]! >> 4;
+    const rateCode = frame[2]! & 0xf;
+    const extra =
+      (sizeCode === 0b0110 ? 1 : sizeCode === 0b0111 ? 2 : 0) +
+      (rateCode === 0b1100 ? 1 : rateCode === 0b1101 || rateCode === 0b1110 ? 2 : 0);
+    // Past any block size and rate after the number, and the header's CRC-8.
+    const type = (frame[4 + numberBytes + extra + 1]! >> 1) & 0x3f;
+    return type === 0 ? 'constant' : type === 1 ? 'verbatim' : type < 0x20 ? 'fixed' : 'lpc';
+  });
+}
+
 describe('the FLAC encoder', () => {
   for (const bits of [16, 24] as const) {
     it(`gives a chord back exactly at ${bits} bits, a fraction of its size stored plainly`, async () => {
@@ -220,6 +240,15 @@ describe('the FLAC encoder', () => {
       expect(whole.errors).toEqual([]);
       expect(whole.samplesDecoded).toBe(left.length);
       expect(same(whole.channelData[1], asDecoded(right, bits))).toBe(true);
+    });
+
+    it(`predicts a chord at ${bits} bits with a linear predictor fitted to each frame`, async () => {
+      const { left, right } = chord(8 * FLAC_BLOCK_SIZE + 700, bits);
+      const bytes = await expectLossless(left, right, bits);
+      const kinds = firstSubframeKinds(bytes);
+      expect(kinds).toHaveLength(9);
+      // Every frame of a steady tone, the short last one included.
+      expect(kinds.filter((kind) => kind === 'lpc')).toHaveLength(9);
     });
   }
 

@@ -264,7 +264,7 @@ Two named themes share one token vocabulary in `src/themes.css`: Conservatory (d
 
 ## Audio encoding
 
-The export service copies the rendered buffer's channels, **transfers** them to a Worker that masters them and encodes MP3 (LAME via wasm-media-encoders) or FLAC (the app's own encoder, `flacEncode.ts`: fixed predictors, adaptive stereo, partitioned Rice, MD5 — see AUDIO_EXPORT.md), streams progress (mastering's steps, then each ~2 s chunk or 4096-sample frame; the render's own progress comes from its pauses), validates plausibility (an MP3's size vs duration·bitrate, a FLAC's STREAMINFO vs the render), stores an MP3 in `audioCache`, tags the file (ID3 or Vorbis comments), and hands the UI a `File` for `navigator.share` — called only from a fresh click, with download as the universal fallback. The same encoders run on the main thread, a slice at a time, where the worker cannot.
+The export service copies the rendered buffer's channels, **transfers** them to a Worker that masters them and encodes MP3 (LAME via wasm-media-encoders) or FLAC (the app's own encoder, `flacEncode.ts`: linear prediction, adaptive stereo, partitioned Rice, MD5 — see AUDIO_EXPORT.md), streams progress (mastering's steps, then each ~2 s chunk or 4096-sample frame; the render's own progress comes from its pauses), validates plausibility (an MP3's size vs duration·bitrate, a FLAC's STREAMINFO vs the render), stores an MP3 in `audioCache`, tags the file (ID3 or Vorbis comments), and hands the UI a `File` for `navigator.share` — called only from a fresh click, with download as the universal fallback. The same encoders run on the main thread, a slice at a time, where the worker cannot.
 
 ## PWA
 
