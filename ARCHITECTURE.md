@@ -40,11 +40,11 @@ src/
                 (key and mode), quantization, notationLayout, scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
                 scrubController, sheetLayout (pure paginated engraving),
-                accidentalStacking (the sheet's accidental columns from glyph
+                accidentalStacking (accidental columns from the glyph
                 boxes), sheetRenderer (print-style page on a DrawSurface),
                 sheetText (title accidentals as glyphs), glyphs/ (the Bravura
-                subset the sheet draws: generated metrics and outlines,
-                drawGlyph, engravingGlyphs — see SHEET_EXPORT.md)
+                subset the live score and the sheet draw: generated metrics
+                and outlines, drawGlyph, engravingGlyphs — see SHEET_EXPORT.md)
     transport/  transportMachine (pure), transportClock, transportController,
                 sustainPedal, modes, TransportControls, ModeMenu
     metronome/  MetronomeControls
