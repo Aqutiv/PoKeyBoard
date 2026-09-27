@@ -13,6 +13,7 @@ import {
 } from '@/features/notation/glyphs/musicGlyphMetrics';
 import * as outlinesModule from '@/features/notation/glyphs/musicGlyphOutlines';
 import { MUSIC_GLYPH_OUTLINES } from '@/features/notation/glyphs/musicGlyphOutlines';
+import { STEM_X_G } from '@/features/notation/sheetLayout';
 
 /**
  * The generated glyph modules: complete, consistent with the font's own
@@ -128,6 +129,18 @@ describe('the music glyph modules', () => {
     expect(ENGRAVING_DEFAULTS.stemThickness).toBe(0.12);
     expect(ENGRAVING_DEFAULTS.legerLineThickness).toBe(0.16);
     expect(ENGRAVING_DEFAULTS.legerLineExtension).toBe(0.4);
+  });
+
+  it("puts the sheet's stems where the notehead's stem anchor says", () => {
+    const [left, , right] = MUSIC_GLYPH_METRICS.noteheadBlack.bbox;
+    // The stem's centre line, from the head's centre: its outer edge on the
+    // anchor, half a stem inside it.
+    const fromAnchor =
+      MUSIC_GLYPH_ANCHORS.noteheadBlack.stemUpSE[0] -
+      (left + right) / 2 -
+      ENGRAVING_DEFAULTS.stemThickness / 2;
+    expect(STEM_X_G).toBeCloseTo(fromAnchor, 12);
+    expect(STEM_X_G).toBeCloseTo(0.53, 12);
   });
 
   it('open with the licence the font is under, and say they are not the font', () => {

@@ -2,7 +2,6 @@ import type { TimeSignature } from '@/domain/takeTypes';
 import {
   ACCIDENTAL_COLUMN_W_G,
   HAIRPIN_MOUTH_G,
-  HEAD_RX_G,
   KEY_ACCIDENTAL_W_G,
   keySignatureWidthPt,
   PEDAL_HOOK_G,
@@ -22,24 +21,30 @@ import {
   type SheetSystem,
   type SheetTie,
 } from './sheetLayout';
-import { drawAccidentalGlyph } from './accidentalGlyph';
 import type { DrawSurface } from './drawSurface';
+import { beamPieceXs, beamYAt, BEAM_SPACING_G, BEAM_THICKNESS_G } from './beamGeometry';
+import { drawGlyph } from './glyphs/drawGlyph';
 import {
-  beamPieceXs,
-  beamYAt,
-  extraStemG,
-  BEAM_SPACING_G,
-  BEAM_THICKNESS_G,
-  STEM_LENGTH_G,
-} from './beamGeometry';
-import {
-  normalizeFifths,
-  signatureAccidental,
-  signatureSteps,
-  type AccidentalKind,
-} from './keySignature';
+  clefGlyphFor,
+  drawAccidentalCentred,
+  drawAccidentalEndingAt,
+  drawDigitRun,
+  drawRestSymbol,
+  DYNAMIC_GLYPHS,
+  dynamicOpticalCentre,
+  flagAnchorYG,
+  flagGlyphFor,
+  flaggedStemG,
+  glyphCentre,
+  noteheadGlyphFor,
+  noteheadHalfWidth,
+  secondShiftG,
+  STEM_ANCHOR_RISE_G,
+  STEM_THICKNESS_G,
+} from './glyphs/engravingGlyphs';
+import { ENGRAVING_DEFAULTS, MUSIC_GLYPH_METRICS } from './glyphs/musicGlyphMetrics';
+import { normalizeFifths, signatureAccidental, signatureSteps } from './keySignature';
 import { beamCountFor, type DurationSymbol } from './quantization';
-import { drawRestGlyph } from './restGlyph';
 import { restStep } from './rests';
 import { ellipsizeRich, fillRich } from './sheetText';
 import type { ClefKind } from './staffMapping';
@@ -51,12 +56,14 @@ import type { ClefKind } from './staffMapping';
  * that writes the same calls as vector operators (`export/pdfSurface.ts`), so
  * the preview shows exactly what prints.
  *
- * All music glyphs (clefs, brace, accidentals, flags, rests) are hand-drawn
- * Béziers, so the page is the same on every device; fonts are used only for
- * genuinely textual elements (title, digits, dynamics, page numbers), always
- * Times, which is what the PDF sets. Rests and accidentals come from
- * `restGlyph.ts` and `accidentalGlyph.ts`, shared with the live score so both
- * views draw the same shapes.
+ * Every music symbol — clefs, brace, noteheads, flags, accidentals, rests,
+ * dots, time signature and tuplet digits, dynamics, the 8va label, the tempo
+ * mark's note — is a glyph from the music font (`glyphs/`), placed by its
+ * SMuFL metrics and anchors, so the page is the same on every device. What is
+ * drawn as lines is what engravers rule: staff lines, bar lines, stems, ledger
+ * lines, beams, ties, hairpins, pedal brackets and the octave line. Words and
+ * numbers — title, credit, measure and page numbers, the tempo's "= n" — are
+ * set in Times, which is what the PDF sets.
  *
  * Only the canvas subset `DrawSurface` names may be used here: anything else
  * would work in the preview and have no counterpart in the PDF.
@@ -73,7 +80,21 @@ const SERIF = '"Times New Roman", Times, serif';
 
 const STAFF_LINE_W = 0.9;
 const BARLINE_W = 1;
-const STEM_W = 1;
+const STEM_W = STEM_THICKNESS_G * G;
+const LEDGER_W = ENGRAVING_DEFAULTS.legerLineThickness * G;
+/** How far a ledger line runs past the head it carries. */
+const LEDGER_EXTENSION = ENGRAVING_DEFAULTS.legerLineExtension * G;
+
+/** Clear space between an accidental and the head it stands before. */
+const ACCIDENTAL_GAP_G = 0.25;
+/** Clear space between the rightmost head and its dot. */
+const DOT_GAP_G = 0.4;
+/** Where a system's clefs start, after its opening bar line. */
+const SYSTEM_CLEF_X_G = 1.1;
+/** Where a clef changing mid-staff starts, after the bar line it follows. */
+const CLEF_CHANGE_X_G = 0.6;
+/** Clear space between the brace and the system it joins, in points. */
+const BRACE_GAP_PT = 2.5;
 
 /** What a bar of silence takes, whatever the meter is. */
 const WHOLE_REST: DurationSymbol = { base: 'whole', dotted: false };
@@ -139,27 +160,19 @@ function drawTitleBlock(ctx: DrawSurface, page: SheetPage): void {
   ctx.textAlign = 'left';
 }
 
-/** "♩ = bpm" with a hand-drawn quarter note (no music-font dependency). */
+/** Size the tempo mark's note is set at: smaller than the music it governs. */
+const TEMPO_NOTE_SPACE = 0.75 * G;
+
+/** "♩ = bpm": the metronome-mark quarter note standing on the baseline, then the number. */
 function drawTempoMark(ctx: DrawSurface, x: number, baseline: number, bpm: number): void {
-  const headX = x + 3;
-  const headY = baseline - 2.5;
-  ctx.save();
-  ctx.translate(headX, headY);
-  ctx.rotate(-0.32);
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 3.1, 2.3, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(headX + 2.8, headY - 0.6);
-  ctx.lineTo(headX + 2.8, headY - 10);
-  ctx.stroke();
+  const noteX = x + 0.5;
+  const [, bottom] = MUSIC_GLYPH_METRICS.metNoteQuarterUp.bbox;
+  drawGlyph(ctx, 'metNoteQuarterUp', noteX, baseline + bottom * TEMPO_NOTE_SPACE, TEMPO_NOTE_SPACE);
 
   ctx.font = `11px ${SERIF}`;
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(`= ${bpm}`, headX + 7.5, baseline);
+  ctx.fillText(`= ${bpm}`, noteX + 1.6 * G, baseline);
 }
 
 function drawFooter(ctx: DrawSurface, page: SheetPage): void {
@@ -196,8 +209,9 @@ function drawSystem(ctx: DrawSurface, system: SheetSystem, page: SheetPage): voi
   ctx.lineTo(system.xPt, bassBottom);
   ctx.stroke();
 
-  drawClef(ctx, system.clefs.treble, system.xPt + 13, system.trebleTopPt, 1);
-  drawClef(ctx, system.clefs.bass, system.xPt + 12, system.bassTopPt, 1);
+  const clefX = system.xPt + SYSTEM_CLEF_X_G * G;
+  drawClef(ctx, system.clefs.treble, clefX, system.trebleTopPt, false);
+  drawClef(ctx, system.clefs.bass, clefX, system.bassTopPt, false);
 
   drawKeySignature(ctx, system, metrics, page.keySignature);
   if (system.showTimeSignature)
@@ -220,6 +234,9 @@ function drawSystem(ctx: DrawSurface, system: SheetSystem, page: SheetPage): voi
   for (const dynamic of system.dynamics) drawDynamic(ctx, dynamic, system.dynamicsRowPt);
 }
 
+/** Size the 8va and 8vb labels are set at. */
+const OCTAVE_LABEL_SPACE = 0.7 * G;
+
 /**
  * An 8va or 8vb: the label, then a dashed line running to a hook that turns
  * down onto the music it covers. The hook is what says where it stops, so an
@@ -234,15 +251,13 @@ function drawOctave(
   const y = octave.up
     ? system.trebleTopPt - 2.6 * G
     : system.bassTopPt + metrics.staffHeightPt + 2.6 * G;
-  const label = octave.up ? '8va' : '8vb';
+  const label = octave.up ? 'ottavaAlta' : 'ottavaBassaVb';
 
-  ctx.font = `italic 600 ${1.9 * G}px ${SERIF}`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
   let lineFrom = octave.x1Pt;
   if (!octave.continuesLeft) {
-    ctx.fillText(label, octave.x1Pt, y + 0.6 * G);
-    lineFrom = octave.x1Pt + ctx.measureText(label).width + 0.5 * G;
+    // Its digit is centred on the line, and the line starts clear after it.
+    drawGlyph(ctx, label, octave.x1Pt, y + 0.65 * G, OCTAVE_LABEL_SPACE);
+    lineFrom = octave.x1Pt + MUSIC_GLYPH_METRICS[label].advance * OCTAVE_LABEL_SPACE + 0.4 * G;
   }
 
   ctx.save();
@@ -264,17 +279,13 @@ function drawOctave(
 }
 
 /**
- * A dynamic mark, in the bold italic serif that editions have set them in
- * since long before music fonts. These are letters, so the renderer's rule
- * about drawing its glyphs rather than typesetting them does not apply —
- * `p` and `f` are text, and always were.
+ * A dynamic mark: the music font's own glyph for the whole mark, its letters
+ * kerned as the font sets them, standing on the dynamics row and centred on
+ * the note it belongs to by its optical centre rather than its ink.
  */
 function drawDynamic(ctx: DrawSurface, dynamic: SheetDynamic, rowY: number): void {
-  ctx.font = `bold italic ${2.4 * G}px ${SERIF}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText(dynamic.mark, dynamic.xPt, rowY);
-  ctx.textAlign = 'left';
+  const x = dynamic.xPt - dynamicOpticalCentre(dynamic.mark) * G;
+  drawGlyph(ctx, DYNAMIC_GLYPHS[dynamic.mark], x, rowY, G);
 }
 
 /**
@@ -353,7 +364,7 @@ function drawMeasure(
   // A clef turning over is engraved small, just inside the bar line it follows.
   for (const staff of measure.clefChanges) {
     const staffTop = staff === 'treble' ? system.trebleTopPt : system.bassTopPt;
-    drawClef(ctx, measure.clefs[staff], measure.xPt + 1.5 * G, staffTop, CLEF_CHANGE_SCALE);
+    drawClef(ctx, measure.clefs[staff], measure.xPt + CLEF_CHANGE_X_G * G, staffTop, true);
   }
 
   if (measure.tempoMarkBpm !== null) {
@@ -379,7 +390,7 @@ function drawMeasure(
   if (measure.empty) {
     const centerX = measure.xPt + measure.widthPt / 2;
     for (const top of [system.trebleTopPt, system.bassTopPt]) {
-      drawRestGlyph(ctx, WHOLE_REST, centerX, top, WHOLE_REST_STEP, G);
+      drawRestSymbol(ctx, WHOLE_REST, centerX, top, WHOLE_REST_STEP, G);
     }
     return;
   }
@@ -390,24 +401,12 @@ function drawMeasure(
       drawChord(ctx, chord, column.xPt, staffTop, measure.beams);
     }
     if (column.trebleRest) {
-      drawRestGlyph(
-        ctx,
-        column.trebleRest.symbol,
-        column.xPt,
-        system.trebleTopPt,
-        column.trebleRest.step,
-        G,
-      );
+      const { symbol, step } = column.trebleRest;
+      drawRestSymbol(ctx, symbol, column.xPt, system.trebleTopPt, step, G);
     }
     if (column.bassRest) {
-      drawRestGlyph(
-        ctx,
-        column.bassRest.symbol,
-        column.xPt,
-        system.bassTopPt,
-        column.bassRest.step,
-        G,
-      );
+      const { symbol, step } = column.bassRest;
+      drawRestSymbol(ctx, symbol, column.xPt, system.bassTopPt, step, G);
     }
   }
   for (const beam of measure.beams) {
@@ -423,27 +422,28 @@ function drawChord(
   staffTop: number,
   beams: SheetBeam[],
 ): void {
-  const rx = (chord.symbol.base === 'whole' ? 1.25 : 1) * HEAD_RX_G * G;
-  const ry = 0.5 * G;
-  const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
-  /** Where a note's head sits, once any collision shift is applied. */
-  const headX = (note: SheetNote): number => x + note.headShift * 2 * rx;
+  const base = chord.symbol.base;
+  const head = noteheadGlyphFor(base);
+  const half = noteheadHalfWidth(base) * G;
+  const shift = secondShiftG(base) * G;
+  /** Where a note's head is centred, once any collision shift is applied. */
+  const headX = (note: SheetNote): number => x + note.headShift * shift;
   // Accidentals hang off the left of the whole chord and dots off its right:
   // measured from the owning head alone, either would land on top of a head
   // displaced past it.
   const shifts = chord.notes.map((note) => note.headShift);
-  const leftEdgeX = x + Math.min(...shifts) * 2 * rx;
-  const rightEdgeX = x + Math.max(...shifts) * 2 * rx;
+  const leftHeadX = x + Math.min(...shifts) * shift;
+  const rightHeadX = x + Math.max(...shifts) * shift;
 
   // Ledger lines behind the heads, each long enough to carry every head on its
   // step — a displaced head needs the line to reach out to it.
-  ctx.lineWidth = STAFF_LINE_W;
+  ctx.lineWidth = LEDGER_W;
   const ledgerSpans = new Map<number, { left: number; right: number }>();
   for (const note of chord.notes) {
     for (const step of note.ledger) {
       const span = ledgerSpans.get(step);
-      const left = headX(note) - rx - 0.28 * G;
-      const right = headX(note) + rx + 0.28 * G;
+      const left = headX(note) - half - LEDGER_EXTENSION;
+      const right = headX(note) + half + LEDGER_EXTENSION;
       if (span) {
         span.left = Math.min(span.left, left);
         span.right = Math.max(span.right, right);
@@ -462,42 +462,27 @@ function drawChord(
 
   for (const note of chord.notes) {
     const y = staffTop + staffYRel(note.step);
-    const hx = headX(note);
-    ctx.save();
-    ctx.translate(hx, y);
-    ctx.rotate(-0.32);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2);
-    if (hollow) {
-      ctx.lineWidth = chord.symbol.base === 'whole' ? 1.3 : 1.1;
-      ctx.stroke();
-    } else {
-      ctx.fill();
-    }
-    ctx.restore();
+    drawGlyph(ctx, head, headX(note) - glyphCentre(head) * G, y, G);
 
     if (note.accidental) {
-      drawAccidental(
-        ctx,
-        note.accidental,
-        leftEdgeX - 1.5 * G - note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G,
-        y,
-      );
+      // Right-aligned, so accidentals of different widths line up on the head.
+      const right =
+        leftHeadX - half - ACCIDENTAL_GAP_G * G - note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G;
+      drawAccidentalEndingAt(ctx, note.accidental, right, y, G);
     }
     if (chord.symbol.dotted) {
       // Dots sit in a space: shift line-notes up half a space.
       const dotY = y - (note.step % 2 === 0 ? G / 2 : 0);
-      ctx.beginPath();
-      ctx.arc(rightEdgeX + 1.3 * G, dotY, 0.22 * G, 0, Math.PI * 2);
-      ctx.fill();
+      drawGlyph(ctx, 'augmentationDot', rightHeadX + half + DOT_GAP_G * G, dotY, G);
     }
   }
 
-  if (chord.symbol.base === 'whole') return;
+  if (base === 'whole') return;
 
   const stemX = stemXPt(x, chord.stemDown);
   const topHeadY = staffTop + staffYRel(chord.notes[chord.notes.length - 1]!.step);
   const bottomHeadY = staffTop + staffYRel(chord.notes[0]!.step);
+  const flags = beamCountFor(base);
 
   let tipY: number;
   if (chord.beamId !== null) {
@@ -505,66 +490,47 @@ function drawChord(
     const dx = beam.x2Pt - beam.x1Pt;
     tipY = dx === 0 ? beam.y1Pt : beam.y1Pt + ((stemX - beam.x1Pt) / dx) * (beam.y2Pt - beam.y1Pt);
   } else {
-    // Flags stack back toward the head, so three or four of them need a longer
-    // stem than an eighth's to sit on.
-    const stem = (STEM_LENGTH_G + extraStemG(beamCountFor(chord.symbol.base))) * G;
+    // A 32nd's and a 64th's flags stack up past a normal stem's end, and
+    // their anchors say how much further the stem has to run to meet them.
+    const stem = flaggedStemG(flags, chord.stemDown) * G;
     tipY = chord.stemDown ? bottomHeadY + stem : topHeadY - stem;
   }
 
+  // The stem starts where the far head's stem anchor says, meeting its edge.
+  const rise = STEM_ANCHOR_RISE_G * G;
   ctx.lineWidth = STEM_W;
   ctx.beginPath();
-  ctx.moveTo(stemX, chord.stemDown ? topHeadY : bottomHeadY);
+  ctx.moveTo(stemX, chord.stemDown ? topHeadY + rise : bottomHeadY - rise);
   ctx.lineTo(stemX, tipY);
   ctx.stroke();
 
-  if (chord.beamId === null) {
-    const flags = beamCountFor(chord.symbol.base);
-    for (let i = 0; i < flags; i += 1) {
-      drawFlag(ctx, stemX, tipY + (chord.stemDown ? -1 : 1) * i * 0.9 * G, chord.stemDown);
-    }
+  if (chord.beamId === null && flags !== 0) {
+    // One glyph carries all of a note's flags, its origin on the stem's left
+    // edge and as far short of the tip as its anchor says.
+    drawGlyph(
+      ctx,
+      flagGlyphFor(flags, chord.stemDown),
+      stemX - STEM_W / 2,
+      tipY + flagAnchorYG(flags, chord.stemDown) * G,
+      G,
+    );
   }
 }
 
-/** Filled flag curving from the stem tip back toward the notehead. */
-function drawFlag(ctx: DrawSurface, x: number, tipY: number, stemDown: boolean): void {
-  const d = stemDown ? -1 : 1; // flags extend from the tip toward the head
-  ctx.beginPath();
-  ctx.moveTo(x, tipY);
-  ctx.bezierCurveTo(
-    x + 0.15 * G,
-    tipY + d * 0.9 * G,
-    x + 1.45 * G,
-    tipY + d * 1.1 * G,
-    x + 0.95 * G,
-    tipY + d * 2.7 * G,
-  );
-  ctx.bezierCurveTo(
-    x + 1.3 * G,
-    tipY + d * 1.5 * G,
-    x + 0.5 * G,
-    tipY + d * 1.3 * G,
-    x,
-    tipY + d * 0.7 * G,
-  );
-  ctx.closePath();
-  ctx.fill();
-}
+/** Size tuplet numerals are set at: small enough not to compete with the notes. */
+const TUPLET_SPACE = 0.8 * G;
 
 /**
- * The tuplet numeral, centred over its beam on the side away from the heads.
- * Italic, as editions set it, and small enough not to compete with the notes.
+ * The tuplet numeral, centred on its beam on the side away from the heads:
+ * above an up-stem run, below a down-stem one, clear of the beam either way.
  */
 function drawTupletNumeral(ctx: DrawSurface, beam: SheetBeam): void {
   if (beam.tupletCount === null) return;
   const midX = (beam.x1Pt + beam.x2Pt) / 2;
   const midY = (beam.y1Pt + beam.y2Pt) / 2;
-  // Clear of the beam on the stem side: below a down-stem run, above an up one.
-  const away = beam.stemDown ? 1.5 * G : -0.9 * G;
-  ctx.font = `italic 600 ${1.9 * G}px ${SERIF}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillText(String(beam.tupletCount), midX, midY + away);
-  ctx.textAlign = 'left';
+  // The digits stand on their origin, so below the beam it goes their height lower.
+  const y = beam.stemDown ? midY + 1.8 * G : midY - 0.6 * G;
+  drawDigitRun(ctx, 'tuplet', beam.tupletCount, midX, y, TUPLET_SPACE);
 }
 
 /**
@@ -618,12 +584,17 @@ function drawKeySignature(
     const steps = signatureSteps(fifths, system.clefs[staff]);
     for (let i = 0; i < steps.length; i += 1) {
       const x = left + (i + 0.5) * KEY_ACCIDENTAL_W_G * G;
-      drawAccidental(ctx, sign, x, top + staffYRel(steps[i] as number));
+      drawAccidentalCentred(ctx, sign, x, top + staffYRel(steps[i] as number), G);
     }
   }
 }
 
-/** Time signature digits on both staffs (first system only). */
+/**
+ * Time signature digits on both staffs (first system only): each number a row
+ * of digits set by their advances and centred, the numerator's centred on the
+ * staff's upper half and the denominator's on its lower — so a 12 sits as
+ * squarely as a 4.
+ */
 function drawTimeSignature(
   ctx: DrawSurface,
   system: SheetSystem,
@@ -633,176 +604,35 @@ function drawTimeSignature(
 ): void {
   const x =
     system.xPt + metrics.clefAreaPt + keySignatureWidthPt(fifths) + metrics.timeSigAreaPt * 0.4;
-  ctx.font = `700 ${2.6 * G}px ${SERIF}`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
   for (const top of [system.trebleTopPt, system.bassTopPt]) {
-    ctx.fillText(String(timeSignature.numerator), x, top + 1.85 * G);
-    ctx.fillText(String(timeSignature.denominator), x, top + 3.95 * G);
+    drawDigitRun(ctx, 'timeSig', timeSignature.numerator, x, top + G, G);
+    drawDigitRun(ctx, 'timeSig', timeSignature.denominator, x, top + 3 * G, G);
   }
-  ctx.textAlign = 'left';
 }
-
-function drawAccidental(ctx: DrawSurface, kind: AccidentalKind, x: number, y: number): void {
-  drawAccidentalGlyph(ctx, kind, x, y, G);
-}
-
-/** Curly brace joining the two staffs, drawn as a filled double curve. */
-function drawBrace(ctx: DrawSurface, x: number, top: number, bottom: number): void {
-  const right = x - 2.5;
-  const mid = (top + bottom) / 2;
-  const h = bottom - top;
-  ctx.beginPath();
-  ctx.moveTo(right, top);
-  ctx.bezierCurveTo(right - 7, top + h * 0.26, right - 1.5, mid - h * 0.16, right - 7.5, mid);
-  ctx.bezierCurveTo(right - 1.5, mid + h * 0.16, right - 7, bottom - h * 0.26, right, bottom);
-  ctx.bezierCurveTo(right - 5.2, bottom - h * 0.26, right - 0.2, mid + h * 0.14, right - 5.6, mid);
-  ctx.bezierCurveTo(right - 0.2, mid - h * 0.14, right - 5.2, top + h * 0.26, right, top);
-  ctx.closePath();
-  ctx.fill();
-}
-
-/** Scale a clef announcing a change mid-staff is drawn at. */
-const CLEF_CHANGE_SCALE = 0.72;
 
 /**
- * A clef at `cx`, drawn at `scale` — full size in a system prefix, smaller
- * where one turns over mid-staff. The glyphs are laid out around the staff
- * top, so scaling about that point keeps them seated on their own lines.
+ * The brace joining the two staffs: the font's brace, scaled evenly until its
+ * box runs from the treble's top line to the bass's bottom one, just left of
+ * the system.
+ */
+function drawBrace(ctx: DrawSurface, x: number, top: number, bottom: number): void {
+  const [, low, right, high] = MUSIC_GLYPH_METRICS.brace.bbox;
+  const space = (bottom - top) / (high - low);
+  drawGlyph(ctx, 'brace', x - BRACE_GAP_PT - right * space, top + high * space, space);
+}
+
+/**
+ * A clef starting at `x`: a G clef on its G line, an F clef on its F line.
+ * Full size where a system opens; where one turns over mid-staff, the font's
+ * smaller change clef, which sits on the same line.
  */
 function drawClef(
   ctx: DrawSurface,
   clef: ClefKind,
-  cx: number,
+  x: number,
   staffTop: number,
-  scale: number,
+  change: boolean,
 ): void {
-  if (scale === 1) {
-    if (clef === 'treble') drawTrebleClef(ctx, cx, staffTop);
-    else drawBassClef(ctx, cx, staffTop);
-    return;
-  }
-  ctx.save();
-  // Scale about the staff's vertical centre so a smaller clef stays centred on
-  // the staff rather than riding up off its top line.
-  const centreY = staffTop + 2 * G;
-  ctx.translate(cx, centreY);
-  ctx.scale(scale, scale);
-  ctx.translate(-cx, -centreY);
-  if (clef === 'treble') drawTrebleClef(ctx, cx, staffTop);
-  else drawBassClef(ctx, cx, staffTop);
-  ctx.restore();
-}
-
-/** Stylized G clef: spiral on the G line, tall flourish, tail with a dot. */
-function drawTrebleClef(ctx: DrawSurface, cx: number, staffTop: number): void {
-  const gy = staffTop + 3 * G; // G4 line
-  ctx.lineWidth = 1.15;
-
-  // Spiral around the G line.
-  ctx.beginPath();
-  ctx.arc(cx - 0.05 * G, gy, 0.55 * G, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx, gy - 0.1 * G, 1.05 * G, 0.25 * Math.PI, 1.75 * Math.PI);
-  ctx.stroke();
-
-  // Rising line from the spiral through the top curl.
-  ctx.beginPath();
-  ctx.moveTo(cx + 0.78 * G, gy + 0.68 * G);
-  ctx.bezierCurveTo(
-    cx + 1.15 * G,
-    staffTop + 0.6 * G,
-    cx + 0.9 * G,
-    staffTop - 1.6 * G,
-    cx + 0.1 * G,
-    staffTop - 2.4 * G,
-  );
-  ctx.bezierCurveTo(
-    cx - 0.75 * G,
-    staffTop - 1.55 * G,
-    cx - 0.2 * G,
-    staffTop - 0.3 * G,
-    cx + 0.2 * G,
-    staffTop + 0.9 * G,
-  );
-  // Descender through the staff to the tail.
-  ctx.bezierCurveTo(
-    cx + 0.45 * G,
-    staffTop + 1.9 * G,
-    cx + 0.4 * G,
-    staffTop + 3.6 * G,
-    cx + 0.32 * G,
-    staffTop + 5.2 * G,
-  );
-  ctx.stroke();
-
-  // Tail hook and dot.
-  ctx.beginPath();
-  ctx.moveTo(cx + 0.32 * G, staffTop + 5.2 * G);
-  ctx.bezierCurveTo(
-    cx + 0.2 * G,
-    staffTop + 6 * G,
-    cx - 0.9 * G,
-    staffTop + 6 * G,
-    cx - 0.95 * G,
-    staffTop + 5.35 * G,
-  );
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(cx - 0.7 * G, staffTop + 5.3 * G, 0.3 * G, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-/** F clef: filled head, tapered sweeping curve, two dots by the F line. */
-function drawBassClef(ctx: DrawSurface, cx: number, staffTop: number): void {
-  const fy = staffTop + G; // F3 line
-  ctx.beginPath();
-  ctx.arc(cx - 0.2 * G, fy, 0.45 * G, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Tapered curve drawn as a filled shape between two Béziers.
-  ctx.beginPath();
-  ctx.moveTo(cx - 0.6 * G, fy + 0.1 * G);
-  ctx.bezierCurveTo(
-    cx - 0.5 * G,
-    staffTop - 0.45 * G,
-    cx + 1.4 * G,
-    staffTop - 0.35 * G,
-    cx + 1.55 * G,
-    fy + 0.15 * G,
-  );
-  ctx.bezierCurveTo(
-    cx + 1.7 * G,
-    fy + 1.4 * G,
-    cx + 0.65 * G,
-    fy + 2.3 * G,
-    cx - 0.55 * G,
-    fy + 2.75 * G,
-  );
-  ctx.bezierCurveTo(
-    cx + 0.55 * G,
-    fy + 2.05 * G,
-    cx + 1.25 * G,
-    fy + 1.3 * G,
-    cx + 1.15 * G,
-    fy + 0.3 * G,
-  );
-  ctx.bezierCurveTo(
-    cx + 1.05 * G,
-    staffTop - 0.05 * G,
-    cx - 0.3 * G,
-    staffTop + 0.05 * G,
-    cx - 0.6 * G,
-    fy + 0.1 * G,
-  );
-  ctx.closePath();
-  ctx.fill();
-
-  ctx.beginPath();
-  ctx.arc(cx + 2.1 * G, fy - 0.45 * G, 0.2 * G, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(cx + 2.1 * G, fy + 0.45 * G, 0.2 * G, 0, Math.PI * 2);
-  ctx.fill();
+  const line = clef === 'treble' ? staffTop + 3 * G : staffTop + G;
+  drawGlyph(ctx, clefGlyphFor(clef, change), x, line, G);
 }

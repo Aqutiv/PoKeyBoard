@@ -11,14 +11,10 @@ import {
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
-import {
-  beamSpanFor,
-  extraStemG,
-  BEAM_THICKNESS_G,
-  STEM_LENGTH_G,
-  type BeamPiece,
-} from './beamGeometry';
+import { beamSpanFor, BEAM_THICKNESS_G, type BeamPiece } from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
+import { flaggedStemReachG, noteheadHalfWidth, STEM_THICKNESS_G } from './glyphs/engravingGlyphs';
+import { MUSIC_GLYPH_ANCHORS } from './glyphs/musicGlyphMetrics';
 import { normalizeFifths, type AccidentalKind } from './keySignature';
 import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
 import type { ClefKind, StaffKind } from './staffMapping';
@@ -36,10 +32,19 @@ export type SheetGrid = Exclude<QuantizationSetting, 'off'>;
 export const SHEET_GAP_PT = 5.4;
 const G = SHEET_GAP_PT;
 
-/** Notehead horizontal radius. */
+/**
+ * Room kept around a notehead's centre for what attaches beside it — a tie's
+ * end, an octave line's reach — a little wider than the head itself.
+ */
 export const HEAD_RX_G = 0.64;
-/** Stem x offset from the head center (inset from the head edge). */
-export const STEM_X_G = HEAD_RX_G - 0.1;
+/**
+ * Stem centre-line x offset from the head centre: the stem's outer edge on the
+ * notehead's stem anchor, which is the head's own edge, and half a stem inside.
+ */
+export const STEM_X_G =
+  MUSIC_GLYPH_ANCHORS.noteheadBlack.stemUpSE[0] -
+  noteheadHalfWidth('quarter') -
+  STEM_THICKNESS_G / 2;
 /** Extra lead reserved before a column that carries an accidental. */
 export const ACCIDENTAL_LEAD_G = 1.7;
 /** Each further accidental column stacked left of the first. */
@@ -1044,11 +1049,12 @@ function systemExtents(measures: SheetMeasure[]): { abovePt: number; belowPt: nu
         let top = staffYRel(chord.notes[chord.notes.length - 1]!.step) - headPad;
         let bottom = staffYRel(chord.notes[0]!.step) + headPad;
         if (chord.symbol.base !== 'whole' && chord.beamId === null) {
-          // A lone 32nd or 64th stacks more flags than an ordinary stem holds,
-          // so it reaches further and the system has to leave room for it.
-          const stem = (STEM_LENGTH_G + extraStemG(beamCountFor(chord.symbol.base))) * G;
-          if (chord.stemDown) bottom = Math.max(bottom, stemAnchorYRel(chord) + stem);
-          else top = Math.min(top, stemAnchorYRel(chord) - stem);
+          // A lone 32nd or 64th stacks more flags than an ordinary stem holds:
+          // its stem runs longer and its flag's ink past the stem's end, and
+          // the system has to leave room for both.
+          const reach = flaggedStemReachG(beamCountFor(chord.symbol.base), chord.stemDown) * G;
+          if (chord.stemDown) bottom = Math.max(bottom, stemAnchorYRel(chord) + reach);
+          else top = Math.min(top, stemAnchorYRel(chord) - reach);
         }
         if (chord.staff === 'treble') abovePt = Math.max(abovePt, -top);
         else belowPt = Math.max(belowPt, bottom - 4 * G);

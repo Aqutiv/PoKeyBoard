@@ -10,8 +10,9 @@ export type GlyphMatrix = readonly [number, number, number, number, number, numb
 /**
  * What the printed sheet draws with: exactly the part of
  * `CanvasRenderingContext2D` that `sheetRenderer.ts` and the helpers it draws
- * through (`sheetText.ts`, `accidentalGlyph.ts`, `restGlyph.ts`,
- * `glyphs/drawGlyph.ts`) call, and nothing more.
+ * through (`sheetText.ts`, the music glyphs of `glyphs/`) call, and nothing
+ * more. The live score's own `accidentalGlyph.ts` and `restGlyph.ts` take one
+ * too, and are handed its canvas.
  *
  * A real canvas context satisfies it as it stands, which is how the export
  * dialog's preview draws a page. The PDF export draws the same calls onto a
