@@ -1,4 +1,6 @@
 import type { ReverbRoom } from '@/domain/takeTypes';
+// The generator the reverb has always drawn its noise from.
+import { xorshift32 } from '@/utils/random';
 
 /**
  * The reverb's rooms, as impulses made here rather than recorded — no licensed
@@ -319,17 +321,6 @@ function addSpike(data: Float32Array, index: number, level: number, air: number)
     data[i] = (data[i] as number) + value;
     value *= 1 - air;
   }
-}
-
-/** xorshift32, the generator the reverb has always drawn its noise from. */
-function xorshift32(seed: number): () => number {
-  let state = seed >>> 0 || 1;
-  return () => {
-    state ^= state << 13;
-    state ^= state >>> 17;
-    state ^= state << 5;
-    return (state >>> 0) / 0x1_0000_0000;
-  };
 }
 
 /** FNV-1a: a seed from a name, the same on every platform and every build. */
