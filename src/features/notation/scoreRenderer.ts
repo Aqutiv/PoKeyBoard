@@ -4,13 +4,38 @@ import {
   beamPieceXs,
   beamSpanFor,
   beamYAt,
-  extraStemG,
   BEAM_SPACING_G,
   BEAM_THICKNESS_G,
-  STEM_LENGTH_G,
   type BeamPiece,
 } from './beamGeometry';
-import { normalizeFifths, signatureAccidental, signatureSteps } from './keySignature';
+import { drawGlyph } from './glyphs/drawGlyph';
+import {
+  ACCIDENTAL_GLYPHS,
+  clefGlyphFor,
+  digitGlyphsFor,
+  drawDigitRun,
+  DYNAMIC_GLYPHS,
+  dynamicInkG,
+  dynamicOpticalCentre,
+  flagAnchorYG,
+  flagGlyphFor,
+  flaggedStemG,
+  flaggedStemReachG,
+  glyphCentre,
+  glyphWidth,
+  noteheadGlyphFor,
+  noteheadHalfWidth,
+  restInkG,
+  runAdvance,
+  STEM_ANCHOR_RISE_G,
+} from './glyphs/engravingGlyphs';
+import { MUSIC_GLYPH_METRICS, MUSIC_GLYPH_NAMES } from './glyphs/musicGlyphMetrics';
+import {
+  normalizeFifths,
+  signatureAccidental,
+  signatureSteps,
+  type AccidentalKind,
+} from './keySignature';
 import {
   firstChordIndexAt,
   measureIndexAt,
@@ -58,19 +83,26 @@ export function gutterWidthFor(fifths: number): number {
   return count === 0 ? GUTTER : GUTTER + count * KEY_ACCIDENTAL_PX + GAP * 0.6;
 }
 
-/** Half a note head's width; a whole note's is a quarter as wide again. */
-const HEAD_RX = GAP * 0.64;
+// Every music symbol on the score is a glyph of the music font (`glyphs/`),
+// drawn to a staff space of `GAP` pixels. What depends on a glyph's shape —
+// how wide a head is, how far a flag swings out, where a dynamic's middle is
+// — is read from the font's metrics, never written down here.
+
+type DurationBase = DurationSymbol['base'];
+
+/** Half a notehead's width, from its centre to its edge: the font's own head for `base`. */
+function headHalfPx(base: DurationBase): number {
+  return noteheadHalfWidth(base) * GAP;
+}
+
+/** A stem's width: heavier than the font's own, to read at screen size. */
+const STEM_W_PX = 1.6;
+/** Clear space between an accidental's ink and the head it stands before, as on paper. */
+const ACCIDENTAL_GAP_PX = GAP * 0.25;
 /** Horizontal pitch of stacked accidental columns, left of the chord. */
 const ACCIDENTAL_COLUMN_PX = GAP * 1.4;
-/** Half an accidental's width — the double flat's, the widest of them. */
-const ACCIDENTAL_HALF_WIDTH_PX = GAP * 0.62;
-/** An augmentation dot's centre, right of the chord's rightmost head. */
-const DOT_OFFSET_PX = HEAD_RX + 5;
-const DOT_RADIUS_PX = 2;
-/** How far a flag's curve swings out past its stem. */
-const FLAG_REACH_PX = GAP * 0.95;
-/** Half the width of the widest rest glyph. */
-const REST_HALF_WIDTH_PX = GAP * 0.7;
+/** Clear space between the rightmost head and its dot, as on paper. */
+const DOT_GAP_PX = GAP * 0.4;
 
 /**
  * Clear space a bar line keeps before the first ink of the bar it opens: the
@@ -94,18 +126,33 @@ const ON_THE_BAR_MS = 1;
  * under it, and a note sitting flush against its edge loses the left half of
  * its head — and all of its accidental — to that overpaint. It is also about
  * what an engraver leaves after a time signature before the first note.
+ *
+ * It clears any one accidental in the first column — a sharp, the widest,
+ * reaches 16.5 px back from its head's centre — but not a double flat, which
+ * reaches 22.4: on a take's very first chord that one tucks 2.6 px of its ink
+ * under the gutter, as a second column of accidentals there always has.
  */
 export const SCORE_LEAD_IN = GAP * 2.2;
 
 // Beam proportions come from `beamGeometry`, so a run groups and slants the
 // same way on screen as it does on paper — only the unit differs.
-const STEM_LENGTH_PX = GAP * STEM_LENGTH_G;
 const BEAM_THICKNESS_PX = GAP * BEAM_THICKNESS_G;
 const BEAM_SPACING_PX = GAP * BEAM_SPACING_G;
-/** Stem x offset from the head centre, inset from the head edge. */
-const STEM_INSET_PX = GAP * 0.64 - 0.8;
-/** Type size of the numeral over a tuplet's beam. */
-const TUPLET_FONT_PX = GAP * 1.7;
+/**
+ * Room kept for the numeral over a tuplet's beam: the size it was once set in
+ * type, which the font's tuplet digits, at `TUPLET_SPACE`, fit well inside.
+ */
+const TUPLET_ROOM_PX = GAP * 1.7;
+/** Staff space the tuplet numeral is set at, as on paper: small beside the notes. */
+const TUPLET_SPACE = GAP * 0.8;
+/** Clear space between a tuplet's beam and its numeral. */
+const TUPLET_GAP_PX = GAP * 0.6;
+/** The tallest of the tuplet digits, above its origin, in staff spaces. */
+const TUPLET_DIGIT_TOP_G = Math.max(
+  ...MUSIC_GLYPH_NAMES.filter((name) => name.startsWith('tuplet')).map(
+    (name) => MUSIC_GLYPH_METRICS[name].bbox[3],
+  ),
+);
 
 /** One beam's line across the view, in pixels; keyed by `ChordGroup.beamId`. */
 interface BeamLine {
@@ -126,10 +173,18 @@ type BeamLines = Map<number, BeamLine>;
 const WHOLE_REST: DurationSymbol = { base: 'whole', dotted: false };
 const WHOLE_REST_STEP = restStep(WHOLE_REST);
 
-/** Clearance above/below an extreme note head: half-height plus padding. */
-const HEAD_CLEARANCE = GAP * 0.5 + 6;
-/** The same padding, for ink whose own extent is already exact. */
+/** Padding kept past the furthest ink the music reaches, above and below. */
 const INK_CLEARANCE = 6;
+/** How far a notehead's ink reaches above or below its line: the tallest of the font's heads. */
+const HEAD_REACH_PX =
+  Math.max(
+    ...(['noteheadBlack', 'noteheadHalf', 'noteheadWhole'] as const).map((name) => {
+      const [, bottom, , top] = MUSIC_GLYPH_METRICS[name].bbox;
+      return Math.max(top, -bottom);
+    }),
+  ) * GAP;
+/** Clearance above/below an extreme note head: its reach plus padding. */
+const HEAD_CLEARANCE = HEAD_REACH_PX + INK_CLEARANCE;
 /** Least room the pedal bracket keeps under the bass staff. */
 const PEDAL_ROW_PX = 15;
 /** Extra room between the staves when the take carries dynamics. */
@@ -188,17 +243,20 @@ function yRel(step: number): number {
 const TIE_REACH_PX = GAP * 0.85 + (GAP * 1.1) / 2;
 
 /**
- * How far a chord's own stem reaches past its heads, relative to its staff.
+ * How far a chord's own stem and flag reach past its heads, relative to its
+ * staff.
  *
  * Only unbeamed chords answer here — a beamed one hangs from the beam, which
- * is measured whole. The flag grows from the tip back toward the head, so the
- * tip is the whole reach.
+ * is measured whole. A flag hangs from the tip back toward the head, but a
+ * 32nd's and a 64th's stack up past a normal stem's end, so the reach is the
+ * stem or the flag's ink, whichever runs further (`flaggedStemReachG`).
  */
 function stemExtentRel(chord: ChordGroup): number | null {
   if (chord.symbol.base === 'whole' || chord.beamId !== null) return null;
   const anchor = chord.stemDown ? chord.notes[0] : chord.notes[chord.notes.length - 1];
   if (!anchor) return null;
-  return yRel(anchor.step) + (chord.stemDown ? 1 : -1) * STEM_LENGTH_PX;
+  const reach = flaggedStemReachG(beamCountFor(chord.symbol.base), chord.stemDown) * GAP;
+  return yRel(anchor.step) + (chord.stemDown ? 1 : -1) * reach;
 }
 
 /**
@@ -225,8 +283,8 @@ function beamExtentRel(beam: BeamGroup): { top: number; bottom: number } | null 
   let bottom = Math.max(span.y1, span.y2) + half;
   // The tuplet numeral sits outside the beam, on the side away from the heads.
   if (beam.tupletCount !== null) {
-    if (beam.stemDown) bottom += GAP * 1.5 + TUPLET_FONT_PX * 0.25;
-    else top -= GAP * 0.8 + TUPLET_FONT_PX * 0.8;
+    if (beam.stemDown) bottom += GAP * 1.5 + TUPLET_ROOM_PX * 0.25;
+    else top -= GAP * 0.8 + TUPLET_ROOM_PX * 0.8;
   }
   return { top, bottom };
 }
@@ -593,50 +651,92 @@ export function scoreEndMs(layout: ScoreLayout, chrome: ScoreChrome = 'full'): n
   return layout.totalMs;
 }
 
-/** Half the width of a chord's heads, a hollow head's stroke included. */
+/** Half the width of a chord's heads. */
 function headHalfWidth(chord: ChordGroup): number {
-  if (chord.symbol.base === 'whole') return HEAD_RX * 1.25 + 1;
-  return chord.symbol.base === 'half' ? HEAD_RX + 1 : HEAD_RX;
+  return headHalfPx(chord.symbol.base);
 }
 
-/** Where a note's accidental is centred, left of its chord's leftmost head. */
-function accidentalOffsetPx(note: LaidOutNote): number {
-  return HEAD_RX + GAP * 0.7 + note.accidentalColumn * ACCIDENTAL_COLUMN_PX;
+/**
+ * How far a head moves to clear a second. Heads either side of a stem both
+ * overlap it, so they sit a head's width less the stem apart; a whole note has
+ * no stem, and its heads sit edge to edge.
+ */
+function secondShiftPx(base: DurationBase): number {
+  const width = 2 * headHalfPx(base);
+  return base === 'whole' ? width : width - STEM_W_PX;
+}
+
+/** How far a stem stands off its head's centre: on the head's edge, just inside it. */
+function stemInsetPx(base: DurationBase): number {
+  return headHalfPx(base) - STEM_W_PX / 2;
+}
+
+/**
+ * Where a note's accidental ink ends, left of its chord's leftmost head centre
+ * `half` wide. Right-aligned, as on paper, so accidentals of different widths
+ * line up on the chord, a column pitch apart.
+ */
+function accidentalRightPx(note: LaidOutNote, half: number): number {
+  return half + ACCIDENTAL_GAP_PX + note.accidentalColumn * ACCIDENTAL_COLUMN_PX;
+}
+
+/** How far a note's accidental reaches left of its chord's leftmost head centre. */
+function accidentalReachPx(note: LaidOutNote, kind: AccidentalKind, half: number): number {
+  return accidentalRightPx(note, half) + glyphWidth(ACCIDENTAL_GLYPHS[kind]) * GAP;
+}
+
+/** How far a dot's ink runs right of where it is set: the font's dot. */
+const DOT_REACH_PX = MUSIC_GLYPH_METRICS.augmentationDot.bbox[2] * GAP;
+
+/** How far a flag's ink swings out right of its stem's centre line. */
+function flagReachPx(count: BeamCount, stemDown: boolean): number {
+  const [, , right] = MUSIC_GLYPH_METRICS[flagGlyphFor(count, stemDown)].bbox;
+  return right * GAP - STEM_W_PX / 2;
+}
+
+/** How far a rest's ink reaches either side of its onset. */
+function restReachPx(symbol: DurationSymbol): { left: number; right: number } {
+  const { left, right } = restInkG(symbol);
+  return { left: left * GAP, right: right * GAP };
 }
 
 /** How far a chord's heads reach left of its onset, a displaced one included. */
 function headsReachLeft(chord: ChordGroup): number {
-  return (
-    headHalfWidth(chord) - Math.min(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX
-  );
+  const shift = secondShiftPx(chord.symbol.base);
+  return headHalfWidth(chord) - Math.min(...chord.notes.map((note) => note.headShift)) * shift;
 }
 
 /** How far a chord's heads reach right of its onset, a displaced one included. */
 function headsReachRight(chord: ChordGroup): number {
-  return (
-    Math.max(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX + headHalfWidth(chord)
-  );
+  const shift = secondShiftPx(chord.symbol.base);
+  return Math.max(...chord.notes.map((note) => note.headShift)) * shift + headHalfWidth(chord);
 }
 
 /** How far a chord's ink reaches left of its onset: heads, then accidentals. */
 function chordReachLeft(chord: ChordGroup): number {
-  const leftEdge = Math.min(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX;
+  const half = headHalfWidth(chord);
+  const shift = secondShiftPx(chord.symbol.base);
+  const leftEdge = Math.min(...chord.notes.map((note) => note.headShift)) * shift;
   let reach = headsReachLeft(chord);
   for (const note of chord.notes) {
     if (!note.accidental) continue;
-    reach = Math.max(reach, accidentalOffsetPx(note) + ACCIDENTAL_HALF_WIDTH_PX - leftEdge);
+    reach = Math.max(reach, accidentalReachPx(note, note.accidental, half) - leftEdge);
   }
   return reach;
 }
 
 /** How far a chord's ink reaches right of its onset: heads, dots, a flag. */
 function chordReachRight(chord: ChordGroup): number {
-  const rightEdge = Math.max(...chord.notes.map((note) => note.headShift)) * 2 * HEAD_RX;
+  const { base } = chord.symbol;
+  const rightEdge = Math.max(...chord.notes.map((note) => note.headShift)) * secondShiftPx(base);
   let reach = headsReachRight(chord);
-  if (chord.symbol.dotted) reach = Math.max(reach, rightEdge + DOT_OFFSET_PX + DOT_RADIUS_PX);
-  if (chord.beamId === null && beamCountFor(chord.symbol.base) > 0) {
-    const stemX = chord.stemDown ? -HEAD_RX + 0.8 : HEAD_RX - 0.8;
-    reach = Math.max(reach, stemX + FLAG_REACH_PX);
+  if (chord.symbol.dotted) {
+    reach = Math.max(reach, rightEdge + headHalfPx(base) + DOT_GAP_PX + DOT_REACH_PX);
+  }
+  const flags = beamCountFor(base);
+  if (chord.beamId === null && flags !== 0) {
+    const stemX = (chord.stemDown ? -1 : 1) * stemInsetPx(base);
+    reach = Math.max(reach, stemX + flagReachPx(flags, chord.stemDown));
   }
   return reach;
 }
@@ -652,9 +752,13 @@ const widestReaches = new WeakMap<ScoreLayout, number>();
 function widestReachPx(layout: ScoreLayout): number {
   const cached = widestReaches.get(layout);
   if (cached !== undefined) return cached;
-  let widest = REST_HALF_WIDTH_PX;
+  let widest = 0;
   for (const chord of layout.chords) {
     widest = Math.max(widest, chordReachLeft(chord), chordReachRight(chord));
+  }
+  for (const rest of layout.rests) {
+    const ink = restReachPx(rest.symbol);
+    widest = Math.max(widest, ink.left, ink.right);
   }
   widestReaches.set(layout, widest);
   return widest;
@@ -722,7 +826,8 @@ function dividerX(view: ScoreView, layout: ScoreLayout, ms: number): number {
     if (rest.displayStartMs > ms + searchMs) break;
     if (!drawsStaff(view, rest.staff)) continue;
     // Ink, but not a head: packed tight, a line through a rest still reads.
-    reach(rest.displayStartMs, REST_HALF_WIDTH_PX, REST_HALF_WIDTH_PX);
+    const ink = restReachPx(rest.symbol);
+    reach(rest.displayStartMs, ink.left, ink.right);
   }
 
   // Room for the clef first, where the music leaves it: clear of all the ink,
@@ -864,7 +969,6 @@ function drawMeasures(
     const previous = layout.measures[measure.index - 1];
     if (previous && previous.bpm !== measure.bpm && onset >= view.gutterPx - 8) {
       drawTempoMark(ctx, onset + 16, view.trebleTop - 20, measure.bpm, palette);
-      ctx.strokeStyle = palette.barLine;
     }
     if (measure.empty) {
       const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
@@ -894,9 +998,13 @@ function drawMeasures(
   }
 }
 
+/** Staff space the tempo mark's note is set at: small, beside the measure number. */
+const TEMPO_NOTE_SPACE = GAP * 0.4;
+
 /**
- * "♩ = bpm" where the tempo changes. The quarter note is drawn rather than
- * typeset: the score canvas uses no music font.
+ * "♩ = bpm" where the tempo changes: the music font's metronome-mark quarter
+ * note, its head centred on `x` and its foot a pixel above the baseline, then
+ * the number in the measure numbers' type.
  */
 function drawTempoMark(
   ctx: CanvasRenderingContext2D,
@@ -906,19 +1014,14 @@ function drawTempoMark(
   palette: ScorePalette,
 ): void {
   ctx.fillStyle = palette.measureNumber;
-  ctx.strokeStyle = palette.measureNumber;
-  ctx.save();
-  ctx.translate(x, baseline - 2.5);
-  ctx.rotate(-0.32);
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 2.8, 2.1, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(x + 2.6, baseline - 3.2);
-  ctx.lineTo(x + 2.6, baseline - 11);
-  ctx.stroke();
+  const [, bottom] = MUSIC_GLYPH_METRICS.metNoteQuarterUp.bbox;
+  drawGlyph(
+    ctx,
+    'metNoteQuarterUp',
+    x - glyphCentre('metNoteQuarterUp') * TEMPO_NOTE_SPACE,
+    baseline - 1 + bottom * TEMPO_NOTE_SPACE,
+    TEMPO_NOTE_SPACE,
+  );
   ctx.fillText(`= ${Math.round(bpm)}`, x + 6, baseline);
 }
 
@@ -935,7 +1038,6 @@ function drawRests(
   const fromMs = view.scrollMs - 400;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
   ctx.fillStyle = palette.rest;
-  ctx.strokeStyle = palette.rest;
   const { rests } = layout;
   for (let i = firstAtOrAfter(rests, fromMs, (rest) => rest.displayStartMs); ; i += 1) {
     const rest = rests[i];
@@ -996,6 +1098,9 @@ function drawPedals(
   }
 }
 
+/** Staff space the 8va and 8vb labels are set at. */
+const OCTAVE_LABEL_SPACE = GAP * 0.6;
+
 /**
  * 8va and 8vb lines, above the treble staff and below the bass.
  *
@@ -1015,16 +1120,14 @@ function drawOctaves(
 
   ctx.strokeStyle = palette.noteDim;
   ctx.fillStyle = palette.noteDim;
-  ctx.font = `italic 600 ${GAP * 1.6}px Georgia, "Times New Roman", Times, serif`;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
 
   for (const octave of layout.octaves) {
     if (octave.toMs < fromMs) continue;
     if (octave.fromMs >= toMs) break; // sorted by staff then time
     const openLeft = octave.fromMs < fromMs;
     const openRight = octave.toMs > toMs;
-    const x1 = openLeft ? view.gutterPx : xForMs(view, octave.fromMs) - GAP * 0.64;
+    // From the left edge of the first head it covers.
+    const x1 = openLeft ? view.gutterPx : xForMs(view, octave.fromMs) - headHalfPx('quarter');
     const x2 = openRight ? view.widthPx : xForMs(view, octave.toMs) + GAP * 1.3;
     if (x2 <= x1) continue;
     if (!drawsStaff(view, octave.staff)) continue;
@@ -1032,9 +1135,13 @@ function drawOctaves(
 
     let lineFrom = x1;
     if (!openLeft) {
-      const label = octave.up ? '8va' : '8vb';
-      ctx.fillText(label, x1, y + GAP * 0.55);
-      lineFrom = x1 + ctx.measureText(label).width + GAP * 0.4;
+      // The font's label, its ink centred on the line; the line starts clear
+      // after it, by its advance.
+      const label = octave.up ? 'ottavaAlta' : 'ottavaBassaVb';
+      const { advance, bbox } = MUSIC_GLYPH_METRICS[label];
+      const middle = (bbox[1] + bbox[3]) / 2;
+      drawGlyph(ctx, label, x1, y + middle * OCTAVE_LABEL_SPACE, OCTAVE_LABEL_SPACE);
+      lineFrom = x1 + advance * OCTAVE_LABEL_SPACE + GAP * 0.4;
     }
     ctx.save();
     ctx.setLineDash([3, 2.6]);
@@ -1053,6 +1160,9 @@ function drawOctaves(
     }
   }
 }
+
+/** Staff space the dynamic marks are set at. */
+const DYNAMIC_SPACE = GAP * 0.9;
 
 /**
  * Dynamic marks and hairpins, between the staves.
@@ -1092,19 +1202,20 @@ function drawDynamics(
     ctx.stroke();
   }
 
+  // Each mark is the font's one glyph for it, its letters kerned as the font
+  // sets them, standing on the row and centred on its note by its optical
+  // centre rather than its ink.
   ctx.fillStyle = palette.noteDim;
-  ctx.font = `bold italic ${GAP * 2.1}px Georgia, "Times New Roman", Times, serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
   for (const mark of layout.dynamics) {
     if (mark.atMs < fromMs) continue;
     if (mark.atMs > toMs) break; // sorted by time
-    // Marks are centred, so one at the very start of the piece sits half under
-    // the gutter — which is painted last, and would swallow it. Nudge it clear.
-    const x = Math.max(view.gutterPx + GAP * 1.2, xForMs(view, mark.atMs));
-    ctx.fillText(mark.mark, x, rowY);
+    // Centred, one at the very start of the piece reaches back under the
+    // gutter — which is painted last, and would swallow it. Nudge it clear.
+    const ink = dynamicInkG(mark.mark);
+    const x = Math.max(view.gutterPx + ink.left * DYNAMIC_SPACE + 2, xForMs(view, mark.atMs));
+    const origin = x - dynamicOpticalCentre(mark.mark) * DYNAMIC_SPACE;
+    drawGlyph(ctx, DYNAMIC_GLYPHS[mark.mark], origin, rowY, DYNAMIC_SPACE);
   }
-  ctx.textAlign = 'left';
 }
 
 /**
@@ -1121,7 +1232,7 @@ function drawTies(
 ): void {
   const fromMs = view.scrollMs - 4000;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
-  const open = new Map<string, { x: number; y: number; above: boolean }>();
+  const open = new Map<string, { x: number; y: number; above: boolean; half: number }>();
   ctx.fillStyle = palette.noteDim;
 
   const { chords } = layout;
@@ -1138,14 +1249,16 @@ function drawTies(
       const above = chord.stemDown;
       const x = xForMs(view, chord.displayStartMs);
       const y = yForStep(view, note.staff, note.step) + (above ? -1 : 1) * GAP * 0.85;
+      // From one head's edge to the other's.
+      const half = headHalfWidth(chord);
       if (note.tiedFromPrev) {
         const start = open.get(key);
         if (start) {
           open.delete(key);
-          drawTieArc(ctx, start.x + GAP * 0.64, start.y, x - GAP * 0.64, y, start.above);
+          drawTieArc(ctx, start.x + start.half, start.y, x - half, y, start.above);
         }
       }
-      if (note.tiedToNext) open.set(key, { x, y, above });
+      if (note.tiedToNext) open.set(key, { x, y, above, half });
     }
   }
 }
@@ -1174,7 +1287,8 @@ function drawTieArc(
 
 /** Where a chord's stem stands, and the head the beam springs from. */
 function stemXFor(view: ScoreView, chord: ChordGroup): number {
-  return xForMs(view, chord.displayStartMs) + (chord.stemDown ? -1 : 1) * STEM_INSET_PX;
+  const inset = stemInsetPx(chord.symbol.base);
+  return xForMs(view, chord.displayStartMs) + (chord.stemDown ? -1 : 1) * inset;
 }
 
 function beamAnchorY(view: ScoreView, chord: ChordGroup): number {
@@ -1237,14 +1351,15 @@ function drawBeams(ctx: CanvasRenderingContext2D, lines: BeamLines, palette: Sco
   ctx.fillStyle = palette.note;
   for (const line of lines.values()) {
     if (line.tupletCount !== null) {
-      // The numeral goes on the side away from the heads, as on paper.
+      // The font's tuplet digits, centred on the beam on the side away from
+      // the heads, clear of it either way, as on paper. They stand on their
+      // origin, so below the beam they go their height lower.
       const midX = (line.x1 + line.x2) / 2;
       const midY = (line.y1 + line.y2) / 2;
-      ctx.font = `italic 600 ${TUPLET_FONT_PX}px Georgia, "Times New Roman", Times, serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'alphabetic';
-      ctx.fillText(String(line.tupletCount), midX, midY + (line.stemDown ? GAP * 1.5 : -GAP * 0.8));
-      ctx.textAlign = 'left';
+      const y = line.stemDown
+        ? midY + TUPLET_GAP_PX + TUPLET_DIGIT_TOP_G * TUPLET_SPACE
+        : midY - TUPLET_GAP_PX;
+      drawDigitRun(ctx, 'tuplet', line.tupletCount, midX, y, TUPLET_SPACE);
     }
     const toward = line.stemDown ? -1 : 1; // further beams stack toward the heads
     const half = BEAM_THICKNESS_PX / 2;
@@ -1321,17 +1436,20 @@ function drawChord(
   const x = xForMs(view, chord.displayStartMs);
   if (x < view.gutterPx - 40) return;
 
-  const rx = HEAD_RX;
-  const ry = GAP * 0.5;
-  const hollow = chord.symbol.base === 'whole' || chord.symbol.base === 'half';
-  /** Where a note's head sits, once any collision shift is applied. */
-  const headX = (note: LaidOutNote): number => x + note.headShift * 2 * rx;
+  const { base } = chord.symbol;
+  const head = noteheadGlyphFor(base);
+  const half = headHalfPx(base);
+  const shift = secondShiftPx(base);
+  /** From a head's centre back to its glyph's origin. */
+  const headOrigin = glyphCentre(head) * GAP;
+  /** Where a note's head is centred, once any collision shift is applied. */
+  const headX = (note: LaidOutNote): number => x + note.headShift * shift;
   // Accidentals hang off the left of the whole chord and dots off its right:
   // measured from the owning head alone, either would land on top of a head
   // displaced past it.
   const shifts = chord.notes.map((note) => note.headShift);
-  const leftEdgeX = x + Math.min(...shifts) * 2 * rx;
-  const rightEdgeX = x + Math.max(...shifts) * 2 * rx;
+  const leftEdgeX = x + Math.min(...shifts) * shift;
+  const rightEdgeX = x + Math.max(...shifts) * shift;
 
   // Ledger lines first, behind heads, reaching out to any displaced head.
   ctx.strokeStyle = palette.staffLine;
@@ -1340,8 +1458,8 @@ function drawChord(
     for (const step of ledgerLineSteps(note.step)) {
       const y = yForStep(view, note.staff, step) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(headX(note) - rx - 4, y);
-      ctx.lineTo(headX(note) + rx + 4, y);
+      ctx.moveTo(headX(note) - half - 4, y);
+      ctx.lineTo(headX(note) + half + 4, y);
       ctx.stroke();
     }
   }
@@ -1351,96 +1469,68 @@ function drawChord(
 
   for (const note of chord.notes) {
     const y = yForStep(view, note.staff, note.step);
-    const hx = headX(note);
     minY = Math.min(minY, y);
     maxY = Math.max(maxY, y);
     // Two independent reasons a head lights, kept named apart rather than
     // folded together: the cursor is inside it, or the user is holding it.
     const sounding = playheadMs >= note.startMs && playheadMs < note.startMs + note.durationMs;
     const held = lit(note);
-    const color = sounding || held ? palette.highlight : palette.note;
+    // A head, its accidental and its dot light; the stem, flag and beam
+    // belong to the whole chord, and stay in ink.
+    ctx.fillStyle = sounding || held ? palette.highlight : palette.note;
 
-    ctx.save();
-    ctx.translate(hx, y);
-    ctx.rotate(-0.32);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, chord.symbol.base === 'whole' ? rx * 1.25 : rx, ry, 0, 0, Math.PI * 2);
-    if (hollow) {
-      ctx.strokeStyle = color;
-      ctx.lineWidth = 1.8;
-      ctx.stroke();
-    } else {
-      ctx.fillStyle = color;
-      ctx.fill();
-    }
-    ctx.restore();
-
+    // The font's head, a hollow one's hole and all, filled like any other.
+    drawGlyph(ctx, head, headX(note) - headOrigin, y, GAP);
     if (note.accidental) {
-      ctx.fillStyle = color;
-      ctx.strokeStyle = color;
-      drawAccidentalGlyph(ctx, note.accidental, leftEdgeX - accidentalOffsetPx(note), y, GAP);
+      // Right-aligned before the chord, so its ink ends where its column does.
+      const name = ACCIDENTAL_GLYPHS[note.accidental];
+      const right = leftEdgeX - accidentalRightPx(note, half);
+      const centre = right - (MUSIC_GLYPH_METRICS[name].bbox[2] - glyphCentre(name)) * GAP;
+      drawAccidentalGlyph(ctx, note.accidental, centre, y, GAP);
     }
     if (chord.symbol.dotted) {
-      ctx.fillStyle = color;
-      ctx.beginPath();
+      // Dots sit in a space: a note on a line has its dot moved up half a space.
       const dotY = y - (note.step % 2 === 0 ? GAP / 2 : 0);
-      ctx.arc(rightEdgeX + DOT_OFFSET_PX, dotY, DOT_RADIUS_PX, 0, Math.PI * 2);
-      ctx.fill();
+      drawGlyph(ctx, 'augmentationDot', rightEdgeX + half + DOT_GAP_PX, dotY, GAP);
     }
   }
 
-  // Stem and flags (whole notes have neither). A beamed chord stems to its
-  // beam and takes no flag — the beam is the flag, shared.
-  if (chord.symbol.base !== 'whole') {
-    const beam = chord.beamId === null ? undefined : beamLines.get(chord.beamId);
-    const sx = chord.stemDown ? x - rx + 0.8 : x + rx - 0.8;
-    const headEnd = chord.stemDown ? minY : maxY;
-    // Flags stack back toward the head, so three or four of them need a longer
-    // stem than an eighth's to sit on.
-    const stemPx = STEM_LENGTH_PX + extraStemG(beamCountFor(chord.symbol.base)) * GAP;
-    const tipY = beam
-      ? beamYAt(beam, beam.x1, beam.x2, sx)
-      : chord.stemDown
-        ? maxY + stemPx
-        : minY - stemPx;
+  // Stem and flag (whole notes have neither). A beamed chord stems to its beam
+  // and takes no flag — the beam is the flag, shared.
+  if (base === 'whole') return;
+  const beam = chord.beamId === null ? undefined : beamLines.get(chord.beamId);
+  const sx = x + (chord.stemDown ? -1 : 1) * stemInsetPx(base);
+  // The stem starts where the far head's stem anchor says, meeting its edge.
+  const rise = STEM_ANCHOR_RISE_G * GAP;
+  const headEnd = chord.stemDown ? minY + rise : maxY - rise;
+  const flags = beamCountFor(base);
+  // A 32nd's and a 64th's flags stack up past a normal stem's end, and their
+  // anchors say how much further the stem has to run to meet them.
+  const stemPx = flaggedStemG(flags, chord.stemDown) * GAP;
+  const tipY = beam
+    ? beamYAt(beam, beam.x1, beam.x2, sx)
+    : chord.stemDown
+      ? maxY + stemPx
+      : minY - stemPx;
 
-    ctx.strokeStyle = palette.note;
-    ctx.lineWidth = 1.6;
-    ctx.beginPath();
-    ctx.moveTo(sx, headEnd);
-    ctx.lineTo(sx, tipY);
-    ctx.stroke();
-    // Flags hang from the tip back toward the head, as on paper — see
-    // `drawFlag` in sheetRenderer. Drawn the other way they reach a further
-    // two staff spaces past the stem, off the top of the view.
-    if (!beam) drawFlags(ctx, chord, sx, tipY, chord.stemDown ? -1 : 1, palette);
-  }
-}
-
-function drawFlags(
-  ctx: CanvasRenderingContext2D,
-  chord: ChordGroup,
-  x: number,
-  stemEndY: number,
-  direction: 1 | -1,
-  palette: ScorePalette,
-): void {
-  const flags = beamCountFor(chord.symbol.base);
   ctx.strokeStyle = palette.note;
-  ctx.lineWidth = 1.6;
-  for (let i = 0; i < flags; i += 1) {
-    const y = stemEndY + direction * i * (GAP * 0.7);
-    ctx.beginPath();
-    ctx.moveTo(x, y);
-    ctx.bezierCurveTo(
-      x + GAP * 1.1,
-      y + direction * GAP * 0.5,
-      x + GAP * 1.2,
-      y + direction * GAP * 1.3,
-      x + GAP * 0.4,
-      y + direction * GAP * 2,
+  ctx.lineWidth = STEM_W_PX;
+  ctx.beginPath();
+  ctx.moveTo(sx, headEnd);
+  ctx.lineTo(sx, tipY);
+  ctx.stroke();
+  if (!beam && flags !== 0) {
+    // One glyph carries all of a note's flags, hanging from the tip back
+    // toward the head as on paper: its origin on the stem's left edge, as far
+    // short of the tip as its anchor says.
+    ctx.fillStyle = palette.note;
+    drawGlyph(
+      ctx,
+      flagGlyphFor(flags, chord.stemDown),
+      sx - STEM_W_PX / 2,
+      tipY + flagAnchorYG(flags, chord.stemDown) * GAP,
+      GAP,
     );
-    ctx.stroke();
   }
 }
 
@@ -1454,6 +1544,9 @@ function previewPosition(midi: number, input: ScoreRenderInput): StaffPosition {
   const spelled = spellInKey(midi, { fifths, mode: input.layout.keyMode });
   return midiToStaffPosition(midi, undefined, undefined, fifths, spelled);
 }
+
+/** From a black head's centre back to its glyph's origin. */
+const BLACK_HEAD_ORIGIN_PX = glyphCentre('noteheadBlack') * GAP;
 
 function drawOpenNotes(
   ctx: CanvasRenderingContext2D,
@@ -1471,14 +1564,8 @@ function drawOpenNotes(
     // Extension bar shows the note is still held.
     ctx.fillStyle = palette.recordWash;
     ctx.fillRect(x, y - 3, width, 6);
-    ctx.save();
-    ctx.translate(x, y);
-    ctx.rotate(-0.32);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, GAP * 0.64, GAP * 0.5, 0, 0, Math.PI * 2);
     ctx.fillStyle = palette.record;
-    ctx.fill();
-    ctx.restore();
+    drawGlyph(ctx, 'noteheadBlack', x - BLACK_HEAD_ORIGIN_PX, y, GAP);
   }
 }
 
@@ -1503,12 +1590,8 @@ function drawGhosts(
       ctx.lineTo(x + GAP, ly);
       ctx.stroke();
     }
-    ctx.translate(x, y);
-    ctx.rotate(-0.32);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, GAP * 0.64, GAP * 0.5, 0, 0, Math.PI * 2);
     ctx.fillStyle = palette.ghost;
-    ctx.fill();
+    drawGlyph(ctx, 'noteheadBlack', x - BLACK_HEAD_ORIGIN_PX, y, GAP);
     ctx.restore();
   }
 }
@@ -1567,31 +1650,22 @@ function drawPlayhead(
   ctx.fill();
 }
 
-let glyphSupport: { treble: boolean; bass: boolean } | null = null;
-
-function detectGlyphSupport(ctx: CanvasRenderingContext2D): { treble: boolean; bass: boolean } {
-  if (glyphSupport) return glyphSupport;
-  ctx.save();
-  ctx.font = `${GAP * 4}px serif`;
-  const treble = ctx.measureText('\u{1D11E}').width > GAP;
-  const bass = ctx.measureText('\u{1D122}').width > GAP;
-  ctx.restore();
-  glyphSupport = { treble, bass };
-  return glyphSupport;
-}
-
-/** Scale a clef announcing a change mid-score is drawn at. */
-const INLINE_CLEF_SCALE = 0.72;
-
 /** Room an inline clef takes, and the gap it keeps off the bar line. */
 const INLINE_CLEF_W = 22;
 const INLINE_CLEF_PAD = 3;
 /** How far back from its bar line an inline clef's wash reaches. */
 const INLINE_CLEF_ROOM = INLINE_CLEF_W + INLINE_CLEF_PAD + 2;
+/** How wide the wash behind an inline clef is. */
+const INLINE_CLEF_WASH_W = INLINE_CLEF_W + 4;
+
+/** The line a clef is set on: a G clef's G line, an F clef's F line. */
+function clefLineY(clef: ClefKind, staffTop: number): number {
+  return clef === 'treble' ? staffTop + STAFF_H - GAP : staffTop + GAP;
+}
 
 /**
- * A clef announced mid-score, drawn smaller than the gutter's and seated on
- * the staff it belongs to. Scaling about the staff's centre keeps it there.
+ * A clef announced mid-score: the font's change clef, smaller than the
+ * gutter's, centred in its wash and seated on the line it names.
  *
  * It sits in the tail of the measure, just before the bar line, which is where
  * printed music puts a clef that changes on a bar line. Paper widens the bar
@@ -1608,20 +1682,16 @@ function drawInlineClef(
   palette: ScorePalette,
   part: ClefPart,
 ): void {
-  const x = barX - INLINE_CLEF_W - INLINE_CLEF_PAD;
+  const washX = barX - INLINE_CLEF_ROOM;
   if (part === 'wash') {
     ctx.fillStyle = palette.gutterBg;
-    ctx.fillRect(barX - INLINE_CLEF_ROOM, staffTop - 3, INLINE_CLEF_W + 4, STAFF_H + 6);
+    ctx.fillRect(washX, staffTop - 3, INLINE_CLEF_WASH_W, STAFF_H + 6);
     return;
   }
-  ctx.save();
-  const centreY = staffTop + STAFF_H / 2;
-  ctx.translate(x, centreY);
-  ctx.scale(INLINE_CLEF_SCALE, INLINE_CLEF_SCALE);
-  ctx.translate(-x, -centreY);
-  if (clef === 'treble') drawFallbackTrebleClef(ctx, x + 6, staffTop, palette);
-  else drawFallbackBassClef(ctx, x + 6, staffTop, palette);
-  ctx.restore();
+  const name = clefGlyphFor(clef, true);
+  const centre = washX + INLINE_CLEF_WASH_W / 2;
+  ctx.fillStyle = palette.noteDim;
+  drawGlyph(ctx, name, centre - glyphCentre(name) * GAP, clefLineY(clef, staffTop), GAP);
 }
 
 /** An inline clef is drawn in two passes: its wash, then the clef. */
@@ -1669,29 +1739,51 @@ function clefsAt(layout: ScoreLayout, ms: number): Record<StaffKind, ClefKind> {
   return measure?.clefs ?? { treble: defaultClefFor('treble'), bass: defaultClefFor('bass') };
 }
 
-/** The clef glyph for a staff, falling back to a drawn one where unsupported. */
-function drawGutterClef(
-  ctx: CanvasRenderingContext2D,
-  clef: ClefKind,
-  staffTop: number,
-  palette: ScorePalette,
-): void {
-  const support = detectGlyphSupport(ctx);
-  if (clef === 'treble') {
-    if (support.treble) {
-      ctx.font = `${GAP * 4.1}px serif`;
-      ctx.fillText('\u{1D11E}', 8, staffTop + STAFF_H - GAP + GAP * 1.4);
-    } else {
-      drawFallbackTrebleClef(ctx, 14, staffTop, palette);
-    }
-    return;
+/** Where the gutter's clefs start, after the system line. */
+const GUTTER_CLEF_X = 8;
+/** Where the wider of the gutter's two clefs ends. */
+const GUTTER_CLEF_RIGHT_PX =
+  GUTTER_CLEF_X +
+  Math.max(...(['gClef', 'fClef'] as const).map((name) => MUSIC_GLYPH_METRICS[name].bbox[2])) * GAP;
+
+/** The clef a staff reads under, at the gutter's start: the font's full-size clef. */
+function drawGutterClef(ctx: CanvasRenderingContext2D, clef: ClefKind, staffTop: number): void {
+  drawGlyph(ctx, clefGlyphFor(clef, false), GUTTER_CLEF_X, clefLineY(clef, staffTop), GAP);
+}
+
+/** Where the key signature's `i`th accidental is centred. */
+function keyAccidentalX(i: number): number {
+  return GUTTER - 22 + (i + 0.5) * KEY_ACCIDENTAL_PX;
+}
+
+/** How far in from the gutter's edge the time signature is centred. */
+const TIME_SIG_INSET_PX = 14;
+/** Clear space the time signature keeps from what stands before it, and from the edge. */
+const TIME_SIG_CLEAR_PX = GAP * 0.3;
+/** The smallest the time signature is ever set, as a share of its full size. */
+const TIME_SIG_MIN_SCALE = 0.5;
+
+/**
+ * The staff space the time signature's digits are set at: full size where
+ * each number fits between what stands before it — the clefs, or the key
+ * signature — and the gutter's edge, and evenly smaller where one does not.
+ * So a 12/8 shrinks, rather than the gutter growing: the gutter's width is
+ * what the Play page scrolls under and what Learn fits its bars to.
+ */
+function timeSignatureSpace(gutterPx: number, fifths: number, meter: TimeSignature): number {
+  let before = GUTTER_CLEF_RIGHT_PX;
+  const count = Math.abs(fifths);
+  if (count > 0) {
+    const sign = ACCIDENTAL_GLYPHS[signatureAccidental(fifths)];
+    before = Math.max(before, keyAccidentalX(count - 1) + (glyphWidth(sign) / 2) * GAP);
   }
-  if (support.bass) {
-    ctx.font = `${GAP * 3.2}px serif`;
-    ctx.fillText('\u{1D122}', 8, staffTop + GAP * 3.1);
-  } else {
-    drawFallbackBassClef(ctx, 14, staffTop, palette);
-  }
+  const centre = gutterPx - TIME_SIG_INSET_PX;
+  const room = 2 * Math.min(centre - before, gutterPx - centre) - 2 * TIME_SIG_CLEAR_PX;
+  const widest = Math.max(
+    runAdvance(digitGlyphsFor('timeSig', meter.numerator)),
+    runAdvance(digitGlyphsFor('timeSig', meter.denominator)),
+  );
+  return GAP * Math.min(1, Math.max(TIME_SIG_MIN_SCALE, room / (widest * GAP)));
 }
 
 function drawGutter(
@@ -1719,15 +1811,14 @@ function drawGutter(
   ctx.lineTo(SYSTEM_LINE_X, systemBottom(view));
   ctx.stroke();
 
+  // Clefs, key signature and time signature: all the font's, in the dimmer ink.
   ctx.fillStyle = palette.noteDim;
-  ctx.textAlign = 'left';
-  ctx.textBaseline = 'alphabetic';
 
   // The gutter sits over the music, so it has to name the clef in force where
   // the view actually starts — not the one the piece opened with.
   const clefs = clefsAt(input.layout, view.scrollMs);
   for (const staff of stavesOf(view)) {
-    drawGutterClef(ctx, clefs[staff], staffTopFor(view, staff), palette);
+    drawGutterClef(ctx, clefs[staff], staffTopFor(view, staff));
   }
 
   // Key signature between the clef and the time signature, read under
@@ -1735,85 +1826,26 @@ function drawGutter(
   const fifths = normalizeFifths(input.keySignature);
   if (fifths !== 0) {
     const sign = signatureAccidental(fifths);
-    ctx.fillStyle = palette.noteDim;
-    ctx.strokeStyle = palette.noteDim;
     for (const staff of stavesOf(view)) {
       const top = staffTopFor(view, staff);
       const steps = signatureSteps(fifths, clefs[staff]);
       for (let i = 0; i < steps.length; i += 1) {
         const y = top + STAFF_H - ((steps[i] as number) * GAP) / 2;
-        drawAccidentalGlyph(ctx, sign, GUTTER - 22 + (i + 0.5) * KEY_ACCIDENTAL_PX, y, GAP);
+        drawAccidentalGlyph(ctx, sign, keyAccidentalX(i), y, GAP);
       }
     }
-    ctx.fillStyle = palette.noteDim;
   }
 
   // Time signature on every staff drawn. Like the measure number, it describes
-  // the bar rather than the note, so a bare view leaves it off.
+  // the bar rather than the note, so a bare view leaves it off. Each number is
+  // a row of digits centred on its half of the staff, so a 12 sits as
+  // squarely as a 4.
   if (chromeOf(view) !== 'bare') {
-    ctx.font = `700 ${GAP * 2.1}px system-ui, sans-serif`;
-    ctx.textAlign = 'center';
-    const tsX = view.gutterPx - 14;
+    const space = timeSignatureSpace(view.gutterPx, fifths, timeSignature);
+    const x = view.gutterPx - TIME_SIG_INSET_PX;
     for (const top of staffTops(view)) {
-      ctx.fillText(String(timeSignature.numerator), tsX, top + GAP * 1.8);
-      ctx.fillText(String(timeSignature.denominator), tsX, top + GAP * 3.9);
+      drawDigitRun(ctx, 'timeSig', timeSignature.numerator, x, top + GAP, space);
+      drawDigitRun(ctx, 'timeSig', timeSignature.denominator, x, top + 3 * GAP, space);
     }
-    ctx.textAlign = 'left';
   }
-}
-
-/** Stylized G clef: spiral around the G line plus a tall flourish. */
-function drawFallbackTrebleClef(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  staffTop: number,
-  palette: ScorePalette,
-): void {
-  const gy = staffTop + STAFF_H - GAP; // G4 line
-  ctx.strokeStyle = palette.noteDim;
-  ctx.lineWidth = 1.8;
-  ctx.beginPath();
-  ctx.arc(x, gy, GAP * 0.75, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x + GAP * 0.75, gy);
-  ctx.bezierCurveTo(x + GAP, staffTop - 6, x - GAP * 0.4, staffTop - 12, x, staffTop - 4);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(x, staffTop - 4);
-  ctx.lineTo(x, staffTop + STAFF_H + 8);
-  ctx.stroke();
-}
-
-/** Stylized F clef: comma curve with the two dots around the F line. */
-function drawFallbackBassClef(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  staffTop: number,
-  palette: ScorePalette,
-): void {
-  const fy = staffTop + GAP; // F3 line
-  ctx.strokeStyle = palette.noteDim;
-  ctx.fillStyle = palette.noteDim;
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  ctx.arc(x - 2, fy, GAP * 0.42, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.moveTo(x - 2, fy);
-  ctx.bezierCurveTo(
-    x + GAP * 1.6,
-    fy - GAP * 1.2,
-    x + GAP * 1.6,
-    fy + GAP * 1.6,
-    x - 2,
-    fy + GAP * 2.6,
-  );
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.arc(x + GAP * 1.7, fy - 3, 1.7, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.arc(x + GAP * 1.7, fy + 4, 1.7, 0, Math.PI * 2);
-  ctx.fill();
 }

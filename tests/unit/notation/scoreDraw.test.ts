@@ -1,7 +1,58 @@
-import { describe, expect, it } from 'vitest';
-import type { NoteEvent, NoteStaff } from '@/domain/takeTypes';
-import { layoutScore, type ScoreLayout } from '@/features/notation/notationLayout';
-import {
+import { describe, expect, it, vi } from 'vitest';
+import type { NoteEvent, NoteStaff, TimeSignature } from '@/domain/takeTypes';
+import type { MusicGlyphName } from '@/features/notation/glyphs/musicGlyphMetrics';
+import type { LayoutOptions, ScoreLayout } from '@/features/notation/notationLayout';
+import type {
+  ScoreChrome,
+  ScoreRenderInput,
+  ScoreView,
+  StaffMode,
+} from '@/features/notation/scoreRenderer';
+
+/**
+ * The first test to actually call `drawScore`. It records what the renderer
+ * asks the context to do rather than what it paints, which is enough to pin
+ * *why* a head is the colour it is — the thing that has no other net.
+ *
+ * Every music symbol on the live score is a glyph of the music font, drawn
+ * through `drawGlyph`. The calls are passed straight through to the real
+ * function, so their paths and fills still reach the recording context, and
+ * each one is logged on the way: which glyph, where its origin went, the staff
+ * space it was drawn to, and the colour and alpha it was filled in.
+ */
+interface GlyphCall {
+  name: MusicGlyphName;
+  x: number;
+  y: number;
+  space: number;
+  fill: string;
+  alpha: number;
+}
+
+/** Every glyph drawn in this file, in order; each render keeps its own slice. */
+const glyphLog: GlyphCall[] = [];
+
+vi.doMock('@/features/notation/glyphs/drawGlyph', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/notation/glyphs/drawGlyph')>();
+  return {
+    ...actual,
+    drawGlyph: (...args: Parameters<typeof actual.drawGlyph>): void => {
+      const [ctx, name, x, y, space] = args;
+      const alpha = (ctx as unknown as { globalAlpha?: number }).globalAlpha ?? 1;
+      glyphLog.push({ name, x, y, space, fill: String(ctx.fillStyle), alpha });
+      actual.drawGlyph(...args);
+    },
+  };
+});
+
+// One import at a time, after the mock: imports started together can each
+// replay vitest's mock queue, and one of them can bind the real module.
+const { MUSIC_GLYPH_ANCHORS, MUSIC_GLYPH_METRICS } =
+  await import('@/features/notation/glyphs/musicGlyphMetrics');
+const { flagAnchorYG, flaggedStemG, STEM_ANCHOR_RISE_G } =
+  await import('@/features/notation/glyphs/engravingGlyphs');
+const { layoutScore } = await import('@/features/notation/notationLayout');
+const {
   computeScoreGeometry,
   drawScore,
   GAP,
@@ -9,17 +60,8 @@ import {
   SCORE_LEAD_IN,
   SCORE_PALETTES,
   scoreEndMs,
-  type ScoreRenderInput,
-  type ScoreChrome,
-  type ScoreView,
-  type StaffMode,
-} from '@/features/notation/scoreRenderer';
+} = await import('@/features/notation/scoreRenderer');
 
-/**
- * The first test to actually call `drawScore`. It records what the renderer
- * asks the context to do rather than what it paints, which is enough to pin
- * *why* a head is the colour it is — the thing that has no other net.
- */
 interface Point {
   x: number;
   y: number;
@@ -40,16 +82,24 @@ interface Recorder {
   texts: string[];
   /** Every path stroked, in order. Enough to find where a line was drawn. */
   paths: StrokedPath[];
-  /** Every `fillRect`, with the fillStyle in force — a wash, a rest block. */
+  /** Every `fillRect`, with the fillStyle in force — a wash, the gutter. */
   rects: { style: string; x: number; width: number }[];
-  /**
-   * The centre of every ellipse drawn. Heads are drawn by translating to the
-   * head and then rotating, so the translation alone places them; scale and
-   * rotation are not tracked.
-   */
-  ellipses: Point[];
   /** Every paint, in order, as "fill:", "stroke:" or "rect:" and the style. */
   ops: string[];
+}
+
+/** What one render drew: the recording, the glyphs among it, and the view it drew. */
+interface Drawn extends Recorder {
+  glyphs: GlyphCall[];
+  view: ScoreView;
+}
+
+interface CanvasState {
+  offset: Point;
+  fillStyle: string;
+  strokeStyle: string;
+  lineWidth: number;
+  globalAlpha: number;
 }
 
 function recordingContext(): Recorder {
@@ -58,13 +108,18 @@ function recordingContext(): Recorder {
   const texts: string[] = [];
   const paths: StrokedPath[] = [];
   const rects: { style: string; x: number; width: number }[] = [];
-  const ellipses: Point[] = [];
   const ops: string[] = [];
-  const state = { fillStyle: '#000', strokeStyle: '#000', lineWidth: 1 };
-  let offset: Point = { x: 0, y: 0 };
-  const saved: Point[] = [];
+  // Only translation is tracked: the renderer places everything else itself.
+  let state: CanvasState = {
+    offset: { x: 0, y: 0 },
+    fillStyle: '#000',
+    strokeStyle: '#000',
+    lineWidth: 1,
+    globalAlpha: 1,
+  };
+  const saved: CanvasState[] = [];
   let path: Point[] = [];
-  const at = (x: number, y: number): Point => ({ x: offset.x + x, y: offset.y + y });
+  const at = (x: number, y: number): Point => ({ x: state.offset.x + x, y: state.offset.y + y });
 
   const ctx = {
     get fillStyle() {
@@ -85,21 +140,26 @@ function recordingContext(): Recorder {
     set lineWidth(value: number) {
       state.lineWidth = value;
     },
+    get globalAlpha() {
+      return state.globalAlpha;
+    },
+    set globalAlpha(value: number) {
+      state.globalAlpha = value;
+    },
     font: '',
     textAlign: 'left',
     textBaseline: 'alphabetic',
-    globalAlpha: 1,
-    save: () => void saved.push(offset),
+    save: () => void saved.push({ ...state }),
     restore: () => {
-      offset = saved.pop() ?? { x: 0, y: 0 };
+      state = saved.pop() ?? state;
     },
     translate: (x: number, y: number) => {
-      offset = at(x, y);
+      state.offset = at(x, y);
     },
     rotate: () => {},
     scale: () => {},
     setTransform: () => {
-      offset = { x: 0, y: 0 };
+      state.offset = { x: 0, y: 0 };
     },
     beginPath: () => {
       path = [];
@@ -110,11 +170,11 @@ function recordingContext(): Recorder {
     quadraticCurveTo: () => {},
     bezierCurveTo: () => {},
     arc: () => {},
-    ellipse: (x: number, y: number) => void ellipses.push(at(x, y)),
+    ellipse: () => {},
     rect: () => {},
     clearRect: () => {},
     fillRect: (x: number, _y: number, width: number) => {
-      rects.push({ style: state.fillStyle, x: offset.x + x, width });
+      rects.push({ style: state.fillStyle, x: state.offset.x + x, width });
       ops.push(`rect:${state.fillStyle}`);
     },
     strokeRect: () => {},
@@ -128,14 +188,12 @@ function recordingContext(): Recorder {
       paths.push({ style: state.strokeStyle, width: state.lineWidth, points: path });
     },
     fillText: (text: string) => void texts.push(text),
-    // Constant, because the renderer caches its glyph-support probe at module
-    // scope — a varying width would make the first suite to run decide for all.
     measureText: () => ({ width: 40 }) as TextMetrics,
     clip: () => {},
     setLineDash: () => {},
   } as unknown as CanvasRenderingContext2D;
 
-  return { ctx, fills, strokes, texts, paths, rects, ellipses, ops };
+  return { ctx, fills, strokes, texts, paths, rects, ops };
 }
 
 const LAYOUT_OPTS = {
@@ -143,7 +201,7 @@ const LAYOUT_OPTS = {
   timeSignature: { numerator: 4, denominator: 4 },
   quantization: '1/16',
   minMeasures: 1,
-} as const;
+} as const satisfies LayoutOptions;
 
 /** One whole note filling its bar, as every Learn snippet is built. */
 function oneNote(midi: number, staff?: NoteStaff): ScoreLayout {
@@ -180,6 +238,7 @@ function bar(beats: readonly number[], midi = 60, staff: NoteStaff = 'treble'): 
 function written(
   entries: readonly (readonly [beat: number, beats: number, midi?: number])[],
   staff: NoteStaff = 'treble',
+  options: LayoutOptions = LAYOUT_OPTS,
 ): ScoreLayout {
   const notes: NoteEvent[] = entries.map(([beat, beats, midi = 60], index) => ({
     id: `w${index}`,
@@ -189,7 +248,7 @@ function written(
     velocity: 0.7,
     staff,
   }));
-  const score = layoutScore(notes, LAYOUT_OPTS);
+  const score = layoutScore(notes, options);
   return { ...score, dynamics: [], hairpins: [] };
 }
 
@@ -219,7 +278,7 @@ function render(
   overrides: Partial<
     Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'scrollMs' | 'systemBreakMs' | 'gutterPx'>
   > = {},
-): Recorder {
+): Drawn {
   const geometry = computeScoreGeometry(layout, { staves });
   const recorder = recordingContext();
   const view: ScoreView = {
@@ -236,6 +295,7 @@ function render(
     ...(chrome === null ? {} : { chrome }),
     ...overrides,
   };
+  const from = glyphLog.length;
   drawScore(
     recorder.ctx,
     view,
@@ -251,65 +311,107 @@ function render(
     },
     SCORE_PALETTES.dark,
   );
-  return recorder;
+  return { ...recorder, glyphs: glyphLog.slice(from), view };
 }
+
+/** A glyph's box in staff spaces, `[left, bottom, right, top]`, y up — the font's own. */
+const box = (name: MusicGlyphName) => MUSIC_GLYPH_METRICS[name].bbox;
+/** How far right of its origin a glyph's ink is centred, in staff spaces. */
+const centreOf = (name: MusicGlyphName): number => (box(name)[0] + box(name)[2]) / 2;
+/** Half a glyph's ink width, in staff spaces. */
+const halfOf = (name: MusicGlyphName): number => (box(name)[2] - box(name)[0]) / 2;
+
+/** Half a black head's width, and a whole note's, in pixels. */
+const HEAD_HALF = halfOf('noteheadBlack') * GAP;
+const WHOLE_HALF = halfOf('noteheadWhole') * GAP;
+/** The stem's width on screen. */
+const STEM_W = 1.6;
+
+interface Head {
+  name: MusicGlyphName;
+  /** Where the head is centred: its glyph's origin, plus half its width. */
+  x: number;
+  y: number;
+  half: number;
+  fill: string;
+}
+
+/** Every notehead drawn, by its centre. */
+function heads(drawn: Drawn): Head[] {
+  return drawn.glyphs
+    .filter((glyph) => glyph.name.startsWith('notehead'))
+    .map((glyph) => ({
+      name: glyph.name,
+      x: glyph.x + centreOf(glyph.name) * glyph.space,
+      y: glyph.y,
+      half: halfOf(glyph.name) * glyph.space,
+      fill: glyph.fill,
+    }));
+}
+
+const named = (drawn: Drawn, name: MusicGlyphName): GlyphCall[] =>
+  drawn.glyphs.filter((glyph) => glyph.name === name);
+
+/** The colour of each head drawn, in the order drawn. */
+const headFills = (drawn: Drawn): string[] => heads(drawn).map((head) => head.fill);
 
 const { note, highlight } = SCORE_PALETTES.dark;
 
 describe('drawScore note highlighting', () => {
   it('draws a head in the plain note colour by default', () => {
-    const drawn = render(oneNote(60));
-    expect(drawn.strokes).toContain(note);
-    expect(drawn.strokes).not.toContain(highlight);
+    expect(headFills(render(oneNote(60)))).toEqual([note]);
   });
 
   it('lights the head whose midi the user is holding', () => {
-    // A whole note is hollow, so the head is stroked rather than filled.
-    const drawn = render(oneNote(60), { litMidis: new Set([60]) });
-    expect(drawn.strokes).toContain(highlight);
+    expect(headFills(render(oneNote(60), { litMidis: new Set([60]) }))).toEqual([highlight]);
   });
 
   it('leaves a head alone when a different key is held', () => {
-    const drawn = render(oneNote(60), { litMidis: new Set([62]) });
-    expect(drawn.strokes).not.toContain(highlight);
+    expect(headFills(render(oneNote(60), { litMidis: new Set([62]) }))).toEqual([note]);
   });
 
   it('does not light the octave above — the written note is the written note', () => {
-    const drawn = render(oneNote(60), { litMidis: new Set([72]) });
-    expect(drawn.strokes).not.toContain(highlight);
+    expect(headFills(render(oneNote(60), { litMidis: new Set([72]) }))).toEqual([note]);
   });
 
   it('treats an empty held set as nothing held', () => {
-    const drawn = render(oneNote(60), { litMidis: new Set() });
-    expect(drawn.strokes).not.toContain(highlight);
+    expect(headFills(render(oneNote(60), { litMidis: new Set() }))).toEqual([note]);
   });
 
   it('lights a head by which note it is, when asked by id', () => {
-    const drawn = render(oneNote(60), { litNoteIds: new Set(['n']) });
-    expect(drawn.strokes).toContain(highlight);
+    expect(headFills(render(oneNote(60), { litNoteIds: new Set(['n']) }))).toEqual([highlight]);
   });
 
   it('lights by id instead of by pitch, never both', () => {
     // A lesson walking a line passes ids; a held key must not then light every
     // head of its pitch on top of them.
     const drawn = render(oneNote(60), { litNoteIds: new Set(), litMidis: new Set([60]) });
-    expect(drawn.strokes).not.toContain(highlight);
+    expect(headFills(drawn)).toEqual([note]);
   });
 
   it('lights one of two heads of the same pitch, by id', () => {
-    // Quarter notes are filled, so each lit head is one highlight fill.
     const drawn = render(bar([0, 1]), { litNoteIds: new Set(['n0']) });
-    expect(drawn.fills.filter((fill) => fill === highlight)).toHaveLength(1);
+    expect(headFills(drawn)).toEqual([highlight, note]);
     const both = render(bar([0, 1]), { litMidis: new Set([60]) });
-    expect(both.fills.filter((fill) => fill === highlight)).toHaveLength(2);
+    expect(headFills(both)).toEqual([highlight, highlight]);
+  });
+
+  it('fills a hollow head as the font draws it, rather than stroking an outline', () => {
+    // The whole note's glyph carries its own hole, so it is filled like any
+    // other; a whole note has no stem, so nothing at all is stroked in ink.
+    const drawn = render(oneNote(60));
+    expect(heads(drawn).map((head) => head.name)).toEqual(['noteheadWhole']);
+    expect(drawn.strokes).not.toContain(note);
+    const half = render(written([[0, 2]]));
+    expect(heads(half).map((head) => head.name)).toEqual(['noteheadHalf']);
   });
 });
 
 describe('drawScore bare chrome', () => {
   it('prints no time signature and no measure number', () => {
     const drawn = render(oneNote(60));
-    expect(drawn.texts).not.toContain('4');
-    expect(drawn.texts).not.toContain('1');
+    expect(drawn.glyphs.filter((glyph) => glyph.name.startsWith('timeSig'))).toEqual([]);
+    expect(drawn.texts).toEqual([]);
   });
 });
 
@@ -318,86 +420,91 @@ describe('drawScore single-staff filtering', () => {
   // the staff it is not showing is not harmlessly off-canvas: it lands on the
   // staff that *is* drawn, measured from the other clef's reference line —
   // roughly a sixth from where it belongs, with nothing to say so.
-  //
-  // `litMidis` is the probe rather than a stroke count because the highlight
-  // colour is used for note heads and nothing else.
   it('draws a note whose staff the view shows', () => {
     const drawn = render(oneNote(60, 'bass'), { litMidis: new Set([60]) }, 'bass');
-    expect(drawn.strokes).toContain(highlight);
+    expect(headFills(drawn)).toEqual([highlight]);
   });
 
   it('leaves out a note belonging to the staff the view does not show', () => {
     // C4 with no hint resolves to the treble staff, so a bass-only view has
     // no business drawing it at all.
     const drawn = render(oneNote(60), { litMidis: new Set([60]) }, 'bass');
-    expect(drawn.strokes).not.toContain(highlight);
+    expect(heads(drawn)).toEqual([]);
   });
 
   it('draws both staves of a grand view', () => {
     const bass = render(oneNote(53, 'bass'), { litMidis: new Set([53]) }, 'grand');
-    expect(bass.strokes).toContain(highlight);
+    expect(headFills(bass)).toEqual([highlight]);
     const treble = render(oneNote(60, 'treble'), { litMidis: new Set([60]) }, 'grand');
-    expect(treble.strokes).toContain(highlight);
+    expect(headFills(treble)).toEqual([highlight]);
   });
 });
 
 describe('drawScore clefs', () => {
-  // The gutter names the clef in force with a glyph, so which clef a lesson
-  // snippet draws is assertable rather than something only a screenshot sees.
-  const TREBLE_CLEF = '\u{1D11E}';
-  const BASS_CLEF = '\u{1D122}';
+  // The gutter names the clef in force with the font's clef, so which clef a
+  // lesson snippet draws is assertable rather than something only a
+  // screenshot sees.
+  const clefs = (drawn: Drawn) =>
+    drawn.glyphs.filter((glyph) => glyph.name.endsWith('Clef')).map((glyph) => glyph.name);
 
   it('draws a treble clef, and only that, for a treble view', () => {
-    const drawn = render(oneNote(60), {}, 'treble');
-    expect(drawn.texts).toContain(TREBLE_CLEF);
-    expect(drawn.texts).not.toContain(BASS_CLEF);
+    expect(clefs(render(oneNote(60), {}, 'treble'))).toEqual(['gClef']);
   });
 
   it('draws an F clef, and only that, for a bass view', () => {
-    const drawn = render(oneNote(53, 'bass'), {}, 'bass');
-    expect(drawn.texts).toContain(BASS_CLEF);
-    expect(drawn.texts).not.toContain(TREBLE_CLEF);
+    expect(clefs(render(oneNote(53, 'bass'), {}, 'bass'))).toEqual(['fClef']);
   });
 
   it('draws both clefs for a grand view', () => {
+    expect(clefs(render(oneNote(60, 'treble'), {}, 'grand'))).toEqual(['gClef', 'fClef']);
+  });
+
+  it('sets each clef on the line it names, at the gutter’s start, in the dimmer ink', () => {
     const drawn = render(oneNote(60, 'treble'), {}, 'grand');
-    expect(drawn.texts).toContain(TREBLE_CLEF);
-    expect(drawn.texts).toContain(BASS_CLEF);
+    const { noteDim } = SCORE_PALETTES.dark;
+    const [g] = named(drawn, 'gClef');
+    const [f] = named(drawn, 'fClef');
+    // The G clef curls round the G line, the second from the bottom; the F
+    // clef's dots stand either side of the F line, the second from the top.
+    expect(g).toMatchObject({ x: 8, y: drawn.view.trebleTop + 3 * GAP, space: GAP, fill: noteDim });
+    expect(f).toMatchObject({ x: 8, y: drawn.view.bassTop + GAP, space: GAP, fill: noteDim });
   });
 });
 
 describe('drawScore lesson chrome', () => {
   const { rest } = SCORE_PALETTES.dark;
+  const rests = (drawn: Drawn) =>
+    drawn.glyphs
+      .filter((glyph) => glyph.name.startsWith('rest'))
+      .map((glyph) => [glyph.name, glyph.fill]);
 
   it('draws the rests the engraver derived', () => {
     // A bar with a hole on beat two. `StaffSnippet` blanks rests by default,
     // because a worked example is not a performance — but the rhythm chapter
     // teaches the rest as a symbol, so it asks for them back.
     const drawn = render(bar([0, 2, 3]), {}, 'treble', 'lesson');
-    expect(drawn.fills).toContain(rest);
+    expect(rests(drawn)).toEqual([['restQuarter', rest]]);
   });
 
   it('draws none once they are blanked', () => {
     const withRests = bar([0, 2, 3]);
     const drawn = render({ ...withRests, rests: [] }, {}, 'treble', 'lesson');
+    expect(rests(drawn)).toEqual([]);
     expect(drawn.fills).not.toContain(rest);
   });
 
   it('prints the time signature under lesson chrome, and not under bare', () => {
-    expect(render(bar([0, 1, 2, 3]), {}, 'treble', 'lesson').texts).toContain('4');
+    // 4/4 is two 4s, one over the other, on the single staff drawn.
+    expect(named(render(bar([0, 1, 2, 3]), {}, 'treble', 'lesson'), 'timeSig4')).toHaveLength(2);
     // The regression guard: adding a third value changed nothing for 'bare'.
-    expect(render(bar([0, 1, 2, 3]), {}, 'treble', 'bare').texts).not.toContain('4');
+    expect(named(render(bar([0, 1, 2, 3]), {}, 'treble', 'bare'), 'timeSig4')).toEqual([]);
   });
 
   it('leaves the measure number off under lesson chrome', () => {
-    // Diffed against 'full' rather than asserted directly: a measure number
-    // '1' and a time-signature '4' are both just text, and counting is the
-    // honest way to tell one apart from the other.
     const full = render(bar([0, 1, 2, 3]), {}, 'treble', 'full');
     const lesson = render(bar([0, 1, 2, 3]), {}, 'treble', 'lesson');
-    expect(full.texts.length).toBeGreaterThan(lesson.texts.length);
-    // 4/4 prints two of them, one over the other, on the single staff drawn.
-    expect(lesson.texts.filter((text) => text === '4')).toHaveLength(2);
+    expect(full.texts).toContain('1');
+    expect(lesson.texts).toEqual([]);
   });
 
   it('suppresses the empty spill bar, as bare does', () => {
@@ -406,12 +513,11 @@ describe('drawScore lesson chrome', () => {
     // lesson draws the music, not the silence after it. (Its closing line
     // stands where the spill bar's opening one would, thick: see below.)
     const filled = bar([0, 1, 2, 3]);
-    const spill = (drawn: Recorder) => ({
+    const spill = (drawn: Drawn) => ({
       lines: drawn.paths.filter(
         (path) => path.style === SCORE_PALETTES.dark.barLine && path.width === 1,
       ).length,
-      // A whole rest is a block, drawn with `fillRect`.
-      rests: drawn.rects.filter((rect) => rect.style === rest).length,
+      rests: named(drawn, 'restWhole').length,
     });
     const wide = { widthPx: 600 };
     expect(spill(render(filled, {}, 'treble', 'full', wide))).toEqual({ lines: 1, rests: 1 });
@@ -423,13 +529,57 @@ describe('drawScore lesson chrome', () => {
     // without defaulting would turn every piece of furniture off for the live
     // score, which is the regression this guards.
     const drawn = render(bar([0, 2, 3]), {}, 'treble', null);
-    expect(drawn.texts).toContain('4');
+    expect(named(drawn, 'timeSig4')).toHaveLength(2);
+    expect(drawn.texts).toContain('1');
     expect(drawn.fills).toContain(rest);
   });
 });
 
+describe('drawScore time signature', () => {
+  const { noteDim } = SCORE_PALETTES.dark;
+  const digits = (drawn: Drawn) => drawn.glyphs.filter((glyph) => glyph.name.startsWith('timeSig'));
+  /** The ink of a row of digits drawn on one line, left and right. */
+  const rowInk = (row: GlyphCall[]) => ({
+    left: Math.min(...row.map((glyph) => glyph.x + box(glyph.name)[0] * glyph.space)),
+    right: Math.max(...row.map((glyph) => glyph.x + box(glyph.name)[2] * glyph.space)),
+  });
+
+  it('centres each number on its half of the staff, full size where it fits', () => {
+    const drawn = render(bar([0, 1, 2, 3]), {}, 'treble', 'lesson');
+    const [upper, lower] = digits(drawn);
+    const top = drawn.view.trebleTop;
+    for (const [glyph, y] of [
+      [upper, top + GAP],
+      [lower, top + 3 * GAP],
+    ] as const) {
+      expect(glyph).toMatchObject({ name: 'timeSig4', y, space: GAP, fill: noteDim });
+      // Centred 14 px in from the gutter's edge, by the digit's advance.
+      const advance = MUSIC_GLYPH_METRICS.timeSig4.advance * GAP;
+      expect((glyph?.x ?? 0) + advance / 2).toBeCloseTo(drawn.view.gutterPx - 14, 6);
+    }
+  });
+
+  it('shrinks a number too wide for the gutter, both rows alike, clear of the clef', () => {
+    // The gutter keeps its width, so Learn's bars per line do not move; 12/8
+    // is set smaller instead.
+    const twelveEight: TimeSignature = { numerator: 12, denominator: 8 };
+    const drawn = render(bar([0, 1, 2, 3]), { timeSignature: twelveEight }, 'treble', 'lesson');
+    const glyphs = digits(drawn);
+    expect(glyphs.map((glyph) => glyph.name)).toEqual(['timeSig1', 'timeSig2', 'timeSig8']);
+    const space = glyphs[0]?.space ?? GAP;
+    expect(space).toBeLessThan(GAP);
+    expect(glyphs.every((glyph) => glyph.space === space)).toBe(true);
+    const twelve = rowInk(glyphs.slice(0, 2));
+    // Clear of the G clef's ink, and inside the gutter's edge.
+    const clefRight = 8 + box('gClef')[2] * GAP;
+    expect(twelve.left).toBeGreaterThan(clefRight);
+    expect(twelve.right).toBeLessThan(drawn.view.gutterPx);
+    expect((twelve.left + twelve.right) / 2).toBeCloseTo(drawn.view.gutterPx - 14, 0);
+  });
+});
+
 describe('drawScore gutter', () => {
-  const { staffLine, gutterBg, barLine, noteDim, rest } = SCORE_PALETTES.dark;
+  const { staffLine, gutterBg, barLine, noteDim } = SCORE_PALETTES.dark;
 
   /**
    * Paths stroked after the gutter's fill went down: the only ones it cannot
@@ -488,16 +638,22 @@ describe('drawScore gutter', () => {
       hairpins: [],
       rests: [],
     });
-    const ink = (drawn: Recorder) => drawn.fills.filter((fill) => fill === noteDim).length;
+    const sharps = (drawn: Drawn) =>
+      named(drawn, 'accidentalSharp').map((glyph) => [glyph.fill, glyph.y]);
     const plain = render(empty(0), {}, 'treble', 'bare');
     const signed = render(empty(2), { keySignature: 2 }, 'treble', 'bare', {
       gutterPx: gutterWidthFor(2),
     });
-    expect(ink(plain)).toBe(0);
-    expect(ink(signed)).toBeGreaterThan(0);
+    expect(sharps(plain)).toEqual([]);
+    // F♯ on the top line, then C♯ in the third space.
+    const top = signed.view.trebleTop;
+    expect(sharps(signed)).toEqual([
+      [noteDim, top],
+      [noteDim, top + 1.5 * GAP],
+    ]);
     // No bar line inside it and no rest: the stave just closes where its bar ends.
     expect(signed.paths.filter((path) => path.style === barLine && path.width === 1)).toEqual([]);
-    expect(signed.rects.filter((rect) => rect.style === rest)).toEqual([]);
+    expect(signed.glyphs.filter((glyph) => glyph.name.startsWith('rest'))).toEqual([]);
   });
 });
 
@@ -507,21 +663,223 @@ describe('drawScore beams', () => {
     // which note is sounding; a beam belongs to the group, so there is no half
     // of one to colour. Pinned so a later refactor cannot quietly change it.
     const drawn = render(eighths([60, 62]), { litMidis: new Set([60]) });
+    expect(headFills(drawn)).toEqual([highlight, note]);
+    // The one highlight fill is that head's: the beam is filled in ink.
     expect(drawn.fills.filter((fill) => fill === highlight)).toHaveLength(1);
-    expect(drawn.fills).toContain(note);
+    expect(drawn.fills.filter((fill) => fill === note).length).toBeGreaterThan(1);
   });
 
   it('leaves out a beam belonging to the staff the view does not show', () => {
     const grand = render(eighths([48, 50], 'bass'), {}, 'grand');
     const trebleOnly = render(eighths([48, 50], 'bass'), {}, 'treble');
     expect(trebleOnly.fills.length).toBeLessThan(grand.fills.length);
+    expect(heads(trebleOnly)).toEqual([]);
+  });
+});
+
+describe('drawScore glyph placement', () => {
+  const { noteDim, record, ghost, recordWash } = SCORE_PALETTES.dark;
+  /** Three bars of 4/4 across, a beat to 50 px. */
+  const WIDE = { widthPx: 800, pxPerMs: 0.05 };
+  const onsetX = (ms: number): number => gutterWidthFor(0) + SCORE_LEAD_IN + ms * WIDE.pxPerMs;
+  /** Every stem drawn: ink-coloured strokes at the stem's width. */
+  const stems = (drawn: Drawn) =>
+    drawn.paths.filter((path) => path.style === note && path.width === STEM_W);
+
+  it('stands a stem on the head’s edge, from the head’s stem anchor', () => {
+    // C4 stems up: from the right edge of its head, less half the stem, and
+    // from a hair above the head's centre, where the head's own anchor says.
+    const drawn = render(written([[0, 1]]), {}, 'treble', 'bare', WIDE);
+    const [head] = heads(drawn);
+    expect(head?.x).toBeCloseTo(onsetX(0), 6);
+    const [stem] = stems(drawn);
+    const x = onsetX(0) + HEAD_HALF - STEM_W / 2;
+    const [from, to] = stem?.points ?? [];
+    expect(from?.x).toBeCloseTo(x, 6);
+    expect(from?.y).toBeCloseTo((head?.y ?? 0) - STEM_ANCHOR_RISE_G * GAP, 6);
+    expect(to?.x).toBeCloseTo(x, 6);
+    expect(to?.y).toBeCloseTo((head?.y ?? 0) - 3.5 * GAP, 6);
+  });
+
+  it.each([
+    [0.5, 1, 'flag8thUp'],
+    [0.25, 2, 'flag16thUp'],
+    [0.125, 3, 'flag32ndUp'],
+    [0.0625, 4, 'flag64thUp'],
+  ] as const)('hangs a %s-beat note’s flags from its stem as one glyph', (beats, count, flag) => {
+    const drawn = render(
+      written([[0, beats]], 'treble', { ...LAYOUT_OPTS, quantization: '1/64' }),
+      {},
+      'treble',
+      'bare',
+      WIDE,
+    );
+    const [head] = heads(drawn);
+    const [stem] = stems(drawn);
+    // A 32nd's and a 64th's flags stack up past a normal stem, and their
+    // anchors say how much further the stem runs to meet them.
+    const tip = (head?.y ?? 0) - flaggedStemG(count, false) * GAP;
+    expect(stem?.points[1]?.y).toBeCloseTo(tip, 6);
+    const glyphs = drawn.glyphs.filter((glyph) => glyph.name.startsWith('flag'));
+    expect(glyphs).toHaveLength(1);
+    // Its origin on the stem's left edge, as far short of the tip as its anchor says.
+    expect(glyphs[0]).toMatchObject({ name: flag, space: GAP, fill: note });
+    expect(glyphs[0]?.x).toBeCloseTo((stem?.points[0]?.x ?? 0) - STEM_W / 2, 6);
+    expect(glyphs[0]?.y).toBeCloseTo(tip + flagAnchorYG(count, false) * GAP, 6);
+  });
+
+  it('hangs a down-stem flag from the stem on the head’s left', () => {
+    // F5 stems down, from the head's left edge.
+    const drawn = render(written([[0, 0.5, 77]]), {}, 'treble', 'bare', WIDE);
+    const [head] = heads(drawn);
+    const [stem] = stems(drawn);
+    const x = onsetX(0) - HEAD_HALF + STEM_W / 2;
+    expect(stem?.points[0]?.x).toBeCloseTo(x, 6);
+    expect(stem?.points[0]?.y).toBeCloseTo((head?.y ?? 0) + STEM_ANCHOR_RISE_G * GAP, 6);
+    const [flag] = named(drawn, 'flag8thDown');
+    expect(flag?.x).toBeCloseTo(x - STEM_W / 2, 6);
+    const tip = (head?.y ?? 0) + flaggedStemG(1, true) * GAP;
+    expect(flag?.y).toBeCloseTo(tip + flagAnchorYG(1, true) * GAP, 6);
+  });
+
+  it('sets a dot clear of the head, in the space above a line note', () => {
+    // A dotted half on C4, which sits on a ledger line.
+    const drawn = render(written([[0, 3]]), {}, 'treble', 'bare', WIDE);
+    const [head] = heads(drawn);
+    const [dot] = named(drawn, 'augmentationDot');
+    expect(dot?.x).toBeCloseTo((head?.x ?? 0) + HEAD_HALF + 0.4 * GAP, 6);
+    expect(dot?.y).toBeCloseTo((head?.y ?? 0) - GAP / 2, 6);
+  });
+
+  it('right-aligns a chord’s accidentals, a column pitch apart', () => {
+    const spelled = (id: string, midi: number, step: 'A' | 'B' | 'C' | 'F', alter: number) => ({
+      id,
+      midi,
+      startMs: 0,
+      durationMs: 1000,
+      velocity: 0.7,
+      spelling: { step, alter },
+    });
+    // C♯4 under B♭4 share the first column: their ink ends at the same x,
+    // however different their widths.
+    const shared = layoutScore([spelled('c', 61, 'C', 1), spelled('b', 70, 'B', -1)], LAYOUT_OPTS);
+    const drawn = render({ ...shared, rests: [] }, {}, 'treble', 'bare', WIDE);
+    const inkRight = (glyph: GlyphCall | undefined) =>
+      glyph ? glyph.x + box(glyph.name)[2] * glyph.space : Number.NaN;
+    const columnZero = onsetX(0) - HEAD_HALF - 0.25 * GAP;
+    expect(inkRight(named(drawn, 'accidentalSharp')[0])).toBeCloseTo(columnZero, 6);
+    expect(inkRight(named(drawn, 'accidentalFlat')[0])).toBeCloseTo(columnZero, 6);
+    // F♯5 over A♯4 are too close for one column; the lower stands a column out.
+    const stacked = layoutScore([spelled('f', 78, 'F', 1), spelled('a', 70, 'A', 1)], LAYOUT_OPTS);
+    const two = render({ ...stacked, rests: [] }, {}, 'treble', 'bare', WIDE);
+    const sharps = named(two, 'accidentalSharp')
+      .map(inkRight)
+      .sort((a, b) => a - b);
+    expect(sharps[0]).toBeCloseTo(columnZero - 1.4 * GAP, 6);
+    expect(sharps[1]).toBeCloseTo(columnZero, 6);
+  });
+
+  it('draws a held recording note and a ghost with the font’s black head', () => {
+    const empty = { ...layoutScore([], LAYOUT_OPTS), dynamics: [], hairpins: [], rests: [] };
+    const drawn = render(
+      empty,
+      {
+        recording: true,
+        playheadMs: 400,
+        openNotes: [{ midi: 64, startMs: 0, durationMs: 400 }],
+        ghosts: [{ midi: 67, life: 0.5 }],
+      },
+      'treble',
+      null,
+      WIDE,
+    );
+    expect(heads(drawn).map((head) => [head.name, head.fill])).toEqual([
+      ['noteheadBlack', record],
+      ['noteheadBlack', ghost],
+    ]);
+    // The held note's head sits at its start, over the wash that runs on to now.
+    expect(heads(drawn)[0]?.x).toBeCloseTo(onsetX(0), 6);
+    expect(drawn.rects.some((rect) => rect.style === recordWash && rect.x === onsetX(0))).toBe(
+      true,
+    );
+    // The ghost fades with the life it has left.
+    expect(named(drawn, 'noteheadBlack')[1]?.alpha).toBe(0.5);
+  });
+
+  it('numbers a tuplet with the font’s tuplet digits, centred on its beam', () => {
+    // Six sixteenths in the time of four, declared, at C5: they stem down, so
+    // the numeral goes under the beam.
+    const sextuplet: NoteEvent[] = [0, 1, 2, 3, 4, 5].map((i) => ({
+      id: `s${i}`,
+      midi: 72,
+      startMs: Math.round((i * 1000) / 6),
+      durationMs: 166,
+      velocity: 0.5,
+      tuplet: { actual: 3, normal: 2, unit: 16 },
+    }));
+    const layout = layoutScore(sextuplet, { ...LAYOUT_OPTS, quantization: '1/64' });
+    expect(layout.beams[0]?.tupletCount).toBe(6);
+    const drawn = render({ ...layout, rests: [] }, {}, 'treble', 'bare', WIDE);
+    const [six] = named(drawn, 'tuplet6');
+    expect(six).toMatchObject({ space: 0.8 * GAP, fill: note });
+    const tips = stems(drawn)
+      .map((path) => path.points[1] as Point)
+      .sort((a, b) => a.x - b.x);
+    const first = tips[0] as Point;
+    const last = tips[tips.length - 1] as Point;
+    const advance = MUSIC_GLYPH_METRICS.tuplet6.advance * (six?.space ?? 0);
+    expect((six?.x ?? 0) + advance / 2).toBeCloseTo((first.x + last.x) / 2, 6);
+    // Its top clear below the beam, which is half a space thick.
+    const top = (six?.y ?? 0) - box('tuplet6')[3] * (six?.space ?? 0);
+    expect(top).toBeGreaterThan((first.y + last.y) / 2 + 0.25 * GAP);
+  });
+
+  it('writes a dynamic as the font’s one glyph, centred by its optical centre', () => {
+    const layout: ScoreLayout = {
+      ...bar([0, 1, 2, 3]),
+      dynamics: [
+        { atMs: 0, mark: 'fff' },
+        { atMs: 2000, mark: 'p' },
+      ],
+    };
+    const drawn = render(layout, {}, 'treble', null, WIDE);
+    const space = 0.9 * GAP;
+    const [fff] = named(drawn, 'dynamicFFF');
+    const [p] = named(drawn, 'dynamicPiano');
+    for (const mark of [fff, p]) {
+      expect(mark).toMatchObject({ y: drawn.view.dynamicsRow, space, fill: noteDim });
+    }
+    const optical = (name: 'dynamicFFF' | 'dynamicPiano') =>
+      MUSIC_GLYPH_ANCHORS[name].opticalCenter[0] * space;
+    expect((p?.x ?? 0) + optical('dynamicPiano')).toBeCloseTo(onsetX(2000), 6);
+    // An fff on the very first note would reach back under the gutter, which
+    // is painted last; it is nudged clear, its ink two pixels off the edge.
+    expect((fff?.x ?? 0) + box('dynamicFFF')[0] * space).toBeCloseTo(drawn.view.gutterPx + 2, 6);
+  });
+
+  it('labels an 8va with the font’s glyph and starts its line after it', () => {
+    const layout: ScoreLayout = {
+      ...bar([0, 1, 2, 3], 84),
+      octaves: [{ staff: 'treble', fromMs: 0, toMs: 3000, up: true }],
+    };
+    const drawn = render(layout, {}, 'treble', null, WIDE);
+    const space = 0.6 * GAP;
+    const [label] = named(drawn, 'ottavaAlta');
+    expect(label).toMatchObject({ space, fill: noteDim });
+    expect(label?.x).toBeCloseTo(onsetX(0) - HEAD_HALF, 6);
+    // Its ink centred on the line.
+    const lineY = drawn.view.trebleTop - 2.4 * GAP;
+    const [, bottom, , top] = box('ottavaAlta');
+    expect((label?.y ?? 0) - ((bottom + top) / 2) * space).toBeCloseTo(lineY, 6);
+    const dashed = drawn.paths.find((path) => path.style === noteDim && path.width === 1.1);
+    const lineFrom = (label?.x ?? 0) + MUSIC_GLYPH_METRICS.ottavaAlta.advance * space + 0.4 * GAP;
+    expect(dashed?.points[0]?.x).toBeCloseTo(lineFrom, 6);
+    expect(dashed?.points[0]?.y).toBeCloseTo(lineY, 6);
   });
 });
 
 describe('drawScore bar lines', () => {
-  const { barLine, gutterBg, loopEdge, loopWash, playhead } = SCORE_PALETTES.dark;
-  /** Half a head's width, as the renderer draws it. */
-  const HEAD_RX = GAP * 0.64;
+  const { barLine, gutterBg, loopEdge, loopWash, playhead, noteDim } = SCORE_PALETTES.dark;
   /** Three bars of 4/4 across, a beat to 50 px. */
   const WIDE = { widthPx: 800, pxPerMs: 0.05 };
 
@@ -549,9 +907,9 @@ describe('drawScore bar lines', () => {
     const drawn = render(quarters(2), {}, 'treble', null, WIDE);
     const downbeat = onsetX(4000);
     // The note is still drawn at its time: only the line moved.
-    expect(drawn.ellipses.some((head) => Math.abs(head.x - downbeat) < 1e-6)).toBe(true);
+    expect(heads(drawn).some((head) => Math.abs(head.x - downbeat) < 1e-6)).toBe(true);
     const line = lineNear(drawn, 4000);
-    expect(line).toBeLessThan(downbeat - HEAD_RX);
+    expect(line).toBeLessThan(downbeat - HEAD_HALF);
     // About a head's width back, not drifting off into the bar before.
     expect(downbeat - line).toBeLessThan(GAP * 2);
   });
@@ -601,10 +959,13 @@ describe('drawScore bar lines', () => {
         const drawn = render(layout, {}, 'treble', chrome, { widthPx: 800, pxPerMs });
         const lines = barLines(drawn);
         expect(lines.length).toBeGreaterThan(0);
+        const drawnHeads = heads(drawn);
+        expect(drawnHeads.length).toBeGreaterThan(0);
         for (const x of lines) {
-          for (const head of drawn.ellipses) {
-            // A whole note's head is a quarter as wide again.
-            expect(Math.abs(x - head.x)).toBeGreaterThan(HEAD_RX * 1.25);
+          for (const head of drawnHeads) {
+            // Each head by its own width: a whole note's is wider (0.844 of a
+            // space either side, against a black head's 0.59).
+            expect(Math.abs(x - head.x)).toBeGreaterThan(head.half);
           }
         }
       }
@@ -628,8 +989,11 @@ describe('drawScore bar lines', () => {
       );
     const plain = at(65);
     const sharp = at(66);
-    // The sharp is centred past the head's edge and a gap; this is its left side.
-    expect(sharp).toBeLessThan(onsetX(4000) - (HEAD_RX * 1.25 + GAP * 0.7 + GAP * 0.6));
+    // The sharp's ink ends a quarter space before the whole note's head, and
+    // the line keeps its lead before that ink — to the pixel it snaps to.
+    const sharpLeft =
+      onsetX(4000) - (WHOLE_HALF + 0.25 * GAP + halfOf('accidentalSharp') * 2 * GAP);
+    expect(sharp).toBeLessThanOrEqual(sharpLeft - 0.6 * GAP + 1);
     expect(sharp).toBeLessThan(plain);
   });
 
@@ -645,8 +1009,8 @@ describe('drawScore bar lines', () => {
     ]);
     const drawn = render(packed, {}, 'treble', null, { widthPx: 800, pxPerMs });
     const line = lineNear(drawn, 4000, pxPerMs);
-    expect(line).toBeGreaterThan(onsetX(3750, pxPerMs) + HEAD_RX);
-    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+    expect(line).toBeGreaterThan(onsetX(3750, pxPerMs) + HEAD_HALF);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_HALF);
   });
 
   it('keeps clear of the downbeat head when a flag swings out over it', () => {
@@ -666,8 +1030,8 @@ describe('drawScore bar lines', () => {
     expect(sixteenth?.stemDown).toBe(false);
     const drawn = render(flagged, {}, 'treble', null, { widthPx: 800, pxPerMs });
     const line = lineNear(drawn, 4000, pxPerMs);
-    expect(line).toBeGreaterThan(onsetX(3750, pxPerMs) + HEAD_RX);
-    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+    expect(line).toBeGreaterThan(onsetX(3750, pxPerMs) + HEAD_HALF);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_HALF);
   });
 
   it('crosses a rest rather than a head when a rest overlaps the downbeat', () => {
@@ -683,8 +1047,8 @@ describe('drawScore bar lines', () => {
     expect(packed.rests.some((rest) => rest.displayStartMs === 3750)).toBe(true);
     const drawn = render(packed, {}, 'treble', null, { widthPx: 800, pxPerMs });
     const line = lineNear(drawn, 4000, pxPerMs);
-    expect(line).toBeGreaterThan(onsetX(3000, pxPerMs) + HEAD_RX);
-    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_RX);
+    expect(line).toBeGreaterThan(onsetX(3000, pxPerMs) + HEAD_HALF);
+    expect(line).toBeLessThan(onsetX(4000, pxPerMs) - HEAD_HALF);
   });
 
   it('looks as far as a chord stacks its accidentals', () => {
@@ -702,8 +1066,10 @@ describe('drawScore bar lines', () => {
     );
     expect(Math.max(...columns)).toBeGreaterThanOrEqual(3);
     const drawn = render({ ...stacked, rests: [] }, {}, 'treble', 'lesson', WIDE);
-    // The outermost sharp's left edge, before any head displacement.
-    const sharp = onsetX(5000) - (HEAD_RX + GAP * 0.7 + 3 * GAP * 1.4 + GAP * 0.6);
+    // The outermost sharp's left edge, before any head displacement: right-
+    // aligned a quarter space off the head, three columns out.
+    const sharp =
+      onsetX(5000) - (HEAD_HALF + 0.25 * GAP + 3 * 1.4 * GAP + halfOf('accidentalSharp') * 2 * GAP);
     expect(lineNear(drawn, 4000)).toBeLessThan(sharp);
   });
 
@@ -755,8 +1121,15 @@ describe('drawScore bar lines', () => {
     const score = layoutScore(notes, { ...LAYOUT_OPTS, tempoChanges: [{ atMs: 4000, bpm: 90 }] });
     const drawn = render({ ...score, dynamics: [], hairpins: [] }, {}, 'treble', null, WIDE);
     expect(drawn.texts).toContain('= 90');
+    const [quarter] = named(drawn, 'metNoteQuarterUp');
+    const space = 0.4 * GAP;
+    expect(quarter).toMatchObject({ space, fill: SCORE_PALETTES.dark.measureNumber });
+    // Its head centred where the drawn head used to be, over the downbeat...
     const mark = Math.round(onsetX(4000)) + 0.5 + 16;
-    expect(drawn.ellipses.some((ellipse) => Math.abs(ellipse.x - mark) < 1e-6)).toBe(true);
+    expect((quarter?.x ?? 0) + centreOf('metNoteQuarterUp') * space).toBeCloseTo(mark, 6);
+    // ...and its foot a pixel above the baseline the number stands on.
+    const baseline = drawn.view.trebleTop - 20;
+    expect((quarter?.y ?? 0) - box('metNoteQuarterUp')[1] * space).toBeCloseTo(baseline - 1, 6);
   });
 
   it('keeps the tempo mark while its downbeat shows, after the line has scrolled away', () => {
@@ -807,6 +1180,13 @@ describe('drawScore bar lines', () => {
     const wash = drawn.rects.find((rect) => rect.style === gutterBg && rect.x > gutterWidthFor(0));
     expect(wash).toBeDefined();
     expect((wash?.x ?? 0) + (wash?.width ?? 0)).toBeLessThanOrEqual(line);
+    // The font's change clef, centred in that wash, on the bass staff's G line.
+    const [clef] = named(drawn, 'gClefChange');
+    expect(clef).toMatchObject({ space: GAP, fill: noteDim, y: drawn.view.bassTop + 3 * GAP });
+    expect((clef?.x ?? 0) + centreOf('gClefChange') * GAP).toBeCloseTo(
+      (wash?.x ?? 0) + (wash?.width ?? 0) / 2,
+      6,
+    );
   });
 
   describe('the closing line', () => {
@@ -911,11 +1291,11 @@ describe('drawScore bar lines', () => {
     const drawn = render(turning(3.5, 4.5), {}, 'grand', null, WIDE);
     const wash = clefWash(drawn);
     expect(wash).toBeDefined();
-    expect(wash?.x).toBeGreaterThan(onsetX(3500) + HEAD_RX);
+    expect(wash?.x).toBeGreaterThan(onsetX(3500) + HEAD_HALF);
     const line = barLines(drawn).find((x) => Math.abs(x - onsetX(4000)) < 25);
     expect(line).toBeDefined();
     expect((wash?.x ?? 0) + (wash?.width ?? 0)).toBeLessThanOrEqual(line ?? 0);
-    expect(line).toBeLessThan(onsetX(4500) - HEAD_RX);
+    expect(line).toBeLessThan(onsetX(4500) - HEAD_HALF);
   });
 
   it('lays the wash of a clef change under the music, so it never erases a note', () => {

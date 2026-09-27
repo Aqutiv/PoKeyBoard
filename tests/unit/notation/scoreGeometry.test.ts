@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { beamSpanFor, BEAM_THICKNESS_G } from '@/features/notation/beamGeometry';
+import { flaggedStemReachG } from '@/features/notation/glyphs/engravingGlyphs';
 import { layoutScore, type ScoreLayout } from '@/features/notation/notationLayout';
 import {
   BASS_TOP,
@@ -182,6 +183,25 @@ describe('computeScoreGeometry', () => {
     const headY = geometry.trebleTop + STAFF_H - (high.step * GAP) / 2;
     const stemTip = chord?.stemDown === false ? headY - GAP * 3.5 : headY - GAP * 0.5;
     expect(stemTip).toBeGreaterThanOrEqual(0);
+  });
+
+  // A 32nd's and a 64th's flags stack up past a normal stem's end, so the flag
+  // is the ink that reaches furthest — and the room kept for a bare stem was
+  // not enough for it.
+  it('fits the flags of a lone 64th that stems away from the staff', () => {
+    // E6, a 64th, over a held C5: two voices, so the top one stems up.
+    const layout = layoutScore([note(88, 0, 31.25), note(72, 0, 500)], {
+      ...LAYOUT_OPTS,
+      quantization: '1/64',
+    });
+    const chord = layout.chords.find((c) => c.notes.some((n) => n.midi === 88));
+    expect(chord?.symbol.base).toBe('64th');
+    expect(chord?.beamId).toBe(null);
+    expect(chord?.stemDown).toBe(false);
+
+    const geometry = computeScoreGeometry(layout);
+    const headY = geometry.trebleTop + STAFF_H - (midiToStaffPosition(88).step * GAP) / 2;
+    expect(headY - flaggedStemReachG(4, false) * GAP).toBeGreaterThanOrEqual(0);
   });
 });
 

@@ -143,6 +143,10 @@ describe('drawing deep into a long take', () => {
           if (name === 'fillText') return (text: string) => texts.push(text);
           if (name === 'fill') return () => fills.push(state.fillStyle);
           if (name === 'measureText') return () => ({ width: 40 });
+          // A canvas has no `fillGlyph`. Answered with a function like every
+          // other name, it would send each music glyph to a no-op instead of
+          // through the path and `fill()` a canvas gets.
+          if (name === 'fillGlyph') return undefined;
           return () => {};
         },
         set: (_target, name, value) => {

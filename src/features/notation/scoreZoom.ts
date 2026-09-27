@@ -12,8 +12,8 @@ const ZOOM_STEP = 1.25;
 
 /**
  * The narrowest space the score leaves between two onsets that follow each
- * other on a staff, in design pixels. A head is about 11.5 wide: any closer
- * and heads touch.
+ * other on a staff, in design pixels. A head is about 10.6 wide: any closer
+ * and heads all but touch.
  */
 export const MIN_ONSET_GAP_PX = 16;
 
