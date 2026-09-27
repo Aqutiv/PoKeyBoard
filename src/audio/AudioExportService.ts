@@ -1,11 +1,13 @@
 import { getCachedAudio, invalidateCachedAudio, putCachedAudio } from '@/data/audioCacheRepository';
 import { persistenceService } from '@/data/persistence';
+import { useTakeStore } from '@/state/useTakeStore';
 import { computeExportHash } from '@/domain/takeHash';
 import type { Take } from '@/domain/takeTypes';
 import { libraryTrackSummary } from '@/features/library/catalog';
 import { ExportError } from '@/utils/errors';
 import { takeAudioFileName } from '@/utils/filenames';
 import type { EncoderResponse } from '@/workers/mp3Encoder.worker';
+import { audioEngine } from './AudioEngine';
 import { id3v2Tag } from './id3';
 import { instrumentForPackVersion } from './instruments';
 import type { LoudnessMode } from './loudness';
@@ -90,7 +92,7 @@ class AudioExportService {
   private activeJob: ActiveExportJob | null = null;
 
   async exportTake(
-    take: Take,
+    requested: Take,
     options: ExportOptions,
     onProgress: (progress: ExportProgress) => void,
   ): Promise<ExportResult> {
@@ -110,6 +112,14 @@ class AudioExportService {
       if (!job.cancelled && this.activeJob === job) onProgress(progress);
     };
     try {
+      // A piano chosen a moment ago may still be decoding while the previous
+      // one plays on. The export is rendered, named, tagged and cached as one
+      // piano, so wait for it to settle; then read the open take again, whose
+      // stamp follows the choice — back to the piano that plays on, if the new
+      // one could not be loaded. `requested` was read before that happened.
+      await this.awaitJob(job, audioEngine.whenSwitchSettled());
+      const open = useTakeStore.getState().take;
+      const take = open.id === requested.id ? open : requested;
       const bitrateKbps = QUALITY_BITRATE[options.quality];
       const hash = await this.awaitJob(
         job,

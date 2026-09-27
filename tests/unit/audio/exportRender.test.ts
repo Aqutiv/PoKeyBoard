@@ -13,7 +13,6 @@ const h = vi.hoisted(() => ({
 
 vi.mock('@/audio/AudioEngine', () => ({
   audioEngine: {
-    whenSwitchSettled: async () => undefined,
     ensurePlayableRange: h.ensurePlayableRange,
     bank: {
       // The top strings have no damper: theirs ring 20 s, whenever let go.
