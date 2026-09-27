@@ -45,21 +45,22 @@ import { ellipsizeRich, fillRich } from './sheetText';
 import type { ClefKind } from './staffMapping';
 
 /**
- * Draws one sheet page in engraved print style: black ink on white paper.
- * The ctx must be scaled so 1 canvas unit = 1 PDF point. All music glyphs
- * (clefs, brace, accidentals, flags, rests) are hand-drawn Béziers so the
- * output is identical on every device; fonts are used only for genuinely
- * textual elements (title, digits, page numbers). Rests and accidentals come
- * from `restGlyph.ts` and `accidentalGlyph.ts`, shared with the live score so
- * both views draw the same shapes.
+ * Draws one sheet page in engraved print style: black ink on white paper,
+ * onto any `DrawSurface` whose units are PDF points (y down). The export
+ * dialog's preview passes its scaled canvas; the PDF export passes a surface
+ * that writes the same calls as vector operators (`export/pdfSurface.ts`), so
+ * the preview shows exactly what prints.
+ *
+ * All music glyphs (clefs, brace, accidentals, flags, rests) are hand-drawn
+ * Béziers, so the page is the same on every device; fonts are used only for
+ * genuinely textual elements (title, digits, dynamics, page numbers), always
+ * Times, which is what the PDF sets. Rests and accidentals come from
+ * `restGlyph.ts` and `accidentalGlyph.ts`, shared with the live score so both
+ * views draw the same shapes.
+ *
+ * Only the canvas subset `DrawSurface` names may be used here: anything else
+ * would work in the preview and have no counterpart in the PDF.
  */
-
-/** Device pixels per PDF point for print rasterization (≈288 DPI). */
-export const RENDER_SCALE = 4;
-/** Reduced scale for very long documents to bound canvas memory. */
-export const RENDER_SCALE_LARGE_DOC = 3;
-/** Page count above which the reduced scale is used. */
-export const LARGE_DOC_PAGE_COUNT = 30;
 
 const G = SHEET_GAP_PT;
 const INK = '#000000';
