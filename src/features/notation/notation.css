@@ -20,11 +20,17 @@
   display: block;
 }
 
+/* The note just played, in the gutter's top corner, above the treble clef,
+   whose curl rises almost a space and a half over the staff. The score is
+   drawn smaller on a short screen, down to 62%, and the clef comes up with
+   it, so the name sits at the very top, its line box no taller than its
+   letters. */
 .score__notename {
   position: absolute;
-  top: 8px;
+  top: 0;
   left: 10px;
   font-size: 13px;
+  line-height: 1;
   font-weight: 650;
   color: var(--accent-strong);
   font-variant-numeric: tabular-nums;
