@@ -203,6 +203,37 @@ describe('computeScoreGeometry', () => {
     const headY = geometry.trebleTop + STAFF_H - (midiToStaffPosition(88).step * GAP) / 2;
     expect(headY - flaggedStemReachG(4, false) * GAP).toBeGreaterThanOrEqual(0);
   });
+
+  // An octave line stands clear above what it covers, and on the Play page
+  // above the bar numbers too; the room for it is kept on top of the music's.
+  it('keeps room above the treble staff for an octave line over high music', () => {
+    const layout = layoutScore(
+      [0, 1, 2, 3].map((i) => note(108, i * 500, 500)),
+      LAYOUT_OPTS,
+    );
+    expect(layout.octaves).toHaveLength(1);
+    const without = computeScoreGeometry({ ...layout, octaves: [] });
+    expect(computeScoreGeometry(layout).trebleTop).toBeGreaterThan(without.trebleTop);
+  });
+
+  it('keeps room under the bass staff for an 8vb, with the pedal row below it', () => {
+    const layout = layoutScore(
+      [0, 1, 2, 3].map((i): NoteEvent => ({ ...note(24, i * 500, 500), staff: 'bass' })),
+      {
+        ...LAYOUT_OPTS,
+        pedals: [
+          { atMs: 0, down: true },
+          { atMs: 1900, down: false },
+        ],
+      },
+    );
+    expect(layout.octaves).toHaveLength(1);
+    const without = computeScoreGeometry({ ...layout, octaves: [] });
+    const geometry = computeScoreGeometry(layout);
+    expect(geometry.minHeight).toBeGreaterThan(without.minHeight);
+    expect(geometry.pedalRow).toBeGreaterThan(without.pedalRow);
+    expect(geometry.trebleTop).toBe(without.trebleTop);
+  });
 });
 
 /** One staff loses the second staff and the gap between them. */

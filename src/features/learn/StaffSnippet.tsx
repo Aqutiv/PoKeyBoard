@@ -178,7 +178,7 @@ export function StaffSnippet({
       return [
         {
           layout,
-          geometry: computeScoreGeometry(layout, { staves }),
+          geometry: computeScoreGeometry(layout, { staves, chrome }),
           // Fit the phrase's own bars. A note that fills its bar spills an
           // empty one into the layout, which a lesson does not draw; fitted to
           // the layout's whole length, the music took two thirds of the card
@@ -198,7 +198,12 @@ export function StaffSnippet({
       const layout = lessonLayout(own, phrase, showRests);
       out.push({
         layout,
-        geometry: computeScoreGeometry(layout, { staves }),
+        // Sized for the furniture it is drawn with, which only the first
+        // system carries in full.
+        geometry: computeScoreGeometry(layout, {
+          staves,
+          chrome: out.length === 0 ? chrome : 'bare',
+        }),
         // Every system shares one scale, so a beat is as wide on the last line
         // as on the first.
         spanMs: systemMs,

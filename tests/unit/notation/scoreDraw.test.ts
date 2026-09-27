@@ -80,6 +80,8 @@ interface Recorder {
   fills: string[];
   strokes: string[];
   texts: string[];
+  /** Every text drawn, with where its baseline starts. */
+  labels: { text: string; x: number; y: number }[];
   /** Every path stroked, in order. Enough to find where a line was drawn. */
   paths: StrokedPath[];
   /** Every `fillRect`, with the fillStyle in force — a wash, the gutter. */
@@ -106,6 +108,7 @@ function recordingContext(): Recorder {
   const fills: string[] = [];
   const strokes: string[] = [];
   const texts: string[] = [];
+  const labels: { text: string; x: number; y: number }[] = [];
   const paths: StrokedPath[] = [];
   const rects: { style: string; x: number; width: number }[] = [];
   const ops: string[] = [];
@@ -187,13 +190,16 @@ function recordingContext(): Recorder {
       ops.push(`stroke:${state.strokeStyle}`);
       paths.push({ style: state.strokeStyle, width: state.lineWidth, points: path });
     },
-    fillText: (text: string) => void texts.push(text),
+    fillText: (text: string, x: number, y: number) => {
+      texts.push(text);
+      labels.push({ text, ...at(x, y) });
+    },
     measureText: () => ({ width: 40 }) as TextMetrics,
     clip: () => {},
     setLineDash: () => {},
   } as unknown as CanvasRenderingContext2D;
 
-  return { ctx, fills, strokes, texts, paths, rects, ops };
+  return { ctx, fills, strokes, texts, labels, paths, rects, ops };
 }
 
 const LAYOUT_OPTS = {
@@ -279,7 +285,7 @@ function render(
     Pick<ScoreView, 'widthPx' | 'pxPerMs' | 'scrollMs' | 'systemBreakMs' | 'gutterPx'>
   > = {},
 ): Drawn {
-  const geometry = computeScoreGeometry(layout, { staves });
+  const geometry = computeScoreGeometry(layout, { staves, ...(chrome === null ? {} : { chrome }) });
   const recorder = recordingContext();
   const view: ScoreView = {
     widthPx: 300,
@@ -351,6 +357,37 @@ function heads(drawn: Drawn): Head[] {
 
 const named = (drawn: Drawn, name: MusicGlyphName): GlyphCall[] =>
   drawn.glyphs.filter((glyph) => glyph.name === name);
+
+/** A box of ink on the canvas, y down. */
+interface Ink {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** A glyph's ink as drawn: the font's box, placed and scaled. */
+function inkOf(glyph: GlyphCall): Ink {
+  const [left, bottom, right, top] = box(glyph.name);
+  return {
+    left: glyph.x + left * glyph.space,
+    right: glyph.x + right * glyph.space,
+    top: glyph.y - top * glyph.space,
+    bottom: glyph.y - bottom * glyph.space,
+  };
+}
+
+/** The box a stroked path's points span. */
+function pathInk(path: StrokedPath): Ink {
+  const xs = path.points.map((point) => point.x);
+  const ys = path.points.map((point) => point.y);
+  return {
+    left: Math.min(...xs),
+    right: Math.max(...xs),
+    top: Math.min(...ys),
+    bottom: Math.max(...ys),
+  };
+}
 
 /** The colour of each head drawn, in the order drawn. */
 const headFills = (drawn: Drawn): string[] => heads(drawn).map((head) => head.fill);
@@ -868,13 +905,219 @@ describe('drawScore glyph placement', () => {
     expect(label).toMatchObject({ space, fill: noteDim });
     expect(label?.x).toBeCloseTo(onsetX(0) - HEAD_HALF, 6);
     // Its ink centred on the line.
-    const lineY = drawn.view.trebleTop - 2.4 * GAP;
     const [, bottom, , top] = box('ottavaAlta');
-    expect((label?.y ?? 0) - ((bottom + top) / 2) * space).toBeCloseTo(lineY, 6);
+    const lineY = (label?.y ?? 0) - ((bottom + top) / 2) * space;
     const dashed = drawn.paths.find((path) => path.style === noteDim && path.width === 1.1);
     const lineFrom = (label?.x ?? 0) + MUSIC_GLYPH_METRICS.ottavaAlta.advance * space + 0.4 * GAP;
     expect(dashed?.points[0]?.x).toBeCloseTo(lineFrom, 6);
     expect(dashed?.points[0]?.y).toBeCloseTo(lineY, 6);
+  });
+});
+
+describe('drawScore octave lines', () => {
+  const { noteDim, staffLine, rest } = SCORE_PALETTES.dark;
+  /** Three bars of 4/4 across, a beat to 50 px. */
+  const WIDE = { widthPx: 800, pxPerMs: 0.05 };
+  /** The clear space an octave line's mark keeps from anything under it. */
+  const CLEAR = 0.5 * GAP;
+
+  /**
+   * One octave line's mark: its label's ink, and the line and hook stroked
+   * after it — the box they fill together.
+   */
+  const markOf = (drawn: Drawn, name: 'ottavaAlta' | 'ottavaBassaVb'): Ink => {
+    const [label] = named(drawn, name);
+    expect(label).toBeDefined();
+    const strokes = drawn.paths
+      .filter((path) => path.style === noteDim && path.width === 1.1)
+      .map(pathInk);
+    return [inkOf(label as GlyphCall), ...strokes].reduce((a, b) => ({
+      left: Math.min(a.left, b.left),
+      right: Math.max(a.right, b.right),
+      top: Math.min(a.top, b.top),
+      bottom: Math.max(a.bottom, b.bottom),
+    }));
+  };
+
+  /**
+   * The notes' ink out in the music: heads, accidentals, dots and flags, and
+   * the stems and ledger lines stroked for them.
+   */
+  const noteInk = (drawn: Drawn): Ink[] => [
+    ...drawn.glyphs
+      .filter((glyph) => /^(notehead|accidental|augmentationDot|flag)/.test(glyph.name))
+      .map(inkOf)
+      .filter((ink) => ink.left > drawn.view.gutterPx),
+    ...drawn.paths
+      .map((path) => ({ path, ink: pathInk(path) }))
+      .filter(
+        ({ path, ink }) =>
+          path.width === STEM_W || (path.style === staffLine && ink.right - ink.left < 3 * GAP),
+      )
+      .map(({ ink }) => ink),
+  ];
+  const highest = (inks: readonly Ink[]): number => Math.min(...inks.map((ink) => ink.top));
+  const lowest = (inks: readonly Ink[]): number => Math.max(...inks.map((ink) => ink.bottom));
+
+  /** A bar of C4, then a bar of C6s: written an octave down, on C5, under an 8va. */
+  const intoBarTwo = (): ScoreLayout =>
+    written([
+      [0, 4, 60],
+      [4, 1, 84],
+      [5, 1, 84],
+      [6, 1, 84],
+      [7, 1, 84],
+    ]);
+
+  it('leaves the line 2.4 spaces up where nothing crowds it', () => {
+    const layout = intoBarTwo();
+    expect(layout.octaves).toEqual([{ staff: 'treble', fromMs: 4000, toMs: 7000, up: true }]);
+    // A lesson draws no bar numbers, and the heads, on C5, sit in the staff.
+    const drawn = render(layout, {}, 'treble', 'lesson', WIDE);
+    const [label] = named(drawn, 'ottavaAlta');
+    const [, bottom, , top] = box('ottavaAlta');
+    const lineY = (label?.y ?? 0) - ((bottom + top) / 2) * 0.6 * GAP;
+    expect(lineY).toBeCloseTo(drawn.view.trebleTop - 2.4 * GAP, 6);
+  });
+
+  it('rises clear of the heads and ledger lines it covers', () => {
+    // C7s, written an octave down on C6's two ledger lines: 2.4 spaces up, the
+    // line ran through their heads and the label sat on the first.
+    const layout = bar([0, 1, 2, 3], 96);
+    expect(layout.octaves).toEqual([{ staff: 'treble', fromMs: 0, toMs: 3000, up: true }]);
+    const drawn = render(layout, {}, 'treble', 'lesson', WIDE);
+    expect(markOf(drawn, 'ottavaAlta').bottom).toBeCloseTo(highest(noteInk(drawn)) - CLEAR, 6);
+  });
+
+  it('rises clear of an accidental standing taller than its head', () => {
+    // B♭6s, written B♭5: the flat's ink reaches well above the head it alters.
+    const notes: NoteEvent[] = [0, 1, 2, 3].map((beat) => ({
+      id: `f${beat}`,
+      midi: 94,
+      startMs: beat * 1000,
+      durationMs: 1000,
+      velocity: 0.7,
+      staff: 'treble',
+      spelling: { step: 'B', alter: -1 },
+    }));
+    const layout = { ...layoutScore(notes, LAYOUT_OPTS), dynamics: [], hairpins: [] };
+    expect(layout.octaves).toHaveLength(1);
+    const drawn = render(layout, {}, 'treble', 'lesson', WIDE);
+    const [flat] = named(drawn, 'accidentalFlat');
+    const [head] = heads(drawn);
+    expect(inkOf(flat as GlyphCall).top).toBeLessThan((head?.y ?? 0) - GAP);
+    expect(markOf(drawn, 'ottavaAlta').bottom).toBeCloseTo(highest(noteInk(drawn)) - CLEAR, 6);
+  });
+
+  it('rises clear of the stems and flags of an upper voice', () => {
+    // Two voices, all of it above C6: E7 eighths stemming up over C7 quarters.
+    // The upper stems reach three and a half spaces above heads already over the staff.
+    const notes: NoteEvent[] = [0, 1, 2, 3].flatMap((beat): NoteEvent[] => [
+      {
+        id: `u${beat}`,
+        midi: 100,
+        startMs: beat * 1000,
+        durationMs: 500,
+        velocity: 0.7,
+        staff: 'treble',
+        voice: 0,
+      },
+      {
+        id: `l${beat}`,
+        midi: 96,
+        startMs: beat * 1000,
+        durationMs: 1000,
+        velocity: 0.7,
+        staff: 'treble',
+        voice: 1,
+      },
+    ]);
+    const layout = { ...layoutScore(notes, LAYOUT_OPTS), dynamics: [], hairpins: [] };
+    expect(layout.octaves).toHaveLength(1);
+    const upper = layout.chords.filter((chord) => chord.voice === 0);
+    expect(upper.every((chord) => !chord.stemDown && chord.beamId === null)).toBe(true);
+    const drawn = render(layout, {}, 'treble', 'lesson', WIDE);
+    expect(named(drawn, 'flag8thUp')).toHaveLength(4);
+    expect(markOf(drawn, 'ottavaAlta').bottom).toBeCloseTo(highest(noteInk(drawn)) - CLEAR, 6);
+  });
+
+  it('takes the row above the bar numbers on the Play page', () => {
+    // The label starts over bar 2's number. The heads under it are low enough
+    // to leave the line where it stood; the number is not.
+    const drawn = render(intoBarTwo(), {}, 'treble', null, WIDE);
+    const number = drawn.labels.find((label) => label.text === '2');
+    expect(number).toBeDefined();
+    const mark = markOf(drawn, 'ottavaAlta');
+    expect(Math.abs(mark.left - (number?.x ?? 0))).toBeLessThan(GAP);
+    // A numeral's ink rises about three quarters of its size, 10 px, above its baseline.
+    expect(mark.bottom).toBeCloseTo((number?.y ?? 0) - 7.5 - CLEAR, 6);
+  });
+
+  it('lifts a tempo mark over its bar above the line', () => {
+    // Bar 2 goes to 90 bpm, and its four C6s go under an 8va.
+    const beat = 60_000 / 90;
+    const notes: NoteEvent[] = [
+      { id: 'w', midi: 60, startMs: 0, durationMs: 4000, velocity: 0.7 },
+      ...[0, 1, 2, 3].map((i) => ({
+        id: `q${i}`,
+        midi: 84,
+        startMs: Math.round(4000 + i * beat),
+        durationMs: Math.round(beat),
+        velocity: 0.7,
+      })),
+    ];
+    const score = layoutScore(notes, { ...LAYOUT_OPTS, tempoChanges: [{ atMs: 4000, bpm: 90 }] });
+    const layout = { ...score, dynamics: [], hairpins: [] };
+    expect(layout.octaves).toHaveLength(1);
+    const drawn = render(layout, {}, 'treble', null, WIDE);
+    const mark = markOf(drawn, 'ottavaAlta');
+    const [quarter] = named(drawn, 'metNoteQuarterUp');
+    const number = drawn.labels.find((label) => label.text === '= 90');
+    expect(quarter).toBeDefined();
+    // The number stands on the baseline, the note a pixel above it.
+    expect(number?.y).toBeCloseTo(mark.top - CLEAR, 6);
+    expect(inkOf(quarter as GlyphCall).bottom).toBeCloseTo(mark.top - CLEAR - 1, 6);
+    // All of it still on the canvas.
+    expect(inkOf(quarter as GlyphCall).top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('keeps a line over the highest notes inside the canvas', () => {
+    // C8s, written C7 an octave down, five ledger lines over the staff.
+    const drawn = render(bar([0, 1, 2, 3], 108), {}, 'treble', null, WIDE);
+    expect(markOf(drawn, 'ottavaAlta').top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('sinks an 8vb clear of what it covers, and the pedal row under it', () => {
+    // C1s, written an octave up on C2's two ledger lines under the bass staff,
+    // under the sustain pedal.
+    const notes: NoteEvent[] = [0, 1, 2, 3].map((beat) => ({
+      id: `b${beat}`,
+      midi: 24,
+      startMs: beat * 1000,
+      durationMs: 1000,
+      velocity: 0.7,
+      staff: 'bass',
+    }));
+    const score = layoutScore(notes, {
+      ...LAYOUT_OPTS,
+      pedals: [
+        { atMs: 0, down: true },
+        { atMs: 3900, down: false },
+      ],
+    });
+    const layout = { ...score, dynamics: [], hairpins: [] };
+    expect(layout.octaves).toEqual([{ staff: 'bass', fromMs: 0, toMs: 3000, up: false }]);
+    expect(layout.pedals).toHaveLength(1);
+    const drawn = render(layout, {}, 'grand', null, WIDE);
+    const mark = markOf(drawn, 'ottavaBassaVb');
+    expect(mark.top).toBeCloseTo(lowest(noteInk(drawn)) + CLEAR, 6);
+    // The bracket, hooks and all, clear under the whole mark, and on the canvas.
+    const pedal = drawn.paths
+      .filter((path) => path.style === rest && path.width === 1.2)
+      .map(pathInk);
+    expect(pedal.length).toBeGreaterThan(0);
+    expect(highest(pedal)).toBeGreaterThanOrEqual(mark.bottom + CLEAR - 1e-6);
+    expect(lowest(pedal)).toBeLessThanOrEqual(drawn.view.heightPx);
   });
 });
 
