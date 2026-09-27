@@ -825,6 +825,22 @@ describe('beam grouping', () => {
     ]);
   });
 
+  it('beams every bar of eighths alike, whichever way its milliseconds round', () => {
+    // At 104 bpm a beat is 576.92 ms, and bar lines and notes both land on whole
+    // milliseconds. Bar 2 starts at 2307.69, written 2308, and its fourth beat
+    // at 4038.46, written 4038: 0.77 ms early against the bar line, which is
+    // more than a thousandth of a beat. That was once enough to put the beat's
+    // first eighth in the beat before, beaming the bar as three, one and a flag.
+    const eighthMs = 60_000 / 104 / 2;
+    const layout = layoutScore(
+      Array.from({ length: 32 }, (_, i) =>
+        note({ id: `e${i}`, midi: 72, startMs: Math.round(i * eighthMs), durationMs: 280 }),
+      ),
+      { ...OPTS, bpm: 104, quantization: '1/8' },
+    );
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual([4, 4, 4, 4, 4, 4, 4, 4]);
+  });
+
   it('beams by the beat where a lesson asks it to', () => {
     const layout = layoutScore(eighths([0, 250, 500, 750]), { ...OPTS, eighthsByHalfBar: false });
     expect(layout.beams.map((beam) => beam.members.length)).toEqual([2, 2]);
@@ -879,6 +895,32 @@ describe('beam grouping', () => {
         { from: 0, to: 0, stub: 1 },
         { from: 2, to: 2, stub: -1 },
       ],
+    ]);
+  });
+
+  it('turns a sixteenth’s stub by where it is written, not where it rounds to', () => {
+    // Eighth, sixteenth, eighth: the sixteenth starts the beat's second half,
+    // so its stub points on. At 104 bpm that half falls at 288.46 ms and the
+    // sixteenth is written at 288, which read as just short of it and turned
+    // the stub back in one bar and not the next.
+    const beatMs = 60_000 / 104;
+    const figure = (bar: number): NoteEvent[] =>
+      [
+        [0, 0.5],
+        [0.5, 0.25],
+        [0.75, 0.5],
+      ].map(([at, beats], i) =>
+        note({
+          id: `b${bar}n${i}`,
+          midi: 72,
+          startMs: Math.round((bar * 4 + at!) * beatMs),
+          durationMs: Math.round(beats! * beatMs),
+        }),
+      );
+    const layout = layoutScore([...figure(0), ...figure(1)], { ...OPTS, bpm: 104 });
+    expect(layout.beams.map((beam) => beam.secondary)).toEqual([
+      [[{ from: 1, to: 1, stub: 1 }]],
+      [[{ from: 1, to: 1, stub: 1 }]],
     ]);
   });
 
