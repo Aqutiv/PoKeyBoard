@@ -33,8 +33,9 @@ getTakeForExport(id)
   label, the tempo mark's note — is a glyph of the **Bravura** music font (see
   _Music font_ below), placed by its SMuFL metrics and anchors, so the page is
   the same on every device. Staff and bar lines, stems, ledger lines, beams,
-  ties, hairpins, pedal brackets and the octave line are ruled, and words and
-  numbers — title, credit, measure and page numbers, "= n" — are set in Times.
+  ties, hairpins, pedal brackets and the octave line are drawn directly, and
+  words and numbers — title, credit, measure and page numbers, "= n" — are set
+  in Times.
   A title's own accidentals ("Nocturne in E♭") are the same glyphs
   (`sheetText.ts`), since Times has no ♭ to print; a title too long for the
   page is cut between whole graphemes. The live score still draws its own

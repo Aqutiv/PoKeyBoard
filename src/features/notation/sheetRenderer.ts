@@ -60,11 +60,11 @@ import type { ClefKind } from './staffMapping';
  * Every music symbol — clefs, brace, noteheads, flags, accidentals, rests,
  * dots, time signature and tuplet digits, dynamics, the 8va label, the tempo
  * mark's note — is a glyph from the music font (`glyphs/`), placed by its
- * SMuFL metrics and anchors, so the page is the same on every device. What is
- * drawn as lines is what engravers rule: staff lines, bar lines, stems, ledger
- * lines, beams, ties, hairpins, pedal brackets and the octave line. Words and
- * numbers — title, credit, measure and page numbers, the tempo's "= n" — are
- * set in Times, which is what the PDF sets.
+ * SMuFL metrics and anchors, so the page is the same on every device. The rest
+ * is drawn directly, to the font's proportions where it has them: staff lines,
+ * bar lines, stems, ledger lines, beams, ties, hairpins, pedal brackets and the
+ * octave line. Words and numbers — title, credit, measure and page numbers,
+ * the tempo's "= n" — are set in Times, which is what the PDF sets.
  *
  * Only the canvas subset `DrawSurface` names may be used here: anything else
  * would work in the preview and have no counterpart in the PDF.
