@@ -56,6 +56,7 @@ import { spellInKey } from './pitchSpelling';
 import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
 import { drawRestGlyph } from './restGlyph';
 import { restStep } from './rests';
+import { basePxPerMsFor, MIN_DISPLAY_ZOOM } from './scoreZoom';
 import {
   defaultClefFor,
   ledgerLineSteps,
@@ -227,6 +228,13 @@ export interface ScoreGeometryOptions {
    * to 'full', as `ScoreView.chrome` does.
    */
   chrome?: ScoreChrome;
+  /**
+   * The tightest spacing the view is drawn at, in pixels per millisecond. An
+   * octave line clears what it stands over, and packed tighter it stands over
+   * more, so its room is measured here. Defaults to the Play page's tightest:
+   * its spacing zoomed all the way out (`basePxPerMsFor` at `MIN_DISPLAY_ZOOM`).
+   */
+  pxPerMs?: number;
 }
 
 export interface ScoreGeometry {
@@ -353,6 +361,8 @@ const OCTAVE_BAND_HALF_PX = Math.max(
 );
 /** Clear space an octave line's band keeps from the music under it, and from the bar numbers. */
 const OCTAVE_CLEAR_PX = GAP * 0.5;
+/** How far past the centre of the last head it covers an octave line's hook stands. */
+const OCTAVE_HOOK_PAST_PX = GAP * 1.3;
 
 /**
  * How far a chord's own ink reaches above its staff (`up`) or below it,
@@ -407,12 +417,12 @@ function beamEdgeRel(beam: BeamGroup, chord: ChordGroup): number | null {
 
 /**
  * The furthest the music under an octave line reaches toward it, relative to
- * the top of its staff, or null for a line over nothing: the chords it covers,
- * and the ones either side of them. Its label starts over the first head, where
- * the flag or dot of the chord before can reach, and its hook stands past the
- * last, over where the chord after begins — its accidentals hang back that far.
+ * the top of its staff, or null for a line over nothing. That is the chords it
+ * covers, and any chord beside them whose ink reaches in, at `pxPerMs`, under
+ * its label, which starts at the first head's edge, or under its hook, which
+ * stands past the last head. Packed tight, that can be several either side.
  */
-function coveredInkRel(layout: ScoreLayout, span: OctaveSpan): number | null {
+function coveredInkRel(layout: ScoreLayout, span: OctaveSpan, pxPerMs: number): number | null {
   let ink = span.up ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
   const further = (y: number): void => {
     ink = span.up ? Math.min(ink, y) : Math.max(ink, y);
@@ -432,26 +442,23 @@ function coveredInkRel(layout: ScoreLayout, span: OctaveSpan): number | null {
     const edge = beamEdgeRel(beam, chord);
     if (edge !== null) further(edge);
   };
-  /** Every chord of the span's staff at the onset nearest `from`, stepping by `step`. */
-  const beside = (from: number, step: 1 | -1): void => {
-    let onset: number | null = null;
-    for (let i = from; i >= 0 && i < chords.length; i += step) {
-      const chord = chords[i] as ChordGroup;
-      if (onset !== null && chord.displayStartMs !== onset) return;
-      if (chord.staff !== span.staff) continue;
-      onset = chord.displayStartMs;
+  // Where the mark starts and ends across the take, with its clear space.
+  const from = span.fromMs * pxPerMs - headHalfPx('quarter') - OCTAVE_CLEAR_PX;
+  const to = span.toMs * pxPerMs + OCTAVE_HOOK_PAST_PX + OCTAVE_CLEAR_PX;
+  // No ink reaches further than this off its onset, so nothing further off counts.
+  const widest = widestReachPx(layout);
+  const reaches = chordReachesFor(layout);
+  for (let i = firstChordIndexAt(chords, (from - widest) / pxPerMs); i < chords.length; i += 1) {
+    const chord = chords[i] as ChordGroup;
+    const x = chord.displayStartMs * pxPerMs;
+    if (x - widest > to) break;
+    if (chord.staff !== span.staff) continue;
+    if (chord.displayStartMs >= span.fromMs && chord.displayStartMs <= span.toMs) {
+      covers(chord, true);
+    } else if (x + (reaches.right[i] as number) > from && x - (reaches.left[i] as number) < to) {
       covers(chord, false);
     }
-  };
-  const first = firstChordIndexAt(chords, span.fromMs);
-  beside(first - 1, -1);
-  let i = first;
-  for (; i < chords.length; i += 1) {
-    const chord = chords[i] as ChordGroup;
-    if (chord.displayStartMs > span.toMs) break;
-    if (chord.staff === span.staff) covers(chord, true);
   }
-  beside(i, 1);
   return Number.isFinite(ink) ? ink : null;
 }
 
@@ -460,17 +467,24 @@ function coveredInkRel(layout: ScoreLayout, span: OctaveSpan): number | null {
  *
  * Its usual distance off the staff, unless something under it reaches
  * further. Then it moves out until its band (`OCTAVE_BAND_HALF_PX`) clears, by
- * `OCTAVE_CLEAR_PX`, the furthest ink of the music it covers: a head on its
- * ledger lines, an accidental, a stem and its flag, a beam. And where the view
+ * `OCTAVE_CLEAR_PX`, the furthest ink of the music under it (`coveredInkRel`):
+ * a head on its ledger lines, an accidental, a stem and its flag, a beam. That
+ * depends on the spacing, since packed tighter the line's ends stand over more
+ * of the chords beside it; the view's own is `pxPerMs`. And where the view
  * numbers its bars, an 8va takes the row above the numbers as well — every bar
  * carries one, and a line across a bar line would hang its label or its hook
  * on it. Stacked as an engraver stacks them: the music, then the measure
  * numbers, then the octave line, and a tempo mark outside them all
  * (`tempoMarkRise`).
  */
-function octaveLineRel(layout: ScoreLayout, span: OctaveSpan, numbered: boolean): number {
+function octaveLineRel(
+  layout: ScoreLayout,
+  span: OctaveSpan,
+  numbered: boolean,
+  pxPerMs: number,
+): number {
   const clearance = OCTAVE_CLEAR_PX + OCTAVE_BAND_HALF_PX;
-  const ink = coveredInkRel(layout, span);
+  const ink = coveredInkRel(layout, span, pxPerMs);
   if (!span.up) {
     const line = STAFF_H + OCTAVE_LINE_OFFSET_PX;
     return ink === null ? line : Math.max(line, ink + clearance);
@@ -482,20 +496,29 @@ function octaveLineRel(layout: ScoreLayout, span: OctaveSpan, numbered: boolean)
 }
 
 /**
- * Every octave line's place (`octaveLineRel`), by index into `layout.octaves`.
- * Built once per layout, which is immutable, for views that number their bars
- * and for those that do not.
+ * Every octave line's place (`octaveLineRel`) at one spacing, by index into
+ * `layout.octaves`, for views that number their bars and for those that do
+ * not. Built again only when the spacing changes.
  */
-const octaveLines = new WeakMap<ScoreLayout, { numbered?: number[]; plain?: number[] }>();
+type OctaveLines = { pxPerMs: number; lines: number[] };
+const octaveLines = new WeakMap<ScoreLayout, { numbered?: OctaveLines; plain?: OctaveLines }>();
 
-function octaveLinesFor(layout: ScoreLayout, numbered: boolean): readonly number[] {
+function octaveLinesFor(
+  layout: ScoreLayout,
+  numbered: boolean,
+  pxPerMs: number,
+): readonly number[] {
   let cached = octaveLines.get(layout);
   if (!cached) {
     cached = {};
     octaveLines.set(layout, cached);
   }
   const key = numbered ? 'numbered' : 'plain';
-  return (cached[key] ??= layout.octaves.map((span) => octaveLineRel(layout, span, numbered)));
+  const hit = cached[key];
+  if (hit?.pxPerMs === pxPerMs) return hit.lines;
+  const lines = layout.octaves.map((span) => octaveLineRel(layout, span, numbered, pxPerMs));
+  cached[key] = { pxPerMs, lines };
+  return lines;
 }
 
 /**
@@ -586,7 +609,9 @@ export function computeScoreGeometry(
   // An octave line stands outside the music it covers, so its band is the
   // furthest thing out on its side — except the pedal row, which goes under an
   // 8vb it runs beneath, and a tempo mark, which goes over an 8va on its bar.
-  const lines = octaveLinesFor(layout, (options.chrome ?? 'full') === 'full');
+  // Each is measured where it stands furthest out: at the tightest spacing.
+  const tightest = options.pxPerMs ?? basePxPerMsFor(layout) * MIN_DISPLAY_ZOOM;
+  const lines = octaveLinesFor(layout, (options.chrome ?? 'full') === 'full', tightest);
   layout.octaves.forEach((span, i) => {
     const line = lines[i] as number;
     if (span.up && span.staff === upStaff) {
@@ -1393,7 +1418,7 @@ function drawMeasures(
   ctx.textBaseline = 'alphabetic';
   // Where the octave lines stand, for a tempo mark to clear; see `tempoMarkRise`.
   const lines = drawsStaff(view, 'treble')
-    ? octaveLinesFor(layout, chromeOf(view) === 'full')
+    ? octaveLinesFor(layout, chromeOf(view) === 'full', view.pxPerMs)
     : null;
 
   const { measures } = layout;
@@ -1437,7 +1462,10 @@ function drawMeasures(
     const previous = layout.measures[measure.index - 1];
     if (previous && previous.bpm !== measure.bpm && onset >= view.gutterPx - 8) {
       const rise = lines ? tempoMarkRise(layout, measure, lines) : TEMPO_MARK_RISE_PX;
-      drawTempoMark(ctx, onset + 16, view.trebleTop - rise, measure.bpm, palette);
+      // Kept on the canvas even in a view drawn tighter than the room above
+      // it was measured for; see `ScoreGeometryOptions.pxPerMs`.
+      const baseline = Math.max(TEMPO_MARK_HEIGHT_PX, view.trebleTop - rise);
+      drawTempoMark(ctx, onset + 16, baseline, measure.bpm, palette);
     }
     if (measure.empty) {
       const cx = xForMs(view, (measure.startMs + measure.endMs) / 2);
@@ -1588,7 +1616,7 @@ function drawOctaves(
   if (layout.octaves.length === 0) return;
   const fromMs = view.scrollMs;
   const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs;
-  const lines = octaveLinesFor(layout, chromeOf(view) === 'full');
+  const lines = octaveLinesFor(layout, chromeOf(view) === 'full', view.pxPerMs);
 
   ctx.strokeStyle = palette.noteDim;
   ctx.fillStyle = palette.noteDim;
@@ -1602,10 +1630,15 @@ function drawOctaves(
     const openRight = octave.toMs > toMs;
     // From the left edge of the first head it covers.
     const x1 = openLeft ? view.gutterPx : xForMs(view, octave.fromMs) - headHalfPx('quarter');
-    const x2 = openRight ? view.widthPx : xForMs(view, octave.toMs) + GAP * 1.3;
+    const x2 = openRight ? view.widthPx : xForMs(view, octave.toMs) + OCTAVE_HOOK_PAST_PX;
     if (x2 <= x1) continue;
     if (!drawsStaff(view, octave.staff)) continue;
-    const y = staffTopFor(view, octave.staff) + (lines[i] as number);
+    // Kept on the canvas even in a view drawn tighter than the room for it
+    // was measured for; see `ScoreGeometryOptions.pxPerMs`.
+    const at = staffTopFor(view, octave.staff) + (lines[i] as number);
+    const y = octave.up
+      ? Math.max(OCTAVE_BAND_HALF_PX, at)
+      : Math.min(view.heightPx - OCTAVE_BAND_HALF_PX, at);
 
     let lineFrom = x1;
     if (!openLeft) {

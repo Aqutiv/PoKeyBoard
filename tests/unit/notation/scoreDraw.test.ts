@@ -1087,6 +1087,50 @@ describe('drawScore octave lines', () => {
     expect(markOf(drawn, 'ottavaAlta').top).toBeGreaterThanOrEqual(0);
   });
 
+  /**
+   * Quarters on the pitches given, the line over the two of them `covered`
+   * names: the others stand beside it, where its label or hook can reach.
+   */
+  const beside = (midis: readonly number[], covered: readonly [number, number]): ScoreLayout => ({
+    ...written(midis.map((midi, beat) => [beat, 1, midi] as const)),
+    octaves: [{ staff: 'treble', fromMs: covered[0] * 1000, toMs: covered[1] * 1000, up: true }],
+  });
+  /** The notes' ink under a mark, however little of it. */
+  const inkUnder = (drawn: Drawn, mark: Ink): Ink[] =>
+    noteInk(drawn).filter((ink) => ink.left < mark.right && ink.right > mark.left);
+
+  it('rises clear of every chord its hook stands over, however many', () => {
+    // 6 px to the beat, the hook past the second C5 stands over the E4 after
+    // it and over the B5 after that.
+    const drawn = render(beside([72, 72, 64, 83], [0, 1]), {}, 'treble', 'lesson', {
+      widthPx: 800,
+      pxPerMs: 6 / 1000,
+    });
+    const mark = markOf(drawn, 'ottavaAlta');
+    expect(mark.bottom).toBeCloseTo(highest(inkUnder(drawn, mark)) - CLEAR, 6);
+    expect(mark.top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('rises clear of every chord its label stands over, however many', () => {
+    // 4 px to the beat, the label over the first C5 stands over the E4 before
+    // it and the B5 before that.
+    const drawn = render(beside([83, 64, 72, 72], [2, 3]), {}, 'treble', 'lesson', {
+      widthPx: 800,
+      pxPerMs: 4 / 1000,
+    });
+    const mark = markOf(drawn, 'ottavaAlta');
+    expect(mark.bottom).toBeCloseTo(highest(inkUnder(drawn, mark)) - CLEAR, 6);
+  });
+
+  it('stays where it stood when a chord beside it is out of its reach', () => {
+    // Spread out, the B5 after the line stands well clear of its hook.
+    const drawn = render(beside([72, 72, 83, 64], [0, 1]), {}, 'treble', 'lesson', WIDE);
+    const [label] = named(drawn, 'ottavaAlta');
+    const [, bottom, , top] = box('ottavaAlta');
+    const lineY = (label?.y ?? 0) - ((bottom + top) / 2) * 0.6 * GAP;
+    expect(lineY).toBeCloseTo(drawn.view.trebleTop - 2.4 * GAP, 6);
+  });
+
   it('sinks an 8vb clear of what it covers, and the pedal row under it', () => {
     // C1s, written an octave up on C2's two ledger lines under the bass staff,
     // under the sustain pedal.
