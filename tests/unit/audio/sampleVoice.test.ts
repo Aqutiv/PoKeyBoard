@@ -13,6 +13,7 @@ import {
   ATTACK_S,
   dampSampleVoice,
   moveSampleVoiceRelease,
+  nearestFrameTime,
   RELEASE_TC,
   releaseSampleVoice,
   releaseTcFor,
@@ -201,6 +202,30 @@ describe('shared sample voice', () => {
     expect(voice.source.start).toHaveBeenCalledWith(2, 0.011);
   });
 
+  it('finds the whole frame nearest a time, on the context’s own clock', () => {
+    const { audio, context } = setup();
+    expect(nearestFrameTime(audio, 1.5)).toBe(1.5);
+    expect(nearestFrameTime(audio, 1 + 0.49 / 48_000)).toBe(1);
+    expect(nearestFrameTime(audio, 1 + 0.51 / 48_000)).toBe(48_001 / 48_000);
+    context.sampleRate = 44_100;
+    expect(nearestFrameTime(audio, 1 + 0.51 / 48_000)).toBe(1);
+  });
+
+  it('starts a voice, envelope and all, on the whole frame nearest its time', () => {
+    // Between two frames the browser would read the recording by linear
+    // interpolation, dulling its treble; on one it plays as recorded.
+    const { audio, destination } = setup();
+    const plain: SampleSelection = { buffer: {} as AudioBuffer, playbackRate: 1, gain: 1 };
+    const early = startSampleVoice(audio, destination, plain, 2 + 0.3 / 48_000);
+    expect(early.source.start).toHaveBeenCalledWith(2, 0);
+    expect(early.gain.gain.setValueAtTime).toHaveBeenCalledWith(0, 2);
+    expect(early.gain.gain.linearRampToValueAtTime).toHaveBeenCalledWith(1, 2 + ATTACK_S);
+    expect(early.startTime).toBe(2);
+    const late = startSampleVoice(audio, destination, plain, 2 + 0.7 / 48_000);
+    expect(late.source.start).toHaveBeenCalledWith(96_001 / 48_000, 0);
+    expect(late.startTime).toBe(96_001 / 48_000);
+  });
+
   it('damps a bass string more slowly than a treble one', () => {
     expect(releaseTcFor(21)).toBeGreaterThan(releaseTcFor(60));
     expect(releaseTcFor(60)).toBeGreaterThan(releaseTcFor(84));
@@ -299,6 +324,20 @@ describe('shared sample voice', () => {
       expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 1, RESTRIKE_TC);
       // ...and the one that does is held for the longer value.
       expect(params[1]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 3, RELEASE_TC);
+    });
+
+    it('strikes a note two voices share once between two frames, too', () => {
+      // Both copies round up to the next frame, and meet there: the first is
+      // still the one that gives way, not a second sound on one string.
+      const { audio, destination, params, sources } = setup();
+      const voices = new VoiceManager(audio, destination);
+      const when = 1 + 0.7 / 48_000;
+      voices.scheduleNote(plain, 67, 'playback', when, 2);
+      voices.scheduleNote(plain, 67, 'playback', when, 0.5);
+      const frame = 48_001 / 48_000;
+      expect(sources[0]!.start).toHaveBeenCalledWith(frame, 0);
+      expect(sources[1]!.start).toHaveBeenCalledWith(frame, 0);
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, frame, RESTRIKE_TC);
     });
 
     it('leaves a held key its own until playback strikes it again', () => {
@@ -427,6 +466,24 @@ describe('shared sample voice', () => {
         notes.map(() => plain),
       )(Number.POSITIVE_INFINITY);
       expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, 0.16, RESTRIKE_TC);
+    });
+
+    it('damps a string from the frame its new strike starts on in an export, as live', () => {
+      const { audio, destination, params, sources } = setup();
+      const notes = [
+        { midi: 64, velocity: 0.7, startMs: 0, durationMs: 1000 },
+        // Seven tenths of a frame past half a second.
+        { midi: 64, velocity: 0.7, startMs: 500 + 0.7 / 48, durationMs: 100 },
+      ];
+      scheduleTakeVoices(
+        audio,
+        destination,
+        notes,
+        notes.map(() => plain),
+      )(Number.POSITIVE_INFINITY);
+      const frame = 24_001 / 48_000;
+      expect(sources[1]!.start).toHaveBeenCalledWith(frame, 0);
+      expect(params[0]!.setTargetAtTime).toHaveBeenLastCalledWith(0, frame, RESTRIKE_TC);
     });
 
     it('makes the same voices for an export a stretch at a time as all at once', () => {

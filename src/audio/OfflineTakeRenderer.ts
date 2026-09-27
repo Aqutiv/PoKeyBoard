@@ -19,6 +19,7 @@ import { createPianoGraph } from './PianoGraphFactory';
 import { REVERB_ROOM_PRESETS } from './reverbImpulse';
 import {
   dampSampleVoice,
+  nearestFrameTime,
   releaseSampleVoice,
   startSampleVoice,
   stillSoundingAt,
@@ -97,16 +98,19 @@ export function scheduleTakeVoices(
       if (when >= untilS) return;
       const sample = samples[next];
       if (!sample) continue;
+      // The frame the voice will start on, as live, so the sound it cuts short
+      // fades from that very frame.
+      const at = nearestFrameTime(context, when);
       let keyUp = when + note.durationMs / 1000;
       const previous = sounding.get(note.midi);
       // Still sounding when the key comes down again, held, dying away under its
       // damper, or never damped up where there are none: that sound gives way to
       // this one.
-      if (previous && stillSoundingAt(previous.voice, when)) {
-        dampSampleVoice(previous.voice, when);
+      if (previous && stillSoundingAt(previous.voice, at)) {
+        dampSampleVoice(previous.voice, at);
         keyUp = Math.max(keyUp, previous.keyUp);
       }
-      const voice = startSampleVoice(context, destination, sample, when);
+      const voice = startSampleVoice(context, destination, sample, at);
       releaseSampleVoice(voice, keyUp);
       sounding.set(note.midi, { voice, keyUp });
     }

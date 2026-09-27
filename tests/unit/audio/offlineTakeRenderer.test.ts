@@ -22,6 +22,7 @@ vi.mock('@/audio/AudioEngine', () => ({
 }));
 vi.mock('@/audio/sampleVoice', () => ({
   UNDAMPED_FROM_MIDI: 91,
+  nearestFrameTime: (_context: BaseAudioContext, when: number) => when,
   startSampleVoice: vi.fn(() => ({})),
   releaseSampleVoice: vi.fn(),
   dampSampleVoice: vi.fn(),

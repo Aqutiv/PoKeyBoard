@@ -97,9 +97,25 @@ function toneFilter(context: BaseAudioContext, cutoffHz: number): BiquadFilterNo
 }
 
 /**
+ * `when` moved to the nearest whole frame of `context`'s clock.
+ *
+ * A buffer source started between two frames reads its buffer from between two
+ * samples, and the browser gets those by linear interpolation: a lowpass, and
+ * a different one for every note. In Chromium, half a frame late costs 2 dB at
+ * 10 kHz and 12 dB at 20 kHz, and a quarter of a frame 1.4 and 5.2. Started on
+ * a frame, a recording played at its own pitch comes out sample for sample as
+ * it was recorded. Half a frame is 10 µs at 48 kHz, far below anything a
+ * player could hear or feel.
+ */
+export function nearestFrameTime(context: BaseAudioContext, when: number): number {
+  return Math.round(when * context.sampleRate) / context.sampleRate;
+}
+
+/**
  * The same source, loop coordinates, tone and envelope for live and offline
  * audio. A voice with a cutoff runs source → tone filter → envelope; any other
- * has no filter at all, and costs what it always did.
+ * has no filter at all, and costs what it always did. It starts on the whole
+ * frame nearest `when` (`nearestFrameTime`), and its `startTime` says which.
  */
 export function startSampleVoice(
   context: BaseAudioContext,
@@ -107,6 +123,7 @@ export function startSampleVoice(
   sample: SampleSelection,
   when: number,
 ): SampleVoice {
+  const start = nearestFrameTime(context, when);
   const source = context.createBufferSource();
   source.buffer = sample.buffer;
   source.playbackRate.value = sample.playbackRate;
@@ -119,8 +136,8 @@ export function startSampleVoice(
   }
   const gain = context.createGain();
   const level = heldLevel(sample);
-  const attackEnd = when + (sample.envelope?.attack ?? ATTACK_S);
-  gain.gain.setValueAtTime(0, when);
+  const attackEnd = start + (sample.envelope?.attack ?? ATTACK_S);
+  gain.gain.setValueAtTime(0, start);
   gain.gain.linearRampToValueAtTime(level, attackEnd);
   if (sample.envelope) {
     const decayStart = attackEnd + sample.envelope.hold;
@@ -137,12 +154,12 @@ export function startSampleVoice(
     source.connect(gain);
   }
   gain.connect(destination);
-  source.start(when, sample.offset ?? 0);
+  source.start(start, sample.offset ?? 0);
   const voice: SampleVoice = {
     source,
     gain,
     sample,
-    startTime: when,
+    startTime: start,
     ...(filter ? { filter } : {}),
   };
   if (sample.envelope) {
