@@ -132,39 +132,4 @@ describe('the layout', () => {
       [78, 0],
     ]);
   });
-
-  it('gives a double flat two column slots in a chord', () => {
-    // B𝄫4 over G♭4, two steps apart: the flat cannot use either of the
-    // double flat's slots, so it stands in the third. The old five-step rule
-    // put it in the second, under the double flat's own ink.
-    const flats: NoteEvent[] = [
-      {
-        id: 'b',
-        midi: 69,
-        startMs: 0,
-        durationMs: 1000,
-        velocity: 0.6,
-        spelling: { step: 'B', alter: -2 },
-      },
-      {
-        id: 'g',
-        midi: 66,
-        startMs: 0,
-        durationMs: 1000,
-        velocity: 0.6,
-        spelling: { step: 'G', alter: -1 },
-      },
-    ];
-    const score = layoutScore(flats, {
-      bpm: 60,
-      timeSignature: { numerator: 4, denominator: 4 },
-      quantization: '1/16',
-      minMeasures: 1,
-    });
-    const live = score.chords.flatMap((chord) => chord.notes);
-    expect(live.map((n) => [n.midi, n.accidental, n.accidentalColumn])).toEqual([
-      [66, 'b', 2],
-      [69, 'bb', 0],
-    ]);
-  });
 });

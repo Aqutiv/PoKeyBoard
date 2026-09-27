@@ -277,6 +277,38 @@ describe('layoutScore', () => {
       );
       expect(layout.chords[0]!.notes.map((n) => n.accidentalColumn)).toEqual([3, 2, 1, 0]);
     });
+
+    it('moves a sharp five steps under another out a column, as the font’s sharps need six', () => {
+      // A♯4 under F♯5. Their glyphs' boxes, not one step count, decide.
+      const layout = layoutScore(
+        [
+          note({ id: 'f', midi: 78, startMs: 0, spelling: { step: 'F', alter: 1 } }),
+          note({ id: 'a', midi: 70, startMs: 0, spelling: { step: 'A', alter: 1 } }),
+        ],
+        OPTS,
+      );
+      expect(layout.chords[0]!.notes.map((n) => [n.midi, n.accidentalColumn])).toEqual([
+        [70, 1],
+        [78, 0],
+      ]);
+    });
+
+    it('gives a double flat two column slots', () => {
+      // G♭4 two steps under B𝄫4 can use neither of the double flat's slots.
+      const layout = layoutScore(
+        [
+          note({ id: 'b', midi: 69, startMs: 0, spelling: { step: 'B', alter: -2 } }),
+          note({ id: 'g', midi: 66, startMs: 0, spelling: { step: 'G', alter: -1 } }),
+        ],
+        OPTS,
+      );
+      expect(
+        layout.chords[0]!.notes.map((n) => [n.midi, n.accidental, n.accidentalColumn]),
+      ).toEqual([
+        [66, 'b', 2],
+        [69, 'bb', 0],
+      ]);
+    });
   });
 
   it('numbers voices from the source when it has them, else by pitch', () => {
