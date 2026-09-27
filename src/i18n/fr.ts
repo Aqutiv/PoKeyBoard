@@ -654,12 +654,38 @@ export const fr: Messages = {
       'Ajoutez PoKeyBoard à votre écran d’accueil ou à votre bureau : elle s’ouvre en plein écran, démarre sans connexion et laisse le navigateur de côté. Installez-la avant d’enregistrer quoi que ce soit d’important, car l’application installée peut utiliser un stockage distinct de celui de l’onglet.',
     credits: 'Crédits',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
-    attribution:
-      'Pianos : Salamander Grand Piano v3 par Alexander Holm (CC-BY 3.0) et Headroom Piano par Bengt Nilsson (CC-BY 4.0), tous deux adaptés pour le web. Encodage MP3 par l’encodeur LAME compilé en WebAssembly. Les mentions complètes accompagnent le code source dans THIRD_PARTY_NOTICES.md.',
-    bitklavierAttribution:
-      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image : un Steinway D enregistré à l’université de Princeton par Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers et Daniel Trueman. Adapté pour le web : trois de ses seize couches de vélocité, raccourcies par un fondu de sortie, rehaussées en niveau et réencodées en FLAC 16 bits.',
-    wurlitzerAttribution:
-      'Échantillons Wurlitzer EP203W par Greg Sullivan ; mapping SFZ par kinwie. Adaptés pour le web avec boucles de sustain, accordage et une étendue de 88 touches.',
+    pianosTitle: 'Pianos',
+    pianoCredits: {
+      salamander: {
+        credit: 'Salamander Grand Piano v3 par Alexander Holm.',
+        adapted:
+          'Adapté pour le web : 3 de ses 16 couches de vélocité, raccourcies à 7–12 secondes par un fondu de sortie et réduites de 24 à 16 bits.',
+      },
+      headroom: {
+        credit: 'Headroom Piano par Bengt Nilsson ; mapping SFZ par kinwie.',
+        adapted:
+          'Adapté pour le web : 3 de ses 5 couches de vélocité, micros rapprochés uniquement, raccourcies à 7–12 secondes par un fondu de sortie.',
+      },
+      bitklavier: {
+        credit:
+          'bitKlavier Grand Sample Library—Lip Cardioid Mic Image : un Steinway D enregistré à l’université de Princeton par Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers et Daniel Trueman.',
+        adapted:
+          'Adapté pour le web : 3 de ses 16 couches de vélocité, raccourcies à 7–12 secondes par un fondu de sortie, rehaussées en niveau et réduites de 24 à 16 bits.',
+      },
+      wurlitzer: {
+        credit: 'Échantillons Wurlitzer EP203W par Greg Sullivan ; mapping SFZ par kinwie.',
+        adapted:
+          'Adapté pour le web : les enregistrements sont inchangés et leur mapping s’étend aux 88 touches.',
+      },
+    },
+    source: 'Source',
+    softwareTitle: 'Logiciels',
+    software: {
+      lame: 'encodage MP3, compilé en WebAssembly',
+      pdfLib: 'export des partitions en PDF',
+      fraunces: 'police de titres par Undercase Type',
+    },
+    notices: 'Les mentions de licence complètes accompagnent le code source :',
     version: ({ version }) => `Version ${version}.`,
   },
   errors: {

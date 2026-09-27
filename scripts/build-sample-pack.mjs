@@ -317,11 +317,13 @@ async function convert(job) {
     '2',
     '-sample_fmt',
     's16',
-    // swresample dithers nothing by default. Needed on every pack, not just the
-    // 24-bit source: the fade runs in float, so the last 1.5s of every file is a
-    // requantization, and undithered that is truncation distortion in the tail.
-    // High-passed TPDF keeps the noise out of the way; noise-shaped modes would
-    // stack audible hiss across three layers sounding at once.
+    // swresample dithers nothing by default, and dithers only where the chain
+    // leaves 16 bits: a 24-bit source, or a gain in float. A 16-bit source
+    // (Headroom) stays 16-bit throughout, so there this does nothing — the audio
+    // ahead of the fade stays bit-identical to the source, and afade requantizes
+    // the fade itself undithered. High-passed TPDF keeps the noise out of the
+    // way; noise-shaped modes would stack audible hiss across three layers
+    // sounding at once.
     '-dither_method',
     'triangular_hp',
     '-c:a',

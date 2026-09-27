@@ -647,10 +647,22 @@ export interface Messages {
     installBody: string;
     credits: string;
     creditLine: string;
-    attribution: string;
-    /** Followed by links to the dataset's DOI and to the licence. */
-    bitklavierAttribution: string;
-    wurlitzerAttribution: string;
+    pianosTitle: string;
+    /**
+     * Each piano's credit, then how its recordings were adapted. The piano's
+     * name comes before them, and links to its source and licence after.
+     */
+    pianoCredits: Record<
+      'salamander' | 'headroom' | 'bitklavier' | 'wurlitzer',
+      { credit: string; adapted: string }
+    >;
+    /** Link text for where a piano's original recordings are published. */
+    source: string;
+    softwareTitle: string;
+    /** What each one does in the app; its name comes before, its licence after. */
+    software: { lame: string; pdfLib: string; fraunces: string };
+    /** Followed by a link to THIRD_PARTY_NOTICES.md. */
+    notices: string;
     version: (p: { version: string }) => string;
   };
   errors: Record<ErrorMessageKey, string>;

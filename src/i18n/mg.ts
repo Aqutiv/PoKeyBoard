@@ -660,12 +660,39 @@ export const mg: Messages = {
       'Ampio ao amin’ny efijery fandraisana na ny biraonao ny PoKeyBoard: misokatra manerana ny efijery izy, miroso na tsy misy fifandraisana aza, ary tsy tsindrian’ny navigatera intsony. Apetraho alohan’ny handraketanao zavatra tianao hotehirizina, satria mety hampiasa fitehirizana hafa noho ny onglet ny rindrambaiko voapetraka.',
     credits: 'Fisaorana',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
-    attribution:
-      'Piano: Salamander Grand Piano v3 nataon’i Alexander Holm (CC-BY 3.0) sy Headroom Piano nataon’i Bengt Nilsson (CC-BY 4.0), samy nampifanaraka ho an’ny web. Fanovana MP3 amin’ny encoder LAME natao WebAssembly. Ny fanamarihana feno dia miaraka amin’ny loharano ao amin’ny THIRD_PARTY_NOTICES.md.',
-    bitklavierAttribution:
-      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: Steinway D noraketina tao amin’ny Oniversiten’i Princeton nataon’i Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers ary Daniel Trueman. Nampifanaraka ho an’ny web: sosona hafainganam-pandeha telo amin’ireo enina ambin’ny folo, nohafohezina tamin’ny fihenan’ny feo, nampiakarina ny haavon’ny feony ary navadika ho FLAC 16-bit.',
-    wurlitzerAttribution:
-      'Santionan’ny Wurlitzer EP203W nataon’i Greg Sullivan; fandrindrana SFZ nataon’i kinwie. Nampifanaraka ho an’ny web miaraka amin’ny tadivavarana sustain, fanitsiana feo ary fitendry 88.',
+    pianosTitle: 'Piano',
+    pianoCredits: {
+      salamander: {
+        credit: 'Salamander Grand Piano v3 nataon’i Alexander Holm.',
+        adapted:
+          'Nampifanaraka ho an’ny web: sosona hafainganam-pandeha 3 amin’ireo 16, nohafohezina ho 7–12 segondra tamin’ny fihenan’ny feo, ary nahena ho 16-bit avy amin’ny 24-bit.',
+      },
+      headroom: {
+        credit: 'Headroom Piano nataon’i Bengt Nilsson; fandrindrana SFZ nataon’i kinwie.',
+        adapted:
+          'Nampifanaraka ho an’ny web: sosona hafainganam-pandeha 3 amin’ireo 5, ny mikrô akaiky ihany, nohafohezina ho 7–12 segondra tamin’ny fihenan’ny feo.',
+      },
+      bitklavier: {
+        credit:
+          'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: Steinway D noraketina tao amin’ny Oniversiten’i Princeton nataon’i Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers ary Daniel Trueman.',
+        adapted:
+          'Nampifanaraka ho an’ny web: sosona hafainganam-pandeha 3 amin’ireo 16, nohafohezina ho 7–12 segondra tamin’ny fihenan’ny feo, nampiakarina ny haavon’ny feony, ary nahena ho 16-bit avy amin’ny 24-bit.',
+      },
+      wurlitzer: {
+        credit:
+          'Santionan’ny Wurlitzer EP203W nataon’i Greg Sullivan; fandrindrana SFZ nataon’i kinwie.',
+        adapted:
+          'Nampifanaraka ho an’ny web: tsy novaina ny firaketana, fa nohitarina ho amin’ny fitendry 88 rehetra ny fandrindrana.',
+      },
+    },
+    source: 'Loharano',
+    softwareTitle: 'Rindrambaiko',
+    software: {
+      lame: 'fanovana MP3, natao WebAssembly',
+      pdfLib: 'famoahana partition ho PDF',
+      fraunces: 'endri-tsoratra lohateny nataon’i Undercase Type',
+    },
+    notices: 'Ny fanamarihana feno momba ny fahazoan-dalana dia miaraka amin’ny loharano:',
     version: ({ version }) => `Kinova ${version}.`,
   },
   errors: {

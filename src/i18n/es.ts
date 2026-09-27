@@ -652,12 +652,38 @@ export const es: Messages = {
       'Añade PoKeyBoard a tu pantalla de inicio o escritorio: se abre a pantalla completa, arranca sin conexión y deja al navegador a un lado. Instálala antes de grabar algo que quieras conservar, porque la app instalada puede usar un almacenamiento distinto al de la pestaña.',
     credits: 'Créditos',
     creditLine: 'Product Manager / Vibe Coder: Idan Robbins',
-    attribution:
-      'Pianos: Salamander Grand Piano v3 de Alexander Holm (CC-BY 3.0) y Headroom Piano de Bengt Nilsson (CC-BY 4.0), ambos adaptados para la web. Codificación MP3 con el codificador LAME compilado a WebAssembly. Los avisos completos se incluyen con el código fuente en THIRD_PARTY_NOTICES.md.',
-    bitklavierAttribution:
-      'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: un Steinway D grabado en la Universidad de Princeton por Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers y Daniel Trueman. Adaptado para la web: tres de sus dieciséis capas de velocidad, acortadas con un fundido de salida, con el nivel subido y recodificadas en FLAC de 16 bits.',
-    wurlitzerAttribution:
-      'Muestras del Wurlitzer EP203W de Greg Sullivan; mapeo SFZ de kinwie. Adaptadas para la web con bucles de sostenido, afinación y un rango ampliado de 88 teclas.',
+    pianosTitle: 'Pianos',
+    pianoCredits: {
+      salamander: {
+        credit: 'Salamander Grand Piano v3 de Alexander Holm.',
+        adapted:
+          'Adaptado para la web: 3 de sus 16 capas de velocidad, acortadas a 7–12 segundos con un fundido de salida y reducidas de 24 a 16 bits.',
+      },
+      headroom: {
+        credit: 'Headroom Piano de Bengt Nilsson; mapeo SFZ de kinwie.',
+        adapted:
+          'Adaptado para la web: 3 de sus 5 capas de velocidad, solo con los micrófonos cercanos, acortadas a 7–12 segundos con un fundido de salida.',
+      },
+      bitklavier: {
+        credit:
+          'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: un Steinway D grabado en la Universidad de Princeton por Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers y Daniel Trueman.',
+        adapted:
+          'Adaptado para la web: 3 de sus 16 capas de velocidad, acortadas a 7–12 segundos con un fundido de salida, con el nivel subido y reducidas de 24 a 16 bits.',
+      },
+      wurlitzer: {
+        credit: 'Muestras del Wurlitzer EP203W de Greg Sullivan; mapeo SFZ de kinwie.',
+        adapted:
+          'Adaptado para la web: las grabaciones no se modifican y su mapeo se amplía a las 88 teclas.',
+      },
+    },
+    source: 'Fuente',
+    softwareTitle: 'Software',
+    software: {
+      lame: 'codificación MP3, compilado a WebAssembly',
+      pdfLib: 'exportación de partituras en PDF',
+      fraunces: 'tipografía de títulos de Undercase Type',
+    },
+    notices: 'Los avisos de licencia completos se incluyen con el código fuente:',
     version: ({ version }) => `Versión ${version}.`,
   },
   errors: {
