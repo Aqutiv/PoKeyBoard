@@ -50,7 +50,7 @@ src/
                 (pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
     settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
                 reset), PianoSection (piano choice with its own offline pack,
-                levels)
+                levels, room, tone)
     play/       PlayPage, SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
@@ -159,7 +159,11 @@ match would take the note's own fundamental, so no ramp starts below 2.5 times
 it, and the top keys keep a smaller correction. A stand-in from a brighter layer
 plays at its ramp's bottom, and one from a darker layer open. The cutoff is
 scaled by the playback rate, so a note pitched from its root keeps the root's
-tone.
+tone. Settings → Piano → Tone follows touch, on by default, switches the ramps
+off: `getSample` with `tone: false` leaves out the cutoff and its make-up
+together, and every recording plays open, as all of them did before exporter
+version 9. The engine takes the setting from the next note it plays, and an
+export from its own options, which its hash carries too.
 
 The selected piano is authoritative everywhere, including export: `setTake`
 stamps the take's `samplePackVersion` from the active instrument, so live
@@ -221,7 +225,7 @@ read and therefore device-local rather than part of the settings backup.
 
 Dexie v1: `takes` (denormalized summary columns + full JSON — lists never parse takes), `audioCache` (MP3 blobs in a separate table so lists never load audio), `settings`, `metadata`. Schema versions are the migration mechanism. The persistence service debounces autosaves (800 ms), forces saves on recording stop / page hide / before export, restores the last take + playhead, and requests persistent storage after the first meaningful save.
 
-Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/reverb mix and room/pack + bitrate + metronome + loudness + exporter version); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
+Export caching: `takeHash` hashes only audible content (notes/pedals/tempo/reverb mix and room/pack + bitrate + metronome + loudness + exporter version, and Tone follows touch when it is off, so an export with the tone on keeps the key it always had); the take store bumps a `contentRevision` only for audible edits, and the autosave layer invalidates the cached MP3 exactly when that moves — renames, playhead changes and the volume slider never rerender audio.
 
 ## Theming
 
