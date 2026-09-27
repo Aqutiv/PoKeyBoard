@@ -11,14 +11,16 @@ import {
   type PedalSpan,
   type ScoreLayout,
 } from './notationLayout';
-import {
-  beamSpanFor,
-  extraStemG,
-  BEAM_THICKNESS_G,
-  STEM_LENGTH_G,
-  type BeamPiece,
-} from './beamGeometry';
+import { accidentalSlots, assignAccidentalColumns } from './accidentalStacking';
+import { beamSpanFor, BEAM_THICKNESS_G, type BeamPiece } from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
+import {
+  dynamicInkG,
+  flaggedStemReachG,
+  noteheadHalfWidth,
+  STEM_THICKNESS_G,
+} from './glyphs/engravingGlyphs';
+import { MUSIC_GLYPH_ANCHORS } from './glyphs/musicGlyphMetrics';
 import { normalizeFifths, type AccidentalKind } from './keySignature';
 import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
 import type { ClefKind, StaffKind } from './staffMapping';
@@ -36,10 +38,19 @@ export type SheetGrid = Exclude<QuantizationSetting, 'off'>;
 export const SHEET_GAP_PT = 5.4;
 const G = SHEET_GAP_PT;
 
-/** Notehead horizontal radius. */
+/**
+ * Room kept around a notehead's centre for what attaches beside it — a tie's
+ * end, an octave line's reach — a little wider than the head itself.
+ */
 export const HEAD_RX_G = 0.64;
-/** Stem x offset from the head center (inset from the head edge). */
-export const STEM_X_G = HEAD_RX_G - 0.1;
+/**
+ * Stem centre-line x offset from the head centre: the stem's outer edge on the
+ * notehead's stem anchor, which is the head's own edge, and half a stem inside.
+ */
+export const STEM_X_G =
+  MUSIC_GLYPH_ANCHORS.noteheadBlack.stemUpSE[0] -
+  noteheadHalfWidth('quarter') -
+  STEM_THICKNESS_G / 2;
 /** Extra lead reserved before a column that carries an accidental. */
 export const ACCIDENTAL_LEAD_G = 1.7;
 /** Each further accidental column stacked left of the first. */
@@ -438,15 +449,32 @@ function advanceG(deltaMs: number, wholeMs: number): number {
   return clamp(10 * Math.pow(Math.max(deltaMs, 0) / wholeMs, 0.47), MIN_ADV_G, MAX_ADV_G);
 }
 
-/** How many accidental columns the widest chord here needs (0 if none). */
+/**
+ * How many accidental column slots the widest stack here needs (0 if none): a
+ * double flat fills two.
+ */
 function accidentalColumnsIn(column: WorkColumn): number {
   let columns = 0;
   for (const chord of [...column.treble, ...column.bass]) {
     for (const note of chord.notes) {
-      if (note.accidental !== null) columns = Math.max(columns, note.accidentalColumn + 1);
+      if (note.accidental === null) continue;
+      columns = Math.max(columns, note.accidentalColumn + accidentalSlots(note.accidental));
     }
   }
   return columns;
+}
+
+/**
+ * Stack each staff's accidentals again by the printed glyphs' own boxes. The
+ * layout stacked them by one step count for every pair, which the live score
+ * still draws by; the sheet's glyphs are taller, and a sharp over a sharp or
+ * a flat under one needs more room than that count gives. The sheet's notes
+ * are its own copies, so the live score's columns are left as they were.
+ */
+function restackAccidentals(column: WorkColumn): void {
+  for (const chords of [column.treble, column.bass]) {
+    assignAccidentalColumns(chords.flatMap((chord) => chord.notes));
+  }
 }
 
 function toSheetChord(chord: ChordGroup): SheetChord {
@@ -527,6 +555,7 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
       else column.bassRest = entry;
     }
     const columns = [...byTime.values()].sort((a, b) => a.timeMs - b.timeMs);
+    for (const column of columns) restackAccidentals(column);
     if (columns.length === 0) {
       return {
         index: measure.index,
@@ -691,7 +720,9 @@ export const PEDAL_HOOK_G = 0.75;
 export const DYNAMICS_ROW_PT = 12;
 /** Half-height of a hairpin's open end. */
 export const HAIRPIN_MOUTH_G = 0.55;
-/** Clear space kept between a hairpin and the mark at either end of it. */
+/** Clear space kept between a hairpin and the ink of the mark at either end of it. */
+const HAIRPIN_GAP_G = 0.5;
+/** How far a hairpin's end stands off from its note where no mark is written there. */
 const HAIRPIN_CLEARANCE_G = 1.2;
 
 /**
@@ -815,9 +846,12 @@ function buildDynamics(
   const toMs = last.endMs;
 
   const dynamics: SheetDynamic[] = [];
+  /** The marks this system writes, by when they fall. */
+  const markAt = new Map<number, DynamicMark>();
   for (const mark of marks) {
     if (mark.atMs < fromMs || mark.atMs >= toMs) continue;
     dynamics.push({ xPt: xAtTime(anchors, mark.atMs), mark: mark.mark });
+    markAt.set(mark.atMs, mark.mark);
   }
 
   const wedges: SheetHairpin[] = [];
@@ -825,10 +859,21 @@ function buildDynamics(
     if (hairpin.toMs <= fromMs || hairpin.fromMs >= toMs) continue;
     const continuesLeft = hairpin.fromMs < fromMs;
     const continuesRight = hairpin.toMs > toMs;
-    // Where an end carries a mark of its own, start clear of it; where the
+    // Where an end carries a mark of its own, keep clear of the mark's ink,
+    // which reaches further from its note for an ff than for a p; where the
     // wedge runs off the system there is nothing to avoid.
-    const lead = continuesLeft ? 0 : HAIRPIN_CLEARANCE_G * G;
-    const trail = continuesRight ? 0 : HAIRPIN_CLEARANCE_G * G;
+    const startMark = markAt.get(hairpin.fromMs);
+    const endMark = markAt.get(hairpin.toMs);
+    const lead = continuesLeft
+      ? 0
+      : startMark
+        ? (dynamicInkG(startMark).right + HAIRPIN_GAP_G) * G
+        : HAIRPIN_CLEARANCE_G * G;
+    const trail = continuesRight
+      ? 0
+      : endMark
+        ? (dynamicInkG(endMark).left + HAIRPIN_GAP_G) * G
+        : HAIRPIN_CLEARANCE_G * G;
     const x1Pt = xAtTime(anchors, Math.max(hairpin.fromMs, fromMs)) + lead;
     const x2Pt = xAtTime(anchors, Math.min(hairpin.toMs, toMs)) - trail;
     // A wedge with no room left to open in says less than nothing.
@@ -1044,11 +1089,12 @@ function systemExtents(measures: SheetMeasure[]): { abovePt: number; belowPt: nu
         let top = staffYRel(chord.notes[chord.notes.length - 1]!.step) - headPad;
         let bottom = staffYRel(chord.notes[0]!.step) + headPad;
         if (chord.symbol.base !== 'whole' && chord.beamId === null) {
-          // A lone 32nd or 64th stacks more flags than an ordinary stem holds,
-          // so it reaches further and the system has to leave room for it.
-          const stem = (STEM_LENGTH_G + extraStemG(beamCountFor(chord.symbol.base))) * G;
-          if (chord.stemDown) bottom = Math.max(bottom, stemAnchorYRel(chord) + stem);
-          else top = Math.min(top, stemAnchorYRel(chord) - stem);
+          // A lone 32nd or 64th stacks more flags than an ordinary stem holds:
+          // its stem runs longer and its flag's ink past the stem's end, and
+          // the system has to leave room for both.
+          const reach = flaggedStemReachG(beamCountFor(chord.symbol.base), chord.stemDown) * G;
+          if (chord.stemDown) bottom = Math.max(bottom, stemAnchorYRel(chord) + reach);
+          else top = Math.min(top, stemAnchorYRel(chord) - reach);
         }
         if (chord.staff === 'treble') abovePt = Math.max(abovePt, -top);
         else belowPt = Math.max(belowPt, bottom - 4 * G);

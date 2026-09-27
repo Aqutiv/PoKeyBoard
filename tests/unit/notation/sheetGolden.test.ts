@@ -99,8 +99,13 @@ describe('sheet goldens', () => {
     expect(page.titleBlock?.title).toContain('♭');
 
     const svg = await svgOf(page);
-    expect(svg).toContain('>8va</text>');
-    expect(svg).toContain('>12</text>');
+    // The music is drawn in the music font's glyphs, the 8va and the tuplet's
+    // 12 among them; words stay in Times.
+    for (const glyph of ['ottavaAlta', 'tuplet1', 'tuplet2', 'fClefChange', 'dynamicMP', 'brace']) {
+      expect(svg).toContain(`<use href="#${glyph}" `);
+    }
+    expect(svg).not.toContain('>8va</text>');
+    expect(svg).not.toContain('>12</text>');
     // The flat in the title is drawn, not typeset.
     expect(svg).toContain('>Golden Study in B</text>');
     expect(svg).not.toMatch(/>[^<]*[♭♯♮𝄪𝄫][^<]*<\/text>/u);
@@ -131,8 +136,15 @@ describe('sheet goldens', () => {
     const lines = first.trimEnd().split('\n');
     expect(lines[0]).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg" width="595\.28pt"/);
     expect(lines.at(-1)).toBe('</svg>');
-    // One element per line.
-    for (const line of lines.slice(1, -1))
-      expect(line).toMatch(/^<(path|text|rect) .*(\/>|<\/text>)$/);
+    // One element per line: each glyph defined once, then placed by <use>.
+    const body = lines.slice(1, -1);
+    const definitions = body.filter((line) => line.startsWith('<defs>'));
+    for (const line of definitions)
+      expect(line).toMatch(/^<defs><path id="\w+" d="M[^"]+"\/><\/defs>$/);
+    const ids = definitions.map((line) => /id="(\w+)"/.exec(line)![1]);
+    expect(new Set(ids).size).toBe(ids.length);
+    for (const line of body.slice(definitions.length))
+      expect(line).toMatch(/^<(path|text|rect|use) .*(\/>|<\/text>)$/);
+    for (const use of first.matchAll(/<use href="#(\w+)"/g)) expect(ids).toContain(use[1]);
   });
 });

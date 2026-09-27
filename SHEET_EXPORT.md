@@ -28,15 +28,18 @@ getTakeForExport(id)
 - `sheetRenderer.ts` draws a page onto a `DrawSurface` (`drawSurface.ts`, the
   exact canvas subset it calls) in PDF points, y down: the dialog's scaled
   preview canvas, or the vector surface the PDF is written with, so the preview
-  shows what prints. All music glyphs (clefs, brace, accidentals, flags, beams,
-  rests, ties, pedal brackets, hairpins) are hand-drawn Béziers — no music font
-  is required, so output is identical on every device. Fonts are used only for
-  text, always Times, which includes dynamic marks: `p` and `f` are letters,
-  and editions have always set them in bold italic. Rests and accidentals live in `restGlyph.ts` and
-  `accidentalGlyph.ts`, shared with the live score so both views draw the same
-  shapes at their own staff-space scale. A title's own accidentals ("Nocturne
-  in E♭") are drawn with those glyphs too (`sheetText.ts`), since Times has no
-  ♭ to print; a title too long for the page is cut between whole graphemes.
+  shows what prints. Every music symbol — clefs, brace, noteheads, flags,
+  accidentals, rests, dots, time signature and tuplet digits, dynamics, the 8va
+  label, the tempo mark's note — is a glyph of the **Bravura** music font (see
+  _Music font_ below), placed by its SMuFL metrics and anchors, so the page is
+  the same on every device. Staff and bar lines, stems, ledger lines, beams,
+  ties, hairpins, pedal brackets and the octave line are drawn directly, and
+  words and numbers — title, credit, measure and page numbers, "= n" — are set
+  in Times.
+  A title's own accidentals ("Nocturne in E♭") are the same glyphs
+  (`sheetText.ts`), since Times has no ♭ to print; a title too long for the
+  page is cut between whole graphemes. The live score still draws its own
+  shapes (`restGlyph.ts`, `accidentalGlyph.ts`) until it moves to the font too.
 - `sheetPdfService.ts` lays out, enforces the page cap and reports progress,
   then dynamically imports `sheetPdfWriter.ts` — the only module that reaches
   **pdf-lib** (MIT), so pdf-lib code-splits out of the dialog and loads on
@@ -47,6 +50,11 @@ getTakeForExport(id)
   - paths are **vectors**: arcs and ellipses become quarter-turn cubics,
     quadratics exact cubics, coordinates are rounded to 0.01 pt, and stroke
     widths follow the transform (a transform that would skew the pen throws);
+  - each **music glyph is written once per file**, as a Form XObject holding
+    its outline, and placed on a page with `q <cm> /Gn Do Q` wherever it is
+    drawn, in the colour current there — a sharp's outline is about 2.4 KB of
+    operators, a use about 45 bytes (`fillGlyph` on the surface; the preview's
+    canvas, which has none, gets the same outline as a path);
   - text is set in the **standard Times fonts, which are not embedded** — a
     viewer substitutes its own Times, and the widths are standard. Strings are
     measured unkerned, which is what the PDF's `Tj` advances, after folding the
@@ -58,7 +66,48 @@ getTakeForExport(id)
 
   The writer yields between pages so progress and Cancel keep working. The
   goldens in `tests/unit/notation/__goldens__/` are page 1 of three sheets
-  written through the same vector surface as SVG (`svgSurface.ts`, test-only).
+  written through the same vector surface as SVG (`svgSurface.ts`, test-only),
+  each glyph a `<defs>` path placed by `<use>`.
+
+## Music font
+
+The printed sheet's symbols are Bravura 1.482, Steinberg's SMuFL font, under
+the SIL Open Font License 1.1 with the Reserved Font Name "Bravura".
+
+- `scripts/extract-music-glyphs.mjs` (run by hand; `--pin` re-pins) reads the
+  60 glyphs the sheet draws out of the font and writes two generated modules
+  with neutral names: `glyphs/musicGlyphMetrics.ts` (advances, bounding boxes,
+  the stem, flag and optical-centre anchors, the engraving defaults, in staff
+  spaces) and `glyphs/musicGlyphOutlines.ts` (each outline as integer deltas in
+  font units, 250 to the staff space), apart so layout code can read the
+  metrics without loading the outlines. Its sources — the font, its metadata,
+  its licence, SMuFL's glyph names — are pinned by URL, size and SHA-256 in
+  `scripts/lib/music-glyphs.pins.json` and staged in the ignored
+  `music-font-staging/`; opentype.js reads the font and is a devDependency
+  only. It checks the font is CFF at 1000 units to the em, every coordinate an
+  integer, no quadratics, and each control box within 0.02 spaces of the
+  metadata's box.
+- The subset is a Modified Version under the OFL, so nothing in it is named
+  Bravura. Both modules open with a `/*!` legal comment carrying the copyright
+  line, that statement and the whole licence; the build keeps legal comments,
+  so it ships in the chunk that carries the glyphs, and the licence is also
+  served verbatim at `licenses/music-glyphs-OFL.txt`. The font file itself is
+  never shipped. The glyphs reach the app only through the lazily loaded sheet
+  chunks.
+- `glyphs/drawGlyph.ts` places a glyph by its SMuFL origin at a staff space of
+  its own and fills it once (nonzero), in the caller's colour;
+  `glyphs/engravingGlyphs.ts` says which glyph draws what and does the
+  arithmetic: widths, centres, the advance of a run of digits, and how long an
+  unbeamed stem has to be to meet its flag.
+- Placement follows the font: noteheads centred on their column, a second
+  displaced by a head less a stem; stems 0.12 spaces wide from the far head's
+  stem anchor, their centre 0.53 spaces from the head's (`STEM_X_G`); a lone
+  32nd's or 64th's stem lengthened as its flag's anchor asks; ledger lines the
+  font's thickness, reaching 0.4 spaces past the head except where they would
+  run into an accidental; accidentals right-aligned a quarter space before the
+  chord; time signatures and tuplet numerals as digit runs centred by their
+  advances; dynamics by their optical centre, with a hairpin stopping half a
+  space clear of a mark's ink.
 
 ## UI
 
@@ -79,9 +128,10 @@ takes seconds and never touches the audio engine.
   options phase also disables Generate when the estimate exceeds the cap.
 - Memory: vector, one page of operators at a time. A page's operators are
   compressed into its content stream as soon as it is drawn, so a long score
-  never holds more than one page of them; a page averages 14–20 KB in the file
-  (Moonlight: 13 pages, 179 KB; the denser Chopin Nocturne in E♭: 8 pages,
-  156 KB), against about 200 KB for the raster pages this replaced.
+  never holds more than one page of them; a page averages 4–8 KB in the file
+  (Moonlight: 13 pages, 56 KB; the denser Chopin Nocturne in E♭: 8 pages,
+  59 KB), since each glyph is written once per file and placed by reference,
+  against about 200 KB for the raster pages this replaced.
 - Share must run in the click handler (user activation), same as audio.
 
 ## Rests, keys, ties, pedal
@@ -91,9 +141,11 @@ takes seconds and never touches the audio engine.
   them — a dotted 64th included, which is what 384 rather than 192 buys — is a
   whole number of units and "may a value of this length start here" stays exact
   integer arithmetic. A 32nd carries three beams or flags and a 64th four
-  (`beamCountFor`, read by both layouts and both renderers), and their stems
+  (`beamCountFor`, read by both layouts and both renderers). Beamed, their stems
   lengthen by the depth the extra beams take up (`extraStemG`) so the innermost
-  never arrives at the notehead.
+  never arrives at the notehead; a lone one on paper carries a single flag
+  glyph, and its stem runs as far as the flag's anchor asks (3.88 spaces up for
+  a 32nd, 4.67 for a 64th).
 - **Rests** are derived, never stored: a staff is occupied for as long as its
   notes are _written_, and the silence left over is filled with rests, split at
   beat boundaries and never across the middle of an even bar. A wholly silent
@@ -130,8 +182,13 @@ takes seconds and never touches the audio engine.
 - An accidental holds for the rest of its bar at the line it stands on and the
   bar line forgets it, so repeats are unmarked and a return to the key takes a
   natural.
-  Accidentals that would foul each other — closer than five steps, about the
-  height of the glyph — stack into columns left of the chord, topmost nearest.
+  Accidentals that would foul each other stack into columns left of the chord,
+  topmost nearest. The live score shares a column at five steps apart, about
+  the height of its own glyphs; the printed sheet re-stacks by the font's glyph
+  boxes (`accidentalStacking.ts`), sharing one only where the lower sign's top
+  and the upper one's bottom fit between their lines — six steps for two
+  sharps, seven for a flat under a sharp, five for two flats — and gives a
+  double flat, wider than a column, two.
 - **Ties** cut a note at every bar line it crosses, and again wherever no
   single value covers the remainder, so a note longer than a whole note is
   written rather than clamped and a ring-out past the bar line is engraved
@@ -166,7 +223,10 @@ takes seconds and never touches the audio engine.
   onsets, holds its band until the level clearly leaves it, and will not speak
   twice inside two bars. A steady climb or fall across a phrase becomes a
   hairpin with the marks kept at each end; a swell too long to taper visibly
-  (more than six bars) stays as marks, which is what an edition writes.
+  (more than six bars) stays as marks, which is what an edition writes. On
+  paper a mark is the font's glyph for the whole of it, centred under its note
+  by its optical centre, and a hairpin stops half a space clear of the ink of
+  the mark at either end.
 
 ## Known limitations
 

@@ -1,10 +1,12 @@
-import type { DrawSurface } from '@/features/notation/drawSurface';
+import type { DrawSurface, GlyphMatrix } from '@/features/notation/drawSurface';
+import type { GlyphOutline } from '@/features/notation/glyphs/glyphOutline';
 
 /**
  * The drawing core behind the vector sheet PDF, and behind the SVG the sheet
  * goldens are written in: a `DrawSurface` that keeps its state and its path
  * exactly the way a canvas does, and hands each paint — a filled or stroked
- * path, a run of text, a text image — to a writer that turns it into operators.
+ * path, a music glyph, a run of text, a text image — to a writer that turns it
+ * into operators.
  *
  * Everything here is canvas page space: points, y down, transformed by the
  * current matrix as each call arrives. A writer that needs another space (a
@@ -21,8 +23,12 @@ import type { DrawSurface } from '@/features/notation/drawSurface';
  *   M, L, C and Z.
  * - Stroke widths and dashes are scaled by the transform at paint time. That is
  *   only exact for a transform that keeps angles (a rotation and one uniform
- *   scale, as the small clef change uses), so stroking under any other throws
- *   rather than drawing a pen the canvas would not have.
+ *   scale), so stroking under any other throws rather than drawing a pen the
+ *   canvas would not have.
+ * - A music glyph arrives whole (`fillGlyph`), with the matrix that puts its
+ *   outline on the page, so a writer can store each glyph once and place it
+ *   by reference every time it recurs — a key signature's sharps, a page of
+ *   noteheads.
  * - Text is set in the four standard Times faces, measured unkerned — what a
  *   PDF `Tj` advances — and normalized first (`normalizePdfText`). A string
  *   the face cannot encode even then becomes an image instead, drawn as written
@@ -109,10 +115,20 @@ export interface ImagePaint {
   color: RgbColor;
 }
 
+export interface GlyphPaint {
+  /** The glyph's name: the same glyph always arrives under the same name. */
+  name: string;
+  outline: GlyphOutline;
+  /** Maps the outline — font units, y up — onto the page (y down). */
+  matrix: Matrix;
+  color: RgbColor;
+}
+
 /** Where a `VectorSurface` sends what it paints. */
 export interface PaintSink {
   fillPath(path: readonly PathCommand[], color: RgbColor): void;
   strokePath(path: readonly PathCommand[], stroke: StrokePaint): void;
+  fillGlyph(glyph: GlyphPaint): void;
   fillText(text: TextPaint): void;
   fillImage(image: ImagePaint): void;
 }
@@ -649,6 +665,17 @@ export class VectorSurface implements DrawSurface {
       ],
       this.state.fillColor,
     );
+  }
+
+  fillGlyph(name: string, outline: GlyphOutline, matrix: GlyphMatrix): void {
+    assertFinite(...matrix);
+    // Like fillRect, a paint of its own: the path being built is left alone.
+    this.sink.fillGlyph({
+      name,
+      outline,
+      matrix: multiply(this.state.ctm, matrix),
+      color: this.state.fillColor,
+    });
   }
 
   // ------------------------------------------------------------- text --

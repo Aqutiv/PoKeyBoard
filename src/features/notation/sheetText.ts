@@ -1,14 +1,16 @@
-import { drawAccidentalGlyph } from './accidentalGlyph';
 import type { DrawSurface } from './drawSurface';
+import { drawGlyph } from './glyphs/drawGlyph';
+import { ACCIDENTAL_GLYPHS } from './glyphs/engravingGlyphs';
+import { MUSIC_GLYPH_METRICS } from './glyphs/musicGlyphMetrics';
 import type { AccidentalKind } from './keySignature';
 
 /**
  * Text on the printed sheet that can carry accidentals — a title such as
- * "Nocturne in E♭ major". The signs are drawn with the sheet's own accidental
- * glyphs rather than taken from a font: Times has no ♭ to set in a PDF, and a
- * browser falls back to whatever font it finds, so the preview and the page
- * would disagree. Drawn this way both show the same sign, sized from the text
- * around it.
+ * "Nocturne in E♭ major". The signs are the music font's accidental glyphs,
+ * the ones the staves carry, rather than characters from a text font: Times
+ * has no ♭ to set in a PDF, and a browser falls back to whatever font it finds,
+ * so the preview and the page would disagree. Drawn this way both show the
+ * same sign, sized from the text around it.
  */
 
 export type RichRun =
@@ -47,29 +49,28 @@ export function splitRich(text: string): RichRun[] {
 }
 
 /**
- * Where each sign's ink reaches around the point `drawAccidentalGlyph` centres
- * it on, in staff spaces (y down): the extents of the shapes it draws today,
- * strokes included.
+ * Where a sign's ink reaches from its glyph's origin, in staff spaces, y up:
+ * the glyph's bounding box.
  */
-const INK: Record<AccidentalKind, { left: number; right: number; bottom: number }> = {
-  '#': { left: -0.6, right: 0.6, bottom: 1.15 },
-  b: { left: -0.3555, right: 0.3103, bottom: 0.6 },
-  natural: { left: -0.301, right: 0.301, bottom: 1.5 },
-  x: { left: -0.52, right: 0.52, bottom: 0.52 },
-  bb: { left: -0.6255, right: 0.5803, bottom: 0.6 },
-};
+function inkOf(kind: AccidentalKind): { left: number; right: number; bottom: number } {
+  const [left, bottom, right] = MUSIC_GLYPH_METRICS[ACCIDENTAL_GLYPHS[kind]].bbox;
+  return { left, right, bottom };
+}
 
 /** Clear space either side of a sign, as a fraction of the font size. */
 const SIDE_BEARING_EM = 0.08;
 
-/** A sign's staff space: a quarter of the font size, so it stands about as tall as a capital. */
+/**
+ * A sign's staff space: a quarter of the font size — the em of a music font is
+ * four staff spaces — so it stands about as tall as a capital.
+ */
 function gapFor(fontPx: number): number {
   return fontPx / 4;
 }
 
 /** How far a sign advances the text, bearings included. */
 export function accidentalRunWidth(kind: AccidentalKind, fontPx: number): number {
-  const ink = INK[kind];
+  const ink = inkOf(kind);
   return 2 * SIDE_BEARING_EM * fontPx + (ink.right - ink.left) * gapFor(fontPx);
 }
 
@@ -115,17 +116,15 @@ export function fillRich(
       cursor += ctx.measureText(run.text).width;
       continue;
     }
-    const ink = INK[run.accidental];
-    // The glyph helpers set their own line widths; keep them off the caller.
-    ctx.save();
-    drawAccidentalGlyph(
+    // The sign's ink starts after its bearing and stands on the baseline.
+    const ink = inkOf(run.accidental);
+    drawGlyph(
       ctx,
-      run.accidental,
+      ACCIDENTAL_GLYPHS[run.accidental],
       cursor + SIDE_BEARING_EM * fontPx - ink.left * gap,
-      y - ink.bottom * gap,
+      y + ink.bottom * gap,
       gap,
     );
-    ctx.restore();
     cursor += accidentalRunWidth(run.accidental, fontPx);
   }
   ctx.textAlign = align;

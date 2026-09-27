@@ -1,5 +1,11 @@
 import type { DrawSurface } from '@/features/notation/drawSurface';
 import {
+  GLYPH_CURVE,
+  GLYPH_LINE,
+  GLYPH_MOVE,
+  type GlyphOutline,
+} from '@/features/notation/glyphs/glyphOutline';
+import {
   COORD_DECIMALS,
   colorToHex,
   formatNumber,
@@ -8,6 +14,7 @@ import {
   VectorSurface,
   type FontFaceKey,
   type FontProvider,
+  type GlyphPaint,
   type ImagePaint,
   type Matrix,
   type PaintSink,
@@ -26,10 +33,13 @@ import {
  * It sees exactly what the PDF writer sees, and writes it the same way: paths
  * already flattened to M, L, C and Z in page space and rounded to 0.01, strokes
  * with the widths and dashes the transform left them, text at the x its
- * alignment put it, set in Times. A string that would be an image in the PDF is
- * a `<rect data-raster-text>` of the image's box. One element per line, and
- * nothing that varies from run to run, so a golden changes only when the page
- * does.
+ * alignment put it, set in Times. A music glyph is defined once, in font units,
+ * as a `<defs>` path named after it, and each drawing of it is a `<use>` with
+ * the matrix that places it — as the PDF writes a glyph once and places it by
+ * reference — so a test can read where every glyph went. A string that would
+ * be an image in the PDF is a `<rect data-raster-text>` of the image's box.
+ * One element per line, and nothing that varies from run to run, so a golden
+ * changes only when the page does.
  */
 
 const WEIGHT: Record<FontFaceKey, string> = {
@@ -73,9 +83,23 @@ function matrixAttribute(m: Matrix): string {
 
 class SvgWriter implements PaintSink {
   readonly lines: string[] = [];
+  /** One `<defs>` line per glyph, in the order they were first drawn. */
+  readonly definitions = new Map<string, string>();
 
   fillPath(path: readonly PathCommand[], color: RgbColor): void {
     this.lines.push(`<path d="${pathData(path)}" fill="${colorToHex(color)}"/>`);
+  }
+
+  fillGlyph(paint: GlyphPaint): void {
+    if (!this.definitions.has(paint.name)) {
+      this.definitions.set(
+        paint.name,
+        `<defs><path id="${paint.name}" d="${glyphPathData(paint.outline)}"/></defs>`,
+      );
+    }
+    this.lines.push(
+      `<use href="#${paint.name}" transform="${matrixAttribute(paint.matrix)}" fill="${colorToHex(paint.color)}"/>`,
+    );
   }
 
   strokePath(path: readonly PathCommand[], stroke: StrokePaint): void {
@@ -135,6 +159,25 @@ function pathData(path: readonly PathCommand[]): string {
     .join(' ');
 }
 
+/** A glyph's outline as path data, in its own font units (y up): a `<use>` places it. */
+function glyphPathData(outline: GlyphOutline): string {
+  const { ops, xy } = outline;
+  const parts: string[] = [];
+  let p = 0;
+  for (const op of ops) {
+    if (op === GLYPH_MOVE || op === GLYPH_LINE) {
+      parts.push(`${op === GLYPH_MOVE ? 'M' : 'L'}${xy[p]} ${xy[p + 1]}`);
+      p += 2;
+    } else if (op === GLYPH_CURVE) {
+      parts.push(`C${Array.from(xy.subarray(p, p + 6)).join(' ')}`);
+      p += 6;
+    } else {
+      parts.push('Z');
+    }
+  }
+  return parts.join(' ');
+}
+
 export interface SvgPageOptions {
   /** Page size in points. */
   width: number;
@@ -166,6 +209,7 @@ export function beginSvgPage(options: SvgPageOptions): SvgPageSurface {
       [
         // A canvas and a PDF both miter up to ten line widths; SVG defaults to four.
         `<svg xmlns="http://www.w3.org/2000/svg" width="${width}pt" height="${height}pt" viewBox="0 0 ${width} ${height}" stroke-miterlimit="10">`,
+        ...writer.definitions.values(),
         ...writer.lines,
         '</svg>',
         '',

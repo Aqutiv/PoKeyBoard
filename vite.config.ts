@@ -103,6 +103,14 @@ export default defineConfig({
       devOptions: { enabled: false },
     }),
   ],
+  build: {
+    rolldownOptions: {
+      // Keep legal comments (`/*!`, `@license`), which minification would
+      // otherwise strip: the music glyphs ship under their font's licence,
+      // and the notice has to travel in the chunk that carries them.
+      output: { comments: { legal: true } },
+    },
+  },
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),

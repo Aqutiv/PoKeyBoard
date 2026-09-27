@@ -13,6 +13,9 @@ blob-report/
 # Sample-pack staging (downloaded FLACs before conversion)
 samples-staging/
 
+# Music-font staging (the pinned Bravura sources the glyph modules are extracted from)
+music-font-staging/
+
 # Logs
 logs/
 *.log

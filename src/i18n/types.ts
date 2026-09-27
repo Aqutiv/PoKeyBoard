@@ -660,7 +660,7 @@ export interface Messages {
     source: string;
     softwareTitle: string;
     /** What each one does in the app; its name comes before, its licence after. */
-    software: { lame: string; pdfLib: string; fraunces: string };
+    software: { lame: string; pdfLib: string; fraunces: string; musicFont: string };
     /** Followed by a link to THIRD_PARTY_NOTICES.md. */
     notices: string;
     version: (p: { version: string }) => string;

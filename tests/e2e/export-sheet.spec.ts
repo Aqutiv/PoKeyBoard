@@ -15,10 +15,11 @@ import { gotoAppReady, nav, recordShortTake } from './helpers';
 /**
  * The most a page of the vector sheet may take on average: 1.5× the densest
  * measured, rounded up to a multiple of 10 KB. That is Chopin's Nocturne in E♭
- * at 19,560 bytes a page; Moonlight, exported here, takes 13,781. The raster
- * pages this replaced were about 200 KB each.
+ * at 7,349 bytes a page; Moonlight, exported here, takes 4,302. Each music
+ * glyph is written once per file and placed by reference, which took those
+ * down from 19,560 and 13,781; the raster pages before that were about 200 KB.
  */
-const PAGE_BUDGET_BYTES = 30 * 1024;
+const PAGE_BUDGET_BYTES = 20 * 1024;
 
 /** The one chunk the sheet export imports dynamically; pdf-lib lives in it. */
 const WRITER_CHUNK = /\/assets\/sheetPdfWriter-[\w-]+\.js$/;
@@ -30,6 +31,8 @@ interface PdfInspection {
   bytesPerPage: number;
   imageCount: number;
   softMaskedImages: number;
+  /** Form XObjects: the music glyphs, each written once and placed by `Do`. */
+  formCount: number;
   baseFonts: Set<string>;
   pageOneContent: string;
 }
@@ -45,6 +48,7 @@ async function inspectPdf(file: Uint8Array): Promise<PdfInspection> {
   const doc = await PDFDocument.load(file);
   let imageCount = 0;
   let softMaskedImages = 0;
+  let formCount = 0;
   const baseFonts = new Set<string>();
   for (const [, object] of doc.context.enumerateIndirectObjects()) {
     const dict =
@@ -54,6 +58,7 @@ async function inspectPdf(file: Uint8Array): Promise<PdfInspection> {
       imageCount += 1;
       if (dict.get(PDFName.of('SMask'))) softMaskedImages += 1;
     }
+    if (dict.get(PDFName.of('Subtype')) === PDFName.of('Form')) formCount += 1;
     const baseFont = dict.get(PDFName.of('BaseFont'));
     if (baseFont) baseFonts.add(baseFont.toString());
   }
@@ -74,6 +79,7 @@ async function inspectPdf(file: Uint8Array): Promise<PdfInspection> {
     bytesPerPage: Math.round(file.length / pageCount),
     imageCount,
     softMaskedImages,
+    formCount,
     baseFonts,
     pageOneContent,
   };
@@ -83,16 +89,19 @@ async function inspectPdf(file: Uint8Array): Promise<PdfInspection> {
 function expectVectorSheet(pdf: PdfInspection): void {
   test.info().annotations.push({
     type: 'sheet PDF size',
-    description: `${pdf.bytes} bytes, ${pdf.pageCount} pages, ${pdf.bytesPerPage} bytes a page`,
+    description: `${pdf.bytes} bytes, ${pdf.pageCount} pages, ${pdf.bytesPerPage} bytes a page, ${pdf.formCount} glyph forms`,
   });
   expect(pdf.imageCount).toBe(0);
   expect(pdf.baseFonts).toContain('/Times-Roman');
   expect(pdf.baseFonts).toContain('/Times-Bold');
-  // Text set in a font, curves, and filled paths.
+  // Text set in a font, lines, and filled paths (beams, the page itself).
   expect(pdf.pageOneContent).toMatch(/ Tf$/m);
   expect(pdf.pageOneContent).toMatch(/ Tj$/m);
-  expect(pdf.pageOneContent).toMatch(/ c$/m);
+  expect(pdf.pageOneContent).toMatch(/ l$/m);
   expect(pdf.pageOneContent).toMatch(/^f$/m);
+  // The music is the font's glyphs: each written once as a form, placed by Do.
+  expect(pdf.formCount).toBeGreaterThan(0);
+  expect(pdf.pageOneContent).toMatch(/^\/G\d+ Do$/m);
   expect(pdf.bytesPerPage).toBeLessThanOrEqual(PAGE_BUDGET_BYTES);
 }
 
@@ -164,6 +173,45 @@ test.describe('Sheet music export', () => {
     await expect(dialog.getByText(/PDF ready/)).toBeVisible({ timeout: 30_000 });
     expect(requested.filter((path) => WRITER_CHUNK.test(path))).toHaveLength(1);
     await expect.poll(() => pdfLibChunks).toEqual([expect.stringMatching(WRITER_CHUNK)]);
+  });
+
+  test('ships the music glyphs with their font licence, and only once the dialog opens', async ({
+    page,
+  }) => {
+    // Every script whose code carries the glyph outlines, by its own content.
+    const glyphChunks: { url: string; body: string }[] = [];
+    page.on('response', async (response) => {
+      const url = new URL(response.url()).pathname;
+      if (!url.endsWith('.js')) return;
+      const body = await response.text().catch(() => '');
+      if (body.includes('accidentalDoubleFlat')) glyphChunks.push({ url, body });
+    });
+
+    await gotoAppReady(page);
+    await recordShortTake(page);
+    // Nothing the app starts with carries them.
+    expect(glyphChunks).toEqual([]);
+
+    const dialog = await openSheetDialog(page);
+    await expect(dialog.locator('.sheet-preview__canvas')).toBeVisible();
+    await expect.poll(() => glyphChunks.length).toBeGreaterThan(0);
+    for (const chunk of glyphChunks) {
+      // The legal comment survives minification, in the chunk the glyphs are in.
+      expect(chunk.body, chunk.url).toContain('SIL OPEN FONT LICENSE Version 1.1');
+      expect(chunk.body, chunk.url).toContain('with Reserved Font Name "Bravura".');
+      expect(chunk.body, chunk.url).toContain(
+        'This subset is a Modified Version of the font and is not named Bravura.',
+      );
+    }
+  });
+
+  test('serves the music font licence', async ({ page }) => {
+    const response = await page.request.get('licenses/music-glyphs-OFL.txt');
+    expect(response.status()).toBe(200);
+    const text = await response.text();
+    expect(text).toContain('Steinberg Media Technologies GmbH');
+    expect(text).toContain('with Reserved Font Name "Bravura".');
+    expect(text).toContain('SIL OPEN FONT LICENSE Version 1.1');
   });
 
   test('sets a title Times cannot encode as a soft-masked image', async ({ page }) => {
