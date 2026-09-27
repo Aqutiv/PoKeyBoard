@@ -14,6 +14,7 @@ export default tseslint.config(
       'test-results',
       'blob-report',
       'samples-staging',
+      'music-font-staging',
       'node_modules',
       '.claude/**',
     ],

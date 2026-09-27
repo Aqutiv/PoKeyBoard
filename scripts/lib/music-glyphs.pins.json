@@ -1,0 +1,26 @@
+{
+  "font": "Bravura bravura-1.482 (https://github.com/steinbergmedia/bravura, 37b194378b710cc40e406ab6c4b07608bb9548ae)",
+  "glyphNames": "SMuFL glyphnames.json (https://github.com/w3c-cg/smufl, 753f551ca6f96bf24ba38aa2d8a317e706238c51)",
+  "files": {
+    "Bravura.otf": {
+      "url": "https://raw.githubusercontent.com/steinbergmedia/bravura/37b194378b710cc40e406ab6c4b07608bb9548ae/redist/otf/Bravura.otf",
+      "bytes": 889228,
+      "sha256": "cdf0f893ee1fdb64b7f6713d71ee0dcfc349c0ac01429a8e451b01a9e79f5f3b"
+    },
+    "Bravura.json": {
+      "url": "https://raw.githubusercontent.com/steinbergmedia/bravura/37b194378b710cc40e406ab6c4b07608bb9548ae/redist/Bravura.json",
+      "bytes": 1256995,
+      "sha256": "489fb4d734fc0b72a3cc601b50ebdf0bf8c57802ab9893e52ce030b86bf2ce11"
+    },
+    "LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/steinbergmedia/bravura/37b194378b710cc40e406ab6c4b07608bb9548ae/LICENSE.txt",
+      "bytes": 4420,
+      "sha256": "bdca252186865f3b2c0e76da4a4e335c14ba1d37f80194fca254ddfa88e84fbf"
+    },
+    "glyphnames.json": {
+      "url": "https://raw.githubusercontent.com/w3c-cg/smufl/753f551ca6f96bf24ba38aa2d8a317e706238c51/metadata/glyphnames.json",
+      "bytes": 301683,
+      "sha256": "1d05352599a20983d1c901635dc75d76f063c0987a7bee65f145325fc3e0d29f"
+    }
+  }
+}
