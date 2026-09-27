@@ -1258,6 +1258,23 @@ describe('drawScore rests', () => {
     expect(lines[0]).toBeLessThan((quarterRest as Ink).left);
   });
 
+  it('draws a rest moved into view whose onset has scrolled out of it', () => {
+    // Zoomed out, a lone eighth's flag pushes the rests after it on by more
+    // time than the view looks back: their onsets have gone past the left
+    // edge, and where they are drawn has not.
+    const pxPerMs = 0.02;
+    const drawn = render(written([[0, 0.5, 64]]), {}, 'treble', null, {
+      widthPx: 800,
+      pxPerMs,
+      scrollMs: 1500,
+    });
+    for (const name of ['rest8th', 'restQuarter'] as const) {
+      const [restInk] = inks(drawn, name);
+      expect(restInk).toBeDefined();
+      expect(restInk?.left).toBeGreaterThan(drawn.view.gutterPx);
+    }
+  });
+
   it('draws the rhythm lesson’s rest on its beat, as it always stood', () => {
     // The densest line a lesson draws: 20 px to the beat.
     const pxPerMs = 20 / 1000;

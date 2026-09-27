@@ -1502,11 +1502,16 @@ function drawRests(
   layout: ScoreLayout,
   palette: ScorePalette,
 ): void {
-  const fromMs = view.scrollMs - 400;
-  const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + 400;
+  const { shifts, widest } = restPlacementFor(layout, view.pxPerMs);
+  // Look as far past the view either way as a rest can still show from: its
+  // onset back in the lead-in, its ink as wide as any, and as far again as
+  // the placement moved it. Zoomed out, that is more time than it once was.
+  const reachPx = SCORE_LEAD_IN + widestReachPx(layout) + widest;
+  const marginMs = Math.max(400, reachPx / view.pxPerMs);
+  const fromMs = view.scrollMs - marginMs;
+  const toMs = view.scrollMs + (view.widthPx - view.gutterPx) / view.pxPerMs + marginMs;
   ctx.fillStyle = palette.rest;
   const { rests } = layout;
-  const { shifts } = restPlacementFor(layout, view.pxPerMs);
   for (let i = firstAtOrAfter(rests, fromMs, (rest) => rest.displayStartMs); ; i += 1) {
     const rest = rests[i];
     if (!rest || rest.displayStartMs > toMs) break; // sorted by display start
