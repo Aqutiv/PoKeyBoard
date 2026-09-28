@@ -214,6 +214,26 @@ waits for the pianissimo recordings its own soft notes ask for
 (`loadRecordingsFor`), and a render that still had to use a stand-in is
 handed over but not kept in the MP3 cache.
 
+Those background loads give way to every load someone is waiting for
+(`sampleTraffic.ts`): a piano's core from its manifest on (the next piano's,
+during a switch), the keys a range needs, an export's recordings (which it
+fetches as the core does, four at a time at full priority) and a download for
+offline use. The engine's banks share one `SampleTraffic`, because a switch
+decodes one piano while the other plays on and fetches its own. The background
+takes a turn for each file it starts. No turn is given while any of those
+loads is under way, and never more than two are out at once across the
+pianos. With a foreground load's four, that makes the six connections a
+browser opens to a host over HTTP/1.1. Each background file is asked for at
+`priority: 'low'` (the Fetch Priority API, a hint where the browser takes it).
+Without the turns, two background loads (the piano's own and a range's) could
+take all six connections between them, and a switch or a download would queue
+behind recordings nobody was waiting for.
+
+A file already started is left to finish, because an export may be waiting on
+the very file a background load is fetching. So the background waits between
+files, never with one in hand. A release ends its bank's hold as well, so a
+load called off never keeps the background waiting.
+
 The timbre then follows the touch too, rather than stepping where the layers
 meet: a harder blow brings the upper partials out, and on their own the
 recordings jump in brightness at every switch, by 200 to 900 cents of spectral
