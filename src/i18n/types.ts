@@ -572,6 +572,9 @@ export interface Messages {
     midiCalibrateLoudest: (p: { softest: number }) => string;
     midiCalibrateRejected: string;
     noteLabels: string;
+    /** The switch that shades lit keys by velocity, and what it does. */
+    velocityShading: string;
+    velocityShadingHint: string;
     followPlayback: string;
     scrubAudition: string;
     backgroundPlayback: string;

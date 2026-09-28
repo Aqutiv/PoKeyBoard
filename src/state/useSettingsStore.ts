@@ -50,6 +50,11 @@ export interface SettingsState {
   /** The MIDI keyboard's calibrated softest and loudest, or null to read it as sent. */
   midiVelocityRange: MidiVelocityRange | null;
   showNoteLabels: boolean;
+  /**
+   * Lit keys are shaded by how hard their note is played, live and in
+   * playback, rather than all alike; see keyShading.ts.
+   */
+  velocityShading: boolean;
   /** Slide the Play keyboard to where playback is playing. */
   keyboardFollowsPlayback: boolean;
   scrubAudition: boolean;
@@ -91,6 +96,7 @@ export interface SettingsState {
   setMidiVelocityCurve(curve: MidiVelocityCurve): void;
   setMidiVelocityRange(range: MidiVelocityRange | null): void;
   setShowNoteLabels(show: boolean): void;
+  setVelocityShading(enabled: boolean): void;
   setKeyboardFollowsPlayback(follow: boolean): void;
   setScrubAudition(enabled: boolean): void;
   setBackgroundPlayback(enabled: boolean): void;
@@ -124,6 +130,7 @@ export const SETTINGS_DEFAULTS = {
   midiVelocityCurve: 'normal' as MidiVelocityCurve,
   midiVelocityRange: null as MidiVelocityRange | null,
   showNoteLabels: true,
+  velocityShading: true,
   keyboardFollowsPlayback: true,
   scrubAudition: true,
   backgroundPlayback: false,
@@ -168,6 +175,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setMidiVelocityCurve: (midiVelocityCurve) => set({ midiVelocityCurve }),
   setMidiVelocityRange: (midiVelocityRange) => set({ midiVelocityRange }),
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
+  setVelocityShading: (velocityShading) => set({ velocityShading }),
   setKeyboardFollowsPlayback: (keyboardFollowsPlayback) => set({ keyboardFollowsPlayback }),
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),

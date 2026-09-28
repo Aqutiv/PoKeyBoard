@@ -6,12 +6,13 @@ import {
   useMemo,
   useRef,
   useState,
+  type CSSProperties,
   type ReactNode,
 } from 'react';
 import { subscribeFrame } from '@/app/frameClock';
-import { useLiveActiveNotes, useSustainDown } from '@/app/hooks/useAudioEngine';
+import { useLiveKeyVelocities, useSustainDown } from '@/app/hooks/useAudioEngine';
 import { audioEngine } from '@/audio/AudioEngine';
-import type { Hand } from '@/domain/hands';
+import type { KeyCue } from '@/domain/hands';
 import type { PedalEvent } from '@/domain/takeTypes';
 import { contributeRange } from '@/audio/playableRange';
 import { scrubController } from '@/features/notation/scrubController';
@@ -50,6 +51,7 @@ import {
   touchVelocity,
   type KeyboardLayout,
 } from './keyboardGeometry';
+import { keyShade } from './keyShading';
 import { KeyboardPointerTracker } from './pointerTracker';
 import { SoundingNotes } from './soundingNotes';
 import { registerMidiKeyboard } from './useMidiInput';
@@ -60,7 +62,17 @@ function cuesMove(state: TransportState): boolean {
   return state === 'playing' || state === 'recording' || state === 'scrubbing';
 }
 
-const NO_HANDS: ReadonlyMap<number, Hand> = new Map();
+const NO_KEYS: ReadonlyMap<number, KeyCue> = new Map();
+
+/**
+ * How deep a key is lit, as a share of its hand's full colour (keyShading.ts),
+ * for keyboard.css to mix. Two properties, one per channel: the take's is
+ * written straight onto the key by the frame loop and the player's is
+ * rendered, and React, which rewrites only the style properties it rendered,
+ * would otherwise take the take's away whenever the player let a key go.
+ */
+const TAKE_SHADE = '--take-shade';
+type KeyStyle = CSSProperties & { '--live-shade'?: string };
 
 /** Set or clear a boolean data attribute, touching the DOM only on a change. */
 function setFlag(element: HTMLElement, name: string, on: boolean): void {
@@ -84,8 +96,9 @@ interface PianoKeyboardProps {
   /**
    * Light the keys the take plays under the moving playhead — playback, an
    * overdub's backing, a scrub — each in the shade of the hand that plays it,
-   * and the pedal cue with them. Drawn on the frame clock straight onto the
-   * keys, so a fast run lights every note without rendering React at all.
+   * as deep as it is played, and the pedal cue with them. Drawn on the frame
+   * clock straight onto the keys, so a fast run lights every note without
+   * rendering React at all.
    */
   playbackCues?: boolean;
   /**
@@ -153,7 +166,8 @@ export function PianoKeyboard({
   const keysRef = useRef<HTMLDivElement | null>(null);
   const [containerWidth, setContainerWidth] = useState(0);
 
-  const liveActive = useLiveActiveNotes();
+  const liveVelocities = useLiveKeyVelocities();
+  const velocityShading = useSettingsStore((s) => s.velocityShading);
   const velocityMode = useSettingsStore((s) => s.velocityMode);
   const fixedVelocity = useSettingsStore((s) => s.fixedVelocity);
   const touchSensitivity = useSettingsStore((s) => s.touchSensitivity);
@@ -305,6 +319,7 @@ export function PianoKeyboard({
     followPlayback,
     setAnchorMidi,
     liveCount: 0,
+    velocityShading,
   });
   useEffect(() => {
     frameInputs.current = {
@@ -312,7 +327,8 @@ export function PianoKeyboard({
       visibleWhites,
       followPlayback,
       setAnchorMidi,
-      liveCount: liveActive.size,
+      liveCount: liveVelocities.size,
+      velocityShading,
     };
   });
 
@@ -340,9 +356,18 @@ export function PianoKeyboard({
     };
     let followedAt = Number.NEGATIVE_INFINITY;
 
-    const show = (hands: ReadonlyMap<number, Hand>, pedalDown: boolean) => {
+    const show = (cues: ReadonlyMap<number, KeyCue>, pedalDown: boolean) => {
+      const { velocityShading: followsVelocity } = frameInputs.current;
       for (const [midi, element] of keyElements.current) {
-        const hand = hands.get(midi);
+        const cue = cues.get(midi);
+        // Read back from the key rather than remembered, as the hand is: a key
+        // the layout has just made anew carries neither.
+        const shade = cue ? keyShade(cue.velocity, followsVelocity) : '';
+        if (element.style.getPropertyValue(TAKE_SHADE) !== shade) {
+          if (shade) element.style.setProperty(TAKE_SHADE, shade);
+          else element.style.removeProperty(TAKE_SHADE);
+        }
+        const hand = cue?.hand;
         if (element.dataset.playback === hand) continue;
         if (hand) element.dataset.playback = hand;
         else delete element.dataset.playback;
@@ -351,7 +376,7 @@ export function PianoKeyboard({
       const { lowMidi, highMidi } = frameInputs.current.layout;
       let below = false;
       let above = false;
-      for (const midi of hands.keys()) {
+      for (const midi of cues.keys()) {
         if (midi < lowMidi) below = true;
         else if (midi > highMidi) above = true;
       }
@@ -367,12 +392,12 @@ export function PianoKeyboard({
       const take = useTakeStore.getState().take;
       const ms = transportController.getPlayheadMs();
       if (state === 'scrubbing') {
-        show(scrubController.getActiveHands(), pedalDownAt(take.pedalEvents, ms));
+        show(scrubController.getActiveKeys(), pedalDownAt(take.pedalEvents, ms));
         return;
       }
       sounding.setNotes(take.notes);
-      const hands = sounding.handsAt(ms);
-      show(hands, pedalDownAt(take.pedalEvents, ms));
+      const cues = sounding.keysAt(ms);
+      show(cues, pedalDownAt(take.pedalEvents, ms));
 
       const inputs = frameInputs.current;
       if (
@@ -387,7 +412,7 @@ export function PianoKeyboard({
         return;
       }
       const next = followAnchor(
-        { now: [...hands.keys()], soon: sounding.startingWithin(ms, FOLLOW_LOOKAHEAD_MS) },
+        { now: [...cues.keys()], soon: sounding.startingWithin(ms, FOLLOW_LOOKAHEAD_MS) },
         inputs.layout.lowMidi,
         inputs.visibleWhites,
       );
@@ -404,7 +429,7 @@ export function PianoKeyboard({
       } else if (!moving && stopFrames) {
         stopFrames();
         stopFrames = null;
-        show(NO_HANDS, false);
+        show(NO_KEYS, false);
       }
     };
     sync();
@@ -412,7 +437,7 @@ export function PianoKeyboard({
     return () => {
       unsubscribe();
       stopFrames?.();
-      show(NO_HANDS, false);
+      show(NO_KEYS, false);
     };
   }, [playbackCues, tracker]);
 
@@ -554,9 +579,10 @@ export function PianoKeyboard({
   /**
    * A key the user is holding. Keys the take plays wear `data-playback` instead,
    * set by the frame loop above; where both apply, the user's own wins — a key
-   * they hold shows the plain active colour, whichever hand the take has.
+   * they hold shows the plain active colour, whichever hand the take has, as
+   * deep as they struck it.
    */
-  const isActive = useCallback((midi: number) => liveActive.has(midi), [liveActive]);
+  const isActive = useCallback((midi: number) => liveVelocities.has(midi), [liveVelocities]);
 
   const registerKey = (midi: number) => (element: HTMLDivElement | null) => {
     if (element) keyElements.current.set(midi, element);
@@ -568,6 +594,16 @@ export function PianoKeyboard({
   const isWrong = useCallback((midi: number) => wrongMidis?.has(midi) ?? false, [wrongMidis]);
 
   const whiteWidthPercent = 100 / layout.whiteCount;
+
+  /** A key's place on the bed and, while the player holds it, how deep it is lit. */
+  const keyStyle = (midi: number, x: number, width: number): KeyStyle => {
+    const velocity = liveVelocities.get(midi);
+    return {
+      left: `${x * whiteWidthPercent}%`,
+      width: `${width * whiteWidthPercent}%`,
+      ...(velocity === undefined ? {} : { '--live-shade': keyShade(velocity, velocityShading) }),
+    };
+  };
 
   return (
     <div className="piano">
@@ -648,10 +684,7 @@ export function PianoKeyboard({
                 isTarget(key.midi) ? ' is-target' : ''
               }${isWrong(key.midi) ? ' is-wrong' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
-              style={{
-                left: `${key.x * whiteWidthPercent}%`,
-                width: `${key.width * whiteWidthPercent}%`,
-              }}
+              style={keyStyle(key.midi, key.x, key.width)}
             >
               {showNoteLabels ? (
                 <span className="piano-key__label" aria-hidden="true">
@@ -673,10 +706,7 @@ export function PianoKeyboard({
                 isTarget(key.midi) ? ' is-target' : ''
               }${isWrong(key.midi) ? ' is-wrong' : ''}`}
               data-target={isTarget(key.midi) ? 'true' : undefined}
-              style={{
-                left: `${key.x * whiteWidthPercent}%`,
-                width: `${key.width * whiteWidthPercent}%`,
-              }}
+              style={keyStyle(key.midi, key.x, key.width)}
             />
           ))}
       </div>

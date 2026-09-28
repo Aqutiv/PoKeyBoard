@@ -99,6 +99,15 @@ export class AudioEngine {
   private readonly schedulerTickListeners = new Set<() => void>();
   private schedulerTicker: AudioWorkletNode | null = null;
   private currentActiveNotes: ReadonlySet<number> = new Set();
+  private currentActiveVelocities: ReadonlyMap<number, number> = new Map();
+  /**
+   * Each key's last live strike, by the velocity it played. Written before the
+   * voice is struck, so the lit set that strike emits finds it; never pruned,
+   * because one strike on a lit key emits twice — the old voice let go, then
+   * the new one lit — and the first of those must not take the entry with it.
+   * A key lit by hand is always lit by its latest strike (`VoiceManager.restrike`).
+   */
+  private readonly struckVelocities = new Map<number, number>();
   private currentSustainDown = false;
   private coreLoadStarted = false;
 
@@ -445,6 +454,9 @@ export class AudioEngine {
     this.voices = new VoiceManager(this.context, this.graph.voiceDestination);
     this.voices.subscribeActiveNotes((midis) => {
       this.currentActiveNotes = midis;
+      this.currentActiveVelocities = new Map(
+        [...midis].map((midi) => [midi, this.struckVelocities.get(midi) ?? 1] as const),
+      );
       for (const listener of this.activeNoteListeners) listener(midis);
     });
     this.voices.subscribeSustain((down) => {
@@ -632,6 +644,7 @@ export class AudioEngine {
     }
     const sample = this.bank.getSample(midi, velocity, { tone: this.toneFollowsTouch });
     if (!sample) return false;
+    this.struckVelocities.set(midi, velocity);
     this.voices.noteOn(sample, midi, sourceId);
     this.emitInput({ type: 'on', midi, velocity, audioTime: this.currentTime, sourceId });
     return true;
@@ -819,6 +832,15 @@ export class AudioEngine {
   /** Stable snapshot of live-input notes; reference changes only on events. */
   getActiveNotes(): ReadonlySet<number> {
     return this.currentActiveNotes;
+  }
+
+  /**
+   * The same keys, each with the velocity it was struck at, so the key bed can
+   * show how hard it was played. A stable snapshot, replaced whenever the set
+   * is; `subscribeActiveNotes` announces both.
+   */
+  getActiveVelocities(): ReadonlyMap<number, number> {
+    return this.currentActiveVelocities;
   }
 
   /**

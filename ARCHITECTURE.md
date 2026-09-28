@@ -2,7 +2,7 @@
 
 ## Principles
 
-1. **The audio clock owns time.** `AudioContext.currentTime` is the only timing authority. React never schedules sound; components read clocks on one shared animation-frame loop (`app/frameClock.ts`), which runs only while something on screen is moving — key lights and the pedal cue are drawn straight onto the keys from it, and React renders only when a readout changes.
+1. **The audio clock owns time.** `AudioContext.currentTime` is the only timing authority. React never schedules sound; components read clocks on one shared animation-frame loop (`app/frameClock.ts`), which runs only while something on screen is moving — key lights (each in its hand's shade, as deep as its note is played) and the pedal cue are drawn straight onto the keys from it, and React renders only when a readout changes.
 2. **Services are module singletons outside React.** The audio engine, transport controller, metronome, scrub controller, persistence, and lifecycle services are plain objects; React subscribes via `useSyncExternalStore` with referentially stable subscribe functions and stable snapshots.
 3. **One piano, two contexts.** Live playback and offline export share the same sample bank (decoded `AudioBuffer`s), the same graph factory, and the same envelope constants — so exports sound like the performance.
 4. **Structured events are the source of truth.** A take is JSON note/pedal events (see TAKE_FORMAT.md); audio is always derived, never recorded from a microphone.
@@ -32,7 +32,8 @@ src/
     keyboard/   geometry, velocityResponse (every input's velocity curve),
                 per-pointer tracker, computer keyboard, game controller, Web
                 MIDI (shared access service, input, and the shell-level
-                useMidiInput), PianoKeyboard
+                useMidiInput), soundingNotes and keyShading (what the key
+                lights show, and how deep), PianoKeyboard
     learn/      chapter catalog, pure exercise spec + matcher, useExercise,
                 LearnPage (outline), ChapterRunner, KeyboardDiagram,
                 StaffSnippet, CircleOfFifths, per-locale lesson content
@@ -272,7 +273,7 @@ A voice behaves like the string it stands for, the same way live and offline (`s
 
 ## Scrubbing
 
-`getCrossedNoteOnsets(prev, next, sortedNotes)` is pure and binary-searched with asymmetric boundaries — forward `(prev, next]`, backward `(next, prev)` — so chords travel together and boundary jitter can't double-fire. The scrub controller adds hysteresis (3 ms), a per-move audition cap, clamped preview voices, and a key-flash set; `MusicScore` translates drags into times (playhead visually fixed, score moves) and continues feeding the controller during inertial coasting.
+`getCrossedNoteOnsets(prev, next, sortedNotes)` is pure and binary-searched with asymmetric boundaries — forward `(prev, next]`, backward `(next, prev)` — so chords travel together and boundary jitter can't double-fire. The scrub controller adds hysteresis (3 ms), a per-move audition cap, clamped preview voices, and a key-flash set (each flash lights its key in the note's hand, as deep as the take plays it); `MusicScore` translates drags into times (playhead visually fixed, score moves) and continues feeding the controller during inertial coasting.
 
 `MusicScore`'s render loop runs only while something on the score moves — playback, recording, a scrub or its coast, a fading ghost note — and sleeps otherwise; the transport, the take, the theme, a resize, a key played or a finger on the score wakes it. Each pass of `scoreRenderer` finds its place in the take by binary search (`firstAtOrAfter`; beams through a per-layout index, since they are in bar order but not time order within a bar), so a frame costs the same twenty minutes into a take as at its start. Spacing is time-proportional, stretched per take (`scoreZoom.basePxPerMsFor`, at most 3×) so its closest common onsets stand 16 px apart, then scaled by the take's `display.zoom`.
 
@@ -323,7 +324,7 @@ Export caching (MP3 only; a FLAC export is never cached): `takeHash` hashes only
 
 ## Theming
 
-Two named themes share one token vocabulary in `src/themes.css`: Conservatory (dark) is the default on `:root`, Ivory recital (light) overrides colors under `html[data-theme='light']`; `color-scheme` flips with them so native controls follow. The preference (`dark | light | system`, default dark) is an ordinary setting (store + zod schema + Dexie row). `src/app/theme.ts` resolves preference × `prefers-color-scheme`, stamps `html[data-theme]`, updates the `theme-color` meta, and mirrors the preference to `localStorage['pokeyboard.theme']`; a tiny inline script in `index.html` reads that mirror **before first paint** so a light-theme user never flashes dark while Dexie loads (the controller deliberately applies nothing at init — the first store emit after hydration reconciles mirror vs Dexie truth, Dexie winning). The live score canvas can't read CSS variables at draw time, so `SCORE_PALETTES` in `scoreRenderer.ts` duplicates both palettes (kept in sync by comment convention) and the theme joins `MusicScore`'s redraw signature; sheet/PDF engraving stays print-monochrome and is untouched by theming. Display type is a self-hosted Fraunces 600 latin subset (`@fontsource/fraunces`), precached by the existing `woff2` glob.
+Two named themes share one token vocabulary in `src/themes.css`: Conservatory (dark) is the default on `:root`, Ivory recital (light) overrides colors under `html[data-theme='light']`; `color-scheme` flips with them so native controls follow. The preference (`dark | light | system`, default dark) is an ordinary setting (store + zod schema + Dexie row). `src/app/theme.ts` resolves preference × `prefers-color-scheme`, stamps `html[data-theme]`, updates the `theme-color` meta, and mirrors the preference to `localStorage['pokeyboard.theme']`; a tiny inline script in `index.html` reads that mirror **before first paint** so a light-theme user never flashes dark while Dexie loads (the controller deliberately applies nothing at init — the first store emit after hydration reconciles mirror vs Dexie truth, Dexie winning). The live score canvas can't read CSS variables at draw time, so `SCORE_PALETTES` in `scoreRenderer.ts` duplicates both palettes (kept in sync by comment convention) and the theme joins `MusicScore`'s redraw signature; sheet/PDF engraving stays print-monochrome and is untouched by theming. A lit key's tokens (`--key-*-active-*`, `--key-*-left-*`) are the loudest note's colours; `keyboard.css` mixes each toward the key's own colour in OKLab by how hard the note was played (`--live-shade` and `--take-shade`, from `keyShading.ts`: the velocity that sounds, as `SoundingNotes.keysAt`, the scrub flashes and `AudioEngine.getActiveVelocities` report it), inside `@supports (color-mix)` so a browser without it lights keys at full strength. Display type is a self-hosted Fraunces 600 latin subset (`@fontsource/fraunces`), precached by the existing `woff2` glob.
 
 ## Audio encoding
 

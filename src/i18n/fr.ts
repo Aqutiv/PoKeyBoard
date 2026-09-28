@@ -543,6 +543,9 @@ export const fr: Messages = {
     midiCalibrateRejected:
       'Votre note la plus forte doit être nettement plus forte que la plus douce. Réessayez.',
     noteLabels: 'Étiquettes des notes sur les touches',
+    velocityShading: 'Touches nuancées selon la vélocité',
+    velocityShadingHint:
+      'Les touches allumées montrent la force de chaque note : pâles si elle est douce, profondes si elle est forte, quand vous jouez comme à la lecture. Désactivé, une touche s’allume de la même façon, quelle que soit la force du jeu.',
     followPlayback: 'Le clavier suit la lecture',
     scrubAudition: 'Son lors du défilement de la partition',
     backgroundPlayback: 'Continuer la lecture en arrière-plan',

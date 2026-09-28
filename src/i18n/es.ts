@@ -540,6 +540,9 @@ export const es: Messages = {
     midiCalibrateRejected:
       'Tu nota más fuerte tiene que sonar claramente más fuerte que la más suave. Inténtalo de nuevo.',
     noteLabels: 'Etiquetas de notas en las teclas',
+    velocityShading: 'Sombreado por velocidad en las teclas',
+    velocityShadingHint:
+      'Las teclas iluminadas muestran la fuerza de cada nota: pálidas si es suave e intensas si es fuerte, al tocar y en la reproducción. Desactivado, una tecla se ilumina igual por fuerte que se toque.',
     followPlayback: 'El teclado sigue la reproducción',
     scrubAudition: 'Sonido al desplazar la partitura',
     backgroundPlayback: 'Continuar la reproducción en segundo plano',

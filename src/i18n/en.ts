@@ -542,6 +542,9 @@ export const en: Messages = {
     midiCalibrateRejected:
       'Your loudest note has to be clearly louder than your softest. Try again.',
     noteLabels: 'Note labels on keys',
+    velocityShading: 'Velocity shading on keys',
+    velocityShadingHint:
+      'Lit keys show how hard each note is played, pale when soft and deep when loud, as you play and in playback. Off, a key lights the same however hard it is played.',
     followPlayback: 'Keyboard follows playback',
     scrubAudition: 'Sound while scrubbing the score',
     backgroundPlayback: 'Continue playback in the background',
