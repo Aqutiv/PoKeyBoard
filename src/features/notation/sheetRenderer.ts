@@ -2,6 +2,7 @@ import type { TimeSignature } from '@/domain/takeTypes';
 import {
   ACCIDENTAL_COLUMN_W_G,
   ACCIDENTAL_GAP_G,
+  COURTESY_CLEF_GAP_G,
   DOT_GAP_G,
   HAIRPIN_MOUTH_G,
   KEY_ACCIDENTAL_W_G,
@@ -368,6 +369,11 @@ function drawMeasure(
     const staffTop = staff === 'treble' ? system.trebleTopPt : system.bassTopPt;
     drawClef(ctx, measure.clefs[staff], measure.xPt + CLEF_CHANGE_X_G * G, staffTop, true);
   }
+  // One the next system opens under is announced as this one ends, small too.
+  for (const { staff, clef } of measure.courtesyClefs) {
+    const staffTop = staff === 'treble' ? system.trebleTopPt : system.bassTopPt;
+    drawClef(ctx, clef, courtesyClefAt(clef, endX).x, staffTop, true);
+  }
 
   if (measure.tempoMarkBpm !== null) {
     drawTempoMark(ctx, measure.xPt + 1, system.tempoMarkBaselinePt, measure.tempoMarkBpm);
@@ -390,7 +396,12 @@ function drawMeasure(
   }
 
   if (measure.empty) {
-    const centerX = measure.xPt + measure.widthPt / 2;
+    // Centred between the bar lines, or short of the courtesy clefs it closes on.
+    const clefInk = measure.courtesyClefs.map(({ clef }) => courtesyClefAt(clef, endX).inkLeft);
+    const centerX =
+      clefInk.length > 0
+        ? (measure.xPt + Math.min(...clefInk)) / 2
+        : measure.xPt + measure.widthPt / 2;
     for (const top of [system.trebleTopPt, system.bassTopPt]) {
       drawRestSymbol(ctx, WHOLE_REST, centerX, top, WHOLE_REST_STEP, G);
     }
@@ -638,8 +649,9 @@ function drawBrace(ctx: DrawSurface, x: number, top: number, bottom: number): vo
 
 /**
  * A clef starting at `x`: a G clef on its G line, an F clef on its F line.
- * Full size where a system opens; where one turns over mid-staff, the font's
- * smaller change clef, which sits on the same line.
+ * Full size where a system opens; where one turns over mid-staff, or is
+ * announced as a system ends, the font's smaller change clef, which sits on
+ * the same line.
  */
 function drawClef(
   ctx: DrawSurface,
@@ -650,4 +662,15 @@ function drawClef(
 ): void {
   const line = clef === 'treble' ? staffTop + 3 * G : staffTop + G;
   drawGlyph(ctx, clefGlyphFor(clef, change), x, line, G);
+}
+
+/**
+ * Where a courtesy clef starts before the bar line at `barX`, and where its
+ * ink does: it is the smaller change clef, its ink ending its clear space
+ * short of the line.
+ */
+function courtesyClefAt(clef: ClefKind, barX: number): { x: number; inkLeft: number } {
+  const [left, , right] = MUSIC_GLYPH_METRICS[clefGlyphFor(clef, true)].bbox;
+  const x = barX - (COURTESY_CLEF_GAP_G + right) * G;
+  return { x, inkLeft: x + left * G };
 }

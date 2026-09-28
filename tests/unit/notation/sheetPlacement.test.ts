@@ -109,6 +109,7 @@ function measure(index: number, xPt: number, widthPt: number, parts: Partial<She
     tempoMarkBpm: null,
     clefs: { treble: 'treble', bass: 'bass' },
     clefChanges: [],
+    courtesyClefs: [],
     ...parts,
   };
   return built;
@@ -1274,7 +1275,11 @@ describe('a clef turning over', () => {
     }).pages[0]!;
   }
 
-  const headXs = (drawn: Drawn): number[] => usesOf(drawn, 'noteheadBlack').map((use) => use.x);
+  /** The heads drawn on `system`'s staves, by x. */
+  const headXsIn = (drawn: Drawn, system: SheetSystem): number[] =>
+    usesOf(drawn, 'noteheadBlack')
+      .filter((use) => use.y > system.trebleTopPt - 4 * G && use.y < system.bassTopPt + 8 * G)
+      .map((use) => use.x);
 
   it('shows a system opening on the new clef in its prefix alone, its notes where they always stand', async () => {
     const turned = pageOf(3);
@@ -1283,13 +1288,81 @@ describe('a clef turning over', () => {
     const drawn = await engrave(turned);
     // Bar 4 opens the second system, whose prefix sets the bass staff's G clef...
     expectUse(drawn, 'gClef', second.xPt + 1.1 * G, second.bassTopPt + 3 * G);
-    // ...so nothing is set after its first bar line.
-    expect(usesOf(drawn, 'gClefChange')).toEqual([]);
-    // And every head stands where it does when the left hand never turns over.
-    const plain = headXs(await engrave(pageOf(null)));
-    const heads = headXs(drawn);
+    // ...so nothing is set after its first bar line: the one small clef on the
+    // page is the courtesy that closes the first system.
+    const changes = usesOf(drawn, 'gClefChange');
+    expect(changes).toHaveLength(1);
+    expect(changes[0]!.y).toBeLessThan(second.trebleTopPt);
+    // And every head of the system stands where it does when the left hand
+    // never turns over.
+    const plainPage = pageOf(null);
+    const plain = headXsIn(await engrave(plainPage), plainPage.systems[1]!);
+    const heads = headXsIn(drawn, second);
+    expect(heads).toHaveLength(24);
     expect(heads).toHaveLength(plain.length);
     heads.forEach((x, i) => expectNear(x, plain[i]!));
+  });
+
+  it('warns of it with a small clef before the closing bar line of the system before', async () => {
+    const turned = pageOf(3);
+    const first = turned.systems[0]!;
+    const closing = first.measures.at(-1)!;
+    expect(closing.index).toBe(2);
+    const barX = closing.xPt + closing.widthPt;
+    const drawn = await engrave(turned);
+    const [courtesy] = usesOf(drawn, 'gClefChange');
+    expect(courtesy).toBeDefined();
+    // The G clef the bass staff opens the next system under, set small on its
+    // G line...
+    expectNear(courtesy!.y, first.bassTopPt + 3 * G);
+    expect(courtesy!.a).toBeCloseTo(G / 250, 5);
+    // ...its ink ending half a space before the bar line that closes the system...
+    expect(lineAt(drawn, barX, first.trebleTopPt, barX, first.bassTopPt + 4 * G)).toBeDefined();
+    expectNear(useInk(courtesy!).right, barX - 0.5 * G);
+    // ...and standing clear of the last notes of the bar it ends.
+    const heads = usesOf(drawn, 'noteheadBlack')
+      .filter((use) => use.y < first.bassTopPt + 8 * G)
+      .filter((use) => use.x > closing.xPt && use.x < barX);
+    expect(heads).toHaveLength(8);
+    const lastHead = Math.max(...heads.map((use) => useInk(use).right));
+    expect(useInk(courtesy!).left - lastHead).toBeGreaterThan(2 * G);
+  });
+
+  it('sets a courtesy clef on each staff that turns over, on its own line', async () => {
+    const barX = MUSIC_X + 200;
+    const closing = measure(0, MUSIC_X, 200, {
+      courtesyClefs: [
+        { staff: 'treble', clef: 'bass' },
+        { staff: 'bass', clef: 'treble' },
+      ],
+    });
+    const drawn = await engrave({ ...PAGE, systems: [system([closing])] });
+    const [f] = usesOf(drawn, 'fClefChange');
+    const [g] = usesOf(drawn, 'gClefChange');
+    // The treble staff's F clef on its F line, the bass staff's G clef on its G
+    // line, each ending half a space before the bar line.
+    expectNear(f!.y, TREBLE + G);
+    expectNear(g!.y, BASS + 3 * G);
+    expectNear(useInk(f!).right, barX - 0.5 * G);
+    expectNear(useInk(g!).right, barX - 0.5 * G);
+    expect(usesOf(drawn, 'fClefChange')).toHaveLength(1);
+    expect(usesOf(drawn, 'gClefChange')).toHaveLength(1);
+  });
+
+  it('centres a bar of rest in the room its courtesy clef leaves it', async () => {
+    const closing = measure(0, MUSIC_X, 200, {
+      empty: true,
+      courtesyClefs: [{ staff: 'bass', clef: 'treble' }],
+    });
+    const drawn = await engrave({ ...PAGE, systems: [system([closing])] });
+    const [courtesy] = usesOf(drawn, 'gClefChange');
+    const rests = usesOf(drawn, 'restWhole');
+    expect(rests).toHaveLength(2);
+    // Each staff's rest stands midway between the bar line it follows and the
+    // courtesy clef's ink, not under the clef's room.
+    const between = (MUSIC_X + useInk(courtesy!).left) / 2;
+    const middles = rests.map(useInk).map((ink) => (ink.left + ink.right) / 2);
+    for (const middle of middles) expectNear(middle, between);
   });
 
   it('sets the new clef after a bar line inside a system, the music after it', async () => {
@@ -1299,8 +1372,10 @@ describe('a clef turning over', () => {
     const measure = system.measures[1]!;
     expect(measure.index).toBe(4);
     const drawn = await engrave(turned);
-    const [change] = usesOf(drawn, 'gClefChange');
+    // The one small clef on the page: a turnover inside a system needs no courtesy.
+    const [change, ...others] = usesOf(drawn, 'gClefChange');
     expect(change).toBeDefined();
+    expect(others).toEqual([]);
     expectNear(change!.x, measure.xPt + 0.6 * G);
     expectNear(change!.y, system.bassTopPt + 3 * G);
     // The bar's first head stands clear past the change's ink.

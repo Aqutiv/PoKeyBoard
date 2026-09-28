@@ -16,6 +16,7 @@ import { beamSpanFor, beamYAt, BEAM_THICKNESS_G, type BeamPiece } from './beamGe
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
 import {
   ACCIDENTAL_GLYPHS,
+  clefGlyphFor,
   digitGlyphsFor,
   dynamicInkG,
   flagGlyphFor,
@@ -73,6 +74,20 @@ export const ACCIDENTAL_GAP_G = 0.25;
 export const DOT_GAP_G = 0.4;
 /** Width a mid-staff clef change takes at the head of a measure. */
 export const CLEF_CHANGE_W_G = 3.6;
+/** Clear space a courtesy clef keeps before the bar line it stands against. */
+export const COURTESY_CLEF_GAP_G = 0.5;
+/**
+ * Room a system's last measure keeps before its closing bar line for a
+ * courtesy clef: the widest change clef's ink, and its clear space. The
+ * measure's own tail spaces it off the music, as it would the bar line.
+ */
+export const COURTESY_CLEF_W_G =
+  Math.max(
+    ...(['treble', 'bass'] as const).map((clef) => {
+      const [left, , right] = MUSIC_GLYPH_METRICS[clefGlyphFor(clef, true)].bbox;
+      return right - left;
+    }),
+  ) + COURTESY_CLEF_GAP_G;
 /** Horizontal pitch of the accidentals in a key signature. */
 export const KEY_ACCIDENTAL_W_G = 1.15;
 /** Clear space kept after the last of them, before the time signature or music. */
@@ -269,6 +284,13 @@ export interface SheetMeasure {
    * the system prefix already shows it.
    */
   clefChanges: StaffKind[];
+  /**
+   * The clef each staff turns over to where the next system opens under a new
+   * one: set small before this measure's closing bar line, a courtesy that
+   * warns the reader before the line turns. Only a system's last measure has
+   * any, and never the piece's.
+   */
+  courtesyClefs: { staff: StaffKind; clef: ClefKind }[];
 }
 
 /**
@@ -627,6 +649,15 @@ function unusedClefRoomG(measure: WorkMeasure, position: number): number {
   return position === 0 ? measure.clefRoomG : 0;
 }
 
+/**
+ * Room a measure keeps before its closing bar line where it ends a system and
+ * `next`, opening the one after, turns over: the courtesy clef warning of it
+ * goes there. Both staffs' clefs share one x, so two take no more.
+ */
+function courtesyRoomG(next: WorkMeasure | undefined): number {
+  return next !== undefined && next.clefTurnsOver.length > 0 ? COURTESY_CLEF_W_G : 0;
+}
+
 /** Greedily fill systems, justify, assign x positions, and build beams. */
 function packSystems(
   workMeasures: WorkMeasure[],
@@ -645,10 +676,17 @@ function packSystems(
   const rows: { measures: WorkMeasure[]; stretch: number }[] = [];
   let current: WorkMeasure[] = [];
   let currentWPt = 0;
-  for (const measure of workMeasures) {
+  for (const [i, measure] of workMeasures.entries()) {
     const available = availableFor(rows.length);
-    if (current.length > 0 && currentWPt + measure.naturalWG * G > available) {
-      rows.push({ measures: current, stretch: available / currentWPt });
+    // A measure fits only with room left for the courtesy clef it would end
+    // the system on. Where there is none, the turnover it warns of fits even
+    // less, its own clef change alone being wider, so the system would end
+    // here all the same: the measure goes on to the next one instead.
+    const endingWG = measure.naturalWG + courtesyRoomG(workMeasures[i + 1]);
+    if (current.length > 0 && currentWPt + endingWG * G > available) {
+      // The system ends on the measure before, which warns of this one.
+      const widthPt = currentWPt + courtesyRoomG(measure) * G;
+      rows.push({ measures: current, stretch: available / widthPt });
       current = [];
       currentWPt = 0;
     }
@@ -663,6 +701,8 @@ function packSystems(
   }
 
   return rows.map((row, systemIndex) => {
+    // The measure the next system opens on, whose turnover this one warns of.
+    const next = rows[systemIndex + 1]?.measures[0];
     let x =
       metrics.marginLeftPt +
       metrics.clefAreaPt +
@@ -670,7 +710,8 @@ function packSystems(
       (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
     const measures: SheetMeasure[] = row.measures.map((wm, position) => {
       const unusedG = unusedClefRoomG(wm, position);
-      const widthPt = (wm.naturalWG - unusedG) * row.stretch * G;
+      const warned = position === row.measures.length - 1 ? next : undefined;
+      const widthPt = (wm.naturalWG - unusedG + courtesyRoomG(warned)) * row.stretch * G;
       const columns: SheetColumn[] = wm.columns.map((column) => ({
         timeMs: column.timeMs,
         xPt: x + (column.headOffG - unusedG) * row.stretch * G,
@@ -695,6 +736,12 @@ function packSystems(
         // turnover landing on the first measure needs nothing after the bar,
         // and keeps no room for it (`unusedClefRoomG`).
         clefChanges: position === 0 ? [] : wm.clefTurnsOver,
+        // One on the next system's first measure is announced on this
+        // system's last instead, before the line turns (`courtesyRoomG`).
+        courtesyClefs:
+          warned === undefined
+            ? []
+            : warned.clefTurnsOver.map((staff) => ({ staff, clef: warned.clefs[staff] })),
       };
       x += widthPt;
       return measure;
