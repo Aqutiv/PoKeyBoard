@@ -19,7 +19,7 @@ getTakeForExport(id)
 - `sheetLayout.ts` is pure geometry (unit-tested, no DOM): columns spaced
   roughly proportionally to duration, measures packed greedily into justified
   systems, systems flowed down pages, and dynamic vertical room for ledger
-  notes, pedal brackets and dynamics.
+  notes, octave lines, pedal brackets and dynamics.
   Spacing and note values follow the tempo in force in
   each measure, so a take whose tempo changes still engraves correctly and
   gets a "♩ = n" mark where the new tempo takes over.
@@ -204,6 +204,18 @@ takes seconds and never touches the audio engine.
   press to its release; a press outliving the system is left open at that end.
   The events were always recorded and imported — this is where they finally get
   drawn.
+- **Octave lines** (see _Known limitations_ for where they come from) stand 2.6
+  spaces off their staff, or further out wherever the music under them reaches
+  past that. The whole mark — label, dashed line, and a hook that turns in only
+  as far as the label reaches — keeps to one band as tall as the label, and the
+  band stands half a space clear of every head and ledger line, accidental,
+  dot, stem and flag, beam, tuplet numeral and tie under it, or within half a
+  space of it either side. So a chord beside the passage counts where its ink
+  reaches in — a flag under the label, ledger lines back under the hook — and
+  one standing clear does not, however high it climbs; the printed spacing is
+  known, where the live score's changes with zoom. A system reserves exactly
+  the room the band needs past its music, with a tempo mark still on top and
+  the pedal row under an 8vb.
 - **Beaming** is decided once, in `layoutScore`, so the printed page and the
   live score group runs the same way and commit a run to the same stem
   direction; `beamGeometry.ts` holds the line arithmetic in staff spaces, read

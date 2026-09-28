@@ -12,15 +12,27 @@ import {
   type ScoreLayout,
 } from './notationLayout';
 import { accidentalSlots } from './accidentalStacking';
-import { beamSpanFor, BEAM_THICKNESS_G, type BeamPiece } from './beamGeometry';
+import { beamSpanFor, beamYAt, BEAM_THICKNESS_G, type BeamPiece } from './beamGeometry';
 import type { DynamicEvent, DynamicMark, HairpinEvent } from './dynamics';
 import {
+  ACCIDENTAL_GLYPHS,
+  digitGlyphsFor,
   dynamicInkG,
+  flagGlyphFor,
   flaggedStemReachG,
+  glyphWidth,
+  noteheadGlyphFor,
   noteheadHalfWidth,
+  runAdvance,
+  secondShiftG,
   STEM_THICKNESS_G,
 } from './glyphs/engravingGlyphs';
-import { MUSIC_GLYPH_ANCHORS } from './glyphs/musicGlyphMetrics';
+import {
+  ENGRAVING_DEFAULTS,
+  MUSIC_GLYPH_ANCHORS,
+  MUSIC_GLYPH_METRICS,
+  type MusicGlyphName,
+} from './glyphs/musicGlyphMetrics';
 import { normalizeFifths, type AccidentalKind } from './keySignature';
 import { beamCountFor, type BeamCount, type DurationSymbol } from './quantization';
 import type { ClefKind, StaffKind } from './staffMapping';
@@ -55,6 +67,10 @@ export const STEM_X_G =
 export const ACCIDENTAL_LEAD_G = 1.7;
 /** Each further accidental column stacked left of the first. */
 export const ACCIDENTAL_COLUMN_W_G = 1.4;
+/** Clear space between an accidental and the head it stands before. */
+export const ACCIDENTAL_GAP_G = 0.25;
+/** Clear space between a chord's rightmost head and its dot. */
+export const DOT_GAP_G = 0.4;
 /** Width a mid-staff clef change takes at the head of a measure. */
 export const CLEF_CHANGE_W_G = 3.6;
 /** Horizontal pitch of the accidentals in a key signature. */
@@ -292,6 +308,11 @@ export interface SheetOctave {
   up: boolean;
   x1Pt: number;
   x2Pt: number;
+  /**
+   * y of the line on the page, where it stands clear of the music under it
+   * (`octaveLineRel`). The whole mark keeps within `OCTAVE_BAND_HALF_G` of it.
+   */
+  yPt: number;
   continuesLeft: boolean;
   continuesRight: boolean;
 }
@@ -663,9 +684,28 @@ function packSystems(
     const ties = buildTies(measures, metrics.marginLeftPt, x);
     const pedals = buildPedals(measures, score.pedals);
     const marks = buildDynamics(measures, score.dynamics, score.hairpins);
-    const octaves = buildOctaves(measures, score.octaves);
+    const octaves = buildOctaves(measures, score.octaves, ties);
     const extents = systemExtents(measures);
     const carriesDynamics = marks.dynamics.length > 0 || marks.hairpins.length > 0;
+
+    // Stacked out from the staves as an engraver stacks them: the music, then
+    // an octave line standing clear of it, which needs only as much room as
+    // its band reaches past the music; then a tempo mark on top and a pedal
+    // bracket underneath, each in a band of its own, so neither can land on a
+    // high note, a low one, or the line.
+    let abovePt = extents.abovePt;
+    let belowPt = extents.belowPt;
+    const band = OCTAVE_BAND_HALF_G * G;
+    for (const octave of octaves) {
+      if (octave.up && octave.staff === 'treble') {
+        abovePt = Math.max(abovePt, band - octave.yPt);
+      } else if (!octave.up && octave.staff === 'bass') {
+        belowPt = Math.max(belowPt, octave.yPt + band - 4 * G);
+      }
+    }
+    if (measures.some((measure) => measure.tempoMarkBpm !== null)) abovePt += TEMPO_MARK_SPACE_PT;
+    if (pedals.length > 0) belowPt += PEDAL_ROW_PT;
+
     return {
       measures,
       ties,
@@ -675,22 +715,13 @@ function packSystems(
       hairpins: marks.hairpins,
       interStaffExtraPt: carriesDynamics ? DYNAMICS_ROW_PT : 0,
       widthPt: x - metrics.marginLeftPt,
-      // An octave line sits outside the staff it covers, so each side reserves
-      // room only when a line actually goes there.
-      abovePt: extents.abovePt + (octaves.some((o) => o.up) ? OCTAVE_ROW_PT : 0),
-      // A pedal bracket gets a row of its own under the staff, so it can never
-      // be pushed into by a low note or land on one.
-      belowPt:
-        extents.belowPt +
-        (pedals.length > 0 ? PEDAL_ROW_PT : 0) +
-        (octaves.some((o) => !o.up) ? OCTAVE_ROW_PT : 0),
+      abovePt,
+      belowPt,
       clefs: (row.measures[0] as WorkMeasure).clefs,
     };
   });
 }
 
-/** Room an octave line takes outside the staff it belongs to (pt). */
-export const OCTAVE_ROW_PT = 15;
 /** Vertical room under the bass staff for a pedal bracket (pt). */
 export const PEDAL_ROW_PT = 13;
 /** The bracket's own height, measured up from its line. */
@@ -756,10 +787,38 @@ function timeAnchorsFor(measures: readonly SheetMeasure[]): TimeAnchor[] {
   return anchors;
 }
 
-/** The octave lines a system carries, clipped to the music it holds. */
+/** Size the 8va and 8vb labels are set at, in staff spaces. */
+export const OCTAVE_LABEL_SPACE_G = 0.7;
+/**
+ * How far an octave line's mark reaches either side of the line, in staff
+ * spaces. Its label is the tallest part of it, its ink centred on the line;
+ * the hook at the far end turns in no further. So the whole mark keeps to one
+ * band this far each side of the line, and that band is what has to clear the
+ * music under it.
+ */
+export const OCTAVE_BAND_HALF_G = Math.max(
+  ...(['ottavaAlta', 'ottavaBassaVb'] as const).map((name) => {
+    const [, bottom, , top] = MUSIC_GLYPH_METRICS[name].bbox;
+    return ((top - bottom) / 2) * OCTAVE_LABEL_SPACE_G;
+  }),
+);
+/** How far an octave line stands off its staff where nothing under it reaches that far. */
+const OCTAVE_LINE_OFFSET_G = 2.6;
+/** Clear space an octave line's band keeps from the music under it. */
+const OCTAVE_CLEAR_G = 0.5;
+/** The pen an octave line and its hook are drawn with (pt). */
+export const OCTAVE_LINE_W_PT = 0.7;
+
+/**
+ * The octave lines a system carries, clipped to the music it holds, each
+ * standing clear of what it stands over (`octaveLineRel`).
+ *
+ * y values are staff-relative here; `paginate` moves them into page space.
+ */
 function buildOctaves(
   measures: readonly SheetMeasure[],
   spans: readonly OctaveSpan[],
+  ties: readonly SheetTie[],
 ): SheetOctave[] {
   const first = measures[0];
   const last = measures[measures.length - 1];
@@ -771,19 +830,218 @@ function buildOctaves(
   const octaves: SheetOctave[] = [];
   for (const span of spans) {
     if (span.toMs < fromMs || span.fromMs >= toMs) continue;
-    const x1Pt = xAtTime(anchors, Math.max(span.fromMs, fromMs));
-    // Reach past the last head so the line covers the note it applies to.
+    // From the left edge of the first head it covers...
+    const x1Pt = xAtTime(anchors, Math.max(span.fromMs, fromMs)) - HEAD_RX_G * G;
+    // ...to past the last, so the line covers the note it applies to.
     const x2Pt = xAtTime(anchors, Math.min(span.toMs, toMs)) + HEAD_RX_G * G * 2;
     octaves.push({
       staff: span.staff,
       up: span.up,
-      x1Pt: x1Pt - HEAD_RX_G * G,
+      x1Pt,
       x2Pt,
+      yPt: octaveLineRel(inkUnderRel(measures, ties, span, x1Pt, x2Pt), span.up),
       continuesLeft: span.fromMs < fromMs,
       continuesRight: span.toMs > toMs,
     });
   }
   return octaves;
+}
+
+/**
+ * Where an octave line stands, relative to the top of its staff.
+ *
+ * Its usual distance off the staff, unless the music under it (`inkUnderRel`)
+ * reaches further. Then it moves out until its band (`OCTAVE_BAND_HALF_G`)
+ * clears that ink by `OCTAVE_CLEAR_G`: a head on its ledger lines, an
+ * accidental, a stem and its flag, a beam, a tie.
+ */
+function octaveLineRel(ink: number | null, up: boolean): number {
+  const clearance = (OCTAVE_CLEAR_G + OCTAVE_BAND_HALF_G) * G;
+  if (up) {
+    const line = -OCTAVE_LINE_OFFSET_G * G;
+    return ink === null ? line : Math.min(line, ink - clearance);
+  }
+  const line = 4 * G + OCTAVE_LINE_OFFSET_G * G;
+  return ink === null ? line : Math.max(line, ink + clearance);
+}
+
+/**
+ * The furthest the music under an octave line reaches toward it, relative to
+ * the top of its staff, or null for a line over nothing.
+ *
+ * That is everything its staff draws under the mark, or within the clear space
+ * its band keeps either side of it: from the label, which starts at the first
+ * head's edge, to the hook, which stands past the last head. A chord there
+ * counts whole — its heads and the ledger lines through them, accidentals,
+ * dots, a stem and its flag — and so does a chord beside the passage whose ink
+ * reaches in: a flag or a dot swinging out from the chord before, under the
+ * label, or the ledger lines, a head set off or the accidentals of the chord
+ * after, reaching back under the hook. Beams, their tuplet numerals and ties
+ * count where they pass under the mark, by how far out they stand there.
+ *
+ * The spacing on paper is fixed, so whatever stands clear of the mark across
+ * the page is left out, however far out it reaches.
+ */
+function inkUnderRel(
+  measures: readonly SheetMeasure[],
+  ties: readonly SheetTie[],
+  span: OctaveSpan,
+  x1Pt: number,
+  x2Pt: number,
+): number | null {
+  const { staff, up } = span;
+  let ink = up ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+  const further = (y: number | null): void => {
+    if (y !== null) ink = up ? Math.min(ink, y) : Math.max(ink, y);
+  };
+  // Where the mark's ink stands across the page — the label from its start, the
+  // hook's pen either side of its end — with its clear space.
+  const clear = OCTAVE_CLEAR_G * G;
+  const from = x1Pt - clear;
+  const to = x2Pt + OCTAVE_LINE_W_PT / 2 + clear;
+
+  for (const measure of measures) {
+    for (const column of measure.columns) {
+      for (const chord of staff === 'treble' ? column.treble : column.bass) {
+        const reach = chordReachPt(chord);
+        if (column.xPt + reach.right > from && column.xPt - reach.left < to) {
+          further(chordInkRel(chord, up));
+        }
+      }
+    }
+    for (const beam of measure.beams) {
+      if (beam.staff === staff) further(beamInkRel(beam, up, from, to));
+    }
+  }
+
+  for (const tie of ties) {
+    if (tie.staff !== staff || tie.above !== up) continue;
+    const a = Math.max(tie.x1Pt, from);
+    const b = Math.min(tie.x2Pt, to);
+    if (a >= b) continue;
+    // A quadratic with its control point halfway along bows out furthest in
+    // its middle, and less toward either end.
+    const length = tie.x2Pt - tie.x1Pt;
+    const t = clamp(0.5, (a - tie.x1Pt) / length, (b - tie.x1Pt) / length);
+    const bow = 2 * t * (1 - t) * tieDepthPt(tie);
+    further(up ? Math.min(tie.y1Pt, tie.y2Pt) - bow : Math.max(tie.y1Pt, tie.y2Pt) + bow);
+  }
+  return Number.isFinite(ink) ? ink : null;
+}
+
+/**
+ * How far a chord's ink reaches left and right of its column, in points, set
+ * as `drawChord` sets it: its heads, one set off either side of the stem
+ * included, and the ledger lines through them; its accidentals on the left;
+ * its dots, and an unbeamed stem's flag, on the right.
+ */
+function chordReachPt(chord: SheetChord): { left: number; right: number } {
+  const { base } = chord.symbol;
+  const half = noteheadHalfWidth(base) * G;
+  const shift = secondShiftG(base) * G;
+  const shifts = chord.notes.map((note) => note.headShift);
+  const leftHead = Math.min(...shifts) * shift;
+  const rightHead = Math.max(...shifts) * shift;
+  let left = 0;
+  let right = 0;
+  for (const note of chord.notes) {
+    const head = half + (note.ledger.length > 0 ? ENGRAVING_DEFAULTS.legerLineExtension * G : 0);
+    left = Math.max(left, head - note.headShift * shift);
+    right = Math.max(right, note.headShift * shift + head);
+    if (note.accidental) {
+      const accidental =
+        half +
+        ACCIDENTAL_GAP_G * G +
+        note.accidentalColumn * ACCIDENTAL_COLUMN_W_G * G +
+        glyphWidth(ACCIDENTAL_GLYPHS[note.accidental]) * G;
+      left = Math.max(left, accidental - leftHead);
+    }
+  }
+  if (chord.symbol.dotted) {
+    const [, , dot] = MUSIC_GLYPH_METRICS.augmentationDot.bbox;
+    right = Math.max(right, rightHead + half + DOT_GAP_G * G + dot * G);
+  }
+  const flags = beamCountFor(base);
+  if (chord.beamId === null && flags !== 0) {
+    // The flag hangs from the stem's left edge and swings out to the right.
+    const [, , flag] = MUSIC_GLYPH_METRICS[flagGlyphFor(flags, chord.stemDown)].bbox;
+    const stemLeft = (chord.stemDown ? -STEM_X_G : STEM_X_G) * G - (STEM_THICKNESS_G / 2) * G;
+    right = Math.max(right, stemLeft + flag * G);
+  }
+  return { left, right };
+}
+
+/**
+ * How far a chord's own ink reaches toward an octave line — above its staff
+ * (`up`) or below it — relative to the staff's top: its heads, and the ledger
+ * lines through them; its accidentals and dots; and an unbeamed stem with its
+ * flags. A beamed chord's stem runs to its beam, which is measured on its own
+ * (`beamInkRel`), and so are ties (`inkUnderRel`).
+ */
+function chordInkRel(chord: SheetChord, up: boolean): number {
+  let ink = up ? Number.POSITIVE_INFINITY : Number.NEGATIVE_INFINITY;
+  const reach = (y: number): void => {
+    ink = up ? Math.min(ink, y) : Math.max(ink, y);
+  };
+  /** How far a glyph set on `y` reaches that way: its box's top, or its bottom. */
+  const edge = (name: MusicGlyphName, y: number): number => {
+    const [, bottom, , top] = MUSIC_GLYPH_METRICS[name].bbox;
+    return y - (up ? top : bottom) * G;
+  };
+  const head = noteheadGlyphFor(chord.symbol.base);
+  for (const note of chord.notes) {
+    const y = staffYRel(note.step);
+    // A ledger line runs no further out than the head it carries.
+    reach(edge(head, y));
+    if (note.accidental) reach(edge(ACCIDENTAL_GLYPHS[note.accidental], y));
+    // A dot sits in a space, so a line note's goes up half a space.
+    if (chord.symbol.dotted) reach(edge('augmentationDot', y - (note.step % 2 === 0 ? G / 2 : 0)));
+  }
+  if (chord.symbol.base !== 'whole' && chord.beamId === null && chord.stemDown !== up) {
+    const stem = flaggedStemReachG(beamCountFor(chord.symbol.base), chord.stemDown) * G;
+    reach(stemAnchorYRel(chord) + (up ? -stem : stem));
+  }
+  return ink;
+}
+
+/**
+ * How far a beam's ink reaches toward an octave line over the stretch of the
+ * page from `from` to `to`, relative to its staff's top, or null where none of
+ * it stands there — as a beam on the far side of its heads never does. That is
+ * its outer edge, the beams after the first stacking inside it, which is
+ * straight, so furthest out at one end of the stretch; and the digits of the
+ * tuplet numeral set outside it.
+ */
+function beamInkRel(beam: SheetBeam, up: boolean, from: number, to: number): number | null {
+  if (beam.stemDown === up) return null;
+  let ink: number | null = null;
+  const further = (y: number): void => {
+    ink = ink === null ? y : up ? Math.min(ink, y) : Math.max(ink, y);
+  };
+  const a = Math.max(beam.x1Pt, from);
+  const b = Math.min(beam.x2Pt, to);
+  if (a < b) {
+    const half = (BEAM_THICKNESS_G / 2) * G;
+    for (const x of [a, b]) {
+      const y = beamYAt({ y1: beam.y1Pt, y2: beam.y2Pt }, beam.x1Pt, beam.x2Pt, x);
+      further(up ? y - half : y + half);
+    }
+  }
+  if (beam.tupletCount !== null) {
+    // Set as `drawDigitRun` sets them: by their advances, centred on the beam.
+    const digits = digitGlyphsFor('tuplet', beam.tupletCount);
+    const space = TUPLET_NUMERAL_SPACE_G * G;
+    const y = tupletNumeralY(beam);
+    let x = (beam.x1Pt + beam.x2Pt) / 2 - (runAdvance(digits) * space) / 2;
+    for (const digit of digits) {
+      const [left, bottom, right, top] = MUSIC_GLYPH_METRICS[digit].bbox;
+      if (x + right * space > from && x + left * space < to) {
+        further(y - (up ? top : bottom) * space);
+      }
+      x += MUSIC_GLYPH_METRICS[digit].advance * space;
+    }
+  }
+  return ink;
 }
 
 /** The pedal brackets a system carries, clipped to the music it holds. */
@@ -873,6 +1131,16 @@ function buildDynamics(
 const TIE_STUB_G = 1.6;
 /** Clearance between a tie and the head it springs from. */
 const TIE_LIFT_G = 0.85;
+
+/**
+ * How far out a tie's arc is drawn to: its control point's distance off the
+ * line between its ends, which the arc bows half way to. Shallow over a short
+ * tie, deeper over a long one, but never a semicircle.
+ */
+export function tieDepthPt(tie: SheetTie): number {
+  const span = Math.max(tie.x2Pt - tie.x1Pt, 0.1);
+  return Math.min(1.1 * G, 0.24 * span + 0.35 * G);
+}
 
 /**
  * Pair up the tied heads of a system into arcs.
@@ -1023,6 +1291,21 @@ function tupletCountFor(symbol: DurationSymbol, runLength: number): number | nul
   return ratio && runLength % ratio.actual === 0 ? runLength : null;
 }
 
+/** Size a tuplet numeral is set at, in staff spaces: small enough not to compete with the notes. */
+export const TUPLET_NUMERAL_SPACE_G = 0.8;
+
+/**
+ * The y a beam's tuplet numeral stands on: centred on the beam, on the side
+ * away from its heads — above an up-stem run, below a down-stem one — and
+ * clear of the beam either way. In the beam's own space, staff-relative or the
+ * page's.
+ */
+export function tupletNumeralY(beam: SheetBeam): number {
+  const midY = (beam.y1Pt + beam.y2Pt) / 2;
+  // The digits stand on their origin, so below the beam it goes their height lower.
+  return beam.stemDown ? midY + 1.8 * G : midY - 0.6 * G;
+}
+
 function emitBeam(
   measure: SheetMeasure,
   run: BeamMember[],
@@ -1063,7 +1346,10 @@ function emitBeam(
   for (const member of run) member.chord.beamId = beamId;
 }
 
-/** Space needed above the treble staff and below the bass staff (pt). */
+/**
+ * Space the music needs above the treble staff and below the bass staff (pt):
+ * what the rest of a system's marks stack outside of (`packSystems`).
+ */
 function systemExtents(measures: SheetMeasure[]): { abovePt: number; belowPt: number } {
   const headPad = 0.5 * G;
   let abovePt = 3 * G; // floor reserves room for the measure number
@@ -1094,11 +1380,6 @@ function systemExtents(measures: SheetMeasure[]): { abovePt: number; belowPt: nu
         belowPt = Math.max(belowPt, Math.max(beam.y1Pt, beam.y2Pt) + pad - 4 * G);
       }
     }
-  }
-  // A tempo mark goes in a band of its own on top of everything the music
-  // needs, so it can never land on a high note or its ledger lines.
-  if (measures.some((measure) => measure.tempoMarkBpm !== null)) {
-    abovePt += TEMPO_MARK_SPACE_PT;
   }
   return { abovePt, belowPt };
 }
@@ -1159,6 +1440,9 @@ function paginate(
       const staffTop = tie.staff === 'treble' ? trebleTopPt : bassTopPt;
       tie.y1Pt += staffTop;
       tie.y2Pt += staffTop;
+    }
+    for (const octave of system.octaves) {
+      octave.yPt += octave.staff === 'treble' ? trebleTopPt : bassTopPt;
     }
     currentSystems.push({
       xPt: metrics.marginLeftPt,

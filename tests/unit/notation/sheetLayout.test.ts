@@ -1,10 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent, TempoChange, TimeSignature } from '@/domain/takeTypes';
 import { BEAM_SLANT_MAX_G, MIN_BEAM_STEM_G } from '@/features/notation/beamGeometry';
+import { MUSIC_GLYPH_METRICS } from '@/features/notation/glyphs/musicGlyphMetrics';
 import { layoutScore } from '@/features/notation/notationLayout';
 import {
   ACCIDENTAL_LEAD_G,
+  PEDAL_HOOK_G,
+  PEDAL_ROW_PT,
   SHEET_GAP_PT,
+  TEMPO_MARK_BASELINE_PT,
+  TEMPO_MARK_SPACE_PT,
   layoutSheet,
   metricsFor,
   normalizePaperSize,
@@ -469,6 +474,79 @@ describe('layoutSheet', () => {
       expect(measure.beams).toHaveLength(2);
       expect(measure.beams.every((beam) => beam.beamCount === 1)).toBe(true);
       expect(staffChords(measure, 'treble')).toHaveLength(8);
+    });
+  });
+
+  describe('room for an octave line', () => {
+    const [, bottom, , top] = MUSIC_GLYPH_METRICS.ottavaAlta.bbox;
+    /** How far an octave line's mark reaches either side of it: its label's half-height. */
+    const BAND = ((top - bottom) / 2) * 0.7 * G;
+
+    /** Four quarters of one pitch, from `startMs`. */
+    function four(midi: number, startMs = 0, extra: Partial<NoteEvent> = {}): NoteEvent[] {
+      return [0, 1, 2, 3].map((i) =>
+        note({ id: `q${startMs}-${i}`, midi, startMs: startMs + i * 500, ...extra }),
+      );
+    }
+
+    it.each([
+      ['inside the staff', 84],
+      ['on the ledger lines of C6', 96],
+      ['on the ledger lines of C7', 108],
+    ])('reserves the room an 8va needs over notes written %s, and no more', (_, midi) => {
+      const system = allSystems(sheet(four(midi)))[0]!;
+      const [octave] = system.octaves;
+      expect(octave?.up).toBe(true);
+      // The first system's room starts under the title block, and the line's band tops it.
+      const { marginTopPt, titleBlockHeightPt } = metricsFor('a4');
+      expect(octave!.yPt - BAND).toBeCloseTo(marginTopPt + titleBlockHeightPt, 6);
+    });
+
+    it('keeps a tempo mark on top of the room, over the line', () => {
+      const system = allSystems(
+        sheet(
+          [note({ id: 'w', midi: 60, durationMs: 2000 }), ...four(96, 2000, { durationMs: 250 })],
+          {},
+          [{ atMs: 2000, bpm: 240 }],
+        ),
+      )[0]!;
+      const [octave] = system.octaves;
+      expect(octave).toBeDefined();
+      // Its baseline stands as far over the line's band as it does over the music elsewhere.
+      expect(octave!.yPt - BAND - system.tempoMarkBaselinePt).toBeCloseTo(
+        TEMPO_MARK_SPACE_PT - TEMPO_MARK_BASELINE_PT,
+        6,
+      );
+    });
+
+    it('reserves the room an 8vb needs under the bass staff, the pedal row under that', () => {
+      const score = layoutScore(four(24, 0, { staff: 'bass' }), {
+        bpm: 120,
+        timeSignature: SHEET_OPTS.timeSignature,
+        quantization: '1/16',
+        pedals: [
+          { atMs: 0, down: true },
+          { atMs: 1900, down: false },
+        ],
+        minMeasures: 1,
+      });
+      const system = layoutSheet(score, SHEET_OPTS).pages[0]!.systems[0]!;
+      const [octave] = system.octaves;
+      expect(octave?.up).toBe(false);
+      expect(system.pedals).toHaveLength(1);
+      const bandBottom = octave!.yPt + BAND;
+      // The bracket, hooks and all, half a space clear under the band, and in
+      // the row it always takes rather than a row further down.
+      expect(system.pedalRowPt - PEDAL_HOOK_G * G - bandBottom).toBeGreaterThanOrEqual(0.5 * G);
+      expect(system.pedalRowPt - bandBottom).toBeLessThanOrEqual(PEDAL_ROW_PT);
+    });
+
+    it('lays out a system without one exactly as before', () => {
+      // The treble's own music and the pedal row decide its room, as they always did.
+      const system = allSystems(sheet(four(76)))[0]!;
+      const { marginTopPt, titleBlockHeightPt } = metricsFor('a4');
+      expect(system.octaves).toEqual([]);
+      expect(system.trebleTopPt - (marginTopPt + titleBlockHeightPt)).toBeCloseTo(3 * G, 6);
     });
   });
 

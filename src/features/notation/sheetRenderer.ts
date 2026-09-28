@@ -1,13 +1,21 @@
 import type { TimeSignature } from '@/domain/takeTypes';
 import {
   ACCIDENTAL_COLUMN_W_G,
+  ACCIDENTAL_GAP_G,
+  DOT_GAP_G,
   HAIRPIN_MOUTH_G,
   KEY_ACCIDENTAL_W_G,
   keySignatureWidthPt,
+  OCTAVE_BAND_HALF_G,
+  OCTAVE_LABEL_SPACE_G,
+  OCTAVE_LINE_W_PT,
   PEDAL_HOOK_G,
   SHEET_GAP_PT,
   staffYRel,
   stemXPt,
+  tieDepthPt,
+  TUPLET_NUMERAL_SPACE_G,
+  tupletNumeralY,
   type SheetBeam,
   type SheetChord,
   type SheetDynamic,
@@ -86,12 +94,8 @@ const LEDGER_W = ENGRAVING_DEFAULTS.legerLineThickness * G;
 /** How far a ledger line runs past the head it carries. */
 const LEDGER_EXTENSION = ENGRAVING_DEFAULTS.legerLineExtension * G;
 
-/** Clear space between an accidental and the head it stands before. */
-const ACCIDENTAL_GAP_G = 0.25;
 /** Clear space a ledger line leaves before an accidental beside it. */
 const LEDGER_ACCIDENTAL_GAP_G = 0.1;
-/** Clear space between the rightmost head and its dot. */
-const DOT_GAP_G = 0.4;
 /** Where a system's clefs start, after its opening bar line. */
 const SYSTEM_CLEF_X_G = 1.1;
 /** Where a clef changing mid-staff starts, after the bar line it follows. */
@@ -232,40 +236,37 @@ function drawSystem(ctx: DrawSurface, system: SheetSystem, page: SheetPage): voi
   }
   for (const tie of system.ties) drawTie(ctx, tie);
   for (const pedal of system.pedals) drawPedal(ctx, pedal, system.pedalRowPt);
-  for (const octave of system.octaves) drawOctave(ctx, octave, system, metrics);
+  for (const octave of system.octaves) drawOctave(ctx, octave);
   for (const hairpin of system.hairpins) drawHairpin(ctx, hairpin, system.dynamicsRowPt);
   for (const dynamic of system.dynamics) drawDynamic(ctx, dynamic, system.dynamicsRowPt);
 }
 
-/** Size the 8va and 8vb labels are set at. */
-const OCTAVE_LABEL_SPACE = 0.7 * G;
-
 /**
  * An 8va or 8vb: the label, then a dashed line running to a hook that turns
- * down onto the music it covers. The hook is what says where it stops, so an
+ * in toward the music it covers. The hook is what says where it stops, so an
  * end that runs off the system has none — the passage carries on.
+ *
+ * The line stands where the layout found it clear of the music under it
+ * (`SheetOctave.yPt`), and the mark keeps to the band that was cleared: the
+ * label's ink centred on the line, and the hook turning in as far as the label
+ * reaches and no further.
  */
-function drawOctave(
-  ctx: DrawSurface,
-  octave: SheetOctave,
-  system: SheetSystem,
-  metrics: SheetPageMetrics,
-): void {
-  const y = octave.up
-    ? system.trebleTopPt - 2.6 * G
-    : system.bassTopPt + metrics.staffHeightPt + 2.6 * G;
+function drawOctave(ctx: DrawSurface, octave: SheetOctave): void {
+  const y = octave.yPt;
   const label = octave.up ? 'ottavaAlta' : 'ottavaBassaVb';
+  const space = OCTAVE_LABEL_SPACE_G * G;
 
   let lineFrom = octave.x1Pt;
   if (!octave.continuesLeft) {
-    // Its digit is centred on the line, and the line starts clear after it.
-    drawGlyph(ctx, label, octave.x1Pt, y + 0.65 * G, OCTAVE_LABEL_SPACE);
-    lineFrom = octave.x1Pt + MUSIC_GLYPH_METRICS[label].advance * OCTAVE_LABEL_SPACE + 0.4 * G;
+    // Its ink centred on the line, which starts clear after it, by its advance.
+    const { advance, bbox } = MUSIC_GLYPH_METRICS[label];
+    drawGlyph(ctx, label, octave.x1Pt, y + ((bbox[1] + bbox[3]) / 2) * space, space);
+    lineFrom = octave.x1Pt + advance * space + 0.4 * G;
   }
 
   ctx.save();
   ctx.setLineDash([2.2, 2]);
-  ctx.lineWidth = 0.7;
+  ctx.lineWidth = OCTAVE_LINE_W_PT;
   ctx.beginPath();
   ctx.moveTo(lineFrom, y);
   ctx.lineTo(octave.x2Pt, y);
@@ -273,10 +274,10 @@ function drawOctave(
   ctx.restore();
 
   if (!octave.continuesRight) {
-    ctx.lineWidth = 0.7;
+    ctx.lineWidth = OCTAVE_LINE_W_PT;
     ctx.beginPath();
     ctx.moveTo(octave.x2Pt, y);
-    ctx.lineTo(octave.x2Pt, y + (octave.up ? 1 : -1) * 0.9 * G);
+    ctx.lineTo(octave.x2Pt, y + (octave.up ? 1 : -1) * OCTAVE_BAND_HALF_G * G);
     ctx.stroke();
   }
 }
@@ -342,9 +343,7 @@ function drawPedal(ctx: DrawSurface, pedal: SheetPedal, rowY: number): void {
  */
 function drawTie(ctx: DrawSurface, tie: SheetTie): void {
   const dir = tie.above ? -1 : 1;
-  const span = Math.max(tie.x2Pt - tie.x1Pt, 0.1);
-  // Shallow over a short tie, deeper over a long one, but never a semicircle.
-  const depth = dir * Math.min(1.1 * G, 0.24 * span + 0.35 * G);
+  const depth = dir * tieDepthPt(tie);
   const midX = (tie.x1Pt + tie.x2Pt) / 2;
   const midY = (tie.y1Pt + tie.y2Pt) / 2;
   ctx.beginPath();
@@ -531,20 +530,22 @@ function drawChord(
   }
 }
 
-/** Size tuplet numerals are set at: small enough not to compete with the notes. */
-const TUPLET_SPACE = 0.8 * G;
-
 /**
  * The tuplet numeral, centred on its beam on the side away from the heads:
- * above an up-stem run, below a down-stem one, clear of the beam either way.
+ * above an up-stem run, below a down-stem one, clear of the beam either way
+ * (`tupletNumeralY`).
  */
 function drawTupletNumeral(ctx: DrawSurface, beam: SheetBeam): void {
   if (beam.tupletCount === null) return;
   const midX = (beam.x1Pt + beam.x2Pt) / 2;
-  const midY = (beam.y1Pt + beam.y2Pt) / 2;
-  // The digits stand on their origin, so below the beam it goes their height lower.
-  const y = beam.stemDown ? midY + 1.8 * G : midY - 0.6 * G;
-  drawDigitRun(ctx, 'tuplet', beam.tupletCount, midX, y, TUPLET_SPACE);
+  drawDigitRun(
+    ctx,
+    'tuplet',
+    beam.tupletCount,
+    midX,
+    tupletNumeralY(beam),
+    TUPLET_NUMERAL_SPACE_G * G,
+  );
 }
 
 /**
