@@ -156,14 +156,14 @@ class AudioExportService {
         format === 'mp3'
           ? new Blob([id3v2Tag(tags), bare], { type: FORMAT_MIME_TYPE.mp3 })
           : tagFlac(bare, tags);
-      const result = (blob: Blob, fromCache: boolean): ExportResult => ({
+      const result = (blob: Blob, fromCache: boolean, cached = format === 'mp3'): ExportResult => ({
         blob,
         fileName,
         format,
         durationMs: effectivePlaybackDurationMs(take),
         sizeBytes: blob.size,
         fromCache,
-        cached: format === 'mp3',
+        cached,
       });
 
       const hash =
@@ -223,7 +223,11 @@ class AudioExportService {
       const bare = new Blob(parts, { type: FORMAT_MIME_TYPE[format] });
       checkEncoded(encoding, parts, bare.size, rendered);
 
-      if (hash !== null) {
+      // A render some notes played from a stand-in (a pianissimo recording
+      // out of reach, offline) is handed over but not kept: kept, it would be
+      // found again by the same hash long after the real recordings arrived.
+      const keep = hash !== null && rendered.standIns === 0;
+      if (keep) {
         await this.awaitJob(
           job,
           putCachedAudio({
@@ -236,7 +240,7 @@ class AudioExportService {
           }),
         );
       }
-      return result(tagged(bare), false);
+      return result(tagged(bare), false, keep);
     } finally {
       if (this.activeJob === job) this.activeJob = null;
       job.rejectCancellation = null;

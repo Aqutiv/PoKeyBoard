@@ -243,6 +243,14 @@ describe('the calibrated voice gain', () => {
     expect(registerTiltDb(calibration, 48)).toBeCloseTo(-2, 12);
   });
 
+  it('takes its medium layer from the table where it names one, and layer 1 where it does not', () => {
+    // A pack with a pianissimo layer has its medium one at 2: here the flat one.
+    const named = { ...sampleCalibration(), tiltLayer: 2 };
+    expect(registerTiltDb(named, 72)).toBe(0);
+    expect(registerTiltDb(named, 48)).toBe(0);
+    expect(registerTiltDb({ ...sampleCalibration(), tiltLayer: 1 }, 72)).toBeCloseTo(1, 12);
+  });
+
   it('aims every note at the reference, plus the curve, plus the tilt', () => {
     const calibration = sampleCalibration();
     expect(targetDb(calibration, 0.75, 60)).toBeCloseTo(-18, 12);

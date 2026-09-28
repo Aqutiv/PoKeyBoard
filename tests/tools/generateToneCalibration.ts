@@ -41,11 +41,7 @@ import * as prettier from 'prettier';
 import { expect, it } from 'vitest';
 import type { SamplePackManifest } from '@/audio/audioTypes';
 import { PIANO_INSTRUMENTS } from '@/audio/instruments';
-import {
-  MAX_ROOT_DISTANCE_SEMITONES,
-  onsetOffsetOf,
-  VELOCITY_LAYER_THRESHOLDS,
-} from '@/audio/SampleBank';
+import { MAX_ROOT_DISTANCE_SEMITONES, onsetOffsetOf } from '@/audio/SampleBank';
 import {
   applyBiquad,
   BRIGHTNESS_WINDOW_S,
@@ -72,6 +68,7 @@ import {
   loudestVoicePeak,
   type VelocityCalibration,
 } from '@/audio/velocityCalibrationMath';
+import { layerLabels, velocityThresholds, type LayerLabel } from '@/audio/velocityLayers';
 
 // Paths hang off the project root: under jsdom, import.meta.url is an http
 // URL rather than a file one, so it cannot anchor them.
@@ -166,7 +163,6 @@ function round(value: number, digits: number): number {
 }
 
 const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-const LAYER_NAMES = ['soft', 'medium', 'loud'];
 
 function noteName(midi: number): string {
   return `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
@@ -200,13 +196,17 @@ interface Ramp {
   rampPeakOverFullDb: number;
 }
 
-/** Measure one recording's ramp: its bottom cutoff against `below`, its make-up and its peaks. */
+/**
+ * Measure one recording's ramp: its bottom cutoff against `below`, its make-up
+ * and its peaks, across the velocities its pack's `thresholds` give its layer.
+ */
 function measureRamp(
   layer: number,
   midi: number,
   recording: Recording,
   below: Recording,
   calibration: VelocityCalibration,
+  thresholds: readonly number[],
 ): Ramp {
   const window = voiceWindow(recording.channels, recording.offsetS, ANALYSIS_RATE);
   const targetHz = brightness(voiceWindow(below.channels, below.offsetS, ANALYSIS_RATE));
@@ -241,8 +241,8 @@ function measureRamp(
   // all but full velocity's and a filter all but open can still lift a peak a
   // little. A stand-in from this layer for the one below plays its ramp's
   // bottom, at velocities just under it, and so no louder than it does there.
-  const bottom = VELOCITY_LAYER_THRESHOLDS[layer - 1]!;
-  const top = VELOCITY_LAYER_THRESHOLDS[layer] ?? 1;
+  const bottom = thresholds[layer - 1]!;
+  const top = thresholds[layer] ?? 1;
   const keys = Array.from(
     { length: 2 * MAX_ROOT_DISTANCE_SEMITONES + 1 },
     (_, index) => midi - MAX_ROOT_DISTANCE_SEMITONES + index,
@@ -296,6 +296,8 @@ function measureRamp(
 
 interface Pack {
   version: string;
+  /** Its layers' labels, by index, for the report. */
+  labels: readonly LayerLabel[];
   table: ToneCalibration;
   ramps: Ramp[];
   /** The pack's loudest voice at full velocity, dBFS; see `loudestVoicePeak`. */
@@ -305,6 +307,8 @@ interface Pack {
 async function measurePack(version: string, manifest: SamplePackManifest): Promise<Pack> {
   const calibration = VELOCITY_CALIBRATIONS[version];
   if (!calibration) throw new Error(`${version} has no velocity calibration: generate that first`);
+  const labels = layerLabels(manifest.velocityLayers);
+  const thresholds = velocityThresholds(labels);
   const dir = path.join(ROOT, 'public', 'piano', version);
   const recordings = new Map<string, Recording>();
   const queue = [...manifest.files];
@@ -328,7 +332,7 @@ async function measurePack(version: string, manifest: SamplePackManifest): Promi
         if (layer === 0) return root;
         const below = recordings.get(`${layer - 1}:${entry.midi}`);
         if (!below) throw new Error(`${version} ${entry.file} has no recording under it`);
-        const measured = measureRamp(layer, entry.midi, recording, below, calibration);
+        const measured = measureRamp(layer, entry.midi, recording, below, calibration, thresholds);
         ramps.push(measured);
         return { ...root, ramp: measured.ramp };
       });
@@ -336,7 +340,7 @@ async function measurePack(version: string, manifest: SamplePackManifest): Promi
   });
   const loudestFullDb =
     20 * Math.log10(loudestVoicePeak(calibration, 1, MAX_ROOT_DISTANCE_SEMITONES));
-  return { version, table: { layers }, ramps, loudestFullDb };
+  return { version, labels, table: { layers }, ramps, loudestFullDb };
 }
 
 /** Whether a ramp's bottom cutoff was lifted by the guard. */
@@ -367,12 +371,13 @@ function worstFullDb(): number {
 /** The summary lines for the table's header, one pack's worth. */
 function summaryLines(pack: Pack): string[] {
   const lines: string[] = [];
-  for (const layer of [1, 2]) {
+  // Every layer above the softest meets the one under it.
+  for (let layer = 1; layer < pack.labels.length; layer += 1) {
     const ramps = pack.ramps.filter((ramp) => ramp.layer === layer);
     const open = ramps.map((ramp) => Math.abs(jumpCents(ramp, ramp.openHz)));
     const toned = ramps.map((ramp) => Math.abs(jumpCents(ramp, ramp.ramp.centroidHz)));
     lines.push(
-      `brightness step into ${LAYER_NAMES[layer]}, cents: ${median(open).toFixed(0)} open, ` +
+      `brightness step into ${pack.labels[layer]}, cents: ${median(open).toFixed(0)} open, ` +
         `${median(toned).toFixed(0)} toned (median; most ${Math.max(...open).toFixed(0)}, ` +
         `${Math.max(...toned).toFixed(0)})`,
     );
@@ -385,7 +390,7 @@ function summaryLines(pack: Pack): string[] {
     `guarded at ${FUNDAMENTAL_GUARD} × the fundamental: ${guardedRamps.length} of ` +
       `${pack.ramps.length} ramps, from ${noteName(lowest)}`,
     `make-up at a ramp's bottom, dB: median ${median(makeups).toFixed(2)}, most ` +
-      `${Math.max(...makeups).toFixed(2)} (${noteName(most.midi)} ${LAYER_NAMES[most.layer]})`,
+      `${Math.max(...makeups).toFixed(2)} (${noteName(most.midi)} ${pack.labels[most.layer]})`,
     `loudest voice on a ramp: ${loudestRampDb(pack).toFixed(2)} dBFS; at full velocity ` +
       `${pack.loudestFullDb.toFixed(2)}, and ${worstFullDb().toFixed(2)} on the loudest pack`,
   );
@@ -443,7 +448,7 @@ function reportTopOctave(pack: Pack): void {
   );
   for (const ramp of top) {
     console.log(
-      `      ${noteName(ramp.midi).padEnd(4)} ${LAYER_NAMES[ramp.layer]!.padEnd(6)} ` +
+      `      ${noteName(ramp.midi).padEnd(4)} ${pack.labels[ramp.layer]!.padEnd(6)} ` +
         `matched ${String(ramp.ramp.matchedCutoffHz).padStart(5)} Hz, ` +
         `${ramp.matchedMakeupDb.toFixed(2)} dB; guarded ${String(ramp.ramp.cutoffHz).padStart(5)} Hz, ` +
         `${ramp.ramp.makeupDb[0]!.toFixed(2)} dB, step ${jumpCents(ramp, ramp.ramp.centroidHz).toFixed(0)} ` +
@@ -545,15 +550,15 @@ it('generates the tone calibration', { timeout: 900_000 }, async () => {
     const over = pack.ramps.reduce((a, b) => (b.rampPeakOverFullDb > a.rampPeakOverFullDb ? b : a));
     console.log(
       `  loudest voice on a ramp: ${loudestRampDb(pack).toFixed(2)} dBFS, ${noteName(loudest.midi)} ` +
-        `${LAYER_NAMES[loudest.layer]} at ${loudest.rampPeakVelocity.toFixed(4)}; at full velocity ` +
+        `${pack.labels[loudest.layer]} at ${loudest.rampPeakVelocity.toFixed(4)}; at full velocity ` +
         `${pack.loudestFullDb.toFixed(2)} dBFS, and ${worstFullDb().toFixed(2)} on the loudest ` +
         `pack; furthest over its own recording at full velocity: ` +
-        `${over.rampPeakOverFullDb.toFixed(2)} dB, ${noteName(over.midi)} ${LAYER_NAMES[over.layer]} ` +
+        `${over.rampPeakOverFullDb.toFixed(2)} dB, ${noteName(over.midi)} ${pack.labels[over.layer]} ` +
         `at ${over.rampPeakVelocity.toFixed(4)}`,
     );
 
     for (const ramp of pack.ramps) {
-      const where = `${pack.version} ${noteName(ramp.midi)} ${LAYER_NAMES[ramp.layer]}`;
+      const where = `${pack.version} ${noteName(ramp.midi)} ${pack.labels[ramp.layer]}`;
       // Matched outright, the ramp meets the layer below.
       if (!guarded(ramp)) {
         expect(Math.abs(jumpCents(ramp, ramp.ramp.centroidHz)), where).toBeLessThan(5);

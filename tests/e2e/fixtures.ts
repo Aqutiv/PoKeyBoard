@@ -13,8 +13,14 @@ const PACK_DIRS = PIANO_INSTRUMENTS.map((instrument) => instrument.path.replace(
 /** MAX_ROOT_DISTANCE_SEMITONES in src/audio/SampleBank.ts. */
 const MAX_ROOT_DISTANCE = 9;
 
-/** The medium layer: getSample falls back to it from any velocity. */
-const STUB_LAYER = 1;
+/**
+ * The layer a stub keeps: the pack's medium one, wherever it is numbered.
+ * getSample falls back to it from any velocity, and a note at the computer
+ * keyboard's velocity plays it on its own tone ramp, as the tone spec expects.
+ */
+function stubLayerOf(manifest: SamplePackManifest): number {
+  return manifest.velocityLayers.find((layer) => layer.label === 'medium')?.index ?? 1;
+}
 
 /** The 88-key range the app can display (FULL_RANGE_LOW/HIGH). */
 const LOWEST_KEY = 21;
@@ -39,8 +45,9 @@ function buildStubManifest(packDir: string): SamplePackManifest {
   // its real mapping; thinning roots would leave silent keys and dangling regions.
   if (realManifest.regions) return realManifest;
 
+  const stubLayer = stubLayerOf(realManifest);
   const roots = realManifest.files
-    .filter((entry) => entry.layer === STUB_LAYER)
+    .filter((entry) => entry.layer === stubLayer)
     .sort((a, b) => a.midi - b.midi);
 
   // Keep a root whenever the last keeper's reach has run out, so consecutive
@@ -63,7 +70,7 @@ function buildStubManifest(packDir: string): SamplePackManifest {
     if (!covered) {
       throw new Error(
         `Stub sample manifest for ${packDir} leaves midi ${midi} unplayable. That ` +
-          `pack's layer-${STUB_LAYER} roots no longer span the keyboard at this stride.`,
+          `pack's layer-${stubLayer} roots no longer span the keyboard at this stride.`,
       );
     }
   }

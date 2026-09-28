@@ -6,20 +6,21 @@ import { ATTACK_S, TONE_FILTER_Q_DB } from './sampleVoice';
  * (tests/tools/generateToneCalibration.ts), the sample bank and the tests all
  * share it.
  *
- * A grand pack is three recordings of every third key — soft, medium and loud
- * — and the velocity calibration plays each at the loudness its velocity asks
- * for (velocityCalibrationMath.ts). Loudness is not all a harder blow changes,
+ * A grand pack is a few recordings of every third key — soft, medium and
+ * loud, and on some a pianissimo under them (velocityLayers.ts) — and the
+ * velocity calibration plays each at the loudness its velocity asks for
+ * (velocityCalibrationMath.ts). Loudness is not all a harder blow changes,
  * though: it brings the upper partials out, and on their own the recordings
  * step in brightness wherever one layer hands over to the next, by 200 to 900
  * cents of spectral centroid around middle C, as the piano goes. So every voice
- * of the medium and loud layers plays through a lowpass whose cutoff follows
+ * of a layer above the softest plays through a lowpass whose cutoff follows
  * its velocity across its layer:
  *
  *   at the layer's bottom, the cutoff that brings its recording down to the
  *   brightness of the layer below's, at the same root (the generator searches
  *   for it); at the layer's top, open; in between, evenly in log frequency.
  *
- * The soft layer has nothing below it to meet and always plays open. A filter
+ * The softest layer has nothing below it to meet and always plays open. A filter
  * takes loudness with it, and the voice gives that back (the make-up), less
  * and less as the filter opens, so every note stays on the velocity curve.
  *
@@ -173,7 +174,7 @@ export function toneRamp(
  * The filter a note plays through, at the recording's own pitch: a note struck
  * at `velocity` asks for layer `requested`, and the bank found the recording
  * of `root` on `layer`. `thresholds` are where each layer above the first
- * begins (the sample bank's `VELOCITY_LAYER_THRESHOLDS`).
+ * begins: the pack's own (`velocityThresholds`).
  *
  * Found on the layer it asked for, a note plays that layer's ramp. During a
  * partial load another layer can stand in: one from a brighter layer plays at
@@ -199,7 +200,7 @@ export function voiceTone(
 
 /**
  * Whether the table holds every one of these recordings, with a ramp for
- * every one above the soft layer.
+ * every one above the softest layer.
  */
 export function toneCalibrationCovers(
   calibration: ToneCalibration,

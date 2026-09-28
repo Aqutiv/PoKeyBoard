@@ -1,12 +1,14 @@
 import { curveDb } from './velocityCurve';
+import { DEFAULT_MEDIUM_LAYER } from './velocityLayers';
 
 /**
  * The arithmetic of the velocity calibration, pure so the generator
  * (tests/tools/generateVelocityCalibration.ts), the sample bank and the tests
  * all share it.
  *
- * A grand pack is three recordings of every third key — soft, medium and loud
- * — each made at whatever level that note and that session happened to give.
+ * A grand pack is a few recordings of every third key — soft, medium and
+ * loud, and on some a pianissimo under them (velocityLayers.ts) — each made
+ * at whatever level that note and that session happened to give.
  * The generator measures every one (velocityCalibration.ts holds the result),
  * and a voice's gain is then simply the distance from its recording's level to
  * where the note should sound:
@@ -146,6 +148,14 @@ export interface VelocityCalibration {
    * calibration (`solveReferenceDb`).
    */
   referenceDb: number;
+  /**
+   * The index of the pack's medium layer, whose balance across the keyboard
+   * every target follows (`registerTiltDb`). Absent means layer 1
+   * (`DEFAULT_MEDIUM_LAYER`), as in every pack of soft, medium and loud, so
+   * their tables read as they always did; a pack with a pianissimo layer
+   * under those has it at 2, and says so.
+   */
+  tiltLayer?: number;
   /** One per velocity layer, by index. */
   layers: readonly LayerCalibration[];
 }
@@ -245,12 +255,9 @@ export function nearestRoot(roots: readonly number[], midi: number): number | un
   return best;
 }
 
-/** The layer whose balance across the keyboard every target follows. */
-export const TILT_LAYER = 1;
-
 /** The medium layer's level at `midi` relative to middle C: the pack's own bass-to-treble balance. */
 export function registerTiltDb(calibration: VelocityCalibration, midi: number): number {
-  const fit = calibration.layers[TILT_LAYER]?.fit;
+  const fit = calibration.layers[calibration.tiltLayer ?? DEFAULT_MEDIUM_LAYER]?.fit;
   return fit ? evaluateFit(fit, midi) - fit[0] : 0;
 }
 

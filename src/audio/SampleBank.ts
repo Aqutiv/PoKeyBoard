@@ -14,18 +14,23 @@ import {
   calibrationCovers,
   type VelocityCalibration,
 } from './velocityCalibrationMath';
-
-/** Velocity below the first threshold → soft layer, below the second → medium. */
-export const VELOCITY_LAYER_THRESHOLDS: readonly [number, number] = [0.45, 0.78];
+import {
+  layerLabels,
+  layerSearchOrder,
+  mediumLayer,
+  velocityGain,
+  velocityThresholds,
+  velocityToLayer,
+  type LayerLabel,
+} from './velocityLayers';
 
 /**
- * Perceptual center velocity each recorded layer represents. Only for a pack
- * with no velocity calibration; see `velocityGain`.
+ * The layers a piano decodes after it is ready to play rather than before:
+ * its pianissimo recordings. Until one arrives the soft layer stands in for
+ * it, at the bottom of its tone ramp and on the velocity curve, so the first
+ * note waits only for the core it always waited for.
  */
-const LAYER_REFERENCE_VELOCITY = [0.3, 0.6, 0.9] as const;
-
-/** Static trims that roughly balance the layers' recorded loudness; as above. */
-const LAYER_TRIM = [1.35, 1.1, 0.95] as const;
+const DEFERRED_LAYERS: ReadonlySet<LayerLabel> = new Set<LayerLabel>(['pianissimo']);
 
 /** Keyboard center (F#4-ish) used to prioritize sample loading order. */
 const LOAD_CENTER_MIDI = 66;
@@ -79,30 +84,11 @@ export function onsetOffsetOf(buffer: AudioBuffer): number {
   return Math.min(trimmed, MAX_ONSET_TRIM_S);
 }
 
-export function velocityToLayer(velocity: number): number {
-  if (velocity < VELOCITY_LAYER_THRESHOLDS[0]) return 0;
-  if (velocity < VELOCITY_LAYER_THRESHOLDS[1]) return 1;
-  return 2;
-}
-
-/**
- * Per-voice gain for a pack with no velocity calibration: the layer's static
- * trim scaled by how far the played velocity sits from the layer's reference.
- * One trim per layer cannot match recordings that differ note by note, so this
- * steps in level where the layers meet, by up to 6.6 dB on the grands; a pack
- * with a calibration (velocityCalibration.ts) plays by that instead.
- */
-export function velocityGain(velocity: number, layer: number): number {
-  const clamped = Math.min(1, Math.max(0.02, velocity));
-  const reference = LAYER_REFERENCE_VELOCITY[layer] ?? 0.6;
-  const trim = LAYER_TRIM[layer] ?? 1;
-  const gain = trim * Math.pow(clamped / reference, 0.6);
-  return Math.min(1.7, Math.max(0.25, gain));
-}
-
 interface LayerRoots {
   /** rootMidi → manifest entry, for every file in the pack. */
   entries: Map<number, SamplePackFileEntry>;
+  /** Every root the layer was recorded at, sorted. */
+  roots: number[];
   /** Sorted midi roots whose buffers are decoded and playable. */
   loadedRoots: number[];
 }
@@ -117,6 +103,19 @@ export class SampleBank {
   private calibration: VelocityCalibration | null = null;
   /** Its tone calibration, likewise; only ever with a velocity calibration. */
   private tone: ToneCalibration | null = null;
+  /** A grand's layers by index (see velocityLayers.ts); none for a pack mapped by regions. */
+  private labels: LayerLabel[] = [];
+  /** Where each of its layers above the softest takes over, in velocity. */
+  private thresholds: readonly number[] = [];
+  /** The layers it decodes once it plays; see `DEFERRED_LAYERS`. */
+  private deferredLayers: ReadonlySet<number> = new Set();
+  /**
+   * Whether the deferred layers load along with the keys they serve: from the
+   * moment the engine makes this the piano that sounds (`loadDeferred`) until
+   * its buffers are released. A piano still decoding for a switch never
+   * fetches them, nor holds them while the one it replaces plays on.
+   */
+  private deferredOn = false;
   private readonly buffers = new Map<string, AudioBuffer>();
   /** Each decoded file's onset; see `onsetOffsetOf`. */
   private readonly onsets = new Map<string, number>();
@@ -157,19 +156,42 @@ export class SampleBank {
       throw new Error(`Manifest fetch failed: ${response.status}`);
     }
     const manifest = (await response.json()) as SamplePackManifest;
+    // Checked before it is taken on: a grand whose layers make no sense would
+    // play its recordings at the wrong velocities, and a manifest taken on and
+    // then refused would leave the piano loading forever.
+    let labels: LayerLabel[] = [];
+    try {
+      if (!manifest.regions) labels = layerLabels(manifest.velocityLayers);
+    } catch (error) {
+      console.error('Sample manifest refused:', error);
+      this.fail('The piano’s sample manifest could not be read.');
+      throw error;
+    }
     this.manifest = manifest;
+    this.labels = labels;
+    this.thresholds = velocityThresholds(labels);
+    this.deferredLayers = new Set(
+      labels.flatMap((label, index) => (DEFERRED_LAYERS.has(label) ? [index] : [])),
+    );
     this.calibration = calibrationFor(manifest);
     this.tone = this.calibration ? toneCalibrationFor(manifest) : null;
     for (const entry of manifest.files) {
       let layer = this.layers.get(entry.layer);
       if (!layer) {
-        layer = { entries: new Map(), loadedRoots: [] };
+        layer = { entries: new Map(), roots: [], loadedRoots: [] };
         this.layers.set(entry.layer, layer);
       }
       layer.entries.set(entry.midi, entry);
-      if (entry.pack === 'core') this.coreTotalBytes += entry.bytes;
+      layer.roots.push(entry.midi);
+      if (entry.pack === 'core' && !this.isDeferred(entry)) this.coreTotalBytes += entry.bytes;
     }
+    for (const layer of this.layers.values()) layer.roots.sort((a, b) => a - b);
     return manifest;
+  }
+
+  /** Whether a file belongs to a layer decoded once the piano plays; see `DEFERRED_LAYERS`. */
+  private isDeferred(entry: SamplePackFileEntry): boolean {
+    return this.deferredLayers.has(entry.layer);
   }
 
   /**
@@ -185,12 +207,15 @@ export class SampleBank {
     if (generation !== this.generation) return;
     this.lastError = undefined;
     this.setPhase('loading-core');
+    // Medium first among a root's layers: the one every other falls back to
+    // soonest. A pack mapped by regions has no labels, and keeps layer 1.
+    const center = this.labels.length > 0 ? mediumLayer(this.labels) : 1;
     const core = manifest.files
-      .filter((entry) => entry.pack === 'core')
+      .filter((entry) => entry.pack === 'core' && !this.isDeferred(entry))
       .sort(
         (a, b) =>
           Math.abs(a.midi - LOAD_CENTER_MIDI) - Math.abs(b.midi - LOAD_CENTER_MIDI) ||
-          Math.abs(a.layer - 1) - Math.abs(b.layer - 1),
+          Math.abs(a.layer - center) - Math.abs(b.layer - center),
       );
     try {
       await this.loadEntries(context, core, generation);
@@ -211,6 +236,10 @@ export class SampleBank {
    * Decode any additional roots needed to play [lowMidi, highMidi]. Runs
    * concurrently with the core load; the phase is recomputed from actual
    * loaded state afterwards (never captured-and-restored — that races).
+   *
+   * Resolves once the range plays. Its deferred recordings (`DEFERRED_LAYERS`)
+   * are nothing it waits for or reports on: on the piano that sounds, they
+   * follow in the background, and until they do the soft layer stands in.
    */
   async ensureRangeLoaded(
     context: BaseAudioContext,
@@ -222,26 +251,115 @@ export class SampleBank {
     if (generation !== this.generation) return;
     const plays = playsRange(manifest, lowMidi, highMidi);
     const needed = manifest.files.filter((entry) => !this.buffers.has(entry.file) && plays(entry));
-    if (needed.length === 0) return;
-    if (this.phase === 'core-ready') this.setPhase('loading-extra');
-    try {
-      await this.loadEntries(context, needed, generation);
-      if (generation !== this.generation) return;
-      if (this.isCoreReady()) {
-        this.lastError = undefined;
-        this.setPhase('core-ready');
+    const now = needed.filter((entry) => !this.isDeferred(entry));
+    const later = needed.filter((entry) => this.isDeferred(entry));
+    if (now.length > 0) {
+      if (this.phase === 'core-ready') this.setPhase('loading-extra');
+      try {
+        await this.loadEntries(context, now, generation);
+        if (generation !== this.generation) return;
+        if (this.isCoreReady()) {
+          this.lastError = undefined;
+          this.setPhase('core-ready');
+        }
+      } catch (error) {
+        if (generation !== this.generation) return;
+        this.fail(error instanceof Error ? error.message : 'Piano samples could not be loaded.');
+        throw error;
       }
-    } catch (error) {
-      if (generation !== this.generation) return;
-      this.fail(error instanceof Error ? error.message : 'Piano samples could not be loaded.');
-      throw error;
     }
+    if (this.deferredOn) void this.loadInBackground(context, later, generation);
+  }
+
+  /**
+   * Make this the piano whose deferred recordings load: every one of a key it
+   * already plays, now, and from here on every one of a range it is asked for.
+   * The engine calls it on the piano that sounds, once it plays. Resolves when
+   * those it starts on are decoded, or have failed and left their stand-ins
+   * (logged, and tried again the next time they are needed); never rejects.
+   */
+  loadDeferred(context: BaseAudioContext): Promise<void> {
+    const manifest = this.manifest;
+    if (!manifest || this.deferredLayers.size === 0) return Promise.resolve();
+    this.deferredOn = true;
+    const playable = new Set<number>();
+    for (const [index, layer] of this.layers) {
+      if (!this.deferredLayers.has(index)) for (const root of layer.loadedRoots) playable.add(root);
+    }
+    const wanted = manifest.files
+      .filter(
+        (entry) =>
+          this.isDeferred(entry) && !this.buffers.has(entry.file) && playable.has(entry.midi),
+      )
+      .sort((a, b) => Math.abs(a.midi - LOAD_CENTER_MIDI) - Math.abs(b.midi - LOAD_CENTER_MIDI));
+    return this.loadInBackground(context, wanted, this.generation);
+  }
+
+  /**
+   * Decode the deferred recordings these notes ask for, and wait for them: an
+   * export renders the recording each of its notes wants, not the one that
+   * stands in while it loads. One that cannot be had — offline before it was
+   * ever fetched, say — is left to its stand-in, as live, and `getSample`
+   * marks the note so the export knows. Never rejects.
+   */
+  async loadRecordingsFor(
+    context: BaseAudioContext,
+    notes: readonly { midi: number; velocity: number }[],
+  ): Promise<void> {
+    const generation = this.generation;
+    await this.loadManifest();
+    if (generation !== this.generation || this.deferredLayers.size === 0) return;
+    const wanted = new Map<string, SamplePackFileEntry>();
+    for (const note of notes) {
+      const layer = velocityToLayer(note.velocity, this.thresholds);
+      if (!this.deferredLayers.has(layer)) continue;
+      const entry = this.ownRecording(layer, note.midi);
+      if (entry && !this.buffers.has(entry.file)) wanted.set(entry.file, entry);
+    }
+    await this.loadInBackground(context, [...wanted.values()], generation);
+  }
+
+  /**
+   * The recording of `layer` made at `midi`'s own nearest root, loaded or not;
+   * undefined past the reach of any.
+   */
+  private ownRecording(layer: number, midi: number): SamplePackFileEntry | undefined {
+    const recorded = this.layers.get(layer);
+    if (!recorded) return undefined;
+    const root = nearestValue(recorded.roots, midi);
+    if (root === undefined || Math.abs(root - midi) > MAX_ROOT_DISTANCE_SEMITONES) return undefined;
+    return recorded.entries.get(root);
+  }
+
+  /**
+   * Decode `entries` without holding anything up or saying anything to the
+   * player: a file that fails is logged and left to its stand-in, and never
+   * sets the bank's error, which the Play page would show whatever the phase.
+   * (A player who saved this piano for offline use before its deferred layers
+   * existed plays offline without them, and that is no error.)
+   */
+  private loadInBackground(
+    context: BaseAudioContext,
+    entries: readonly SamplePackFileEntry[],
+    generation: number,
+  ): Promise<void> {
+    if (entries.length === 0) return Promise.resolve();
+    return this.loadEntries(context, entries, generation, { quiet: true }).catch(
+      (error: unknown) => {
+        if (generation !== this.generation) return;
+        console.warn(
+          'Some pianissimo recordings could not be loaded; the soft layer plays for them.',
+          error,
+        );
+      },
+    );
   }
 
   /**
    * What loading the core and the keys of `span` decodes in all, counted in
    * file bytes as `loadedBytes` is — so the two make a load's progress. Null
-   * until the manifest is in.
+   * until the manifest is in. The deferred layers are no part of it: nothing
+   * waits for them.
    */
   bytesFor(span: { low: number; high: number } | null): number | null {
     const manifest = this.manifest;
@@ -249,6 +367,7 @@ export class SampleBank {
     const plays = span ? playsRange(manifest, span.low, span.high) : () => false;
     let total = 0;
     for (const entry of manifest.files) {
+      if (this.isDeferred(entry)) continue;
       if (entry.pack === 'core' || plays(entry)) total += entry.bytes;
     }
     return total;
@@ -262,6 +381,7 @@ export class SampleBank {
    */
   releaseBuffers(): void {
     this.generation += 1;
+    this.deferredOn = false;
     // The decodes still under way will drop what they bring, so a load after
     // this one must not wait on them: it would wait for nothing.
     this.inFlight.clear();
@@ -275,10 +395,11 @@ export class SampleBank {
     this.setPhase('idle');
   }
 
+  /** Whether the core plays: every core file decoded, but for the deferred layers'. */
   isCoreReady(): boolean {
     if (!this.manifest) return false;
     return this.manifest.files
-      .filter((entry) => entry.pack === 'core')
+      .filter((entry) => entry.pack === 'core' && !this.isDeferred(entry))
       .every((entry) => this.buffers.has(entry.file));
   }
 
@@ -323,6 +444,11 @@ export class SampleBank {
    * With `tone: false` (Settings → Piano → Tone follows touch, off) it gets
    * neither the lowpass nor its make-up, and plays its recording open, as every
    * note did before the ramps.
+   *
+   * A deferred layer (`DEFERRED_LAYERS`) plays only its recording of the
+   * note's own root: until that one is decoded — or where it could not be — a
+   * recording of the next layer at the right pitch stands in, rather than one of
+   * its own pitched from further away. Any stand-in is marked `standIn`.
    */
   getSample(
     midi: number,
@@ -330,12 +456,14 @@ export class SampleBank {
     { tone: toneFollowsTouch = true }: { tone?: boolean } = {},
   ): SampleSelection | null {
     if (this.manifest?.regions) return this.getMappedSample(midi, velocity);
-    const preferredLayer = velocityToLayer(velocity);
-    const order = [preferredLayer, 1, 0, 2].filter((v, i, arr) => arr.indexOf(v) === i);
-    for (const layerIndex of order) {
+    const preferredLayer = velocityToLayer(velocity, this.thresholds);
+    for (const layerIndex of layerSearchOrder(preferredLayer, this.labels.length)) {
       const layer = this.layers.get(layerIndex);
       if (!layer || layer.loadedRoots.length === 0) continue;
-      const root = nearestValue(layer.loadedRoots, midi);
+      const root = nearestValue(
+        this.deferredLayers.has(layerIndex) ? layer.roots : layer.loadedRoots,
+        midi,
+      );
       if (root === undefined || Math.abs(root - midi) > MAX_ROOT_DISTANCE_SEMITONES) continue;
       const entry = layer.entries.get(root);
       if (!entry) continue;
@@ -357,25 +485,20 @@ export class SampleBank {
       // lower, its spectrum moves with it, and so does the cutoff.
       const tone =
         this.tone && toneFollowsTouch
-          ? voiceTone(
-              this.tone,
-              VELOCITY_LAYER_THRESHOLDS,
-              velocity,
-              preferredLayer,
-              layerIndex,
-              root,
-            )
+          ? voiceTone(this.tone, this.thresholds, velocity, preferredLayer, layerIndex, root)
           : undefined;
+      const label = this.labels[preferredLayer] as LayerLabel;
       return {
         buffer,
         playbackRate,
-        gain: calibrated ?? velocityGain(velocity, preferredLayer) * this.levelMatchFor(layerIndex),
+        gain: calibrated ?? velocityGain(velocity, label) * this.levelMatchFor(layerIndex),
         offset: this.onsets.get(entry.file) ?? 0,
         releaseTc: releaseTcFor(midi),
         ...(midi >= UNDAMPED_FROM_MIDI ? { undamped: true } : {}),
         ...(tone
           ? { toneCutoffHz: tone.cutoffHz * playbackRate, toneMakeupDb: tone.makeupDb }
           : {}),
+        ...(layerIndex !== preferredLayer ? { standIn: true } : {}),
       };
     }
     return null;
@@ -445,11 +568,16 @@ export class SampleBank {
     return () => this.listeners.delete(listener);
   }
 
-  /** Load `entries`, stopping at the next file once `generation` is released. */
+  /**
+   * Load `entries`, stopping at the next file once `generation` is released.
+   * A `quiet` load's failures are the caller's to handle; they never become the
+   * bank's error (see `loadInBackground`).
+   */
   private async loadEntries(
     context: BaseAudioContext,
-    entries: SamplePackFileEntry[],
+    entries: readonly SamplePackFileEntry[],
     generation: number,
+    { quiet = false }: { quiet?: boolean } = {},
   ): Promise<void> {
     const queue = [...entries];
     const failures: unknown[] = [];
@@ -461,7 +589,7 @@ export class SampleBank {
         const entry = queue.shift();
         if (!entry) return;
         try {
-          await this.loadEntry(context, entry);
+          await this.loadEntry(context, entry, quiet);
         } catch (error) {
           failures.push(error);
         }
@@ -476,7 +604,11 @@ export class SampleBank {
     }
   }
 
-  private loadEntry(context: BaseAudioContext, entry: SamplePackFileEntry): Promise<void> {
+  private loadEntry(
+    context: BaseAudioContext,
+    entry: SamplePackFileEntry,
+    quiet: boolean,
+  ): Promise<void> {
     if (this.buffers.has(entry.file)) return Promise.resolve();
     const existing = this.inFlight.get(entry.file);
     if (existing) return existing;
@@ -485,8 +617,12 @@ export class SampleBank {
       .catch((error: unknown) => {
         // A load released mid-flight has no one left to tell.
         if (generation === this.generation) {
-          this.lastError = `Could not load piano sample ${entry.file}.`;
-          console.error('Sample load failed:', entry.file, error);
+          if (quiet) {
+            console.warn('Sample load failed:', entry.file, error);
+          } else {
+            this.lastError = `Could not load piano sample ${entry.file}.`;
+            console.error('Sample load failed:', entry.file, error);
+          }
         }
         throw error;
       })
@@ -525,8 +661,12 @@ export class SampleBank {
           layer.loadedRoots.sort((a, b) => a - b);
         }
         this.loadedFiles += 1;
-        this.loadedBytes += entry.bytes;
-        if (entry.pack === 'core') this.coreLoadedBytes += entry.bytes;
+        // Progress is the piano becoming playable, which a deferred layer never
+        // holds up; see `bytesFor` and `coreTotalBytes`.
+        if (!this.isDeferred(entry)) {
+          this.loadedBytes += entry.bytes;
+          if (entry.pack === 'core') this.coreLoadedBytes += entry.bytes;
+        }
         this.emit();
         return;
       } catch (error) {

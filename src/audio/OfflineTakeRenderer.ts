@@ -69,6 +69,13 @@ export interface RenderedTake {
    * toward how loud the piano is; see `ClickTrack`.
    */
   clicks: ClickTrack | null;
+  /**
+   * How many notes played from a stand-in, the recording they asked for
+   * being out of reach (`SampleSelection.standIn`): a pianissimo recording
+   * that could not be fetched, offline, say. Such a render sounds as the
+   * piano does live without it, and is not one to keep as the take's export.
+   */
+  standIns: number;
 }
 
 /**
@@ -287,6 +294,10 @@ export async function renderTakeForExport(
       if (note.midi > maxMidi) maxMidi = note.midi;
     }
     await audioEngine.ensurePlayableRange(minMidi, maxMidi, { remember: false });
+    // And the pianissimo recordings its soft notes ask for, which the piano
+    // decodes only once it plays: a render never keeps a stand-in that a
+    // moment's wait would replace.
+    await audioEngine.loadRecordingsFor(effectiveNotes);
   }
   const sampleFor = (midi: number, velocity: number) =>
     audioEngine.bank.getSample(midi, velocity, { tone: options.toneFollowsTouch });
@@ -301,6 +312,7 @@ export async function renderTakeForExport(
       'exportPianoLoading',
     );
   }
+  const standIns = samples.filter((sample) => sample?.standIn).length;
   const ringOut = undampedRingOutSeconds(effectiveNotes, sampleFor);
   const length = Math.ceil(cappedRenderSeconds(take, ringOut) * RENDER_SAMPLE_RATE);
   const context = new OfflineAudioContext({
@@ -326,7 +338,7 @@ export async function renderTakeForExport(
     options.includeMetronome ? renderClickTrack(take, options.metronomeVolume) : null,
     scheduling,
   ]);
-  return { piano, clicks };
+  return { piano, clicks, standIns };
 }
 
 /** The take's clicks, and the two sounds they are made of; see `ClickTrack`. */

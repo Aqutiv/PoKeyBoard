@@ -338,6 +338,9 @@ export class AudioEngine {
     this.stopWatchingSwitchProgress();
     this.releaseIdleBanks();
     this.setSwitchState({ pending: null, failed: null, progress: 0 });
+    // Only now, as the piano that sounds, does it fetch its pianissimo
+    // recordings: a switch still decoding, or called off, never holds them.
+    if (this.context) void this.bank.loadDeferred(this.context);
   }
 
   /** The new piano could not be loaded: the one playing stays, and is chosen again. */
@@ -486,6 +489,8 @@ export class AudioEngine {
     const bank = this.bank;
     try {
       await bank.loadCorePack(this.context);
+      // The piano plays; its pianissimo recordings follow (SampleBank.loadDeferred).
+      if (bank.isCoreReady() && bank === this.bank) void bank.loadDeferred(this.context);
     } catch (error) {
       console.error('Core sample load failed:', error);
       this.coreLoadStarted = false; // allow retry from the UI
@@ -510,6 +515,17 @@ export class AudioEngine {
     if (remember) this.lastRange = { low: lowMidi, high: highMidi };
     if (!this.context) return;
     await this.bank.ensureRangeLoaded(this.context, lowMidi, highMidi);
+  }
+
+  /**
+   * Decode the deferred recordings — a grand's pianissimo layer — these notes
+   * ask for, and wait for them (`SampleBank.loadRecordingsFor`). An export
+   * calls it after `ensurePlayableRange`, so it renders each note from the
+   * recording it asks for rather than the one standing in while that loads.
+   */
+  async loadRecordingsFor(notes: readonly { midi: number; velocity: number }[]): Promise<void> {
+    if (!this.context) return;
+    await this.bank.loadRecordingsFor(this.context, notes);
   }
 
   /**

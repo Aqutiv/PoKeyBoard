@@ -4,12 +4,7 @@ import path from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SamplePackFileEntry, SamplePackManifest } from '@/audio/audioTypes';
 import { PIANO_INSTRUMENTS } from '@/audio/instruments';
-import {
-  SampleBank,
-  VELOCITY_LAYER_THRESHOLDS,
-  velocityGain,
-  velocityToLayer,
-} from '@/audio/SampleBank';
+import { SampleBank } from '@/audio/SampleBank';
 import { VELOCITY_CALIBRATIONS } from '@/audio/velocityCalibration';
 import {
   ANCHOR_HIGH_MIDI,
@@ -23,6 +18,13 @@ import {
   type VelocityCalibration,
 } from '@/audio/velocityCalibrationMath';
 import { curveDb } from '@/audio/velocityCurve';
+import {
+  layerLabels,
+  mediumLayer,
+  velocityGain,
+  velocityThresholds,
+  velocityToLayer,
+} from '@/audio/velocityLayers';
 
 /**
  * The calibration as it ships: the committed table, over the committed packs,
@@ -46,9 +48,16 @@ const CALIBRATED = PIANO_INSTRUMENTS.filter(
   (instrument) => !manifestOf(instrument.packVersion).regions,
 );
 
+/** A grand manifest's layers as the bank reads them: labels, thresholds, and which is medium. */
+function layersOf(manifest: SamplePackManifest) {
+  const labels = layerLabels(manifest.velocityLayers);
+  return { labels, thresholds: velocityThresholds(labels), medium: mediumLayer(labels) };
+}
+
 /**
  * A bank over a real manifest, holding `files` of it (all of them unless
- * said), each "decoded" to a stand-in that names its file.
+ * said), each "decoded" to a stand-in that names its file — its deferred
+ * layers too, as a piano that sounds has them once they arrive.
  */
 async function loadedBank(
   manifest: SamplePackManifest,
@@ -71,6 +80,7 @@ async function loadedBank(
   } as unknown as BaseAudioContext;
   const bank = new SampleBank('/pack/');
   await bank.loadCorePack(context);
+  await bank.loadDeferred(context);
   return bank;
 }
 
@@ -192,11 +202,12 @@ describe('the velocity calibration table', () => {
 describe.each(CALIBRATED)('the calibrated $packVersion', ({ packVersion }) => {
   const manifest = manifestOf(packVersion);
   const calibration = VELOCITY_CALIBRATIONS[packVersion]!;
+  const { labels, thresholds, medium } = layersOf(manifest);
 
-  it('meets itself at both layer boundaries, on every key', async () => {
+  it('meets itself at every layer boundary, on every key', async () => {
     const bank = await loadedBank(manifest);
     for (const midi of KEYS) {
-      for (const boundary of VELOCITY_LAYER_THRESHOLDS) {
+      for (const boundary of thresholds) {
         const below = hear(bank, manifest, calibration, midi, boundary - 0.001);
         const above = hear(bank, manifest, calibration, midi, boundary + 0.001);
         // Two recordings meet here, so the test is about something.
@@ -209,9 +220,11 @@ describe.each(CALIBRATED)('the calibrated $packVersion', ({ packVersion }) => {
   it('plays the middle three octaves at the computer keyboard’s velocity as loudly as before', async () => {
     const bank = await loadedBank(manifest);
     const velocity = 0.75;
-    const layer = velocityToLayer(velocity);
+    // Its medium layer, wherever that is numbered, as the table's anchor has it.
+    const layer = velocityToLayer(velocity, thresholds);
+    expect(layer).toBe(medium);
     const levelMatch = manifest.velocityLayers.find((entry) => entry.index === layer)?.levelMatch;
-    const oldGainDb = 20 * Math.log10(velocityGain(velocity, layer) * (levelMatch ?? 1));
+    const oldGainDb = 20 * Math.log10(velocityGain(velocity, labels[layer]!) * (levelMatch ?? 1));
     const before: number[] = [];
     const after: number[] = [];
     for (let midi = ANCHOR_LOW_MIDI; midi <= ANCHOR_HIGH_MIDI; midi += 1) {
@@ -237,7 +250,7 @@ describe.each(CALIBRATED)('the calibrated $packVersion', ({ packVersion }) => {
   it('plays a stand-in at the level of the recording it stands in for', async () => {
     /** How far a root plays off its target, all layers alike: what the limit held back. */
     const heldBack = (root: number) => {
-      const recorded = calibration.layers[1]!.roots.find((entry) => entry.midi === root)!;
+      const recorded = calibration.layers[medium]!.roots.find((entry) => entry.midi === root)!;
       return recorded.measuredDb - recorded.correctedDb;
     };
     const full = await loadedBank(manifest);
@@ -252,13 +265,13 @@ describe.each(CALIBRATED)('the calibrated $packVersion', ({ packVersion }) => {
     // holds, and what a phone has early in a load.
     const partial = await loadedBank(
       manifest,
-      manifest.files.filter((entry) => entry.layer === 1 && (entry.midi - 21) % 6 === 0),
+      manifest.files.filter((entry) => entry.layer === medium && (entry.midi - 21) % 6 === 0),
     );
     for (const midi of KEYS) {
       for (const velocity of [0.2, 0.6, 0.95]) {
         const standIn = hear(partial, manifest, calibration, midi, velocity);
         const own = heardInFull.get(`${midi}@${velocity}`)!;
-        expect(standIn.entry.layer).toBe(1);
+        expect(standIn.entry.layer).toBe(medium);
         const target = targetDb(calibration, velocity, midi);
         expect(standIn.levelDb).toBeCloseTo(target + heldBack(standIn.entry.midi), 1);
         expect(own.levelDb).toBeCloseTo(target + heldBack(own.entry.midi), 1);
@@ -276,14 +289,15 @@ describe('a pack without a table', () => {
     const manifest = { ...real, version: 'headroom-grand-v99' };
     expect(VELOCITY_CALIBRATIONS[manifest.version]).toBeUndefined();
     const bank = await loadedBank(manifest);
+    const { labels, thresholds } = layersOf(manifest);
     for (const midi of [30, 60, 90]) {
       for (const velocity of [0.1, 0.449, 0.451, 0.75, 0.779, 0.781, 1]) {
-        const layer = velocityToLayer(velocity);
+        const layer = velocityToLayer(velocity, thresholds);
         const levelMatch = manifest.velocityLayers.find(
           (entry) => entry.index === layer,
         )!.levelMatch!;
         expect(bank.getSample(midi, velocity)!.gain).toBeCloseTo(
-          velocityGain(velocity, layer) * levelMatch,
+          velocityGain(velocity, labels[layer]!) * levelMatch,
           12,
         );
       }
@@ -297,8 +311,9 @@ describe('SampleBank.isCalibrated', () => {
       const manifest = manifestOf(packVersion);
       expect((await loadedBank(manifest)).isCalibrated(), packVersion).toBe(true);
       // The e2e suite's stub pack: a few roots of the medium layer.
+      const { medium } = layersOf(manifest);
       const stub = manifest.files.filter(
-        (entry) => entry.layer === 1 && (entry.midi - 21) % 18 === 0,
+        (entry) => entry.layer === medium && (entry.midi - 21) % 18 === 0,
       );
       expect((await loadedBank(manifest, stub)).isCalibrated(), packVersion).toBe(true);
     }

@@ -7,9 +7,18 @@ import type { InstrumentSettings, ReverbRoom, Take } from '@/domain/takeTypes';
  * offline context are stubs, so what is under test is what the renderer asks of
  * them — which room its graph is built in, and how long it renders for.
  */
-const { createPianoGraph, getSample, rendered } = vi.hoisted(() => ({
+const { createPianoGraph, getSample, loadRecordingsFor, rendered } = vi.hoisted(() => ({
   createPianoGraph: vi.fn(() => ({ voiceDestination: {} })),
-  getSample: vi.fn(() => ({ buffer: { duration: 4 }, playbackRate: 1, gain: 1 })),
+  getSample: vi.fn(
+    (): { buffer: { duration: number }; playbackRate: number; gain: number; standIn?: true } => ({
+      buffer: { duration: 4 },
+      playbackRate: 1,
+      gain: 1,
+    }),
+  ),
+  loadRecordingsFor: vi.fn<(notes: readonly { midi: number; velocity: number }[]) => Promise<void>>(
+    async () => {},
+  ),
   rendered: [] as Array<{ length: number; sampleRate: number }>,
 }));
 
@@ -17,6 +26,7 @@ vi.mock('@/audio/PianoGraphFactory', () => ({ createPianoGraph }));
 vi.mock('@/audio/AudioEngine', () => ({
   audioEngine: {
     ensurePlayableRange: vi.fn(async () => undefined),
+    loadRecordingsFor,
     bank: { getSample },
   },
 }));
@@ -47,6 +57,7 @@ beforeEach(() => {
   vi.stubGlobal('OfflineAudioContext', StubOfflineContext);
   createPianoGraph.mockClear();
   getSample.mockClear();
+  loadRecordingsFor.mockClear();
   rendered.length = 0;
 });
 
@@ -117,6 +128,42 @@ describe('rendering a take for export', () => {
       }
     },
   );
+
+  it('waits for the recordings its notes ask for before choosing any, and counts the stand-ins', async () => {
+    const { renderTakeForExport } = await import('@/audio/OfflineTakeRenderer');
+    // The first note's pianissimo recording could not be had: the soft one stands in.
+    getSample.mockImplementationOnce(() => ({
+      buffer: { duration: 4 },
+      playbackRate: 1,
+      gain: 1,
+      standIn: true,
+    }));
+    const take = createEmptyTake({
+      notes: [
+        { id: 'soft', midi: 60, startMs: 0, durationMs: 500, velocity: 0.2 },
+        { id: 'loud', midi: 64, startMs: 500, durationMs: 500, velocity: 0.9 },
+      ],
+      durationMs: 1000,
+    });
+    const result = await renderTakeForExport(take, {
+      includeMetronome: false,
+      metronomeVolume: 0,
+      toneFollowsTouch: true,
+    });
+
+    // Every note it plays, soft and loud, for the piano to pick from.
+    expect(loadRecordingsFor).toHaveBeenCalledOnce();
+    expect(
+      loadRecordingsFor.mock.calls[0]![0].map(({ midi, velocity }) => [midi, velocity]),
+    ).toEqual([
+      [60, 0.2],
+      [64, 0.9],
+    ]);
+    expect(loadRecordingsFor.mock.invocationCallOrder[0]!).toBeLessThan(
+      getSample.mock.invocationCallOrder[0]!,
+    );
+    expect(result.standIns).toBe(1);
+  });
 
   it('counts a long room’s tail in the memory it warns about', async () => {
     const { estimateRenderMemoryMB } = await import('@/audio/OfflineTakeRenderer');
