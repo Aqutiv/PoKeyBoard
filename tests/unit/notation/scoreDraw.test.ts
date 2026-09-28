@@ -2225,6 +2225,56 @@ describe('drawScore bar numbers and tempo marks', () => {
     expectClearOver(drawn, mark);
   });
 
+  it('reads a stack of beams under high heads only where each is drawn', () => {
+    // C7s stemmed down: a dotted eighth and two 32nds. Their beam hangs under
+    // the heads and still stands over the staff, and the 32nds' second and
+    // third beams stack up over it only between those two. Under the tempo
+    // mark runs the dotted eighth's stretch, one beam deep.
+    const beat = 60_000 / 50;
+    const run: [number, number][] = [
+      [0, 0.75],
+      [0.75, 0.125],
+      [0.875, 0.125],
+    ];
+    const notes: NoteEvent[] = [
+      { id: 'w', midi: 60, startMs: 0, durationMs: 4000, velocity: 0.7, staff: 'treble' },
+      ...run.map(([at, beats], i): NoteEvent => ({
+        id: `b${i}`,
+        midi: 96,
+        startMs: Math.round(4000 + at * beat),
+        durationMs: Math.round(beats * beat),
+        velocity: 0.7,
+        staff: 'treble',
+      })),
+      {
+        id: 'r',
+        midi: 60,
+        startMs: Math.round(4000 + beat),
+        durationMs: Math.round(3 * beat),
+        velocity: 0.7,
+        staff: 'treble',
+      },
+    ];
+    const score = layoutScore(notes, {
+      ...LAYOUT_OPTS,
+      quantization: '1/32',
+      tempoChanges: [{ atMs: 4000, bpm: 50 }],
+    });
+    const layout = { ...score, dynamics: [], hairpins: [] };
+    expect(layout.octaves).toEqual([]);
+    const beamed = layout.beams.find((beam) => beam.members.length === 3);
+    expect(beamed?.stemDown).toBe(true);
+    expect(beamed?.secondary).toHaveLength(2);
+    // A lesson draws no numbers, so nothing else stands the mark up.
+    const drawn = render(layout, {}, 'treble', 'lesson', {
+      widthPx: 900,
+      pxPerMs: basePxPerMsFor(layout),
+    });
+    const mark = tempoBox(drawn, 50);
+    expect(mark.bottom).toBe(drawn.view.trebleTop - 20);
+    expectClearOver(drawn, mark);
+  });
+
   it('stands a tempo mark over its bar’s number when that is lifted', () => {
     // A C6 on the downbeat lifts bar 2's number; the tempo mark stays above it.
     const drawn = play(

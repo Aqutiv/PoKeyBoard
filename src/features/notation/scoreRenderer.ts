@@ -459,9 +459,13 @@ interface InkPiece {
 }
 
 /**
- * The upper edge of a beam run, from its first stem to its last: `y1` to
- * `y2`, straight between. Each stem stands `inset` off its chord's onset, so
- * the edge can be read at any spacing (see `beamLineRel`).
+ * A beam run over the treble staff: the first beam's upper edge, from its
+ * first stem to its last, `y1` to `y2`, straight between. Each stem stands
+ * `inset` off its chord's onset, so the edge can be read at any spacing (see
+ * `beamLineRel`). Under high heads stemmed down, the beams after the first
+ * stack up over it toward the heads, each only over its own pieces of the run
+ * (see `drawBeams`): `stacked` holds its members' onsets and those pieces,
+ * level by level, as the layout gives them.
  */
 interface BeamEdge {
   fromMs: number;
@@ -469,6 +473,37 @@ interface BeamEdge {
   inset: number;
   y1: number;
   y2: number;
+  stacked: { onsets: number[]; levels: BeamPiece[][] } | null;
+}
+
+/** A straight stretch of a beam's upper edge, across the take at one spacing. */
+interface BeamStretch {
+  x1: number;
+  x2: number;
+  y1: number;
+  y2: number;
+}
+
+/**
+ * The upper edges of a beam run as `drawBeams` draws it at `pxPerMs`: the
+ * first beam, and each piece of any stacked over it.
+ */
+function beamStretchesAt(beam: BeamEdge, pxPerMs: number): BeamStretch[] {
+  const x1 = beam.fromMs * pxPerMs + beam.inset;
+  const x2 = beam.toMs * pxPerMs + beam.inset;
+  const stretches = [{ x1, x2, y1: beam.y1, y2: beam.y2 }];
+  if (!beam.stacked) return stretches;
+  const y = (x: number): number =>
+    x2 === x1 ? beam.y1 : beam.y1 + ((x - x1) / (x2 - x1)) * (beam.y2 - beam.y1);
+  const xs = beam.stacked.onsets.map((ms) => ms * pxPerMs + beam.inset);
+  beam.stacked.levels.forEach((pieces, index) => {
+    const lift = (index + 1) * BEAM_SPACING_PX;
+    for (const piece of pieces) {
+      const [from, to] = beamPieceXs(xs, piece, GAP);
+      stretches.push({ x1: from, x2: to, y1: y(from) - lift, y2: y(to) - lift });
+    }
+  });
+  return stretches;
 }
 
 /**
@@ -581,17 +616,21 @@ function trebleInkFor(layout: ScoreLayout): TrebleInk {
     if (!line) continue;
     const inset =
       (beam.stemDown ? -1 : 1) * stemInsetPx((beam.members[0] as ChordGroup).symbol.base);
-    // The first beam's upper edge — or, under high heads stemmed down, the
-    // edge of the last beam, which the others stack up from, toward the heads.
-    const over =
-      BEAM_THICKNESS_PX / 2 + (beam.stemDown ? beam.secondary.length * BEAM_SPACING_PX : 0);
-    if (Math.min(line.span.y1, line.span.y2) - over >= 0) continue;
+    const half = BEAM_THICKNESS_PX / 2;
+    // Under high heads stemmed down, the beams after the first stack up
+    // toward the heads, and can stand over the staff where the first does not.
+    const stacked = beam.stemDown && beam.secondary.length > 0;
+    const highest = stacked ? beam.secondary.length * BEAM_SPACING_PX : 0;
+    if (Math.min(line.span.y1, line.span.y2) - half - highest >= 0) continue;
     beams.push({
       fromMs: line.fromMs,
       toMs: line.toMs,
       inset,
-      y1: line.span.y1 - over,
-      y2: line.span.y2 - over,
+      y1: line.span.y1 - half,
+      y2: line.span.y2 - half,
+      stacked: stacked
+        ? { onsets: beam.members.map((chord) => chord.displayStartMs), levels: beam.secondary }
+        : null,
     });
     longestMs = Math.max(longestMs, line.toMs - line.fromMs);
     if (beam.tupletCount !== null && !beam.stemDown) {
@@ -646,6 +685,7 @@ function trebleInkFor(layout: ScoreLayout): TrebleInk {
   ties.sort((a, b) => a.fromMs - b.fromMs);
   let reach = 0;
   for (const p of pieces) reach = Math.max(reach, -p.left, p.right);
+  for (const beam of beams) reach = Math.max(reach, Math.abs(beam.inset));
   const ink = { pieces, reach, beams, ties, longestMs };
   trebleInks.set(layout, ink);
   return ink;
@@ -694,14 +734,14 @@ function trebleInkTopOver(
   // Beams belong with the stems they join.
   for (let i = firstAtOrAfter(beams, sinceMs, (b) => b.fromMs); stems && i < beams.length; i += 1) {
     const beam = beams[i] as BeamEdge;
-    const x1 = beam.fromMs * pxPerMs + beam.inset;
-    if (x1 >= right) break;
-    const x2 = beam.toMs * pxPerMs + beam.inset;
-    const lo = Math.max(left, x1);
-    const hi = Math.min(right, x2);
-    if (hi <= lo) continue;
-    const y = (x: number): number => beam.y1 + ((x - x1) / (x2 - x1)) * (beam.y2 - beam.y1);
-    top = Math.min(top, y(lo), y(hi));
+    if (beam.fromMs * pxPerMs - reach >= right) break;
+    for (const { x1, x2, y1, y2 } of beamStretchesAt(beam, pxPerMs)) {
+      const lo = Math.max(left, x1);
+      const hi = Math.min(right, x2);
+      if (hi <= lo) continue;
+      const y = (x: number): number => y1 + ((x - x1) / (x2 - x1)) * (y2 - y1);
+      top = Math.min(top, y(lo), y(hi));
+    }
   }
   for (let i = firstAtOrAfter(ties, sinceMs, (t) => t.fromMs); i < ties.length; i += 1) {
     const tie = ties[i] as TieArc;
@@ -752,16 +792,18 @@ function trebleStemInkFrom(
   const sinceMs = (left - reach) / pxPerMs - longestMs;
   for (let i = firstAtOrAfter(beams, sinceMs, (b) => b.fromMs); i < beams.length; i += 1) {
     const beam = beams[i] as BeamEdge;
-    const x1 = beam.fromMs * pxPerMs + beam.inset;
-    if (x1 >= right) break;
-    const x2 = beam.toMs * pxPerMs + beam.inset;
-    const lo = Math.max(left, x1);
-    const hi = Math.min(right, x2);
-    if (hi <= lo) continue;
-    const y = (x: number): number => beam.y1 + ((x - x1) / (x2 - x1)) * (beam.y2 - beam.y1);
-    // Straight, so it rises past `top` at one point, if anywhere across.
-    if (y(lo) < top) edge = Math.min(edge, lo);
-    else if (y(hi) < top) edge = Math.min(edge, lo + ((top - y(lo)) / (y(hi) - y(lo))) * (hi - lo));
+    if (beam.fromMs * pxPerMs - reach >= right) break;
+    for (const { x1, x2, y1, y2 } of beamStretchesAt(beam, pxPerMs)) {
+      const lo = Math.max(left, x1);
+      const hi = Math.min(right, x2);
+      if (hi <= lo) continue;
+      const y = (x: number): number => y1 + ((x - x1) / (x2 - x1)) * (y2 - y1);
+      // Straight, so it rises past `top` at one point, if anywhere across.
+      if (y(lo) < top) edge = Math.min(edge, lo);
+      else if (y(hi) < top) {
+        edge = Math.min(edge, lo + ((top - y(lo)) / (y(hi) - y(lo))) * (hi - lo));
+      }
+    }
   }
   return edge;
 }
