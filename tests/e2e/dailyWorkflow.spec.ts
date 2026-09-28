@@ -6,7 +6,9 @@ test.use({ viewport: { width: 1440, height: 900 } });
 test('piano controls synchronize with Settings in both directions', async ({ page }) => {
   await gotoAppReady(page);
   await page.getByRole('combobox', { name: 'Piano', exact: true }).selectOption('wurlitzer-ep203w');
-  await expect(page.locator('section[data-piano-ready="true"]')).toBeVisible();
+  // As long as gotoAppReady allows: under POKEYBOARD_E2E_REAL_PACK, the keys
+  // this wide keyboard shows beyond the core may still be decoding.
+  await expect(page.locator('section[data-piano-ready="true"]')).toBeVisible({ timeout: 30_000 });
   await page.getByRole('slider', { name: 'Piano volume', exact: true }).fill('0.4');
   await nav(page).getByRole('button', { name: 'Settings' }).click();
   await expect(page.getByRole('radio', { name: /Wurlitzer/ })).toBeChecked();

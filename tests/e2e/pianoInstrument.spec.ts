@@ -106,7 +106,11 @@ test.describe('choosing a piano', () => {
       .locator('.piano-card')
       .filter({ has: page.locator('strong', { hasText: /^Headroom$/ }) });
     await acousticRow.getByRole('button', { name: /^Download / }).click();
-    await expect(acousticRow.getByRole('button', { name: /^Delete / })).toBeVisible();
+    // Under POKEYBOARD_E2E_REAL_PACK this is Headroom's whole 24 MB, file by
+    // file, beside the pianissimo recordings the playing piano fetches.
+    await expect(acousticRow.getByRole('button', { name: /^Delete / })).toBeVisible({
+      timeout: 30_000,
+    });
     // Each piano card owns its download and delete controls.
     const packRow = page
       .locator('.piano-card')
