@@ -8,7 +8,7 @@ export const MIN_DISPLAY_ZOOM = 0.25;
 export const MAX_DISPLAY_ZOOM = 4;
 
 /** Each step of the zoom buttons, as a factor. */
-const ZOOM_STEP = 1.25;
+export const ZOOM_STEP = 1.25;
 
 /**
  * The narrowest space the score leaves between two onsets that follow each

@@ -31,6 +31,11 @@ interface GlyphCall {
 
 /** Every glyph drawn in this file, in order; each render keeps its own slice. */
 const glyphLog: GlyphCall[] = [];
+/**
+ * Set while a glyph's outline is being filled, so the recording context can
+ * tell a glyph's fill from a shape the renderer fills itself — a beam, a tie.
+ */
+let fillingGlyph = false;
 
 vi.doMock('@/features/notation/glyphs/drawGlyph', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/features/notation/glyphs/drawGlyph')>();
@@ -40,7 +45,12 @@ vi.doMock('@/features/notation/glyphs/drawGlyph', async (importOriginal) => {
       const [ctx, name, x, y, space] = args;
       const alpha = (ctx as unknown as { globalAlpha?: number }).globalAlpha ?? 1;
       glyphLog.push({ name, x, y, space, fill: String(ctx.fillStyle), alpha });
-      actual.drawGlyph(...args);
+      fillingGlyph = true;
+      try {
+        actual.drawGlyph(...args);
+      } finally {
+        fillingGlyph = false;
+      }
     },
   };
 });
@@ -61,6 +71,7 @@ const {
   SCORE_PALETTES,
   scoreEndMs,
 } = await import('@/features/notation/scoreRenderer');
+const { basePxPerMsFor } = await import('@/features/notation/scoreZoom');
 
 interface Point {
   x: number;
@@ -74,6 +85,23 @@ interface StrokedPath {
   points: Point[];
 }
 
+/** A quadratic curve in a filled path: from `from`, pulled toward `control`, to `to`. */
+interface Curve {
+  from: Point;
+  control: Point;
+  to: Point;
+}
+
+/**
+ * A shape the renderer filled itself, rather than a glyph's outline: its
+ * points, the curves among them, and the fillStyle in force.
+ */
+interface FilledShape {
+  style: string;
+  points: Point[];
+  curves: Curve[];
+}
+
 interface Recorder {
   ctx: CanvasRenderingContext2D;
   /** Every fillStyle in force at the moment `fill()` was called. */
@@ -84,6 +112,8 @@ interface Recorder {
   labels: { text: string; x: number; y: number }[];
   /** Every path stroked, in order. Enough to find where a line was drawn. */
   paths: StrokedPath[];
+  /** Every shape filled that is not a glyph — a beam, a tie — in order. */
+  shapes: FilledShape[];
   /** Every `fillRect`, with the fillStyle in force — a wash, the gutter. */
   rects: { style: string; x: number; width: number }[];
   /** Every paint, in order, as "fill:", "stroke:" or "rect:" and the style. */
@@ -110,6 +140,7 @@ function recordingContext(): Recorder {
   const texts: string[] = [];
   const labels: { text: string; x: number; y: number }[] = [];
   const paths: StrokedPath[] = [];
+  const shapes: FilledShape[] = [];
   const rects: { style: string; x: number; width: number }[] = [];
   const ops: string[] = [];
   // Only translation is tracked: the renderer places everything else itself.
@@ -122,6 +153,7 @@ function recordingContext(): Recorder {
   };
   const saved: CanvasState[] = [];
   let path: Point[] = [];
+  let curves: Curve[] = [];
   const at = (x: number, y: number): Point => ({ x: state.offset.x + x, y: state.offset.y + y });
 
   const ctx = {
@@ -166,11 +198,16 @@ function recordingContext(): Recorder {
     },
     beginPath: () => {
       path = [];
+      curves = [];
     },
     closePath: () => {},
     moveTo: (x: number, y: number) => void path.push(at(x, y)),
     lineTo: (x: number, y: number) => void path.push(at(x, y)),
-    quadraticCurveTo: () => {},
+    quadraticCurveTo: (cx: number, cy: number, x: number, y: number) => {
+      const from = path[path.length - 1];
+      if (from) curves.push({ from, control: at(cx, cy), to: at(x, y) });
+      path.push(at(x, y));
+    },
     bezierCurveTo: () => {},
     arc: () => {},
     ellipse: () => {},
@@ -184,6 +221,7 @@ function recordingContext(): Recorder {
     fill: () => {
       fills.push(state.fillStyle);
       ops.push(`fill:${state.fillStyle}`);
+      if (!fillingGlyph) shapes.push({ style: state.fillStyle, points: path, curves });
     },
     stroke: () => {
       strokes.push(state.strokeStyle);
@@ -199,7 +237,7 @@ function recordingContext(): Recorder {
     setLineDash: () => {},
   } as unknown as CanvasRenderingContext2D;
 
-  return { ctx, fills, strokes, texts, labels, paths, rects, ops };
+  return { ctx, fills, strokes, texts, labels, paths, shapes, rects, ops };
 }
 
 const LAYOUT_OPTS = {
@@ -377,8 +415,8 @@ function inkOf(glyph: GlyphCall): Ink {
   };
 }
 
-/** The box a stroked path's points span. */
-function pathInk(path: StrokedPath): Ink {
+/** The box a path's points span: one stroked, or a shape filled. */
+function pathInk(path: { points: readonly Point[] }): Ink {
   const xs = path.points.map((point) => point.x);
   const ys = path.points.map((point) => point.y);
   return {
@@ -1775,5 +1813,522 @@ describe('drawScore bar lines', () => {
     ]);
     const drawn = render(opening, {}, 'treble', null, WIDE);
     expect(drawn.texts).toContain('1');
+  });
+});
+
+describe('drawScore bar numbers and tempo marks', () => {
+  const { noteDim, staffLine } = SCORE_PALETTES.dark;
+  const noteInk = SCORE_PALETTES.dark.note;
+  /** Clear space a bar number or a tempo mark keeps above the music under it. */
+  const CLEAR = 0.25 * GAP;
+  /** Clear space between marks stacked over one another: a number, an 8va, a tempo mark. */
+  const STACKED = 0.5 * GAP;
+  /** How far above the staff a number's baseline stands when nothing under it reaches that far. */
+  const NUMBER_RISE = 8;
+  /** How tall a numeral's ink stands in the marks' type: about three quarters of its 10 px. */
+  const NUMERAL = 7.5;
+  /** How wide the renderer allows a numeral to be in that type: a little over half its size. */
+  const FIGURE = 5.5;
+  /** How wide it allows the "= " before a tempo mark's number: about the type's size. */
+  const EQUALS = 10;
+
+  /** Drawn as the Play page draws a take at 100%: full chrome, both staves, its own spacing. */
+  const play = (layout: ScoreLayout, scrollMs = 0): Drawn =>
+    render(layout, {}, 'grand', null, { widthPx: 900, pxPerMs: basePxPerMsFor(layout), scrollMs });
+
+  /** A stroke's ink: its points, thickened by half its width across the line. */
+  const strokeInk = (path: StrokedPath): Ink => {
+    const ink = pathInk(path);
+    const half = path.width / 2;
+    return ink.left === ink.right
+      ? { ...ink, left: ink.left - half, right: ink.right + half }
+      : { ...ink, top: ink.top - half, bottom: ink.bottom + half };
+  };
+
+  /**
+   * The music's ink over the treble staff: heads, accidentals, dots, flags and
+   * tuplet numerals, and the stems and ledger lines stroked for them. Beams
+   * slope and ties arc, so they are measured where they run (`beamTopOver`,
+   * `tieTopOver`).
+   */
+  const trebleInk = (drawn: Drawn): Ink[] =>
+    [
+      ...drawn.glyphs
+        .filter((glyph) => /^(notehead|accidental|augmentationDot|flag|tuplet)/.test(glyph.name))
+        .map(inkOf),
+      ...drawn.paths
+        .filter(
+          (path) =>
+            path.width === STEM_W ||
+            (path.style === staffLine && pathInk(path).right - pathInk(path).left < 3 * GAP),
+        )
+        .map(strokeInk),
+    ].filter((ink) => ink.right > drawn.view.gutterPx && ink.top < drawn.view.bassTop);
+
+  /** The highest a beam's straight edges stand anywhere over `left`..`right`. */
+  const beamTopOver = (shape: FilledShape, left: number, right: number): number => {
+    let top = Number.POSITIVE_INFINITY;
+    shape.points.forEach((from, i) => {
+      const to = shape.points[(i + 1) % shape.points.length] as Point;
+      const lo = Math.max(left, Math.min(from.x, to.x));
+      const hi = Math.min(right, Math.max(from.x, to.x));
+      if (hi < lo) return;
+      const y = (x: number): number =>
+        to.x === from.x
+          ? Math.min(from.y, to.y)
+          : from.y + ((x - from.x) / (to.x - from.x)) * (to.y - from.y);
+      top = Math.min(top, y(lo), y(hi));
+    });
+    return top;
+  };
+
+  /** The highest a tie stands anywhere over `left`..`right`, or Infinity where it does not run. */
+  const tieTopOver = (shape: FilledShape, left: number, right: number): number => {
+    let top = Number.POSITIVE_INFINITY;
+    for (const { from, control, to } of shape.curves) {
+      const lo = Math.max(left, Math.min(from.x, to.x));
+      const hi = Math.min(right, Math.max(from.x, to.x));
+      for (let x = lo; x <= hi; x += Math.min(0.25, hi - lo) || 1) {
+        // The control stands midway across, so x runs evenly with t.
+        const t = (x - from.x) / (to.x - from.x);
+        top = Math.min(top, (1 - t) ** 2 * from.y + 2 * t * (1 - t) * control.y + t ** 2 * to.y);
+      }
+    }
+    return top;
+  };
+
+  /** How far two boxes overlap across. */
+  const across = (a: Ink, b: Ink): number => Math.min(a.right, b.right) - Math.max(a.left, b.left);
+
+  /**
+   * Every piece of the music's ink under `mark` stands `clear` below it.
+   *
+   * A mark is placed where the music stands at its spacing, and then the view
+   * rounds a bar line, and the number after it, to the pixel. So ink reaching
+   * less than a pixel under the mark is beside it rather than under it, and a
+   * beam or tie sloping up under it may stand a fraction of a pixel higher
+   * where the mark is drawn than where it was placed.
+   */
+  const expectClearOver = (drawn: Drawn, mark: Ink, clear = CLEAR): void => {
+    const sloping = 0.25;
+    for (const ink of trebleInk(drawn)) {
+      if (across(mark, ink) <= 1) continue;
+      expect(
+        mark.bottom,
+        `ink at ${ink.left.toFixed(1)}–${ink.right.toFixed(1)}`,
+      ).toBeLessThanOrEqual(ink.top - clear + 1e-6);
+    }
+    for (const beam of drawn.shapes.filter((shape) => shape.style === noteInk)) {
+      if (across(mark, pathInk(beam)) <= 1) continue;
+      const top = beamTopOver(beam, mark.left, mark.right);
+      expect(mark.bottom, 'a beam').toBeLessThanOrEqual(top - clear + sloping);
+    }
+    for (const tie of drawn.shapes.filter((shape) => shape.style === noteDim)) {
+      if (across(mark, pathInk(tie)) <= 1) continue;
+      const top = tieTopOver(tie, mark.left, mark.right);
+      expect(mark.bottom, 'a tie').toBeLessThanOrEqual(top - clear + sloping);
+    }
+  };
+
+  const numberOf = (drawn: Drawn, n: number): { x: number; y: number } => {
+    const label = drawn.labels.find((text) => text.text === String(n));
+    expect(label, `bar ${n}’s number`).toBeDefined();
+    return label as { x: number; y: number };
+  };
+
+  /** The bar line nearest before `number`'s middle. */
+  const lineBefore = (drawn: Drawn, number: Ink): number => {
+    const { barLine } = SCORE_PALETTES.dark;
+    const middle = (number.left + number.right) / 2;
+    const lines = drawn.paths
+      .filter((path) => path.style === barLine && path.width === 1)
+      .map((path) => (path.points[0] as Point).x)
+      .filter((x) => x <= middle + 8);
+    expect(lines.length).toBeGreaterThan(0);
+    return Math.max(...lines);
+  };
+
+  /** A bar number's ink: its figures, standing on its baseline. */
+  const numberBox = (drawn: Drawn, n: number): Ink => {
+    const { x, y } = numberOf(drawn, n);
+    return { left: x, right: x + String(n).length * FIGURE, top: y - NUMERAL, bottom: y };
+  };
+
+  /** A tempo mark's ink: its note, then the number after it, on one baseline. */
+  const tempoBox = (drawn: Drawn, bpm: number): Ink => {
+    const label = drawn.labels.find((text) => text.text === `= ${bpm}`);
+    const [quarter] = named(drawn, 'metNoteQuarterUp');
+    expect(label).toBeDefined();
+    expect(quarter).toBeDefined();
+    const note = inkOf(quarter as GlyphCall);
+    const { x, y } = label as { x: number; y: number };
+    return {
+      left: note.left,
+      right: x + EQUALS + String(bpm).length * FIGURE,
+      top: Math.min(note.top, y - NUMERAL),
+      bottom: y,
+    };
+  };
+
+  /** Notes at `[beat, beats, midi]`, a beat to the second, on the treble staff. */
+  const treble = (
+    entries: readonly (readonly [beat: number, beats: number, midi: number])[],
+  ): ScoreLayout => written(entries, 'treble');
+
+  it('leaves a number where it always stood over a downbeat in the staff', () => {
+    // F5, on the top line: its head reaches half a space over the staff,
+    // three and a half pixels short of the number.
+    const drawn = play(
+      treble([
+        [0, 4, 60],
+        [4, 4, 77],
+        [8, 4, 60],
+      ]),
+    );
+    for (const n of [1, 2, 3]) {
+      expect(numberOf(drawn, n).y).toBe(drawn.view.trebleTop - NUMBER_RISE);
+    }
+  });
+
+  it('lifts a number clear of a high downbeat’s head and ledger lines', () => {
+    // C6, on the second ledger line: its head covered the number.
+    const drawn = play(
+      treble([
+        [0, 4, 60],
+        [4, 4, 84],
+        [8, 4, 60],
+      ]),
+    );
+    const number = numberBox(drawn, 2);
+    const head = heads(drawn).find((h) => h.y < drawn.view.trebleTop);
+    expect(head).toBeDefined();
+    // A quarter space over the top of the head, and clear of everything under it.
+    expect(number.bottom).toBeCloseTo((head?.y ?? 0) - 0.5 * GAP - CLEAR, 6);
+    expectClearOver(drawn, number);
+    // Only that bar's number moves.
+    expect(numberOf(drawn, 1).y).toBe(drawn.view.trebleTop - NUMBER_RISE);
+    expect(numberOf(drawn, 3).y).toBe(drawn.view.trebleTop - NUMBER_RISE);
+  });
+
+  it('lifts a number clear of an accidental standing taller than its head', () => {
+    // E♭5 sits in the staff, but its flat reaches up into the numbers' row.
+    const notes: NoteEvent[] = [
+      { id: 'a', midi: 60, startMs: 0, durationMs: 4000, velocity: 0.7, staff: 'treble' },
+      {
+        id: 'b',
+        midi: 75,
+        startMs: 4000,
+        durationMs: 4000,
+        velocity: 0.7,
+        staff: 'treble',
+        spelling: { step: 'E', alter: -1 },
+      },
+    ];
+    const drawn = play({ ...layoutScore(notes, LAYOUT_OPTS), dynamics: [], hairpins: [] });
+    const [flat] = named(drawn, 'accidentalFlat');
+    expect(flat).toBeDefined();
+    const number = numberBox(drawn, 2);
+    expect(number.bottom).toBeCloseTo(inkOf(flat as GlyphCall).top - CLEAR, 6);
+    expectClearOver(drawn, number);
+  });
+
+  it('lifts a number clear of a tie arriving at its downbeat', () => {
+    // An F5 held over the bar line: the tie arcs over the heads, and ends
+    // under the number where the second head begins.
+    const drawn = play(
+      treble([
+        [0, 3, 60],
+        [3, 2, 77],
+        [5, 3, 60],
+      ]),
+    );
+    const ties = drawn.shapes.filter((shape) => shape.style === noteDim);
+    expect(ties).toHaveLength(1);
+    const number = numberBox(drawn, 2);
+    expect(number.bottom).toBeLessThan(drawn.view.trebleTop - NUMBER_RISE);
+    expectClearOver(drawn, number);
+  });
+
+  /** The stems rising from the heads, as stroked: up from under a head to a tip over it. */
+  const upStems = (drawn: Drawn): Ink[] =>
+    drawn.paths
+      .filter(
+        (path) => path.width === STEM_W && (path.points[1]?.y ?? 0) < (path.points[0]?.y ?? 0),
+      )
+      .map(strokeInk);
+
+  it('steps the first bar’s number back from the stem over its downbeat', () => {
+    // The first bar has no line, so its number stands over the downbeat
+    // itself, where an A4's stem rises a pixel into the numbers' row. It
+    // steps back rather than climb the stem.
+    const layout = treble([
+      [0, 1, 69],
+      [1, 3, 60],
+    ]);
+    expect(layout.chords[0]?.stemDown).toBe(false);
+    const drawn = play(layout);
+    const number = numberBox(drawn, 1);
+    expect(number.bottom).toBe(drawn.view.trebleTop - NUMBER_RISE);
+    const [stem] = upStems(drawn);
+    expect(number.right).toBeLessThanOrEqual((stem?.left ?? 0) - CLEAR + 1);
+    // Still clear of the gutter the music starts after.
+    expect(number.left).toBeGreaterThan(drawn.view.gutterPx);
+    expectClearOver(drawn, number);
+  });
+
+  it('steps a number back from a beam over its downbeat', () => {
+    // An upper voice of beamed eighths, stemmed up over a held E4.
+    const upper = (id: string, midi: number, startMs: number, durationMs: number): NoteEvent => ({
+      id,
+      midi,
+      startMs,
+      durationMs,
+      velocity: 0.7,
+      staff: 'treble',
+      voice: 0,
+    });
+    const notes: NoteEvent[] = [
+      upper('u0', 72, 0, 500),
+      upper('u1', 74, 500, 500),
+      upper('u2', 72, 1000, 3000),
+      { id: 'l', midi: 64, startMs: 0, durationMs: 4000, velocity: 0.7, staff: 'treble', voice: 1 },
+    ];
+    const layout = { ...layoutScore(notes, LAYOUT_OPTS), dynamics: [], hairpins: [] };
+    expect(layout.beams).toHaveLength(1);
+    expect(layout.beams[0]?.stemDown).toBe(false);
+    const drawn = play(layout);
+    const number = numberBox(drawn, 1);
+    expect(number.bottom).toBe(drawn.view.trebleTop - NUMBER_RISE);
+    const [stem] = upStems(drawn);
+    expect(number.right).toBeLessThanOrEqual((stem?.left ?? 0) - CLEAR + 1);
+    expectClearOver(drawn, number);
+  });
+
+  it('steps a three-figure number back from the stem under it, and leaves a two-figure one beside it', () => {
+    // Bars of C4, but for an A4 on the downbeat of bars 10 and 100. Its stem
+    // rises into the numbers' row just right of the head: past the end of
+    // "10", and under the last figure of "100".
+    const entries: [number, number, number][] = [];
+    for (let bar = 0; bar < 100; bar += 1) {
+      if (bar === 9 || bar === 99) entries.push([bar * 4, 1, 69], [bar * 4 + 1, 3, 60]);
+      else entries.push([bar * 4, 4, 60]);
+    }
+    const layout = treble(entries);
+    const pxPerMs = basePxPerMsFor(layout);
+    const at = (bar: number): Drawn => play(layout, (bar - 1) * 4000 - 400 / pxPerMs);
+
+    const ten = at(10);
+    expect(numberOf(ten, 10).y).toBe(ten.view.trebleTop - NUMBER_RISE);
+    const stem = ten.paths
+      .filter((path) => path.width === STEM_W)
+      .map(strokeInk)
+      .find((ink) => ink.left > numberOf(ten, 10).x);
+    expect(stem).toBeDefined();
+    expect(stem?.left).toBeGreaterThan(numberBox(ten, 10).right);
+
+    // Stepped back no further than to where its middle meets the line.
+    const hundred = at(100);
+    const number = numberBox(hundred, 100);
+    expect(number.bottom).toBe(hundred.view.trebleTop - NUMBER_RISE);
+    const line = lineBefore(hundred, number);
+    expect(number.left).toBeLessThan(line + 3);
+    expect((number.left + number.right) / 2).toBeGreaterThanOrEqual(line - 0.5);
+    const tip = upStems(hundred).find((ink) => ink.left > line);
+    expect(number.right).toBeLessThanOrEqual((tip?.left ?? 0) - CLEAR + 1);
+    expectClearOver(hundred, number);
+  });
+
+  it('climbs over the stem when stepping back would put it over another', () => {
+    // An upper voice runs up to the bar line and on over it: a sixteenth D5
+    // just before the line, then a D5 on the downbeat of bar 100, both stemmed
+    // up far into the numbers' row. Stepped back, "100" would stand over the
+    // sixteenth's flag, so it climbs over the downbeat's stem instead.
+    const notes: NoteEvent[] = [];
+    const add = (id: string, midi: number, beat: number, beats: number, voice: number): void => {
+      notes.push({
+        id,
+        midi,
+        startMs: beat * 1000,
+        durationMs: beats * 1000,
+        velocity: 0.7,
+        staff: 'treble',
+        voice,
+      });
+    };
+    for (let bar = 0; bar < 99; bar += 1) add(`c${bar}`, 60, bar * 4, 4, 1);
+    add('e', 60, 396, 4, 1);
+    add('s', 74, 395.75, 0.25, 0);
+    add('d', 74, 396, 1, 0);
+    const layout = { ...layoutScore(notes, LAYOUT_OPTS), dynamics: [], hairpins: [] };
+    const upper = layout.chords.filter((chord) => chord.voice === 0);
+    expect(upper.map((chord) => chord.stemDown)).toEqual([false, false]);
+    const drawn = play(layout, 99 * 4000 - 400 / basePxPerMsFor(layout));
+    const number = numberBox(drawn, 100);
+    expect(number.bottom).toBeLessThan(drawn.view.trebleTop - NUMBER_RISE);
+    expectClearOver(drawn, number);
+  });
+
+  it('keeps a number down when the high note is the one before its bar line', () => {
+    const drawn = play(
+      treble([
+        [0, 3, 60],
+        [3, 1, 84],
+        [4, 4, 60],
+      ]),
+    );
+    expect(numberOf(drawn, 2).y).toBe(drawn.view.trebleTop - NUMBER_RISE);
+  });
+
+  /** Bar 2 goes to 90 bpm; `bar2` is its music, in beats of the new tempo. */
+  const tempoChange = (
+    bar2: readonly (readonly [beat: number, beats: number, midi: number])[],
+  ): ScoreLayout => {
+    const beat = 60_000 / 90;
+    const notes: NoteEvent[] = [
+      { id: 'w', midi: 60, startMs: 0, durationMs: 4000, velocity: 0.7, staff: 'treble' },
+      ...bar2.map(([at, beats, midi], i): NoteEvent => ({
+        id: `t${i}`,
+        midi,
+        startMs: Math.round(4000 + at * beat),
+        durationMs: Math.round(beats * beat),
+        velocity: 0.7,
+        staff: 'treble',
+      })),
+    ];
+    const score = layoutScore(notes, { ...LAYOUT_OPTS, tempoChanges: [{ atMs: 4000, bpm: 90 }] });
+    return { ...score, dynamics: [], hairpins: [] };
+  };
+
+  it('leaves a tempo mark where it always stood over music in the staff', () => {
+    const drawn = play(
+      tempoChange([
+        [0, 1, 60],
+        [1, 1, 64],
+        [2, 2, 67],
+      ]),
+    );
+    expect(drawn.labels.find((text) => text.text === '= 90')?.y).toBe(drawn.view.trebleTop - 20);
+  });
+
+  it('lifts a tempo mark clear of a high note after the downbeat', () => {
+    // A C6 a sixteenth into the bar stands under the mark's number.
+    const drawn = play(
+      tempoChange([
+        [0, 0.25, 60],
+        [0.25, 0.25, 84],
+        [0.5, 0.5, 64],
+        [1, 3, 60],
+      ]),
+    );
+    const mark = tempoBox(drawn, 90);
+    expect(mark.bottom).toBeLessThan(drawn.view.trebleTop - 20);
+    expectClearOver(drawn, mark);
+  });
+
+  it('keeps room for a tempo mark over a note that zooming out brings under it', () => {
+    // A C6 a beat after the downbeat stands past the mark at 100%, and under
+    // its number zoomed out to half that.
+    const layout = tempoChange([
+      [0, 1, 60],
+      [1, 1, 84],
+      [2, 2, 60],
+    ]);
+    const pxPerMs = basePxPerMsFor(layout);
+    const at100 = render(layout, {}, 'grand', null, { widthPx: 900, pxPerMs });
+    expect(at100.labels.find((text) => text.text === '= 90')?.y).toBe(at100.view.trebleTop - 20);
+    const zoomedOut = render(layout, {}, 'grand', null, { widthPx: 900, pxPerMs: pxPerMs / 2 });
+    const mark = tempoBox(zoomedOut, 90);
+    expect(mark.bottom).toBeLessThan(zoomedOut.view.trebleTop - 20);
+    expectClearOver(zoomedOut, mark);
+  });
+
+  it('reads a stack of beams under high heads only where each is drawn', () => {
+    // C7s stemmed down: a dotted eighth and two 32nds. Their beam hangs under
+    // the heads and still stands over the staff, and the 32nds' second and
+    // third beams stack up over it only between those two. Under the tempo
+    // mark runs the dotted eighth's stretch, one beam deep.
+    const beat = 60_000 / 50;
+    const run: [number, number][] = [
+      [0, 0.75],
+      [0.75, 0.125],
+      [0.875, 0.125],
+    ];
+    const notes: NoteEvent[] = [
+      { id: 'w', midi: 60, startMs: 0, durationMs: 4000, velocity: 0.7, staff: 'treble' },
+      ...run.map(([at, beats], i): NoteEvent => ({
+        id: `b${i}`,
+        midi: 96,
+        startMs: Math.round(4000 + at * beat),
+        durationMs: Math.round(beats * beat),
+        velocity: 0.7,
+        staff: 'treble',
+      })),
+      {
+        id: 'r',
+        midi: 60,
+        startMs: Math.round(4000 + beat),
+        durationMs: Math.round(3 * beat),
+        velocity: 0.7,
+        staff: 'treble',
+      },
+    ];
+    const score = layoutScore(notes, {
+      ...LAYOUT_OPTS,
+      quantization: '1/32',
+      tempoChanges: [{ atMs: 4000, bpm: 50 }],
+    });
+    const layout = { ...score, dynamics: [], hairpins: [] };
+    expect(layout.octaves).toEqual([]);
+    const beamed = layout.beams.find((beam) => beam.members.length === 3);
+    expect(beamed?.stemDown).toBe(true);
+    expect(beamed?.secondary).toHaveLength(2);
+    // A lesson draws no numbers, so nothing else stands the mark up.
+    const drawn = render(layout, {}, 'treble', 'lesson', {
+      widthPx: 900,
+      pxPerMs: basePxPerMsFor(layout),
+    });
+    const mark = tempoBox(drawn, 50);
+    expect(mark.bottom).toBe(drawn.view.trebleTop - 20);
+    expectClearOver(drawn, mark);
+  });
+
+  it('stands a tempo mark over its bar’s number when that is lifted', () => {
+    // A C6 on the downbeat lifts bar 2's number; the tempo mark stays above it.
+    const drawn = play(
+      tempoChange([
+        [0, 2, 84],
+        [2, 2, 60],
+      ]),
+    );
+    const number = numberBox(drawn, 2);
+    expect(number.bottom).toBeLessThan(drawn.view.trebleTop - NUMBER_RISE);
+    const mark = tempoBox(drawn, 90);
+    expect(mark.bottom).toBeCloseTo(number.top - STACKED, 6);
+    expectClearOver(drawn, mark);
+    expect(mark.top).toBeGreaterThanOrEqual(0);
+  });
+
+  it('stands an 8va over the number it lifts clear of', () => {
+    // C7s, written an octave down on C6: bar 1's number rises over the first
+    // head, and the line over it.
+    const drawn = play(bar([0, 1, 2, 3], 96));
+    const number = numberBox(drawn, 1);
+    expectClearOver(drawn, number);
+    const [label] = named(drawn, 'ottavaAlta');
+    expect(label).toBeDefined();
+    expect(inkOf(label as GlyphCall).bottom).toBeLessThanOrEqual(number.top - STACKED + 1e-6);
+  });
+
+  it('keeps a number lifted over the highest downbeat on the canvas', () => {
+    // A C7 alone — too few for an 8va — on five ledger lines.
+    const layout = treble([
+      [0, 1, 96],
+      [1, 3, 60],
+    ]);
+    expect(layout.octaves).toEqual([]);
+    const drawn = play(layout);
+    const number = numberBox(drawn, 1);
+    expectClearOver(drawn, number);
+    expect(number.top).toBeGreaterThanOrEqual(0);
   });
 });

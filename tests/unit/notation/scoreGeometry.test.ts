@@ -216,6 +216,18 @@ describe('computeScoreGeometry', () => {
     expect(computeScoreGeometry(layout).trebleTop).toBeGreaterThan(without.trebleTop);
   });
 
+  // A bar number stands clear of the ink under it, so a high downbeat lifts
+  // it; the room for it is kept where there are numbers to draw.
+  it('keeps room above the treble staff for a bar number lifted over a high downbeat', () => {
+    // A C7 alone, on five ledger lines — too few for an 8va — then C4.
+    const layout = layoutScore([note(96, 0, 500), note(60, 500, 1500)], LAYOUT_OPTS);
+    expect(layout.octaves).toEqual([]);
+    const numbered = computeScoreGeometry(layout);
+    const lesson = computeScoreGeometry(layout, { chrome: 'lesson' });
+    expect(numbered.trebleTop).toBeGreaterThan(lesson.trebleTop);
+    expect(computeScoreGeometry(layout, { chrome: 'bare' })).toEqual(lesson);
+  });
+
   it('keeps room under the bass staff for an 8vb, with the pedal row below it', () => {
     const layout = layoutScore(
       [0, 1, 2, 3].map((i): NoteEvent => ({ ...note(24, i * 500, 500), staff: 'bass' })),
