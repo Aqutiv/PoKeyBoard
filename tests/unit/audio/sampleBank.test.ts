@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { SamplePackFileEntry, SamplePackManifest } from '@/audio/audioTypes';
 import { onsetOffsetOf, SampleBank } from '@/audio/SampleBank';
+import { SampleTraffic } from '@/audio/sampleTraffic';
 import { velocityGain } from '@/audio/velocityLayers';
 
 /** Two channels of silence with a note starting at `onsetS` — enough AudioBuffer for the scan. */
@@ -528,6 +529,289 @@ describe('a pack with a pianissimo layer', () => {
     await bank.loadCorePack(context);
     await bank.ensureRangeLoaded(context, 60, 63);
     expect(fetched.filter((file) => file.startsWith('pianissimo'))).toEqual([]);
+  });
+
+  it('leaves an export’s recording that cannot be fetched to its stand-in, with no error', async () => {
+    vi.useFakeTimers();
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const error = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const { context } = servePack(fourLayerManifest(), ['pianissimo-60.sample']);
+    const bank = new SampleBank('/samples/');
+    await bank.loadCorePack(context);
+    const exporting = bank.loadRecordingsFor(context, [{ midi: 60, velocity: 0.1 }]);
+    await vi.runAllTimersAsync();
+    await expect(exporting).resolves.toBeUndefined();
+    expect(bank.getProgress().phase).toBe('core-ready');
+    expect(bank.getProgress().error).toBeUndefined();
+    expect(error).not.toHaveBeenCalled();
+    expect(warn).toHaveBeenCalled();
+    expect(bank.getSample(60, 0.1)?.standIn).toBe(true);
+  });
+});
+
+/**
+ * Serve packs by directory (`/piano/<dir>/`), noting every file asked for
+ * with the priority it was asked at. A request whose URL contains a key
+ * `hold` was given waits until that key is let go. Every file decodes at once,
+ * to a buffer that names it.
+ */
+function servePacks(manifests: Record<string, SamplePackManifest>) {
+  const asked: { file: string; priority: RequestPriority | undefined }[] = [];
+  const held = new Map<string, Promise<void>>();
+  let downloading = 0;
+  let mostAtOnce = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const [, dir = '', file = ''] = /\/piano\/([^/]+)\/([^/]+)$/.exec(url) ?? [];
+      let answer;
+      if (file === 'manifest.json') {
+        answer = { ok: true, json: async () => manifests[dir] };
+      } else {
+        asked.push({ file: `${dir}/${file}`, priority: init?.priority });
+        answer = { ok: true, arrayBuffer: async () => Object.assign(new ArrayBuffer(8), { file }) };
+      }
+      downloading += 1;
+      mostAtOnce = Math.max(mostAtOnce, downloading);
+      // Every download takes a moment, so the ones asked for together overlap.
+      await Promise.resolve();
+      for (const [key, gate] of held) if (url.includes(key)) await gate;
+      downloading -= 1;
+      return answer;
+    }),
+  );
+  const context = {
+    decodeAudioData: vi.fn(
+      async (bytes: ArrayBuffer & { file: string }) =>
+        ({ duration: 1, file: bytes.file }) as unknown as AudioBuffer,
+    ),
+  } as unknown as BaseAudioContext;
+  return {
+    context,
+    asked,
+    /** Every file asked for so far, as `<dir>/<file>`. */
+    files: () => asked.map(({ file }) => file),
+    /** The pianissimo recordings asked for so far. */
+    pianissimo: () => asked.map(({ file }) => file).filter((file) => file.includes('pianissimo')),
+    /** Requests asked for and not yet answered. */
+    downloading: () => downloading,
+    /** The most requests there have been at once since the last call. */
+    mostAtOnce: () => {
+      const most = mostAtOnce;
+      mostAtOnce = downloading;
+      return most;
+    },
+    hold(...keys: string[]): () => void {
+      const opens = keys.map((key) => {
+        let open!: () => void;
+        held.set(
+          key,
+          new Promise<void>((resolve) => {
+            open = resolve;
+          }),
+        );
+        return () => {
+          held.delete(key);
+          open();
+        };
+      });
+      return () => {
+        for (const open of opens) open();
+      };
+    },
+  };
+}
+
+/** Let every load that can move, move. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/** A four-layer grand at `roots`, with `full` of them loaded only when a range asks. */
+function grandWithFull(roots: number[], full: number[]): SamplePackManifest {
+  const manifest = fourLayerManifest(roots);
+  manifest.files = manifest.files.map((entry) =>
+    full.includes(entry.midi) ? { ...entry, pack: 'full' as const } : entry,
+  );
+  return manifest;
+}
+
+describe('the background loads, beside those someone waits for', () => {
+  it('fetch the pianissimo recordings two at a time, and at low priority', async () => {
+    const served = servePacks({ grand: fourLayerManifest([48, 51, 54, 57, 60, 63]) });
+    const bank = new SampleBank('/piano/grand/');
+    await bank.loadCorePack(served.context);
+    // The core is what the piano waits for: four at once, asked for as any request is.
+    expect(served.asked).toHaveLength(18);
+    expect(served.mostAtOnce()).toBe(4);
+    expect(served.asked.every(({ priority }) => priority === undefined)).toBe(true);
+
+    const open = served.hold('pianissimo');
+    const deferred = bank.loadDeferred(served.context);
+    await vi.waitFor(() => expect(served.pianissimo()).toHaveLength(2));
+    await settle();
+    expect(served.pianissimo()).toHaveLength(2);
+    open();
+    await deferred;
+    expect(served.pianissimo()).toHaveLength(6);
+    expect(served.mostAtOnce()).toBe(2);
+    expect(
+      served.asked
+        .filter(({ file }) => file.includes('pianissimo'))
+        .map(({ priority }) => priority),
+    ).toEqual(Array(6).fill('low'));
+  });
+
+  it('start no file while another piano’s core loads, sharing their traffic', async () => {
+    const served = servePacks({ grand: fourLayerManifest([60, 63]), other: stubManifest() });
+    const traffic = new SampleTraffic();
+    const playing = new SampleBank('/piano/grand/', traffic);
+    const next = new SampleBank('/piano/other/', traffic);
+    await playing.loadCorePack(served.context);
+
+    // A switch: the next piano's manifest, and then its core, held in turn.
+    const openManifest = served.hold('other/manifest.json');
+    const openCore = served.hold('other/c4.sample');
+    const switching = next.loadCorePack(served.context);
+    const deferred = playing.loadDeferred(served.context);
+    await settle();
+    expect(served.pianissimo()).toEqual([]);
+    openManifest();
+    await vi.waitFor(() => expect(served.files()).toContain('other/c4.sample'));
+    await settle();
+    expect(served.pianissimo()).toEqual([]);
+
+    openCore();
+    await switching;
+    await deferred;
+    expect(served.pianissimo()).toEqual([
+      'grand/pianissimo-63.sample',
+      'grand/pianissimo-60.sample',
+    ]);
+  });
+
+  it('let the files under way finish when a range load starts, and start no more until it is done', async () => {
+    const served = servePacks({ grand: grandWithFull([48, 51, 54, 57, 60, 63, 99], [99]) });
+    const bank = new SampleBank('/piano/grand/');
+    await bank.loadCorePack(served.context);
+    const openPianissimo = served.hold('pianissimo');
+    const deferred = bank.loadDeferred(served.context);
+    await vi.waitFor(() => expect(served.pianissimo()).toHaveLength(2));
+
+    // The keyboard slides up to the top: keys someone is about to play.
+    const openRange = served.hold('loud-99');
+    const range = bank.ensureRangeLoaded(served.context, 99, 99);
+    await vi.waitFor(() => expect(served.files()).toContain('grand/loud-99.sample'));
+    openPianissimo();
+    await settle();
+    // The two under way are in; no third has started behind the range.
+    expect(bank.isFileLoaded('pianissimo-63.sample')).toBe(true);
+    expect(bank.isFileLoaded('pianissimo-60.sample')).toBe(true);
+    expect(served.pianissimo()).toHaveLength(2);
+
+    openRange();
+    await range;
+    await deferred;
+    // The rest of the piano's, and then the range's own.
+    await vi.waitFor(() => expect(bank.isFileLoaded('pianissimo-99.sample')).toBe(true));
+    expect(served.pianissimo()).toHaveLength(7);
+  });
+
+  it('never hold up a range, nor another piano’s core, however long they take', async () => {
+    const served = servePacks({
+      grand: grandWithFull([57, 60, 63, 99], [99]),
+      other: stubManifest(),
+    });
+    const traffic = new SampleTraffic();
+    const playing = new SampleBank('/piano/grand/', traffic);
+    await playing.loadCorePack(served.context);
+    // Both background turns on downloads that never land.
+    served.hold('pianissimo');
+    void playing.loadDeferred(served.context);
+    await vi.waitFor(() => expect(served.downloading()).toBe(2));
+
+    await playing.ensureRangeLoaded(served.context, 99, 99);
+    expect(playing.isMidiPlayable(99)).toBe(true);
+    expect(playing.getProgress().phase).toBe('core-ready');
+
+    const next = new SampleBank('/piano/other/', traffic);
+    await next.loadCorePack(served.context);
+    expect(next.isCoreReady()).toBe(true);
+  });
+
+  it('give way to an export, whose recordings go at full priority', async () => {
+    const served = servePacks({ grand: fourLayerManifest([48, 51, 54, 57, 60, 63]) });
+    const bank = new SampleBank('/piano/grand/');
+    await bank.loadCorePack(served.context);
+    // The background's two turns: middle C's and the E♭ above it.
+    const openBackground = served.hold('pianissimo-6');
+    void bank.loadDeferred(served.context);
+    await vi.waitFor(() => expect(served.pianissimo()).toHaveLength(2));
+
+    // An export of three soft notes at roots the background has not reached:
+    // all three at once, past the two turns the background has out.
+    const openExport = served.hold('pianissimo-48', 'pianissimo-51', 'pianissimo-54');
+    const exporting = bank.loadRecordingsFor(
+      served.context,
+      [48, 51, 54].map((midi) => ({ midi, velocity: 0.1 })),
+    );
+    await vi.waitFor(() => expect(served.downloading()).toBe(5));
+    expect(
+      served.asked.filter(({ file }) => /pianissimo-(48|51|54)/.test(file)).map((a) => a.priority),
+    ).toEqual([undefined, undefined, undefined]);
+
+    // The background's turns come back, but the export holds it back.
+    openBackground();
+    await settle();
+    expect(served.pianissimo()).not.toContain('grand/pianissimo-57.sample');
+
+    openExport();
+    await exporting;
+    expect(fileOf(bank.getSample(48, 0.1))).toBe('pianissimo-48.sample');
+    await vi.waitFor(() => expect(served.pianissimo()).toContain('grand/pianissimo-57.sample'));
+  });
+
+  it('hand an export the recording they already have under way, fetching it once', async () => {
+    const served = servePacks({ grand: fourLayerManifest([60, 63]) });
+    const bank = new SampleBank('/piano/grand/');
+    await bank.loadCorePack(served.context);
+    const open = served.hold('pianissimo-63');
+    void bank.loadDeferred(served.context);
+    await vi.waitFor(() => expect(served.pianissimo()).toContain('grand/pianissimo-63.sample'));
+
+    let exported = false;
+    const exporting = bank
+      .loadRecordingsFor(served.context, [{ midi: 63, velocity: 0.1 }])
+      .then(() => {
+        exported = true;
+      });
+    await settle();
+    expect(exported).toBe(false);
+    // The export holds the background back, but not the file it is waiting on.
+    open();
+    await exporting;
+    expect(fileOf(bank.getSample(63, 0.1))).toBe('pianissimo-63.sample');
+    expect(served.pianissimo().filter((file) => file.endsWith('-63.sample'))).toHaveLength(1);
+  });
+
+  it('go on once a load they gave way to is called off', async () => {
+    const served = servePacks({ grand: fourLayerManifest([60, 63]), other: stubManifest() });
+    const traffic = new SampleTraffic();
+    const playing = new SampleBank('/piano/grand/', traffic);
+    const next = new SampleBank('/piano/other/', traffic);
+    await playing.loadCorePack(served.context);
+    // The next piano's core, on a download that never lands.
+    served.hold('other/c4.sample');
+    void next.loadCorePack(served.context);
+    await vi.waitFor(() => expect(served.files()).toContain('other/c4.sample'));
+    const deferred = playing.loadDeferred(served.context);
+    await settle();
+    expect(served.pianissimo()).toEqual([]);
+
+    // The playing piano is chosen again: nobody waits for the other now.
+    next.releaseBuffers();
+    await deferred;
+    expect(served.pianissimo()).toHaveLength(2);
   });
 });
 
