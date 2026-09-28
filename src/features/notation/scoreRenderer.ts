@@ -234,8 +234,7 @@ export interface ScoreGeometryOptions {
    * more, so its room is measured here. Defaults to the Play page's tightest:
    * its spacing zoomed all the way out (`basePxPerMsFor` at `MIN_DISPLAY_ZOOM`).
    * A measure number's room is measured no tighter than the Play page's 100%,
-   * and a tempo mark's at every step of the zoom from there; see
-   * `computeScoreGeometry`.
+   * and a tempo mark's at every step of the zoom; see `computeScoreGeometry`.
    */
   pxPerMs?: number;
 }
@@ -1260,20 +1259,23 @@ export function computeScoreGeometry(
       }
     }
     // A tempo mark stands to the right of its downbeat, and the notes after
-    // it pass under it as the music spreads out rather than as it packs in.
-    // So it is measured at every step of the zoom from 100% up, and the room
-    // kept for the highest — and over an 8va on its bar, where the line
-    // stands furthest out, as the line's room is.
+    // it pass under it however the spacing changes: packed in, the ones
+    // further on; spread out, the ones nearer. So it is measured at every step
+    // of the zoom, and the room kept for the highest: clear of the notes at
+    // all of them, and over an 8va on its bar where the line stands furthest
+    // out, as the line's room is. Over the bar numbers, it takes the room
+    // they have: from 100% up.
     const changes = layout.measures.filter(
       (measure, i) => i > 0 && (layout.measures[i - 1] as MeasureInfo).bpm !== measure.bpm,
     );
     if (changes.length > 0) {
       const rises = changes.map((measure) => tempoRiseOverOctaves(layout, measure, lines));
       const widest = basePxPerMsFor(layout) * MAX_DISPLAY_ZOOM;
-      for (const pxPerMs of zoomSteps(opening, widest)) {
+      for (const pxPerMs of zoomSteps(tightest, widest)) {
         const at = octaveLinesFor(layout, numbered, pxPerMs, staves);
+        const overNumbers = numbered && pxPerMs >= opening;
         changes.forEach((measure, k) => {
-          const rise = tempoMarkRise(layout, measure, at, numbered, pxPerMs, staves);
+          const rise = tempoMarkRise(layout, measure, at, overNumbers, pxPerMs, staves);
           rises[k] = Math.max(rises[k] as number, rise);
         });
       }

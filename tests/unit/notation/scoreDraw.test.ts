@@ -2225,6 +2225,23 @@ describe('drawScore bar numbers and tempo marks', () => {
     expectClearOver(drawn, mark);
   });
 
+  it('keeps room for a tempo mark over a note that zooming out brings under it', () => {
+    // A C6 a beat after the downbeat stands past the mark at 100%, and under
+    // its number zoomed out to half that.
+    const layout = tempoChange([
+      [0, 1, 60],
+      [1, 1, 84],
+      [2, 2, 60],
+    ]);
+    const pxPerMs = basePxPerMsFor(layout);
+    const at100 = render(layout, {}, 'grand', null, { widthPx: 900, pxPerMs });
+    expect(at100.labels.find((text) => text.text === '= 90')?.y).toBe(at100.view.trebleTop - 20);
+    const zoomedOut = render(layout, {}, 'grand', null, { widthPx: 900, pxPerMs: pxPerMs / 2 });
+    const mark = tempoBox(zoomedOut, 90);
+    expect(mark.bottom).toBeLessThan(zoomedOut.view.trebleTop - 20);
+    expectClearOver(zoomedOut, mark);
+  });
+
   it('reads a stack of beams under high heads only where each is drawn', () => {
     // C7s stemmed down: a dotted eighth and two 32nds. Their beam hangs under
     // the heads and still stands over the staff, and the 32nds' second and
