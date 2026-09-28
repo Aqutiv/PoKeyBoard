@@ -20,6 +20,10 @@ import { ATTACK_S, TONE_FILTER_Q_DB } from './sampleVoice';
  *   brightness of the layer below's, at the same root (the generator searches
  *   for it); at the layer's top, open; in between, evenly in log frequency.
  *
+ * Where the layer below is the brighter of the two already — a pianissimo
+ * recording or two, by a few cents — there is nothing to bring down, and the
+ * ramp stays open from bottom to top.
+ *
  * The softest layer has nothing below it to meet and always plays open. A filter
  * takes loudness with it, and the voice gives that back (the make-up), less
  * and less as the filter opens, so every note stays on the velocity curve.
@@ -78,7 +82,10 @@ const SEARCH_PRECISION = 1e-4;
 
 /** The ramp that tones one recording, as the table holds it. */
 export interface ToneRamp {
-  /** Where the search met the layer below's brightness, in Hz at the recording's pitch. */
+  /**
+   * Where the search met the layer below's brightness, in Hz at the
+   * recording's pitch; `OPEN_CUTOFF_HZ` where that layer is the brighter.
+   */
   matchedCutoffHz: number;
   /** The cutoff at the layer's bottom: the match, lifted where the top guard binds. */
   cutoffHz: number;

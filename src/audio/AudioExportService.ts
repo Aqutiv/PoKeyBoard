@@ -40,8 +40,12 @@ import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
  * per voice, so notes play brighter or darker than they did.
  * 10: every voice starts on a whole frame, so a key at its recording's own
  * pitch renders sample for sample instead of losing treble to interpolation.
+ * 11: Salamander and the Steinway gained a pianissimo layer, so their softest
+ * notes play a softer recording, and the soft layer's tone ramps down to it.
+ * A take keeps the pack version it was recorded with, so its hash alone would
+ * not notice.
  */
-export const AUDIO_EXPORTER_VERSION = 10;
+export const AUDIO_EXPORTER_VERSION = 11;
 
 export interface ExportOptions {
   encoding: ExportEncoding;

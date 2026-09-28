@@ -171,9 +171,11 @@ test.describe('choosing a piano', () => {
         return start.apply(this, args);
       };
     });
+    // The Steinway's own recordings: from its pack, or from the generation
+    // before it, whose layers that pack re-uses (`../bitklavier-grand-v1/…`).
     const samples = new Set<string>();
     page.on('requestfinished', (request) => {
-      const match = new RegExp(`/${BITKLAVIER_PACK}/([^/]+\\.sample)$`).exec(request.url());
+      const match = /\/bitklavier-grand-v\d+\/([^/]+\.sample)$/.exec(request.url());
       if (match?.[1]) samples.add(match[1]);
     });
     const voiceStarts = () =>

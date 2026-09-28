@@ -1,0 +1,130 @@
+{
+  "dataset": "https://doi.org/10.34770/xm18-yr83",
+  "folder": "https://g-ef94ef.f0ad1.36fe.data.globus.org/10.34770/xm18-yr83/395/bitKlavierGrand_LipCardioid_48k24b/",
+  "renameList": {
+    "bytes": 152238,
+    "sha256": "d066eb7e9c1e214c1207bb8744840619da6cbc325b1c29667c82b1d687b29af5"
+  },
+  "files": {
+    "A0v5.wav": {
+      "bytes": 3744078,
+      "sha256": "c4879873ca22ee57be7974dc5153d96c0802715e2d9612cabc3f27b8175b4ce7"
+    },
+    "C1v5.wav": {
+      "bytes": 3744078,
+      "sha256": "094378b8d08417b8661ec4ab542b42a8faad075de9d35802b24502d74a588f36"
+    },
+    "D#1v5.wav": {
+      "bytes": 3744078,
+      "sha256": "dca855afcc46e03accfe4c33e5235f72f3542415473e5c7c3850a44882b34f35"
+    },
+    "F#1v5.wav": {
+      "bytes": 3744078,
+      "sha256": "99a45f24015f2110d271c46f15951b8f4a822cc66937646fb4e0f8b714bb251f"
+    },
+    "A1v5.wav": {
+      "bytes": 3744078,
+      "sha256": "215f1ba21c7ee64ec0aae574b85e1033b2c987156e8f9cc7d1079327ac8eafd0"
+    },
+    "C2v5.wav": {
+      "bytes": 3744078,
+      "sha256": "5f297fd6826697efc4bb882fe2ed7ebbdac08eb53c4be8ca34364d19852b59e8"
+    },
+    "D#2v5.wav": {
+      "bytes": 3744078,
+      "sha256": "1a7f077714e6a58e074607ac6eb0e670ac8d12abff9c70ca0f3d68a45494a22f"
+    },
+    "F#2v5.wav": {
+      "bytes": 3744078,
+      "sha256": "df3da1bdd8ee25a88f450b890e44314de7db81ffa998093622c43497e039e0cf"
+    },
+    "A2v5.wav": {
+      "bytes": 3744078,
+      "sha256": "d4503e7922968ef865323198b05b5136b19cd1d304ec5e42cf6223d7f0b6c7d4"
+    },
+    "C3v5.wav": {
+      "bytes": 2880078,
+      "sha256": "146bbb684303cd1883cc8727aeb7073974817be7e43a8907aa43edfa08e23da8"
+    },
+    "D#3v5.wav": {
+      "bytes": 2880078,
+      "sha256": "1d7219df1667b410f69ae6b0072adc4ca6f4f7d9a08c5a81f7c9dbde101ba958"
+    },
+    "F#3v5.wav": {
+      "bytes": 2880078,
+      "sha256": "ecb24e60775a11e27164f4aae59857c88b60a61bc8610fdc3ba61cecd3362ee9"
+    },
+    "A3v5.wav": {
+      "bytes": 2880078,
+      "sha256": "921dfdbab21504166596b82f5c9e575e950455a761532cf7c2a370af3354d805"
+    },
+    "C4v5.wav": {
+      "bytes": 2880078,
+      "sha256": "31cb9ea9332db259f4e5cab91f7a05313487a9484ca23928b1afbb8b06b18c10"
+    },
+    "D#4v5.wav": {
+      "bytes": 2880078,
+      "sha256": "d55f5c50be87a6a6bcc94d9778e6df6b32f70171fb28016d2fee5000e96bef99"
+    },
+    "F#4v5.wav": {
+      "bytes": 2880078,
+      "sha256": "40125219eddedae7b4d0b2da7754c2dae9e29295cc5014b036162eec5fe60b04"
+    },
+    "A4v5.wav": {
+      "bytes": 2880078,
+      "sha256": "269b650f21e6e24a144a3e0e1570068d886cc8ade95f9183bcf300b6b91b32c6"
+    },
+    "C5v5.wav": {
+      "bytes": 2304078,
+      "sha256": "ad3578f4347c81cdb85aff728a97dc0c26e66241d1feb53d473ba0a735bb4a71"
+    },
+    "D#5v5.wav": {
+      "bytes": 2304078,
+      "sha256": "bd227f5e957a4cb5656a1ac3cf9c44476aa4235cb380bed26f54400046a1c251"
+    },
+    "F#5v5.wav": {
+      "bytes": 2304078,
+      "sha256": "ba851a794971a390a2591c2c2666760d67f468174687c39d9c1f7b1b8a52d1ef"
+    },
+    "A5v5.wav": {
+      "bytes": 2304078,
+      "sha256": "fd2acb52a5c1be119dc95ee4fbb88575329be185428f0636dcfe8536a65563f6"
+    },
+    "C6v5.wav": {
+      "bytes": 2304078,
+      "sha256": "2f28b63787efd7d8d08228ba8e7d18f868ff07274e3a1e2310889ec3c8bead7a"
+    },
+    "D#6v5.wav": {
+      "bytes": 2304078,
+      "sha256": "a6adc77f4125548b605af173ee02988c3dc9d366603d7e81a96d16f2ea38a1a0"
+    },
+    "F#6v5.wav": {
+      "bytes": 2304078,
+      "sha256": "e3be310311ae8308b82642708964b8b14643cd808c4851f2873a1ef78faa861f"
+    },
+    "A6v5.wav": {
+      "bytes": 2304078,
+      "sha256": "ac2a0f8ee967553d533a734c5d8c2d5c8774d83ac7eb7a50499abd5f65e7d02c"
+    },
+    "C7v5.wav": {
+      "bytes": 2048334,
+      "sha256": "d07d82c91556f8548eb3d7d615b54b10d64808be03a3811cfc6b5ecb287d281f"
+    },
+    "D#7v5.wav": {
+      "bytes": 2175630,
+      "sha256": "34be54184eefaa65730cf38898a07146d35c608e44afe105b57c01c1d7aa815d"
+    },
+    "F#7v5.wav": {
+      "bytes": 1527054,
+      "sha256": "1031fd481bb9c8d713fdb75ad13d0e93b9a7f86575209ab5c155b24cbe4854df"
+    },
+    "A7v5.wav": {
+      "bytes": 1685454,
+      "sha256": "6c894d00de660ee91092fedf58335d13140accbb90c60819e279b6f034927bdc"
+    },
+    "C8v5.wav": {
+      "bytes": 648366,
+      "sha256": "048e8243a7f79689c56b6837a9801ecba84e3ba65abac69f9e839b09069b824e"
+    }
+  }
+}

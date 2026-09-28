@@ -1,0 +1,881 @@
+{
+  "version": "bitklavier-grand-v2",
+  "source": "bitKlavier Grand Sample Library—Lip Cardioid Mic Image (Steinway D) by Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers and Daniel Trueman, Princeton University",
+  "license": "CC-BY 4.0",
+  "sourceUrl": "https://doi.org/10.34770/xm18-yr83",
+  "format": "flac-16bit-48khz-stereo",
+  "velocityLayers": [
+    {
+      "index": 0,
+      "sourceLayer": 5,
+      "label": "pianissimo",
+      "gainDb": 6.29,
+      "levelMatch": 1.0004
+    },
+    {
+      "index": 1,
+      "sourceLayer": 7,
+      "label": "soft",
+      "gainDb": 7.11,
+      "levelMatch": 1.0008
+    },
+    {
+      "index": 2,
+      "sourceLayer": 10,
+      "label": "medium",
+      "gainDb": 5.8,
+      "levelMatch": 1.0002
+    },
+    {
+      "index": 3,
+      "sourceLayer": 14,
+      "label": "loud",
+      "gainDb": 0.33,
+      "levelMatch": 1.7102
+    }
+  ],
+  "coreBytes": 17636020,
+  "totalBytes": 38808514,
+  "files": [
+    {
+      "file": "A0v5.sample",
+      "midi": 21,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 416075
+    },
+    {
+      "file": "../bitklavier-grand-v1/A0v7.sample",
+      "midi": 21,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 452799
+    },
+    {
+      "file": "../bitklavier-grand-v1/A0v10.sample",
+      "midi": 21,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 467139
+    },
+    {
+      "file": "../bitklavier-grand-v1/A0v14.sample",
+      "midi": 21,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 413740
+    },
+    {
+      "file": "C1v5.sample",
+      "midi": 24,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 404112
+    },
+    {
+      "file": "../bitklavier-grand-v1/C1v7.sample",
+      "midi": 24,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 429456
+    },
+    {
+      "file": "../bitklavier-grand-v1/C1v10.sample",
+      "midi": 24,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 443882
+    },
+    {
+      "file": "../bitklavier-grand-v1/C1v14.sample",
+      "midi": 24,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 434861
+    },
+    {
+      "file": "Ds1v5.sample",
+      "midi": 27,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 435733
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds1v7.sample",
+      "midi": 27,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 455109
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds1v10.sample",
+      "midi": 27,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 468726
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds1v14.sample",
+      "midi": 27,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 450791
+    },
+    {
+      "file": "Fs1v5.sample",
+      "midi": 30,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 430607
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs1v7.sample",
+      "midi": 30,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 470400
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs1v10.sample",
+      "midi": 30,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 473248
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs1v14.sample",
+      "midi": 30,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 461182
+    },
+    {
+      "file": "A1v5.sample",
+      "midi": 33,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 426731
+    },
+    {
+      "file": "../bitklavier-grand-v1/A1v7.sample",
+      "midi": 33,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 469685
+    },
+    {
+      "file": "../bitklavier-grand-v1/A1v10.sample",
+      "midi": 33,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 490713
+    },
+    {
+      "file": "../bitklavier-grand-v1/A1v14.sample",
+      "midi": 33,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 477073
+    },
+    {
+      "file": "C2v5.sample",
+      "midi": 36,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 460616
+    },
+    {
+      "file": "../bitklavier-grand-v1/C2v7.sample",
+      "midi": 36,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 503059
+    },
+    {
+      "file": "../bitklavier-grand-v1/C2v10.sample",
+      "midi": 36,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 505487
+    },
+    {
+      "file": "../bitklavier-grand-v1/C2v14.sample",
+      "midi": 36,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 488370
+    },
+    {
+      "file": "Ds2v5.sample",
+      "midi": 39,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 423706
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds2v7.sample",
+      "midi": 39,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 473997
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds2v10.sample",
+      "midi": 39,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 488198
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds2v14.sample",
+      "midi": 39,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 473337
+    },
+    {
+      "file": "Fs2v5.sample",
+      "midi": 42,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 422423
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs2v7.sample",
+      "midi": 42,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 468445
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs2v10.sample",
+      "midi": 42,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 495728
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs2v14.sample",
+      "midi": 42,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 470131
+    },
+    {
+      "file": "A2v5.sample",
+      "midi": 45,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 417034
+    },
+    {
+      "file": "../bitklavier-grand-v1/A2v7.sample",
+      "midi": 45,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 460717
+    },
+    {
+      "file": "../bitklavier-grand-v1/A2v10.sample",
+      "midi": 45,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 484721
+    },
+    {
+      "file": "../bitklavier-grand-v1/A2v14.sample",
+      "midi": 45,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 463748
+    },
+    {
+      "file": "C3v5.sample",
+      "midi": 48,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 312509
+    },
+    {
+      "file": "../bitklavier-grand-v1/C3v7.sample",
+      "midi": 48,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 344897
+    },
+    {
+      "file": "../bitklavier-grand-v1/C3v10.sample",
+      "midi": 48,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 349045
+    },
+    {
+      "file": "../bitklavier-grand-v1/C3v14.sample",
+      "midi": 48,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 348514
+    },
+    {
+      "file": "Ds3v5.sample",
+      "midi": 51,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 329924
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds3v7.sample",
+      "midi": 51,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 344662
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds3v10.sample",
+      "midi": 51,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 348570
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds3v14.sample",
+      "midi": 51,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 347069
+    },
+    {
+      "file": "Fs3v5.sample",
+      "midi": 54,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 326883
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs3v7.sample",
+      "midi": 54,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 337347
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs3v10.sample",
+      "midi": 54,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 348407
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs3v14.sample",
+      "midi": 54,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 348768
+    },
+    {
+      "file": "A3v5.sample",
+      "midi": 57,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 303418
+    },
+    {
+      "file": "../bitklavier-grand-v1/A3v7.sample",
+      "midi": 57,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 336560
+    },
+    {
+      "file": "../bitklavier-grand-v1/A3v10.sample",
+      "midi": 57,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 350993
+    },
+    {
+      "file": "../bitklavier-grand-v1/A3v14.sample",
+      "midi": 57,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 342188
+    },
+    {
+      "file": "C4v5.sample",
+      "midi": 60,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 321363
+    },
+    {
+      "file": "../bitklavier-grand-v1/C4v7.sample",
+      "midi": 60,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 364438
+    },
+    {
+      "file": "../bitklavier-grand-v1/C4v10.sample",
+      "midi": 60,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 366342
+    },
+    {
+      "file": "../bitklavier-grand-v1/C4v14.sample",
+      "midi": 60,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 346247
+    },
+    {
+      "file": "Ds4v5.sample",
+      "midi": 63,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 303134
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds4v7.sample",
+      "midi": 63,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 318013
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds4v10.sample",
+      "midi": 63,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 335602
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds4v14.sample",
+      "midi": 63,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 336975
+    },
+    {
+      "file": "Fs4v5.sample",
+      "midi": 66,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 301225
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs4v7.sample",
+      "midi": 66,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 331868
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs4v10.sample",
+      "midi": 66,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 334375
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs4v14.sample",
+      "midi": 66,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 332658
+    },
+    {
+      "file": "A4v5.sample",
+      "midi": 69,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 289243
+    },
+    {
+      "file": "../bitklavier-grand-v1/A4v7.sample",
+      "midi": 69,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 319761
+    },
+    {
+      "file": "../bitklavier-grand-v1/A4v10.sample",
+      "midi": 69,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 324634
+    },
+    {
+      "file": "../bitklavier-grand-v1/A4v14.sample",
+      "midi": 69,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 314507
+    },
+    {
+      "file": "C5v5.sample",
+      "midi": 72,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 260061
+    },
+    {
+      "file": "../bitklavier-grand-v1/C5v7.sample",
+      "midi": 72,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 283779
+    },
+    {
+      "file": "../bitklavier-grand-v1/C5v10.sample",
+      "midi": 72,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 290400
+    },
+    {
+      "file": "../bitklavier-grand-v1/C5v14.sample",
+      "midi": 72,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 262424
+    },
+    {
+      "file": "Ds5v5.sample",
+      "midi": 75,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 242531
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds5v7.sample",
+      "midi": 75,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 254338
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds5v10.sample",
+      "midi": 75,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 272553
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds5v14.sample",
+      "midi": 75,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 267856
+    },
+    {
+      "file": "Fs5v5.sample",
+      "midi": 78,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 229258
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs5v7.sample",
+      "midi": 78,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 249624
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs5v10.sample",
+      "midi": 78,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 264486
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs5v14.sample",
+      "midi": 78,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 254730
+    },
+    {
+      "file": "A5v5.sample",
+      "midi": 81,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 225019
+    },
+    {
+      "file": "../bitklavier-grand-v1/A5v7.sample",
+      "midi": 81,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 251201
+    },
+    {
+      "file": "../bitklavier-grand-v1/A5v10.sample",
+      "midi": 81,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 267274
+    },
+    {
+      "file": "../bitklavier-grand-v1/A5v14.sample",
+      "midi": 81,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 251929
+    },
+    {
+      "file": "C6v5.sample",
+      "midi": 84,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 235454
+    },
+    {
+      "file": "../bitklavier-grand-v1/C6v7.sample",
+      "midi": 84,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 277149
+    },
+    {
+      "file": "../bitklavier-grand-v1/C6v10.sample",
+      "midi": 84,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 262083
+    },
+    {
+      "file": "../bitklavier-grand-v1/C6v14.sample",
+      "midi": 84,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 247512
+    },
+    {
+      "file": "Ds6v5.sample",
+      "midi": 87,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 224764
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds6v7.sample",
+      "midi": 87,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 234464
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds6v10.sample",
+      "midi": 87,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 242009
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds6v14.sample",
+      "midi": 87,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 236895
+    },
+    {
+      "file": "Fs6v5.sample",
+      "midi": 90,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 220243
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs6v7.sample",
+      "midi": 90,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 239739
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs6v10.sample",
+      "midi": 90,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 257673
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs6v14.sample",
+      "midi": 90,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 237778
+    },
+    {
+      "file": "A6v5.sample",
+      "midi": 93,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 223386
+    },
+    {
+      "file": "../bitklavier-grand-v1/A6v7.sample",
+      "midi": 93,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 246771
+    },
+    {
+      "file": "../bitklavier-grand-v1/A6v10.sample",
+      "midi": 93,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 226654
+    },
+    {
+      "file": "../bitklavier-grand-v1/A6v14.sample",
+      "midi": 93,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 232085
+    },
+    {
+      "file": "C7v5.sample",
+      "midi": 96,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 212267
+    },
+    {
+      "file": "../bitklavier-grand-v1/C7v7.sample",
+      "midi": 96,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 210143
+    },
+    {
+      "file": "../bitklavier-grand-v1/C7v10.sample",
+      "midi": 96,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 224824
+    },
+    {
+      "file": "../bitklavier-grand-v1/C7v14.sample",
+      "midi": 96,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 220542
+    },
+    {
+      "file": "Ds7v5.sample",
+      "midi": 99,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 224523
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds7v7.sample",
+      "midi": 99,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 241066
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds7v10.sample",
+      "midi": 99,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 236118
+    },
+    {
+      "file": "../bitklavier-grand-v1/Ds7v14.sample",
+      "midi": 99,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 217237
+    },
+    {
+      "file": "Fs7v5.sample",
+      "midi": 102,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 168610
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs7v7.sample",
+      "midi": 102,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 154407
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs7v10.sample",
+      "midi": 102,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 204461
+    },
+    {
+      "file": "../bitklavier-grand-v1/Fs7v14.sample",
+      "midi": 102,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 206624
+    },
+    {
+      "file": "A7v5.sample",
+      "midi": 105,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 181477
+    },
+    {
+      "file": "../bitklavier-grand-v1/A7v7.sample",
+      "midi": 105,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 138760
+    },
+    {
+      "file": "../bitklavier-grand-v1/A7v10.sample",
+      "midi": 105,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 128543
+    },
+    {
+      "file": "../bitklavier-grand-v1/A7v14.sample",
+      "midi": 105,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 223544
+    },
+    {
+      "file": "C8v5.sample",
+      "midi": 108,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 82220
+    },
+    {
+      "file": "../bitklavier-grand-v1/C8v7.sample",
+      "midi": 108,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 137604
+    },
+    {
+      "file": "../bitklavier-grand-v1/C8v10.sample",
+      "midi": 108,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 125986
+    },
+    {
+      "file": "../bitklavier-grand-v1/C8v14.sample",
+      "midi": 108,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 165518
+    }
+  ]
+}

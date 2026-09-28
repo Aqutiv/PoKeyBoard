@@ -2,20 +2,25 @@ import { expect, test } from './fixtures';
 import { gotoAppReady, nav, recordShortTake, transport } from './helpers';
 import type { TakeRow } from '../../src/data/db';
 import type { SamplePackManifest } from '../../src/audio/audioTypes';
+import { pianoInstrument } from '../../src/audio/instruments';
+
+// Read from the registry so a pack-version bump cannot leave these stale.
+const SALAMANDER_PACK = pianoInstrument('salamander-grand').packVersion;
+const HEADROOM_PACK = pianoInstrument('headroom-grand').packVersion;
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
 test('an optional range sample failure leaves the decoded core available for playback and recording', async ({
   page,
 }) => {
-  await page.route('**/salamander-grand-v3/manifest.json', async (route) => {
+  await page.route(`**/${SALAMANDER_PACK}/manifest.json`, async (route) => {
     const response = await route.fetch();
     const manifest = (await response.json()) as SamplePackManifest;
     manifest.files = manifest.files.filter((file) => file.pack === 'core');
     manifest.files.push({
       file: 'unavailable-extra.sample',
       midi: 108,
-      layer: 1,
+      layer: manifest.velocityLayers.find((layer) => layer.label === 'medium')!.index,
       pack: 'full',
       bytes: 1,
     });
@@ -47,12 +52,14 @@ test('an optional range sample failure leaves the decoded core available for pla
 });
 
 /**
- * Tags every sample voice with the pack its recording came from: the bytes by
+ * Tags every sample voice with the piano its recording came from: the bytes by
  * the URL they were fetched from, the decoded buffer by those bytes, and each
  * voice started by its buffer. The one-frame buffer that unlocks iOS audio was
- * never fetched, so it is not counted.
+ * never fetched, so it is not counted. The piano is the pack directory less
+ * its `-vN`, so a recording that a pack re-uses from an earlier generation of
+ * its piano (`../salamander-grand-v3/C4v10.sample`) is still that piano's.
  */
-function tagVoicesByPack(): void {
+function tagVoicesByPiano(): void {
   const urlOf = new WeakMap<object, string>();
   const readBytes = Response.prototype.arrayBuffer;
   Response.prototype.arrayBuffer = async function (this: Response) {
@@ -71,16 +78,16 @@ function tagVoicesByPack(): void {
     if (url) urlOf.set(buffer, url);
     return buffer;
   };
-  const packs: string[] = [];
-  Object.assign(window, { __voicePacks: packs });
+  const pianos: string[] = [];
+  Object.assign(window, { __voicePianos: pianos });
   const start = AudioBufferSourceNode.prototype.start;
   AudioBufferSourceNode.prototype.start = function (
     this: AudioBufferSourceNode,
     ...args: Parameters<AudioBufferSourceNode['start']>
   ) {
     const url = this.buffer ? urlOf.get(this.buffer) : undefined;
-    const pack = url ? /\/piano\/([^/]+)\//.exec(url)?.[1] : undefined;
-    if (pack) packs.push(pack);
+    const piano = url ? /\/piano\/([^/]+)-v\d+\//.exec(url)?.[1] : undefined;
+    if (piano) pianos.push(piano);
     return start.apply(this, args);
   };
 }
@@ -94,9 +101,9 @@ test.describe('switching piano during playback', () => {
     test(`piano switching from ${origin} keeps playback running, and the new piano takes over`, async ({
       page,
     }) => {
-      await page.addInitScript(tagVoicesByPack);
-      const voicePacks = () =>
-        page.evaluate(() => [...(window as unknown as { __voicePacks: string[] }).__voicePacks]);
+      await page.addInitScript(tagVoicesByPiano);
+      const voicePianos = () =>
+        page.evaluate(() => [...(window as unknown as { __voicePianos: string[] }).__voicePianos]);
       await gotoAppReady(page);
       await nav(page).getByRole('button', { name: 'Library' }).click();
       await page.getByRole('button', { name: 'Open Where Starlight Lingers' }).click();
@@ -105,7 +112,7 @@ test.describe('switching piano during playback', () => {
       const gate = new Promise<void>((resolve) => {
         release = resolve;
       });
-      await page.route('**/headroom-grand-v2/*.sample', async (route) => {
+      await page.route(`**/${HEADROOM_PACK}/*.sample`, async (route) => {
         await gate;
         await route.continue();
       });
@@ -150,9 +157,9 @@ test.describe('switching piano during playback', () => {
         // The music goes on, on the piano it was playing.
         const position = await page.locator('.transport__time').innerText();
         await expect(page.locator('.transport__time')).not.toHaveText(position);
-        const heard = await voicePacks();
-        expect(heard).toContain('salamander-grand-v3');
-        expect(heard).not.toContain('headroom-grand-v2');
+        const heard = await voicePianos();
+        expect(heard).toContain('salamander-grand');
+        expect(heard).not.toContain('headroom-grand');
 
         release();
         // The real pack decodes some seventy files here: its core and the take's keys.
@@ -162,8 +169,8 @@ test.describe('switching piano during playback', () => {
         ).toBeEnabled();
         // Every note from the take-over on is the new piano's.
         await expect
-          .poll(async () => (await voicePacks()).slice(heard.length))
-          .toContain('headroom-grand-v2');
+          .poll(async () => (await voicePianos()).slice(heard.length))
+          .toContain('headroom-grand');
         await expect(
           transport(page).getByRole('button', { name: 'Pause', exact: true }),
         ).toBeVisible();

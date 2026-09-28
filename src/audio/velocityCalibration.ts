@@ -16,28 +16,65 @@
  * sample peak in dBFS. Keyed by pack version: a published pack never changes,
  * so neither does its entry.
  *
- *   salamander-grand-v3
- *     fit RMS residual, dB: soft 1.88, medium 1.32, loud 1.23
- *     furthest from its fit, dB: D♯6 soft (+4.1)
+ *   salamander-grand-v4
+ *     fit RMS residual, dB: pianissimo 2.44, soft 1.88, medium 1.32, loud 1.23
+ *     furthest from its fit, dB: A3 pianissimo (−5.9)
  *     held back, dB left over target: none
- *     loudest voice peak at full velocity: -0.6 dBFS
+ *     loudest voice peak at full velocity: -0.1 dBFS
  *   headroom-grand-v2
  *     fit RMS residual, dB: soft 2.94, medium 2.48, loud 2.21
  *     furthest from its fit, dB: F♯6 medium (+6.9)
  *     held back, dB left over target: none
  *     loudest voice peak at full velocity: 3.5 dBFS
- *   bitklavier-grand-v1
- *     fit RMS residual, dB: soft 2.67, medium 2.72, loud 2.57
+ *   bitklavier-grand-v2
+ *     fit RMS residual, dB: pianissimo 2.33, soft 2.67, medium 2.72, loud 2.57
  *     furthest from its fit, dB: C6 soft (+8.1)
  *     held back, dB left over target: C6 +1.1
- *     loudest voice peak at full velocity: -0.2 dBFS
+ *     loudest voice peak at full velocity: 0.5 dBFS
  */
 import type { VelocityCalibration } from './velocityCalibrationMath';
 
 export const VELOCITY_CALIBRATIONS: Readonly<Record<string, VelocityCalibration>> = {
-  'salamander-grand-v3': {
+  'salamander-grand-v4': {
     referenceDb: -14.286,
+    tiltLayer: 2,
     layers: [
+      {
+        fit: [-26.0588, -2.1483, -0.488],
+        rmsResidualDb: 2.44,
+        roots: [
+          { midi: 21, measuredDb: -25.27, correctedDb: -25.27, peakDb: -16.12 },
+          { midi: 24, measuredDb: -22.57, correctedDb: -22.57, peakDb: -12.9 },
+          { midi: 27, measuredDb: -21.91, correctedDb: -21.91, peakDb: -13.16 },
+          { midi: 30, measuredDb: -24.61, correctedDb: -24.61, peakDb: -15.33 },
+          { midi: 33, measuredDb: -24.6, correctedDb: -24.6, peakDb: -15.75 },
+          { midi: 36, measuredDb: -23.58, correctedDb: -23.58, peakDb: -15.11 },
+          { midi: 39, measuredDb: -22.79, correctedDb: -22.79, peakDb: -14.9 },
+          { midi: 42, measuredDb: -23.42, correctedDb: -23.42, peakDb: -15.87 },
+          { midi: 45, measuredDb: -25.07, correctedDb: -25.07, peakDb: -16.66 },
+          { midi: 48, measuredDb: -24.49, correctedDb: -24.49, peakDb: -16.51 },
+          { midi: 51, measuredDb: -24.05, correctedDb: -24.05, peakDb: -15.89 },
+          { midi: 54, measuredDb: -26.99, correctedDb: -26.99, peakDb: -17.77 },
+          { midi: 57, measuredDb: -31.43, correctedDb: -31.43, peakDb: -24.13 },
+          { midi: 60, measuredDb: -23.87, correctedDb: -23.87, peakDb: -15.48 },
+          { midi: 63, measuredDb: -26.91, correctedDb: -26.91, peakDb: -16.92 },
+          { midi: 66, measuredDb: -28.93, correctedDb: -28.93, peakDb: -21.99 },
+          { midi: 69, measuredDb: -26.85, correctedDb: -26.85, peakDb: -19.26 },
+          { midi: 72, measuredDb: -26.54, correctedDb: -26.54, peakDb: -19.67 },
+          { midi: 75, measuredDb: -26.57, correctedDb: -26.57, peakDb: -18.77 },
+          { midi: 78, measuredDb: -26.46, correctedDb: -26.46, peakDb: -19.35 },
+          { midi: 81, measuredDb: -35.38, correctedDb: -35.38, peakDb: -27 },
+          { midi: 84, measuredDb: -31.52, correctedDb: -31.52, peakDb: -18.41 },
+          { midi: 87, measuredDb: -34.14, correctedDb: -34.14, peakDb: -23.21 },
+          { midi: 90, measuredDb: -33.64, correctedDb: -33.64, peakDb: -21.68 },
+          { midi: 93, measuredDb: -32.46, correctedDb: -32.46, peakDb: -22.13 },
+          { midi: 96, measuredDb: -40.39, correctedDb: -40.39, peakDb: -28.4 },
+          { midi: 99, measuredDb: -39.04, correctedDb: -39.04, peakDb: -26.9 },
+          { midi: 102, measuredDb: -36.67, correctedDb: -36.67, peakDb: -21.91 },
+          { midi: 105, measuredDb: -46.8, correctedDb: -46.8, peakDb: -32.28 },
+          { midi: 108, measuredDb: -39.61, correctedDb: -39.61, peakDb: -23.86 },
+        ],
+      },
       {
         fit: [-20.3787, -1.704, -0.4991],
         rmsResidualDb: 1.88,
@@ -261,9 +298,46 @@ export const VELOCITY_CALIBRATIONS: Readonly<Record<string, VelocityCalibration>
       },
     ],
   },
-  'bitklavier-grand-v1': {
+  'bitklavier-grand-v2': {
     referenceDb: -13.133,
+    tiltLayer: 2,
     layers: [
+      {
+        fit: [-23.8734, -0.4314, -0.6585],
+        rmsResidualDb: 2.33,
+        roots: [
+          { midi: 21, measuredDb: -28.47, correctedDb: -28.47, peakDb: -20.19 },
+          { midi: 24, measuredDb: -27.94, correctedDb: -27.94, peakDb: -20.64 },
+          { midi: 27, measuredDb: -27.16, correctedDb: -27.16, peakDb: -17.97 },
+          { midi: 30, measuredDb: -25.69, correctedDb: -25.69, peakDb: -16.78 },
+          { midi: 33, measuredDb: -26.31, correctedDb: -26.31, peakDb: -18.31 },
+          { midi: 36, measuredDb: -24.32, correctedDb: -24.32, peakDb: -14.78 },
+          { midi: 39, measuredDb: -25.13, correctedDb: -25.13, peakDb: -15.73 },
+          { midi: 42, measuredDb: -27.39, correctedDb: -27.39, peakDb: -19.06 },
+          { midi: 45, measuredDb: -24.39, correctedDb: -24.39, peakDb: -14.67 },
+          { midi: 48, measuredDb: -27.58, correctedDb: -27.58, peakDb: -20.25 },
+          { midi: 51, measuredDb: -22.98, correctedDb: -22.98, peakDb: -16.25 },
+          { midi: 54, measuredDb: -25.94, correctedDb: -25.94, peakDb: -18.62 },
+          { midi: 57, measuredDb: -24.66, correctedDb: -24.66, peakDb: -17.94 },
+          { midi: 60, measuredDb: -22.11, correctedDb: -22.11, peakDb: -14.51 },
+          { midi: 63, measuredDb: -25.22, correctedDb: -25.22, peakDb: -18.16 },
+          { midi: 66, measuredDb: -23.77, correctedDb: -23.77, peakDb: -16.84 },
+          { midi: 69, measuredDb: -29, correctedDb: -29, peakDb: -22.72 },
+          { midi: 72, measuredDb: -25.64, correctedDb: -25.64, peakDb: -17.77 },
+          { midi: 75, measuredDb: -27.01, correctedDb: -27.01, peakDb: -18.9 },
+          { midi: 78, measuredDb: -25.25, correctedDb: -25.25, peakDb: -17.2 },
+          { midi: 81, measuredDb: -25.93, correctedDb: -25.93, peakDb: -19.89 },
+          { midi: 84, measuredDb: -19.8, correctedDb: -20.87, peakDb: -13.29 },
+          { midi: 87, measuredDb: -24.66, correctedDb: -24.66, peakDb: -15.74 },
+          { midi: 90, measuredDb: -25.21, correctedDb: -25.21, peakDb: -14.8 },
+          { midi: 93, measuredDb: -29.83, correctedDb: -29.83, peakDb: -18.27 },
+          { midi: 96, measuredDb: -33.59, correctedDb: -33.59, peakDb: -19.1 },
+          { midi: 99, measuredDb: -30.99, correctedDb: -30.99, peakDb: -15.93 },
+          { midi: 102, measuredDb: -35.63, correctedDb: -35.63, peakDb: -21.52 },
+          { midi: 105, measuredDb: -36.55, correctedDb: -36.55, peakDb: -20.67 },
+          { midi: 108, measuredDb: -38.18, correctedDb: -38.18, peakDb: -20.76 },
+        ],
+      },
       {
         fit: [-18.7364, -0.342, -0.6801],
         rmsResidualDb: 2.67,

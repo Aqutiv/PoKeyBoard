@@ -20,7 +20,9 @@
  *
  * The run checks the make-up between those points (within 0.03 dB of what the
  * filter really takes), that every ramp the guard leaves alone meets the layer
- * below within a few cents, and that no voice anywhere on a ramp peaks higher
+ * below within a few cents — or, where that layer is the brighter of the two
+ * already, which no lowpass can meet, stays open and steps by less than
+ * `BRIGHTER_BELOW_CENTS` — and that no voice anywhere on a ramp peaks higher
  * than the loudest voice of any pack at full velocity (`loudestVoicePeak`),
  * the worst case the output headroom spec drives the graph with; and it prints
  * what other guard multiples would have done, and the top octave before and
@@ -90,6 +92,15 @@ const TOP_TWO_OCTAVES_MIDI = 84;
 
 /** The furthest the make-up between the table's points may stray from what the filter takes. */
 const MAKEUP_TOLERANCE_DB = 0.03;
+
+/**
+ * The largest step a ramp may leave where the layer below is the brighter of
+ * the two, played open. A lowpass only darkens, so the search leaves such a
+ * ramp open, and the step is the recordings' own: two roots of the pianissimo
+ * layers, Salamander's C6 by 23 cents and the Steinway's F♯6 by 15, where
+ * every other ramp's bottom meets the layer below within 5.
+ */
+const BRIGHTER_BELOW_CENTS = 50;
 
 interface Recording {
   channels: Float32Array[];
@@ -348,6 +359,11 @@ function guarded(ramp: Ramp): boolean {
   return ramp.ramp.cutoffHz > ramp.ramp.matchedCutoffHz;
 }
 
+/** Whether the search left a ramp open, the layer below the brighter already. */
+function leftOpen(ramp: Ramp): boolean {
+  return ramp.ramp.matchedCutoffHz >= OPEN_CUTOFF_HZ;
+}
+
 function jumpCents(ramp: Ramp, centroidHz: number): number {
   return centsBetween(centroidHz, ramp.targetHz);
 }
@@ -386,9 +402,17 @@ function summaryLines(pack: Pack): string[] {
   const lowest = Math.min(...guardedRamps.map((ramp) => ramp.midi));
   const makeups = pack.ramps.map((ramp) => ramp.ramp.makeupDb[0]!);
   const most = pack.ramps.find((ramp) => ramp.ramp.makeupDb[0] === Math.max(...makeups))!;
+  const open = pack.ramps
+    .filter(leftOpen)
+    .map(
+      (ramp) =>
+        `${noteName(ramp.midi)} ${pack.labels[ramp.layer]} by ` +
+        `${Math.abs(jumpCents(ramp, ramp.ramp.centroidHz)).toFixed(0)} cents`,
+    );
   lines.push(
     `guarded at ${FUNDAMENTAL_GUARD} × the fundamental: ${guardedRamps.length} of ` +
       `${pack.ramps.length} ramps, from ${noteName(lowest)}`,
+    `left open, the layer below the brighter already: ${open.length > 0 ? open.join(', ') : 'none'}`,
     `make-up at a ramp's bottom, dB: median ${median(makeups).toFixed(2)}, most ` +
       `${Math.max(...makeups).toFixed(2)} (${noteName(most.midi)} ${pack.labels[most.layer]})`,
     `loudest voice on a ramp: ${loudestRampDb(pack).toFixed(2)} dBFS; at full velocity ` +
@@ -559,9 +583,12 @@ it('generates the tone calibration', { timeout: 900_000 }, async () => {
 
     for (const ramp of pack.ramps) {
       const where = `${pack.version} ${noteName(ramp.midi)} ${pack.labels[ramp.layer]}`;
-      // Matched outright, the ramp meets the layer below.
+      // Matched outright, the ramp meets the layer below — or, where that is
+      // the brighter already, stays open, and only slightly apart.
       if (!guarded(ramp)) {
-        expect(Math.abs(jumpCents(ramp, ramp.ramp.centroidHz)), where).toBeLessThan(5);
+        expect(Math.abs(jumpCents(ramp, ramp.ramp.centroidHz)), where).toBeLessThan(
+          leftOpen(ramp) ? BRIGHTER_BELOW_CENTS : 5,
+        );
       }
       expect(ramp.makeupErrorDb, where).toBeLessThanOrEqual(MAKEUP_TOLERANCE_DB);
     }
