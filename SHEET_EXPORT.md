@@ -218,7 +218,9 @@ takes seconds and never touches the audio engine.
   one standing clear does not, however high it climbs; the printed spacing is
   known, where the live score's changes with zoom. A system reserves exactly
   the room the band needs past its music, with a tempo mark still on top and
-  the pedal row under an 8vb.
+  the pedal row under an 8vb. A line running on to the next system, if only to
+  its first note, stops open at the end of the staff and picks up at the start
+  of the next.
 - **Beaming** is decided once, in `layoutScore`, so the printed page and the
   live score group runs the same way and commit a run to the same stem
   direction; `beamGeometry.ts` holds the line arithmetic in staff spaces, read

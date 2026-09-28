@@ -612,6 +612,22 @@ describe('layoutSheet', () => {
       expect(octave!.x2Pt).toBeCloseTo(column.xPt + 2 * HEAD_RX_G * G, 6);
     });
 
+    it('leaves an 8va running on to the next system open, at the end of the staff', () => {
+      // One whose last note is the next system's downbeat, and one running on
+      // past it: neither stops where this system does.
+      for (const [fromMs, toMs] of [
+        [second - 1500, second],
+        [second - 1000, second + 1000],
+      ] as const) {
+        const systems = allSystems(sheet(raised(fromMs, toMs)));
+        const next = systems.findIndex((system) => system.measures[0]!.startMs === second);
+        const system = systems[next - 1]!;
+        const [octave] = system.octaves;
+        expect(octave).toMatchObject({ continuesLeft: false, continuesRight: true });
+        expect(octave!.x2Pt).toBeCloseTo(system.xPt + system.widthPt, 6);
+      }
+    });
+
     it('writes a dynamic there under its note, and a hairpin from it clear of the mark', () => {
       const score = layout();
       score.dynamics = [

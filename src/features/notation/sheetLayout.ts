@@ -837,12 +837,18 @@ function buildOctaves(
   for (const span of spans) {
     if (span.toMs < fromMs || span.fromMs >= toMs) continue;
     const continuesLeft = span.fromMs < fromMs;
+    // A line whose last note is on a later system, even the next one's
+    // downbeat, runs on to it.
+    const continuesRight = span.toMs >= toMs;
     // From the left edge of the first head it covers, a head on the system's
     // downbeat too; a line carried over from the system before picks up at
     // this one's start instead...
     const x1Pt = (continuesLeft ? first.xPt : xAtTime(anchors, span.fromMs)) - HEAD_RX_G * G;
-    // ...to past the last, so the line covers the note it applies to.
-    const x2Pt = xAtTime(anchors, Math.min(span.toMs, toMs)) + HEAD_RX_G * G * 2;
+    // ...to past the last, so the line covers the note it applies to; one
+    // running on goes to the end of the staff, and no further.
+    const x2Pt = continuesRight
+      ? last.xPt + last.widthPt
+      : xAtTime(anchors, span.toMs) + HEAD_RX_G * G * 2;
     octaves.push({
       staff: span.staff,
       up: span.up,
@@ -850,7 +856,7 @@ function buildOctaves(
       x2Pt,
       yPt: octaveLineRel(inkUnderRel(measures, ties, span, x1Pt, x2Pt), span.up),
       continuesLeft,
-      continuesRight: span.toMs > toMs,
+      continuesRight,
     });
   }
   return octaves;

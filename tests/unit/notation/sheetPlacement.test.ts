@@ -1075,7 +1075,7 @@ describe('octave lines', () => {
     expect(mark.top - Number(number![1])).toBeGreaterThanOrEqual(CLEAR);
   });
 
-  it('carries a line over a system break on to the note it ends on, clear of it', async () => {
+  it('carries a line open over a system break on to the note it ends on, clear of it', async () => {
     // Bars of E5 quarters, broken into systems, but for the last three beats of
     // the first system and the second's downbeat: C7s, written C6 on two ledger
     // lines under a line that runs from one system into the next. The spacing
@@ -1112,6 +1112,21 @@ describe('octave lines', () => {
     );
     expect(under.length).toBeGreaterThan(2);
     expect(highest(under) - mark.bottom).toBeGreaterThanOrEqual(CLEAR - WRITTEN);
+
+    // On the system before, the line runs to the end of the staff and no
+    // further, and stays open there: no hook says it stops.
+    const before = page.systems[0]!;
+    const [runs] = before.octaves;
+    expect(runs).toMatchObject({ continuesLeft: false, continuesRight: true });
+    expectNear(markOf(drawn, runs!).right, before.xPt + before.widthPt);
+    const hooks = drawn.strokes.filter(
+      (stroke) =>
+        !stroke.dashed &&
+        stroke.points.length === 4 &&
+        near(stroke.points[0]!, stroke.points[2]!) &&
+        near(stroke.points[1]!, runs!.yPt),
+    );
+    expect(hooks).toHaveLength(0);
   });
 
   it('keeps every 8va in the Waltz, Op. 64 No. 2 clear of the beams and stems it covers', async () => {
