@@ -8,7 +8,7 @@ import type {
   TempoChange,
   TimeSignature,
 } from '@/domain/takeTypes';
-import { barDurationMs, beatDurationMs } from '@/utils/timing';
+import { barDurationMs } from '@/utils/timing';
 import { assignAccidentalColumns } from './accidentalStacking';
 import type { BeamPiece } from './beamGeometry';
 import {
@@ -32,6 +32,7 @@ import {
   restsForGap,
   SMALLEST_UNITS,
   symbolForUnits,
+  UNITS_PER_WHOLE,
   unitsPerBeat,
   valuesForSpan,
 } from './rests';
@@ -817,11 +818,14 @@ function buildBeamGroups(
   measures: readonly MeasureInfo[],
   rests: readonly LaidOutRest[],
   timeSignature: TimeSignature,
+  tempoMap: TempoMap,
   eighthsByHalfBar: boolean,
 ): BeamGroup[] {
   const compound = timeSignature.numerator % 3 === 0 && timeSignature.denominator >= 8;
   const halfBarEighths =
     eighthsByHalfBar && timeSignature.numerator === 4 && timeSignature.denominator === 4;
+  const perBeat = unitsPerBeat(timeSignature.denominator);
+  const groupUnits = compound ? perBeat * 3 : perBeat;
   /** Where each staff falls silent — a beam stops at any of these. */
   const silentAt = new Set<string>();
   for (const rest of rests) silentAt.add(`${rest.staff}|${rest.displayStartMs}`);
@@ -830,8 +834,19 @@ function buildBeamGroups(
   for (const measure of measures) {
     const inMeasure = chordsByMeasure[measure.index] ?? [];
     if (inMeasure.length === 0) continue;
-    const beatMs = beatDurationMs(measure.bpm, timeSignature);
-    const groupMs = compound ? beatMs * 3 : beatMs;
+    const startBeat = tempoMap.beatAtMs(measure.startMs);
+    /**
+     * Units (see `UNITS_PER_WHOLE`) from the bar line to a moment, counted the
+     * way the rests and ties count them: through the tempo map, to the nearest
+     * whole unit. Bar lines and notes are both written on whole milliseconds
+     * and a beat rarely is one, so a note written on a beat can sit up to a
+     * millisecond short of it, measured from its bar line. Counted in
+     * milliseconds, that put it in the beat before and beamed it with that
+     * one. A unit is over two and a half milliseconds even at the fastest
+     * tempo a take may have, so rounding to one puts the note back on its beat.
+     */
+    const unitsIn = (timeMs: number): number =>
+      Math.round((tempoMap.beatAtMs(timeMs) - startBeat) * perBeat);
 
     for (const staff of ['treble', 'bass'] as const) {
       const onStaff = inMeasure.filter((chord) => chord.staff === staff);
@@ -858,7 +873,7 @@ function buildBeamGroups(
 
       /** Whole notes from the bar line to a chord — how beam levels are counted. */
       const wholesIn = (chord: ChordGroup): number =>
-        (chord.displayStartMs - measure.startMs) / beatMs / timeSignature.denominator;
+        unitsIn(chord.displayStartMs) / UNITS_PER_WHOLE;
 
       const emit = (run: ChordGroup[]): void => {
         const polyphonic = run.find((chord) => (voicesAt.get(chord.displayStartMs) ?? 1) > 1);
@@ -925,10 +940,7 @@ function buildBeamGroups(
             flush();
             continue;
           }
-          // The same hair's-breadth tolerance the ternary reading needs: a beat
-          // is rarely a whole number of milliseconds, so a note written on one
-          // lands just before it and would otherwise beam with the group before.
-          const group = Math.floor((timeMs - measure.startMs) / groupMs + BEAT_EPSILON);
+          const group = Math.floor(unitsIn(timeMs) / groupUnits);
           const previous = run[run.length - 1];
           if (previous !== undefined && !beamsJoin(previous, chord)) flush();
           else if (previous !== undefined && group !== runGroup) flush(chord);
@@ -1789,6 +1801,7 @@ export function layoutScore(performed: readonly NoteEvent[], options: LayoutOpti
     measures,
     rests,
     options.timeSignature,
+    tempoMap,
     options.eighthsByHalfBar ?? true,
   );
   // The bar decides which accidentals survive, so it has to speak before the

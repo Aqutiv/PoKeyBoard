@@ -12,6 +12,7 @@ import {
 import { DEFAULT_LIBRARY_FOLDER, LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { buildLibraryTake } from '@/features/library/trackBuilder';
 import { detectFifths } from '@/features/notation/keyDetection';
+import { layoutScore } from '@/features/notation/notationLayout';
 import { MIDI_MAX, MIDI_MIN } from '@/utils/midi';
 
 describe('library catalog', () => {
@@ -250,6 +251,34 @@ describe('library catalog', () => {
     // The book closes on F with its ninth, spread up to a bell on A6.
     const finalChord = notes.filter((note) => note.startMs >= 118_000);
     expect(finalChord.map((note) => note.midi)).toEqual([29, 48, 57, 67, 72, 77, 81, 93]);
+  });
+
+  it('writes the Blues Bass in C in straight eighths and still plays them swung', () => {
+    const take = getLibraryTake(libraryTakeId('blues-in-c'))!;
+    // Written the way swing is written: plain eighths, which are played long
+    // and short. Laid out on its own grid, every boogie bar is eight of them
+    // beamed by the half bar, each turnaround bar four quarters, and the last
+    // chord a whole note, with not one rest between them.
+    const layout = layoutScore(take.notes, {
+      bpm: take.tempo.bpm,
+      timeSignature: take.tempo.timeSignature,
+      quantization: take.display.quantization,
+      keySignature: detectFifths(take.notes),
+      pedals: take.pedalEvents,
+    });
+    const bass = layout.chords.filter((chord) => chord.staff === 'bass');
+    const values = new Set(bass.map((chord) => JSON.stringify(chord.symbol)));
+    expect([...values].sort()).toEqual(
+      ['eighth', 'quarter', 'whole'].map((base) => JSON.stringify({ base, dotted: false })).sort(),
+    );
+    expect(layout.rests.filter((rest) => rest.staff === 'bass')).toEqual([]);
+    // Three choruses of eleven boogie bars, two half bars each.
+    expect(layout.beams.map((beam) => beam.members.length)).toEqual(Array(66).fill(4));
+
+    // The sound is untouched: each offbeat still lands two thirds of the way
+    // through its beat, a 2:1 swing at 104 bpm.
+    const firstBar = take.notes.filter((note) => note.startMs < 2308).map((note) => note.startMs);
+    expect(firstBar).toEqual([0, 385, 577, 962, 1154, 1538, 1731, 2115]);
   });
 
   it('keeps the accidentals each track was written with', () => {
