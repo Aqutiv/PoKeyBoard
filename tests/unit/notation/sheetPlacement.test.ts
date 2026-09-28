@@ -1234,3 +1234,81 @@ describe('marks on the first downbeat', () => {
     expectNear(pedal!.points[0]!, head.xPt);
   });
 });
+
+describe('a clef turning over', () => {
+  /**
+   * Six bars of quarters in both hands, three to a system: the right hand on
+   * E5, the left on C4, which it reads under a G clef from bar index `turn` on.
+   */
+  function pageOf(turn: number | null): SheetPage {
+    const notes: NoteEvent[] = [];
+    for (let m = 0; m < 6; m += 1) {
+      for (let b = 0; b < 4; b += 1) {
+        const startMs = m * 2000 + b * 500;
+        const clef = turn !== null && m >= turn ? 'treble' : 'bass';
+        notes.push({ id: `r${m}-${b}`, midi: 76, startMs, durationMs: 500, velocity: 0.6 });
+        notes.push({
+          id: `l${m}-${b}`,
+          midi: 60,
+          startMs,
+          durationMs: 500,
+          velocity: 0.6,
+          staff: 'bass',
+          clef,
+        });
+      }
+    }
+    const score = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+      minMeasures: 1,
+    });
+    return layoutSheet(score, {
+      paper: 'a4',
+      timeSignature: { numerator: 4, denominator: 4 },
+      bpm: 120,
+      title: 'Clefs',
+      subtitle: '',
+      credit: 'PoKeyBoard',
+    }).pages[0]!;
+  }
+
+  const headXs = (drawn: Drawn): number[] => usesOf(drawn, 'noteheadBlack').map((use) => use.x);
+
+  it('shows a system opening on the new clef in its prefix alone, its notes where they always stand', async () => {
+    const turned = pageOf(3);
+    const second = turned.systems[1]!;
+    expect(second.firstMeasureNumber).toBe(4);
+    const drawn = await engrave(turned);
+    // Bar 4 opens the second system, whose prefix sets the bass staff's G clef...
+    expectUse(drawn, 'gClef', second.xPt + 1.1 * G, second.bassTopPt + 3 * G);
+    // ...so nothing is set after its first bar line.
+    expect(usesOf(drawn, 'gClefChange')).toEqual([]);
+    // And every head stands where it does when the left hand never turns over.
+    const plain = headXs(await engrave(pageOf(null)));
+    const heads = headXs(drawn);
+    expect(heads).toHaveLength(plain.length);
+    heads.forEach((x, i) => expectNear(x, plain[i]!));
+  });
+
+  it('sets the new clef after a bar line inside a system, the music after it', async () => {
+    const turned = pageOf(4);
+    // Bar 5, the second of the second system.
+    const system = turned.systems[1]!;
+    const measure = system.measures[1]!;
+    expect(measure.index).toBe(4);
+    const drawn = await engrave(turned);
+    const [change] = usesOf(drawn, 'gClefChange');
+    expect(change).toBeDefined();
+    expectNear(change!.x, measure.xPt + 0.6 * G);
+    expectNear(change!.y, system.bassTopPt + 3 * G);
+    // The bar's first head stands clear past the change's ink.
+    const heads = usesOf(drawn, 'noteheadBlack')
+      .filter((use) => use.y > system.trebleTopPt - 4 * G)
+      .filter((use) => use.x > measure.xPt && use.x < measure.xPt + measure.widthPt);
+    expect(heads).toHaveLength(8);
+    const firstHead = Math.min(...heads.map((use) => useInk(use).left));
+    expect(firstHead - useInk(change!).right).toBeGreaterThan(G);
+  });
+});

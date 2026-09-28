@@ -423,6 +423,12 @@ interface WorkMeasure {
   clefs: Record<StaffKind, ClefKind>;
   /** Staffs whose clef differs from the measure before it, system aside. */
   clefTurnsOver: StaffKind[];
+  /**
+   * Room kept after the bar line for the clef change, counted in `naturalWG`
+   * and every column's `headOffG`. A measure opening a system leaves it
+   * unused (`unusedClefRoomG`).
+   */
+  clefRoomG: number;
 }
 
 interface WorkSystem {
@@ -532,6 +538,9 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
         if (previous.clefs[staff] !== measure.clefs[staff]) clefTurnsOver.push(staff);
       }
     }
+    // A clef turning over needs room after the bar line before the music; a
+    // change on both staffs is engraved at one x, so it takes no more.
+    const clefRoomG = clefTurnsOver.length > 0 ? CLEF_CHANGE_W_G : 0;
     const byTime = new Map<number, WorkColumn>();
     const columnAt = (timeMs: number): WorkColumn => {
       let column = byTime.get(timeMs);
@@ -569,19 +578,19 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
         startMs: measure.startMs,
         endMs: measure.endMs,
         columns,
-        naturalWG: EMPTY_MEASURE_W_G + clefTurnsOver.length * CLEF_CHANGE_W_G,
+        naturalWG: EMPTY_MEASURE_W_G + clefRoomG,
         bpm: measure.bpm,
         tempoMarkBpm,
         clefs: measure.clefs,
         clefTurnsOver,
+        clefRoomG,
       };
     }
 
     const lead = columns[0]!.timeMs - measure.startMs;
     let offset =
       START_PAD_G +
-      // A clef turning over needs room after the bar line before the music.
-      (clefTurnsOver.length > 0 ? CLEF_CHANGE_W_G : 0) +
+      clefRoomG +
       (lead > 0 ? Math.min(advanceG(lead, wholeMs), LEAD_SILENCE_MAX_G) : 0);
     for (let i = 0; i < columns.length; i += 1) {
       const column = columns[i]!;
@@ -604,8 +613,18 @@ function buildWorkMeasures(score: ScoreLayout): WorkMeasure[] {
       tempoMarkBpm,
       clefs: measure.clefs,
       clefTurnsOver,
+      clefRoomG,
     };
   });
+}
+
+/**
+ * How much of a measure's clef room goes unused at `position` in its system:
+ * all of it where the measure opens the system, whose prefix already engraves
+ * the clef it opens under, and none anywhere else.
+ */
+function unusedClefRoomG(measure: WorkMeasure, position: number): number {
+  return position === 0 ? measure.clefRoomG : 0;
 }
 
 /** Greedily fill systems, justify, assign x positions, and build beams. */
@@ -627,15 +646,16 @@ function packSystems(
   let current: WorkMeasure[] = [];
   let currentWPt = 0;
   for (const measure of workMeasures) {
-    const wPt = measure.naturalWG * G;
     const available = availableFor(rows.length);
-    if (current.length > 0 && currentWPt + wPt > available) {
+    if (current.length > 0 && currentWPt + measure.naturalWG * G > available) {
       rows.push({ measures: current, stretch: available / currentWPt });
       current = [];
       currentWPt = 0;
     }
+    // Opening the next system, a measure the last one had no room for is
+    // narrower than it was asked to fit there.
+    currentWPt += (measure.naturalWG - unusedClefRoomG(measure, current.length)) * G;
     current.push(measure);
-    currentWPt += wPt;
   }
   if (current.length > 0) {
     const available = availableFor(rows.length);
@@ -649,10 +669,11 @@ function packSystems(
       keyAreaPt +
       (systemIndex === 0 ? metrics.timeSigAreaPt : 0);
     const measures: SheetMeasure[] = row.measures.map((wm, position) => {
-      const widthPt = wm.naturalWG * row.stretch * G;
+      const unusedG = unusedClefRoomG(wm, position);
+      const widthPt = (wm.naturalWG - unusedG) * row.stretch * G;
       const columns: SheetColumn[] = wm.columns.map((column) => ({
         timeMs: column.timeMs,
-        xPt: x + column.headOffG * row.stretch * G,
+        xPt: x + (column.headOffG - unusedG) * row.stretch * G,
         treble: column.treble,
         bass: column.bass,
         trebleRest: column.trebleRest,
@@ -671,7 +692,8 @@ function packSystems(
         tempoMarkBpm: wm.tempoMarkBpm,
         clefs: wm.clefs,
         // The system prefix already engraves the clef it opens under, so a
-        // turnover landing on the first measure needs nothing after the bar.
+        // turnover landing on the first measure needs nothing after the bar,
+        // and keeps no room for it (`unusedClefRoomG`).
         clefChanges: position === 0 ? [] : wm.clefTurnsOver,
       };
       x += widthPt;
