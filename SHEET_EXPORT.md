@@ -311,9 +311,12 @@ takes seconds and never touches the audio engine.
   before.
 - A staff is read under whichever clef the source gives it, and a clef that
   turns over mid-piece is engraved after the bar line it takes over on (and
-  in the prefix of every system that opens under it). Only G and F clefs are
-  supported; a C clef (alto, tenor) drops any override and the staff goes back
-  to its own. A clef stands until something replaces it, so a measure with
+  in the prefix of every system that opens under it). Where it turns over on
+  a system's first bar, the prefix alone shows it: that bar keeps no room
+  after its bar line, so it is spaced, and its system filled, as if nothing
+  turned over there. No courtesy clef is set at the end of the system before
+  it. Only G and F clefs are supported; a C clef (alto, tenor) drops any
+  override and the staff goes back to its own. A clef stands until something replaces it, so a measure with
   nothing on a staff carries the last one forward. The clef rides on the notes
   themselves, and derived rests carry none, so a change the source declares
   during a bar of rest is announced at the next note instead of where it was
