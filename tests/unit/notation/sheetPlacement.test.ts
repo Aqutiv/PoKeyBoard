@@ -1,12 +1,21 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+import process from 'node:process';
 import { PDFDocument } from 'pdf-lib';
-import { beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import type { NoteEvent } from '@/domain/takeTypes';
 import { PdfStandardFonts } from '@/features/export/pdfSurface';
+import { defaultKeySignatureFor, layoutTakeSheet } from '@/features/export/sheetPdfService';
 import { beginSvgPage } from '@/features/export/svgSurface';
 import type { TextRasterizer } from '@/features/export/vectorSurface';
+import { loadClassicTake, SCORE_PACK_PATH } from '@/features/library/scoreLoader';
 import { dynamicOpticalCentre, DYNAMIC_GLYPHS } from '@/features/notation/glyphs/engravingGlyphs';
-import { MUSIC_GLYPH_METRICS } from '@/features/notation/glyphs/musicGlyphMetrics';
+import {
+  MUSIC_GLYPH_METRICS,
+  type MusicGlyphName,
+} from '@/features/notation/glyphs/musicGlyphMetrics';
 import { signatureSteps } from '@/features/notation/keySignature';
-import { layoutScore } from '@/features/notation/notationLayout';
+import { layoutScore, type LayoutOptions } from '@/features/notation/notationLayout';
 import {
   layoutSheet,
   metricsFor,
@@ -17,6 +26,7 @@ import {
   type SheetColumn,
   type SheetMeasure,
   type SheetNote,
+  type SheetOctave,
   type SheetPage,
   type SheetSystem,
 } from '@/features/notation/sheetLayout';
@@ -265,6 +275,26 @@ const bassBeam: SheetBeam = {
 
 const eighth = { base: 'eighth', dotted: false } as const;
 
+/** An 8va over bar 2, stood well off the staff, and an 8vb under bar 1. */
+const OTTAVA: SheetOctave = {
+  staff: 'treble',
+  up: true,
+  x1Pt: M2 + 20,
+  x2Pt: M2 + 200,
+  yPt: TREBLE - 40,
+  continuesLeft: false,
+  continuesRight: false,
+};
+const OTTAVA_BASSA: SheetOctave = {
+  staff: 'bass',
+  up: false,
+  x1Pt: M1 + 20,
+  x2Pt: M1 + 120,
+  yPt: BASS + 4 * G + 30,
+  continuesLeft: false,
+  continuesRight: false,
+};
+
 const PAGE: SheetPage = {
   pageNumber: 1,
   metrics: METRICS,
@@ -337,16 +367,7 @@ const PAGE: SheetPage = {
       ],
       {
         dynamics: [{ xPt: M1 + 60, mark: 'mf' }],
-        octaves: [
-          {
-            staff: 'treble',
-            up: true,
-            x1Pt: M2 + 20,
-            x2Pt: M2 + 200,
-            continuesLeft: false,
-            continuesRight: false,
-          },
-        ],
+        octaves: [OTTAVA, OTTAVA_BASSA],
       },
     ),
   ],
@@ -498,16 +519,33 @@ describe('where the sheet puts its glyphs', () => {
     expectUse(drawn, 'dynamicMF', M1 + 60 - 1.796 * G, BASS - 10);
   });
 
-  it('labels an 8va with the glyph and starts its line past the glyph’s advance', () => {
-    const lineY = TREBLE - 2.6 * G;
+  it('draws an octave line where the layout stands it, the whole mark within its label’s height', () => {
     const size = 0.7 * G;
-    expectUse(drawn, 'ottavaAlta', M2 + 20, lineY + 0.65 * G, size);
-    const from = M2 + 20 + MUSIC_GLYPH_METRICS.ottavaAlta.advance * size + 0.4 * G;
-    const dashed = drawn.strokes.find((stroke) => stroke.dashed);
-    expect(dashed).toBeDefined();
-    expectNear(dashed!.points[0]!, from);
-    expectNear(dashed!.points[1]!, lineY);
-    // The label is no longer set as text.
+    for (const octave of [OTTAVA, OTTAVA_BASSA]) {
+      const name = octave.up ? 'ottavaAlta' : 'ottavaBassaVb';
+      const label = bbox(name);
+      // The glyph's ink centred on the line...
+      expectUse(
+        drawn,
+        name,
+        octave.x1Pt,
+        octave.yPt + ((label.bottom + label.top) / 2) * size,
+        size,
+      );
+      // ...the line starting clear after its advance and running to the end...
+      const from = octave.x1Pt + MUSIC_GLYPH_METRICS[name].advance * size + 0.4 * G;
+      const dashed = drawn.strokes.filter(
+        (stroke) => stroke.dashed && near(stroke.points[1]!, octave.yPt),
+      );
+      expect(dashed).toHaveLength(1);
+      expectNear(dashed[0]!.points[0]!, from);
+      expectNear(dashed[0]!.points[2]!, octave.x2Pt);
+      // ...and the hook there turning in toward the staff, as far as the label reaches.
+      const reach = ((label.top - label.bottom) / 2) * size * (octave.up ? 1 : -1);
+      const hook = lineAt(drawn, octave.x2Pt, octave.yPt, octave.x2Pt, octave.yPt + reach);
+      expect(hook, JSON.stringify(drawn.strokes.filter((s) => s.width === 0.7))).toBeDefined();
+    }
+    // The labels are no longer set as text.
     expect(drawn.svg).not.toContain('>8va</text>');
   });
 
@@ -609,5 +647,478 @@ describe('a hairpin between two dynamics', () => {
     const gap = 0.5 * G;
     expect(wedge!.x1Pt - ink('mp', start!.xPt).right).toBeCloseTo(gap, 6);
     expect(ink('ff', end!.xPt).left - wedge!.x2Pt).toBeCloseTo(gap, 6);
+  });
+});
+
+/** A box of ink on the page, y down. */
+interface Ink {
+  left: number;
+  right: number;
+  top: number;
+  bottom: number;
+}
+
+/** A glyph's ink as placed: the font's box, at the scale its use sets. */
+function useInk(use: Use): Ink {
+  const [left, bottom, right, top] = MUSIC_GLYPH_METRICS[use.name as MusicGlyphName].bbox;
+  const space = use.a * 250;
+  return {
+    left: use.x + left * space,
+    right: use.x + right * space,
+    top: use.y - top * space,
+    bottom: use.y - bottom * space,
+  };
+}
+
+/** A stroked line's ink: its ends, widened across by the pen (the caps are butt). */
+function strokeInk(stroke: Stroke): Ink {
+  const xs = stroke.points.filter((_, i) => i % 2 === 0);
+  const ys = stroke.points.filter((_, i) => i % 2 === 1);
+  const half = stroke.width / 2;
+  const upright = Math.min(...xs) === Math.max(...xs);
+  const level = Math.min(...ys) === Math.max(...ys);
+  return {
+    left: Math.min(...xs) - (level ? 0 : half),
+    right: Math.max(...xs) + (level ? 0 : half),
+    top: Math.min(...ys) - (upright ? 0 : half),
+    bottom: Math.max(...ys) + (upright ? 0 : half),
+  };
+}
+
+/**
+ * Every black filled path's outline — beams, ties, a final bar line's thick
+ * stroke — as points close enough together to stand for it: a slanted beam
+ * stands far out at one end and not the other, and only a trace says which.
+ */
+function filledOutlines(svg: string): [number, number][][] {
+  return [...svg.matchAll(/<path d="([^"]*)" fill="#000000"\/>/g)].map((match) => {
+    const points: [number, number][] = [];
+    let at: [number, number] = [0, 0];
+    let start: [number, number] = [0, 0];
+    /** Points every twentieth of a point along a straight edge. */
+    const edge = (to: [number, number]): void => {
+      const steps = Math.max(1, Math.ceil(Math.hypot(to[0] - at[0], to[1] - at[1]) * 20));
+      for (let k = 1; k <= steps; k += 1) {
+        const t = k / steps;
+        points.push([at[0] + (to[0] - at[0]) * t, at[1] + (to[1] - at[1]) * t]);
+      }
+      at = to;
+    };
+    for (const segment of match[1]!.match(/[MLCZ][^MLCZ]*/g) ?? []) {
+      const n = segment.slice(1).trim().split(/\s+/).filter(Boolean).map(Number);
+      if (segment[0] === 'M') {
+        at = start = [n[0]!, n[1]!];
+        points.push(at);
+      } else if (segment[0] === 'L') {
+        edge([n[0]!, n[1]!]);
+      } else if (segment[0] === 'Z') {
+        edge(start);
+      } else {
+        const [x1, y1, x2, y2, x, y] = n as [number, number, number, number, number, number];
+        for (let k = 1; k <= 1024; k += 1) {
+          const t = k / 1024;
+          const u = 1 - t;
+          points.push([
+            u * u * u * at[0] + 3 * u * u * t * x1 + 3 * u * t * t * x2 + t * t * t * x,
+            u * u * u * at[1] + 3 * u * u * t * y1 + 3 * u * t * t * y2 + t * t * t * y,
+          ]);
+        }
+        at = [x, y];
+      }
+    }
+    return points;
+  });
+}
+
+/** The outlines of the beams and ties, as points of ink: not a bar line's, which fills the system. */
+function filledInk(svg: string): Ink[] {
+  return filledOutlines(svg)
+    .filter((points) => {
+      const ys = points.map(([, y]) => y);
+      return Math.max(...ys) - Math.min(...ys) < 3 * G;
+    })
+    .flatMap((points) => points.map(([x, y]) => ({ left: x, right: x, top: y, bottom: y })));
+}
+
+/** The box a set of inks fills together. */
+function union(inks: readonly Ink[]): Ink {
+  return inks.reduce((a, b) => ({
+    left: Math.min(a.left, b.left),
+    right: Math.max(a.right, b.right),
+    top: Math.min(a.top, b.top),
+    bottom: Math.max(a.bottom, b.bottom),
+  }));
+}
+
+/**
+ * Everything drawn for the notes: heads, accidentals, dots, flags and tuplet
+ * digits; the stems and ledger lines stroked for them; and beams and ties.
+ */
+function noteInk(drawn: Drawn): Ink[] {
+  const widths = [0.12 * G, 0.16 * G];
+  return [
+    ...drawn.uses
+      .filter((use) => /^(notehead|accidental|augmentationDot|flag|tuplet)/.test(use.name))
+      .map(useInk),
+    ...drawn.strokes
+      .filter((stroke) => widths.some((width) => Math.abs(stroke.width - width) < 0.001))
+      .map(strokeInk),
+    ...filledInk(drawn.svg),
+  ];
+}
+
+const highest = (inks: readonly Ink[]): number => Math.min(...inks.map((ink) => ink.top));
+const lowest = (inks: readonly Ink[]): number => Math.max(...inks.map((ink) => ink.bottom));
+
+/**
+ * An octave line's mark as drawn — its label, the dashed line and the hook at
+ * its end — found by the ends the layout gave it.
+ */
+function markOf(drawn: Drawn, octave: SheetOctave): Ink {
+  const lines = drawn.strokes.filter(
+    (stroke) =>
+      stroke.dashed &&
+      stroke.points[0]! > octave.x1Pt - 0.01 &&
+      stroke.points[2]! < octave.x2Pt + 0.01,
+  );
+  expect(lines).toHaveLength(1);
+  const line = lines[0]!;
+  const lineY = line.points[1]!;
+  const pieces = [strokeInk(line)];
+  if (!octave.continuesLeft) {
+    // Its label starts where the line does, its ink around the line's height.
+    const labels = drawn.uses
+      .filter((use) => use.name.startsWith('ottava') && near(use.x, octave.x1Pt))
+      .map(useInk)
+      .filter((ink) => ink.top < lineY && ink.bottom > lineY);
+    expect(labels).toHaveLength(1);
+    pieces.push(labels[0]!);
+  }
+  if (!octave.continuesRight) {
+    const hooks = drawn.strokes.filter(
+      (stroke) =>
+        !stroke.dashed &&
+        stroke.points.length === 4 &&
+        near(stroke.points[0]!, octave.x2Pt) &&
+        near(stroke.points[2]!, octave.x2Pt) &&
+        near(stroke.points[1]!, lineY),
+    );
+    expect(hooks).toHaveLength(1);
+    pieces.push(strokeInk(hooks[0]!));
+  }
+  return union(pieces);
+}
+
+const PACK_DIR = path.resolve(process.cwd(), 'public', SCORE_PACK_PATH);
+
+describe('octave lines', () => {
+  /** Clear space an octave line's mark keeps from the music under it. */
+  const CLEAR = 0.5 * G;
+  /** How far writing coordinates to 0.01 pt can move one measurement against another. */
+  const WRITTEN = 0.02;
+  const TIME = { numerator: 4, denominator: 4 };
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  /** Notes a beat to a second, each `[beat, midi]` a quarter unless `extra` says otherwise. */
+  function played(beats: [number, number][], extra: Partial<NoteEvent> = {}): NoteEvent[] {
+    return beats.map(([beat, midi], i) => ({
+      velocity: 0.6,
+      durationMs: 1000,
+      ...extra,
+      id: `${extra.id ?? 'n'}${i}`,
+      midi,
+      startMs: beat * 1000,
+    }));
+  }
+
+  /** Page 1, its dynamics left out: a hairpin is stroked at the octave line's width. */
+  function pageOf(notes: NoteEvent[], options: Partial<LayoutOptions> = {}): SheetPage {
+    const score = layoutScore(notes, {
+      bpm: 60,
+      timeSignature: TIME,
+      quantization: '1/16',
+      minMeasures: 1,
+      ...options,
+    });
+    score.dynamics = [];
+    score.hairpins = [];
+    return layoutSheet(score, {
+      paper: 'a4',
+      timeSignature: TIME,
+      bpm: 60,
+      title: 'Octaves',
+      subtitle: '',
+      credit: 'PoKeyBoard',
+    }).pages[0]!;
+  }
+
+  /** The page's one octave line, and the page engraved. */
+  async function octaveOn(page: SheetPage): Promise<{ octave: SheetOctave; drawn: Drawn }> {
+    const octaves = page.systems.flatMap((system) => system.octaves);
+    expect(octaves).toHaveLength(1);
+    return { octave: octaves[0]!, drawn: await engrave(page) };
+  }
+
+  /** How far the highest note ink stands over the mark's lowest, less the clear space. */
+  function slack(drawn: Drawn, octave: SheetOctave): number {
+    return highest(noteInk(drawn)) - markOf(drawn, octave).bottom - CLEAR;
+  }
+
+  it('stands the line its usual distance off the staff where nothing under it reaches that far', async () => {
+    // C6 to E6, written an octave down inside the staff.
+    const page = pageOf(
+      played([
+        [0, 84],
+        [1, 86],
+        [2, 88],
+        [3, 86],
+      ]),
+    );
+    const { octave, drawn } = await octaveOn(page);
+    const line = drawn.strokes.filter((stroke) => stroke.dashed);
+    expect(line).toHaveLength(1);
+    expectNear(line[0]!.points[1]!, page.systems[0]!.trebleTopPt - 2.6 * G);
+    expect(slack(drawn, octave)).toBeGreaterThan(0);
+  });
+
+  it('rises clear of the heads and ledger lines it covers', async () => {
+    // C7s, written C6 on two ledger lines: 2.6 spaces up, the line ran through the heads.
+    const { octave, drawn } = await octaveOn(pageOf(played([0, 1, 2, 3].map((b) => [b, 96]))));
+    expect(Math.abs(slack(drawn, octave))).toBeLessThan(WRITTEN);
+  });
+
+  it('rises clear of an accidental standing taller than its head', async () => {
+    // B♭6s, written B♭5: the flat reaches well above the head it alters.
+    const notes = played(
+      [0, 1, 2, 3].map((b) => [b, 94]),
+      { spelling: { step: 'B', alter: -1 } },
+    );
+    const { octave, drawn } = await octaveOn(pageOf(notes));
+    const [flat] = usesOf(drawn, 'accidentalFlat');
+    expect(highest(noteInk(drawn))).toBeCloseTo(useInk(flat!).top, 6);
+    expect(Math.abs(slack(drawn, octave))).toBeLessThan(WRITTEN);
+  });
+
+  it('rises clear of the stems and flags of an upper voice', async () => {
+    // E7 eighths stemming up over C7 quarters, all of it an octave down.
+    const notes = [
+      ...played(
+        [0, 1, 2, 3].map((b) => [b, 100]),
+        { id: 'u', durationMs: 500, voice: 0 },
+      ),
+      ...played(
+        [0, 1, 2, 3].map((b) => [b, 96]),
+        { id: 'l', voice: 1 },
+      ),
+    ];
+    const { octave, drawn } = await octaveOn(pageOf(notes));
+    const flags = usesOf(drawn, 'flag8thUp');
+    expect(flags).toHaveLength(4);
+    expect(highest(noteInk(drawn))).toBeCloseTo(highest(flags.map(useInk)), 6);
+    expect(Math.abs(slack(drawn, octave))).toBeLessThan(WRITTEN);
+  });
+
+  it('rises clear of a beam over the notes', async () => {
+    // The same, in pairs of E7 eighths joined by a beam.
+    const notes = [
+      ...played(
+        [0, 0.5, 1, 1.5, 2, 2.5, 3, 3.5].map((b) => [b, 100]),
+        { id: 'u', durationMs: 500, voice: 0 },
+      ),
+      ...played(
+        [0, 1, 2, 3].map((b) => [b, 96]),
+        { id: 'l', voice: 1 },
+      ),
+    ];
+    const page = pageOf(notes);
+    expect(page.systems[0]!.measures[0]!.beams.length).toBeGreaterThan(0);
+    const { octave, drawn } = await octaveOn(page);
+    const beams = filledInk(drawn.svg);
+    expect(highest(noteInk(drawn))).toBeCloseTo(highest(beams), 6);
+    expect(Math.abs(slack(drawn, octave))).toBeLessThan(WRITTEN);
+  });
+
+  it('rises clear of a tie arcing up toward it', async () => {
+    // A C7 held from bar 1 into bar 2, stemmed down, so its tie bows up.
+    const notes = [
+      ...played([[0, 96]], { id: 'held', durationMs: 6000 }),
+      ...played([
+        [6, 96],
+        [7, 96],
+      ]),
+    ];
+    const { octave, drawn } = await octaveOn(pageOf(notes));
+    const [whole] = usesOf(drawn, 'noteheadWhole');
+    // The arc is what reaches highest.
+    expect(highest(noteInk(drawn))).toBeLessThan(useInk(whole!).top - 0.5 * G);
+    expect(Math.abs(slack(drawn, octave))).toBeLessThan(WRITTEN);
+  });
+
+  it.each([
+    ['before', 0, 1],
+    ['after', 4, 0],
+  ])(
+    'stays down beside a high chord just %s the passage that stands clear of it',
+    async (_, chordBeat, runStart) => {
+      // A5 and E7 together: not all of it that high, so not written an octave in.
+      const notes = [
+        ...played(
+          [
+            [chordBeat, 81],
+            [chordBeat, 100],
+          ],
+          { id: 'c' },
+        ),
+        ...played([84, 86, 88, 86].map((midi, i): [number, number] => [runStart + i, midi])),
+      ];
+      const page = pageOf(notes);
+      const { octave, drawn } = await octaveOn(page);
+      // E7's head on its six ledger lines is the highest thing on the page...
+      const system = page.systems[0]!;
+      const e7 = usesOf(drawn, 'noteheadBlack')
+        .map(useInk)
+        .find((ink) => near(ink.top, system.trebleTopPt + staffYRel(21) - 0.5 * G));
+      expect(e7).toBeDefined();
+      expect(highest(noteInk(drawn))).toBeCloseTo(e7!.top, 6);
+      // ...but it stands well clear of the mark across the page, so the line
+      // keeps its usual place over the passage.
+      const mark = markOf(drawn, octave);
+      expect(Math.max(e7!.left - mark.right, mark.left - e7!.right)).toBeGreaterThan(2 * G);
+      expectNear(octave.yPt, system.trebleTopPt - 2.6 * G);
+    },
+  );
+
+  it('keeps clear of a chord beside the passage whose ink reaches in under its hook', async () => {
+    // Four sixteenths from C6, written in the staff, then A5 and B5: a second
+    // whose lower head, set off left of the stem, stands just past the hook.
+    const notes = [
+      ...[84, 86, 88, 86].map((midi, i) => ({
+        id: `s${i}`,
+        midi,
+        startMs: i * 250,
+        durationMs: 250,
+        velocity: 0.6,
+      })),
+      ...[81, 83].map((midi, i) => ({
+        id: `c${i}`,
+        midi,
+        startMs: 1000,
+        durationMs: 250,
+        velocity: 0.6,
+      })),
+    ];
+    const page = pageOf(notes);
+    const second = page.systems[0]!.measures[0]!.columns.find((column) => column.timeMs === 1000);
+    expect(second?.treble[0]?.notes.map((note) => note.headShift)).toEqual([-1, 0]);
+    const { octave, drawn } = await octaveOn(page);
+    // Its ledger line, the only one on the page, runs in under the hook...
+    const mark = markOf(drawn, octave);
+    const ledgers = drawn.strokes
+      .filter((stroke) => Math.abs(stroke.width - 0.16 * G) < 0.001)
+      .map(strokeInk);
+    expect(ledgers.length).toBeGreaterThan(0);
+    expect(Math.min(...ledgers.map((ink) => ink.left))).toBeLessThan(mark.right);
+    expect(Math.min(...ledgers.map((ink) => ink.left))).toBeGreaterThan(octave.x2Pt - CLEAR);
+    // ...so the line clears that chord, whose B5 is the highest thing on the page.
+    expect(Math.abs(slack(drawn, octave))).toBeLessThan(WRITTEN);
+    expect(octave.yPt).toBeLessThan(page.systems[0]!.trebleTopPt - 2.6 * G - 0.5 * G);
+  });
+
+  it('sinks an 8vb clear of what it covers, and the pedal bracket under it', async () => {
+    // C1s, written C2 on two ledger lines under the bass staff, with the pedal down.
+    const notes = played(
+      [0, 1, 2, 3].map((b) => [b, 24]),
+      { staff: 'bass' },
+    );
+    const page = pageOf(notes, {
+      pedals: [
+        { atMs: 0, down: true },
+        { atMs: 3900, down: false },
+      ],
+    });
+    const { octave, drawn } = await octaveOn(page);
+    expect(octave.up).toBe(false);
+    const mark = markOf(drawn, octave);
+    expect(Math.abs(mark.top - lowest(noteInk(drawn)) - CLEAR)).toBeLessThan(WRITTEN);
+    const pedal = drawn.strokes.filter((stroke) => stroke.width === 0.8).map(strokeInk);
+    expect(pedal.length).toBeGreaterThan(0);
+    expect(highest(pedal) - mark.bottom).toBeGreaterThanOrEqual(CLEAR - WRITTEN);
+  });
+
+  it('keeps a tempo mark over the line', async () => {
+    // Bar 2 goes to 90 bpm, and its C7s go under an 8va stood clear of their ledger lines.
+    const beat = 60_000 / 90;
+    const notes: NoteEvent[] = [
+      { id: 'w', midi: 60, startMs: 0, durationMs: 4000, velocity: 0.6 },
+      ...[0, 1, 2, 3].map((i) => ({
+        id: `q${i}`,
+        midi: 96,
+        startMs: Math.round(4000 + i * beat),
+        durationMs: Math.round(beat),
+        velocity: 0.6,
+      })),
+    ];
+    const page = pageOf(notes, { tempoChanges: [{ atMs: 4000, bpm: 90 }] });
+    const { octave, drawn } = await octaveOn(page);
+    expect(Math.abs(slack(drawn, octave))).toBeLessThan(WRITTEN);
+    const mark = markOf(drawn, octave);
+    const [note] = usesOf(drawn, 'metNoteQuarterUp');
+    expect(note).toBeDefined();
+    expect(mark.top - useInk(note!).bottom).toBeGreaterThanOrEqual(CLEAR);
+    const number = /<text x="[\d.]+" y="([\d.]+)"[^>]*>= 90<\/text>/.exec(drawn.svg);
+    expect(number).not.toBeNull();
+    expect(mark.top - Number(number![1])).toBeGreaterThanOrEqual(CLEAR);
+  });
+
+  it('keeps every 8va in the Waltz, Op. 64 No. 2 clear of the beams and stems it covers', async () => {
+    // Its running eighths stem up to beams two to four spaces over the staff,
+    // written an octave down; 2.6 spaces up, the line ran through them.
+    vi.stubGlobal('fetch', async (input: string) => {
+      const file = path.basename(new URL(input, 'http://localhost/').pathname);
+      const bytes = await readFile(path.join(PACK_DIR, decodeURIComponent(file)));
+      return new Response(new Uint8Array(bytes), { status: 200 });
+    });
+    const take = await loadClassicTake('score-waltz-opus-64-no-2-in-c-minor');
+    expect(take?.title).toBe('Waltz, Op. 64 No. 2');
+    const grid = take!.display.quantization === 'off' ? '1/16' : take!.display.quantization;
+    const { pages } = layoutTakeSheet(take!, 'a4', grid, defaultKeySignatureFor(take!), '');
+    const marked = pages.filter((page) => page.systems.some((system) => system.octaves.length > 0));
+    // Bar 47 among them.
+    expect(
+      marked.some((page) =>
+        page.systems.some(
+          (system) =>
+            system.octaves.length > 0 && system.measures.some((measure) => measure.index === 46),
+        ),
+      ),
+    ).toBe(true);
+
+    let checked = 0;
+    for (const page of marked) {
+      const drawn = await engrave(page);
+      const ink = noteInk(drawn);
+      for (const system of page.systems) {
+        for (const octave of system.octaves) {
+          expect(octave.up).toBe(true);
+          const mark = markOf(drawn, octave);
+          // What is drawn under the mark, or within its clear space of it,
+          // down to its staff's bottom line.
+          const under = ink.filter(
+            (box) =>
+              box.right > mark.left - CLEAR &&
+              box.left < mark.right + CLEAR &&
+              box.bottom > mark.top &&
+              box.top < system.trebleTopPt + 4 * G,
+          );
+          expect(under.length).toBeGreaterThan(5);
+          expect(highest(under) - mark.bottom).toBeGreaterThanOrEqual(CLEAR - WRITTEN);
+          checked += 1;
+        }
+      }
+    }
+    expect(checked).toBeGreaterThanOrEqual(5);
   });
 });
