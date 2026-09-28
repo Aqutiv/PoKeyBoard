@@ -7,6 +7,7 @@ import { layoutScore, type ScoreLayout } from '@/features/notation/notationLayou
 import {
   ACCIDENTAL_LEAD_G,
   CLEF_CHANGE_W_G,
+  COURTESY_CLEF_W_G,
   HEAD_RX_G,
   PEDAL_HOOK_G,
   PEDAL_ROW_PT,
@@ -712,34 +713,46 @@ describe('layoutSheet', () => {
       return allSystems(result).map((system) => system.measures.map((measure) => measure.index));
     }
 
-    /** Where every bar line and column stands across the page. */
-    function across(result: SheetLayoutResult): number[] {
-      return allMeasures(result).flatMap((measure) => [
-        measure.xPt,
-        measure.widthPt,
-        ...measure.columns.map((column) => column.xPt),
-      ]);
+    /** Where every bar line and column stands across the page, from system `from` on. */
+    function across(result: SheetLayoutResult, from: number): number[] {
+      return allSystems(result)
+        .slice(from)
+        .flatMap((system) => system.measures)
+        .flatMap((measure) => [
+          measure.xPt,
+          measure.widthPt,
+          ...measure.columns.map((column) => column.xPt),
+        ]);
     }
 
-    /** `turned` breaks where `plain` does, and puts every bar and column where it does. */
-    function expectLaidOutAlike(turned: SheetLayoutResult, plain: SheetLayoutResult): void {
+    /**
+     * `turned` breaks where `plain` does, and from system `from` on puts every
+     * bar and column where it does.
+     */
+    function expectLaidOutAlike(
+      turned: SheetLayoutResult,
+      plain: SheetLayoutResult,
+      from: number,
+    ): void {
       expect(barsBySystem(turned)).toEqual(barsBySystem(plain));
-      const expected = across(plain);
-      const drift = across(turned).map((x, i) => Math.abs(x - expected[i]!));
+      const expected = across(plain, from);
+      const drift = across(turned, from).map((x, i) => Math.abs(x - expected[i]!));
+      expect(drift.length).toBeGreaterThan(0);
       expect(Math.max(...drift)).toBeLessThan(1e-9);
     }
 
     it('keeps no room after the bar line when a system opens on the turnover', () => {
       // Three bars of quarters to a system; the left hand goes up at bar 4,
       // which opens the second. That system's prefix engraves the new clef, so
-      // nothing is set after its first bar line, and no room is left there.
+      // nothing is set after its first bar line, and no room is left there:
+      // from its start on, everything stands where it does without a turnover.
       const beats = [4, 4, 4, 4, 4, 4];
       const turned = sheet(hands(beats, 3));
       const second = allSystems(turned)[1]!;
       expect(second.firstMeasureNumber).toBe(4);
       expect(second.clefs.bass).toBe('treble');
       expect(second.measures[0]!.clefChanges).toEqual([]);
-      expectLaidOutAlike(turned, sheet(hands(beats, null)));
+      expectLaidOutAlike(turned, sheet(hands(beats, null)), 1);
     });
 
     it('fits a system opening on the turnover the bars it would hold without one', () => {
@@ -748,7 +761,58 @@ describe('layoutSheet', () => {
       const beats = [4, 4, 4, 4, 2, 2, 2, 2, 2];
       const turned = sheet(hands(beats, 3));
       expect(barsBySystem(turned)).toEqual([[0, 1, 2], [3, 4, 5, 6, 7], [8]]);
-      expectLaidOutAlike(turned, sheet(hands(beats, null)));
+      expectLaidOutAlike(turned, sheet(hands(beats, null)), 1);
+    });
+
+    it('warns of it with a courtesy clef at the end of the system before', () => {
+      const turned = sheet(hands([4, 4, 4, 4, 4, 4], 3));
+      const last = allSystems(turned)[0]!.measures.at(-1)!;
+      expect(last.index).toBe(2);
+      // The clef the left hand turns to, set before the first system's closing
+      // bar line...
+      expect(last.courtesyClefs).toEqual([{ staff: 'bass', clef: 'treble' }]);
+      // ...and on no other bar: the final system ends the piece, and warns of nothing.
+      const others = allMeasures(turned).filter((measure) => measure !== last);
+      expect(others.map((measure) => measure.courtesyClefs)).toEqual(others.map(() => []));
+    });
+
+    it('keeps room for the courtesy clef after the music of the bar it ends', () => {
+      const beats = [4, 4, 4, 4, 4, 4];
+      const turned = allSystems(sheet(hands(beats, 3)))[0]!;
+      const plain = allSystems(sheet(hands(beats, null)))[0]!;
+      // The system is justified to the width it always has...
+      expect(turned.measures.map((measure) => measure.index)).toEqual([0, 1, 2]);
+      expect(turned.widthPt).toBeCloseTo(plain.widthPt, 6);
+      // ...and its bars, written alike, are stretched alike: the room is all the
+      // last one has more of than the first, and all of it after its music.
+      const [opening, , closing] = turned.measures as [SheetMeasure, SheetMeasure, SheetMeasure];
+      const lead = (measure: SheetMeasure): number => measure.columns[0]!.xPt - measure.xPt;
+      const tail = (measure: SheetMeasure): number =>
+        measure.xPt + measure.widthPt - measure.columns.at(-1)!.xPt;
+      expect(lead(closing)).toBeCloseTo(lead(opening), 6);
+      expect(tail(closing) - tail(opening)).toBeCloseTo(closing.widthPt - opening.widthPt, 6);
+      expect(closing.widthPt - opening.widthPt).toBeGreaterThanOrEqual(COURTESY_CLEF_W_G * G);
+    });
+
+    it('carries the bar before the turnover on when its system has no room left for the courtesy clef', () => {
+      // A bar of quarters, three of halves and a whole note fill the first
+      // system to within less than a courtesy clef takes, and the turnover at
+      // bar 6 has no room there either...
+      const beats = [4, 2, 2, 2, 1, 4, 4, 4, 4];
+      expect(barsBySystem(sheet(hands(beats, null)))).toEqual([[0, 1, 2, 3, 4], [5, 6, 7], [8]]);
+      // ...so the whole note goes on to the next system with it rather than be
+      // squeezed tighter than it is written, and the clef turns over inside
+      // that system.
+      const turned = sheet(hands(beats, 5));
+      expect(barsBySystem(turned)).toEqual([[0, 1, 2, 3], [4, 5, 6, 7], [8]]);
+      expect(allMeasures(turned)[5]!.clefChanges).toEqual(['bass']);
+      expect(allMeasures(turned).flatMap((measure) => measure.courtesyClefs)).toEqual([]);
+    });
+
+    it('sets none for a turnover inside a system', () => {
+      const measures = allMeasures(sheet(hands([4, 4, 4, 4, 4, 4], 4)));
+      expect(measures[4]!.clefChanges).toEqual(['bass']);
+      expect(measures.flatMap((measure) => measure.courtesyClefs)).toEqual([]);
     });
 
     it('makes room for the new clef after a bar line inside a system', () => {

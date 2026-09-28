@@ -84,8 +84,9 @@ export function dynamicInkG(mark: DynamicMark): { left: number; right: number } 
 
 /**
  * The clef glyph for a staff: full size where a system opens, and the smaller
- * change glyph where one turns over inside the staff. A G clef is placed on
- * its G line and an F clef on its F line.
+ * change glyph where one turns over inside the staff, or is announced at the
+ * end of the system before. A G clef is placed on its G line and an F clef on
+ * its F line.
  */
 export function clefGlyphFor(clef: ClefKind, change: boolean): MusicGlyphName {
   if (clef === 'treble') return change ? 'gClefChange' : 'gClef';

@@ -91,6 +91,7 @@ describe('sheet goldens', () => {
     expect(systems.some((system) => system.hairpins.length > 0)).toBe(true);
     expect(systems.some((system) => system.dynamics.length > 0)).toBe(true);
     expect(measures.some((measure) => measure.clefChanges.length > 0)).toBe(true);
+    expect(measures.some((measure) => measure.courtesyClefs.length > 0)).toBe(true);
     expect(notes.some((note) => note.accidental === 'x')).toBe(true);
     expect(notes.some((note) => note.accidental === 'bb')).toBe(true);
     expect(
@@ -99,9 +100,17 @@ describe('sheet goldens', () => {
     expect(page.titleBlock?.title).toContain('♭');
 
     const svg = await svgOf(page);
-    // The music is drawn in the music font's glyphs, the 8va and the tuplet's
-    // 12 among them; words stay in Times.
-    for (const glyph of ['ottavaAlta', 'tuplet1', 'tuplet2', 'fClefChange', 'dynamicMP', 'brace']) {
+    // The music is drawn in the music font's glyphs, the 8va, the tuplet's 12
+    // and the courtesy clef among them; words stay in Times.
+    for (const glyph of [
+      'ottavaAlta',
+      'tuplet1',
+      'tuplet2',
+      'fClefChange',
+      'gClefChange',
+      'dynamicMP',
+      'brace',
+    ]) {
       expect(svg).toContain(`<use href="#${glyph}" `);
     }
     expect(svg).not.toContain('>8va</text>');
