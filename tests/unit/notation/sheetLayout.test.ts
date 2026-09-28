@@ -6,6 +6,7 @@ import { MUSIC_GLYPH_METRICS } from '@/features/notation/glyphs/musicGlyphMetric
 import { layoutScore, type ScoreLayout } from '@/features/notation/notationLayout';
 import {
   ACCIDENTAL_LEAD_G,
+  CLEF_CHANGE_W_G,
   HEAD_RX_G,
   PEDAL_HOOK_G,
   PEDAL_ROW_PT,
@@ -683,6 +684,84 @@ describe('layoutSheet', () => {
       const held = systemAt(result, third).system;
       expect(held.pedals[0]!.continuesLeft).toBe(true);
       expect(held.pedals[0]!.xFromPt).toBeCloseTo(held.measures[0]!.xPt, 6);
+    });
+  });
+
+  describe('a clef turning over', () => {
+    /**
+     * Both hands in step, `beats[m]` even notes to bar m: the right hand on E5,
+     * the left on C4, which it reads under a G clef from bar index `turn` on and
+     * under its own F clef before that (throughout, for `null`).
+     */
+    function hands(beats: number[], turn: number | null): NoteEvent[] {
+      return beats.flatMap((count, m) =>
+        Array.from({ length: count }, (_, i) => {
+          const startMs = m * 2000 + (i * 2000) / count;
+          const durationMs = 2000 / count;
+          const clef = turn !== null && m >= turn ? 'treble' : 'bass';
+          return [
+            note({ id: `r${m}-${i}`, midi: 76, startMs, durationMs }),
+            note({ id: `l${m}-${i}`, midi: 60, startMs, durationMs, staff: 'bass', clef }),
+          ];
+        }).flat(),
+      );
+    }
+
+    /** Each system's bars, by index. */
+    function barsBySystem(result: SheetLayoutResult): number[][] {
+      return allSystems(result).map((system) => system.measures.map((measure) => measure.index));
+    }
+
+    /** Where every bar line and column stands across the page. */
+    function across(result: SheetLayoutResult): number[] {
+      return allMeasures(result).flatMap((measure) => [
+        measure.xPt,
+        measure.widthPt,
+        ...measure.columns.map((column) => column.xPt),
+      ]);
+    }
+
+    /** `turned` breaks where `plain` does, and puts every bar and column where it does. */
+    function expectLaidOutAlike(turned: SheetLayoutResult, plain: SheetLayoutResult): void {
+      expect(barsBySystem(turned)).toEqual(barsBySystem(plain));
+      const expected = across(plain);
+      const drift = across(turned).map((x, i) => Math.abs(x - expected[i]!));
+      expect(Math.max(...drift)).toBeLessThan(1e-9);
+    }
+
+    it('keeps no room after the bar line when a system opens on the turnover', () => {
+      // Three bars of quarters to a system; the left hand goes up at bar 4,
+      // which opens the second. That system's prefix engraves the new clef, so
+      // nothing is set after its first bar line, and no room is left there.
+      const beats = [4, 4, 4, 4, 4, 4];
+      const turned = sheet(hands(beats, 3));
+      const second = allSystems(turned)[1]!;
+      expect(second.firstMeasureNumber).toBe(4);
+      expect(second.clefs.bass).toBe('treble');
+      expect(second.measures[0]!.clefChanges).toEqual([]);
+      expectLaidOutAlike(turned, sheet(hands(beats, null)));
+    });
+
+    it('fits a system opening on the turnover the bars it would hold without one', () => {
+      // Halves from bar 5 on: the second system has room for bar 4 and four
+      // bars of halves, but not for those and the room a clef change takes.
+      const beats = [4, 4, 4, 4, 2, 2, 2, 2, 2];
+      const turned = sheet(hands(beats, 3));
+      expect(barsBySystem(turned)).toEqual([[0, 1, 2], [3, 4, 5, 6, 7], [8]]);
+      expectLaidOutAlike(turned, sheet(hands(beats, null)));
+    });
+
+    it('makes room for the new clef after a bar line inside a system', () => {
+      const measures = allMeasures(sheet(hands([4, 4, 4, 4, 4, 4], 4)));
+      const plain = measures[3]!;
+      const turned = measures[4]!;
+      expect(turned.clefChanges).toEqual(['bass']);
+      // Bars 4 and 5 share a system, so they stretch alike: the room after the
+      // bar line is all that bar 5 has more of, and its music starts that much
+      // further in.
+      const lead = (measure: SheetMeasure): number => measure.columns[0]!.xPt - measure.xPt;
+      expect(lead(turned) - lead(plain)).toBeCloseTo(turned.widthPt - plain.widthPt, 6);
+      expect(lead(turned) - lead(plain)).toBeGreaterThanOrEqual(CLEF_CHANGE_W_G * G);
     });
   });
 
