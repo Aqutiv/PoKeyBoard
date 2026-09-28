@@ -1,8 +1,8 @@
 /**
  * How many files the background loads fetch at once, all of them together. A
- * load someone waits for fetches four (`SampleBank`), and a browser opens six
- * connections to a host over HTTP/1.1, so none of its files ever queues for a
- * connection behind one nobody is waiting for.
+ * load someone waits for fetches four (`FETCH_CONCURRENCY`), and a browser
+ * opens six connections to a host over HTTP/1.1, so none of its files ever
+ * queues for a connection behind one nobody is waiting for.
  */
 export const BACKGROUND_CONCURRENCY = 2;
 
