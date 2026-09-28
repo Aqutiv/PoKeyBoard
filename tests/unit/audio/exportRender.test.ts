@@ -14,6 +14,7 @@ const h = vi.hoisted(() => ({
 vi.mock('@/audio/AudioEngine', () => ({
   audioEngine: {
     ensurePlayableRange: h.ensurePlayableRange,
+    loadRecordingsFor: async () => undefined,
     bank: {
       // The top strings have no damper: theirs ring 20 s, whenever let go.
       getSample: (midi: number): SampleSelection =>

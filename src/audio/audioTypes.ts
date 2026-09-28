@@ -88,9 +88,9 @@ export interface SampleSelection {
   /**
    * The cutoff of the lowpass that plays this note at the brightness its
    * velocity asks for, in Hz at the note's own pitch (toneCalibrationMath.ts).
-   * Absent, the voice has no filter at all: the soft layer, the top of the loud
-   * one, the Wurlitzer, any pack without a tone calibration, and every note
-   * while Tone follows touch is off.
+   * Absent, the voice has no filter at all: a grand's softest layer, the top
+   * of its loud one, the Wurlitzer, any pack without a tone calibration, and
+   * every note while Tone follows touch is off.
    */
   toneCutoffHz?: number;
   /**
@@ -98,6 +98,12 @@ export interface SampleSelection {
    * voice's envelope gives back on top of `gain`. Only with `toneCutoffHz`.
    */
   toneMakeupDb?: number;
+  /**
+   * The recording the velocity asks for is not decoded — a partial load, or
+   * a deferred layer still loading or unavailable — and another layer's plays
+   * in its place, at the right level and as near the tone as it can.
+   */
+  standIn?: true;
 }
 
 export type SampleLoadPhase =

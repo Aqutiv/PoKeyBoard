@@ -85,6 +85,7 @@ describe('audio export cancellation', () => {
     const { audioExportService, ExportCancelledError } = await exportService(async () => ({
       piano,
       clicks: null,
+      standIns: 0,
     }));
 
     let cancelling = false;
@@ -150,6 +151,7 @@ describe('audio export progress', () => {
         copyFromChannel: (destination: Float32Array) => destination.set(tone),
       },
       clicks: null,
+      standIns: 0,
     };
   }
 
@@ -213,8 +215,11 @@ describe('audio export progress', () => {
 });
 
 describe('audio export formats', () => {
-  /** The service over storage whose cache calls are kept, rendering `seconds` of a quiet tone. */
-  async function service(seconds: number) {
+  /**
+   * The service over storage whose cache calls are kept, rendering `seconds`
+   * of a quiet tone, `standIns` of its notes from a stand-in.
+   */
+  async function service(seconds: number, standIns = 0) {
     vi.resetModules();
     const cache = {
       getCachedAudio: vi.fn(async () => null),
@@ -237,6 +242,7 @@ describe('audio export formats', () => {
           copyFromChannel: (destination: Float32Array) => destination.set(tone),
         },
         clicks: null,
+        standIns,
       })),
     }));
     vi.doMock('wasm-media-encoders', () => ({
@@ -294,6 +300,18 @@ describe('audio export formats', () => {
     );
     expect(result).toMatchObject({ format: 'mp3', fromCache: false, cached: true });
     expect(result.fileName).toMatch(/\.mp3$/);
+    const head = new Uint8Array(await result.blob.slice(0, 3).arrayBuffer());
+    expect(new TextDecoder().decode(head)).toBe('ID3');
+  });
+
+  it('hands over, but does not keep, an MP3 some of whose notes played from a stand-in', async () => {
+    // A pianissimo recording out of reach — offline, say — and the soft one in
+    // its place: kept, the file would be found again by the same hash long
+    // after the real recording arrived.
+    const { audioExportService, cache } = await service(2, 3);
+    const result = await audioExportService.exportTake(titled, options, () => undefined);
+    expect(cache.putCachedAudio).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ format: 'mp3', fromCache: false, cached: false });
     const head = new Uint8Array(await result.blob.slice(0, 3).arrayBuffer());
     expect(new TextDecoder().decode(head)).toBe('ID3');
   });

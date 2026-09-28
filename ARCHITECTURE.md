@@ -178,15 +178,43 @@ load was recorded at its own level. A pack without a table falls back to
 per-layer trims (`velocityGain`) times the per-layer `levelMatch` the build
 script writes into its manifest; the Wurlitzer keeps its own region gains.
 
+A grand's manifest names its layers rather than numbering them by kind
+(`velocityLayers.ts`): `pianissimo`, `soft`, `medium` and `loud`, softest first
+from index 0, a pack having any of them but always a medium one — a bad label
+refuses the manifest (the piano reports an error rather than loading forever).
+Each kind takes over at its own velocity (soft 0.30, medium 0.45, loud 0.78,
+each a little above where its recording naturally sounds on the curve), and a
+pack's softest layer plays everything under the next, so a pack of soft,
+medium and loud splits at 0.45 and 0.78 as it always did, and one with a
+pianissimo layer under those at 0.30 too. During a partial load a note looks
+for a stand-in in the nearest layer, the softer of two as near. The velocity
+table names the medium layer (`tiltLayer`) where it is not layer 1.
+
+A pianissimo layer is **deferred**: the piano is ready, and its first note
+plays, on the core it always waited for, and the pianissimo recordings follow
+(`SampleBank.loadDeferred`). Only the piano that sounds fetches them — after
+its first core load, or once a switch has taken over — so a piano still
+decoding for a switch neither fetches nor holds them, and they count toward
+no progress (`bytesFor`, the core bytes). A range load resolves once the
+range plays, its pianissimo recordings following behind it. Until a note's
+own is decoded, the soft recording at the same root plays for it, at the
+bottom of its tone ramp and on the curve, marked `standIn`; a deferred layer
+never lends a recording pitched from a further root. One that cannot be
+fetched — the pack saved for offline use before the layer existed, say — is
+logged and left to that stand-in, never raising the piano's error. An export
+waits for the pianissimo recordings its own soft notes ask for
+(`loadRecordingsFor`), and a render that still had to use a stand-in is
+handed over but not kept in the MP3 cache.
+
 The timbre then follows the touch too, rather than stepping where the layers
 meet: a harder blow brings the upper partials out, and on their own the
 recordings jump in brightness at every switch, by 200 to 900 cents of spectral
-centroid around middle C, the Steinway least and Headroom most. So each medium
-and loud voice of a grand plays through a lowpass (`toneCalibration.ts`, from
-`tests/tools/generateToneCalibration.ts`, keyed by pack version the same way):
-at its layer's bottom, the cutoff that brings its recording down to the
+centroid around middle C, the Steinway least and Headroom most. So each voice
+of a layer above a grand's softest plays through a lowpass (`toneCalibration.ts`,
+from `tests/tools/generateToneCalibration.ts`, keyed by pack version the same
+way): at its layer's bottom, the cutoff that brings its recording down to the
 brightness of the layer below at the same root, opening evenly in log
-frequency to its layer's top. The soft layer plays open. The filter's
+frequency to its layer's top. The softest layer plays open. The filter's
 K-weighted loss is given back as make-up, less as it opens, so the loudness
 stays on the curve. Brightness is measured as the voice plays (from its onset,
 under its attack, at 48 kHz), and the cutoffs, per root, climb from half a

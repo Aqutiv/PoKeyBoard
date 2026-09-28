@@ -21,12 +21,14 @@ interface Gate {
 /**
  * Real banks over fake bytes: every pack lists a core C4 and two optional
  * roots, C2 and C7, and a decode waits on any gate whose key its URL contains.
+ * A pack named in `pianissimo` also has a pianissimo C4 under them.
  */
 const packs = vi.hoisted(() => ({
   holds: new Map<string, Gate>(),
   failures: new Set<string>(),
   decoded: [] as string[],
   sources: new WeakMap<ArrayBuffer, string>(),
+  pianissimo: new Set<string>(),
 }));
 
 function hold(key: string): Gate {
@@ -40,21 +42,33 @@ function hold(key: string): Gate {
 }
 
 function manifest(url: string) {
+  const pianissimo = [...packs.pianissimo].some((pack) => url.includes(`/${pack}/`));
+  const medium = pianissimo ? 1 : 0;
+  const files = [
+    { file: 'c4.sample', midi: 60, layer: medium, pack: 'core', bytes: 1 },
+    { file: 'c2.sample', midi: 36, layer: medium, pack: 'full', bytes: 1 },
+    { file: 'c7.sample', midi: 96, layer: medium, pack: 'full', bytes: 1 },
+    ...(pianissimo ? [{ file: 'c4pp.sample', midi: 60, layer: 0, pack: 'core', bytes: 1 }] : []),
+  ];
   return {
     version: `stub:${url}`,
     source: 'test',
     license: 'test',
     sourceUrl: 'test',
     format: 'test',
-    velocityLayers: [{ index: 0, sourceLayer: 1, label: 'test' }],
-    coreBytes: 1,
-    totalBytes: 3,
-    files: [
-      { file: 'c4.sample', midi: 60, layer: 0, pack: 'core', bytes: 1 },
-      { file: 'c2.sample', midi: 36, layer: 0, pack: 'full', bytes: 1 },
-      { file: 'c7.sample', midi: 96, layer: 0, pack: 'full', bytes: 1 },
+    velocityLayers: [
+      ...(pianissimo ? [{ index: 0, sourceLayer: 2, label: 'pianissimo' }] : []),
+      { index: medium, sourceLayer: 10, label: 'medium' },
     ],
+    coreBytes: 1,
+    totalBytes: files.length,
+    files,
   };
+}
+
+/** Whether any decode so far came from a URL containing `path`. */
+function decodedFrom(path: string): boolean {
+  return packs.decoded.some((url) => url.includes(path));
 }
 
 class FakeAudioContext {
@@ -104,6 +118,7 @@ function bank(engine: AudioEngine, id: PianoInstrumentId) {
 beforeEach(() => {
   packs.holds.clear();
   packs.failures.clear();
+  packs.pianissimo.clear();
   packs.decoded = [];
   vi.stubGlobal('AudioContext', FakeAudioContext);
   vi.stubGlobal(
@@ -297,5 +312,36 @@ describe('changing piano with nothing playable to keep', () => {
     await switching;
     expect(engine.bank.isCoreReady()).toBe(true);
     expect(packHeard(engine)).toBe('headroom-grand-v2');
+  });
+});
+
+describe('a piano’s pianissimo recordings', () => {
+  it('load once the first piano plays, never holding it up', async () => {
+    packs.pianissimo.add('salamander-grand-v3');
+    const pianissimo = hold('/salamander-grand-v3/c4pp.sample');
+    const engine = await playingEngine();
+    // Ready with its core, the pianissimo C4 still decoding behind it.
+    expect(engine.getLoadProgress().phase).toBe('core-ready');
+    await vi.waitFor(() => expect(decodedFrom('/salamander-grand-v3/c4pp.sample')).toBe(true));
+    expect(engine.bank.getSample(60, 0.2)?.standIn).toBe(true);
+    pianissimo.open();
+    await vi.waitFor(() => expect(engine.bank.getSample(60, 0.2)?.standIn).toBeUndefined());
+  });
+
+  it('are fetched by a new piano only once it takes over, never while it decodes for a switch', async () => {
+    packs.pianissimo.add('headroom-grand-v2');
+    const engine = await playingEngine();
+    const core = hold('/headroom-grand-v2/c4.sample');
+
+    const switching = engine.setInstrument('headroom-grand');
+    await vi.waitFor(() => expect(decodedFrom('/headroom-grand-v2/c4.sample')).toBe(true));
+    // The old piano plays on while the new one decodes: nothing of the
+    // new one's that the switch does not need, and it does not need these.
+    expect(decodedFrom('/headroom-grand-v2/c4pp.sample')).toBe(false);
+
+    core.open();
+    await switching;
+    expect(engine.soundingInstrument.id).toBe('headroom-grand');
+    await vi.waitFor(() => expect(decodedFrom('/headroom-grand-v2/c4pp.sample')).toBe(true));
   });
 });

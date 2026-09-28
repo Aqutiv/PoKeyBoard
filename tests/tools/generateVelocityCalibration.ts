@@ -34,12 +34,7 @@ import { expect, it } from 'vitest';
 import type { SamplePackManifest } from '@/audio/audioTypes';
 import { PIANO_INSTRUMENTS } from '@/audio/instruments';
 import { kWeighting } from '@/audio/loudness';
-import {
-  MAX_ROOT_DISTANCE_SEMITONES,
-  onsetOffsetOf,
-  velocityGain,
-  velocityToLayer,
-} from '@/audio/SampleBank';
+import { MAX_ROOT_DISTANCE_SEMITONES, onsetOffsetOf } from '@/audio/SampleBank';
 import {
   ANCHOR_HIGH_MIDI,
   ANCHOR_LOW_MIDI,
@@ -50,11 +45,19 @@ import {
   MAX_RESIDUAL_DB,
   nearestRoot,
   solveReferenceDb,
-  TILT_LAYER,
   type LayerCalibration,
   type VelocityCalibration,
 } from '@/audio/velocityCalibrationMath';
 import { CURVE_REFERENCE_VELOCITY } from '@/audio/velocityCurve';
+import {
+  DEFAULT_MEDIUM_LAYER,
+  layerLabels,
+  mediumLayer,
+  velocityGain,
+  velocityThresholds,
+  velocityToLayer,
+  type LayerLabel,
+} from '@/audio/velocityLayers';
 
 // Paths hang off the project root: under jsdom, import.meta.url is an http
 // URL rather than a file one, so it cannot anchor them.
@@ -237,7 +240,13 @@ function round(value: number, digits: number): number {
 }
 
 const NOTE_NAMES = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
-const LAYER_NAMES = ['soft', 'medium', 'loud'];
+
+/** One pack's table, with its layers' labels for the report. */
+interface Pack {
+  version: string;
+  calibration: VelocityCalibration;
+  labels: readonly LayerLabel[];
+}
 
 function noteName(midi: number): string {
   return `${NOTE_NAMES[midi % 12]}${Math.floor(midi / 12) - 1}`;
@@ -261,7 +270,7 @@ function heldBackRoots(calibration: VelocityCalibration): string[] {
 }
 
 /** The recording furthest from its layer's fit, and how far, signed. */
-function furthestFromFit(calibration: VelocityCalibration): string {
+function furthestFromFit(calibration: VelocityCalibration, labels: readonly LayerLabel[]): string {
   let furthest = { residual: 0, midi: 0, layer: 0 };
   for (const [layer, { fit, roots }] of calibration.layers.entries()) {
     for (const root of roots) {
@@ -272,7 +281,7 @@ function furthestFromFit(calibration: VelocityCalibration): string {
     }
   }
   const sign = furthest.residual > 0 ? '+' : '−';
-  return `${noteName(furthest.midi)} ${LAYER_NAMES[furthest.layer]} (${sign}${Math.abs(furthest.residual).toFixed(1)})`;
+  return `${noteName(furthest.midi)} ${labels[furthest.layer]} (${sign}${Math.abs(furthest.residual).toFixed(1)})`;
 }
 
 /** The loudest peak a voice reaches at full velocity, stand-ins included, in dBFS. */
@@ -297,26 +306,30 @@ function renderLayer(layer: LayerCalibration): string {
   },`;
 }
 
-function renderTable(packs: readonly { version: string; calibration: VelocityCalibration }[]) {
+function renderTable(packs: readonly Pack[]) {
   const summary = packs
-    .map(({ version, calibration }) => {
+    .map(({ version, calibration, labels }) => {
       const quality = calibration.layers
-        .map((layer, index) => `${LAYER_NAMES[index]} ${layer.rmsResidualDb.toFixed(2)}`)
+        .map((layer, index) => `${labels[index]} ${layer.rmsResidualDb.toFixed(2)}`)
         .join(', ');
       const held = heldBackRoots(calibration);
       return [
         ` *   ${version}`,
         ` *     fit RMS residual, dB: ${quality}`,
-        ` *     furthest from its fit, dB: ${furthestFromFit(calibration)}`,
+        ` *     furthest from its fit, dB: ${furthestFromFit(calibration, labels)}`,
         ` *     held back, dB left over target: ${held.length > 0 ? held.join(', ') : 'none'}`,
         ` *     loudest voice peak at full velocity: ${loudestPeakDb(calibration).toFixed(1)} dBFS`,
       ].join('\n');
     })
     .join('\n');
+  // A table names its medium layer only where it is not layer 1, so the
+  // entries of the packs of soft, medium and loud read as they always did.
+  const tilt = ({ tiltLayer }: VelocityCalibration) =>
+    tiltLayer === undefined ? '' : `\n    tiltLayer: ${tiltLayer},`;
   const rows = packs
     .map(
       ({ version, calibration }) => `'${version}': {
-    referenceDb: ${round(calibration.referenceDb, 3)},
+    referenceDb: ${round(calibration.referenceDb, 3)},${tilt(calibration)}
     layers: [
       ${calibration.layers.map(renderLayer).join('\n')}
     ],
@@ -354,7 +367,7 @@ export const VELOCITY_CALIBRATIONS: Readonly<Record<string, VelocityCalibration>
 // Decoding 180 recordings runs past the default per-test timeout.
 it('generates the velocity calibration', { timeout: 600_000 }, async () => {
   checkMeter();
-  const packs: { version: string; calibration: VelocityCalibration }[] = [];
+  const packs: Pack[] = [];
   for (const instrument of PIANO_INSTRUMENTS) {
     const manifestPath = path.join(
       ROOT,
@@ -373,17 +386,20 @@ it('generates the velocity calibration', { timeout: 600_000 }, async () => {
     expect(layers.map((_, index) => index)).toEqual(
       manifest.velocityLayers.map((layer) => layer.index),
     );
+    const labels = layerLabels(manifest.velocityLayers);
 
     // The anchor: C3–B5 at the computer keyboard's velocity, as loud as the
-    // old trims and the pack's level match played them.
+    // old trims and the pack's level match played them — on its medium layer,
+    // wherever that is numbered, and whose balance every target then follows.
     const velocity = CURVE_REFERENCE_VELOCITY;
-    const oldLayer = velocityToLayer(velocity);
-    expect(oldLayer).toBe(TILT_LAYER);
+    const tiltLayer = mediumLayer(labels);
+    expect(velocityToLayer(velocity, velocityThresholds(labels))).toBe(tiltLayer);
     const levelMatch =
-      manifest.velocityLayers.find((entry) => entry.index === oldLayer)?.levelMatch ?? 1;
-    const oldGainDb = 20 * Math.log10(velocityGain(velocity, oldLayer) * levelMatch);
-    const draft: VelocityCalibration = { referenceDb: 0, layers };
-    const medium = layers[oldLayer]!.roots;
+      manifest.velocityLayers.find((entry) => entry.index === tiltLayer)?.levelMatch ?? 1;
+    const oldGainDb = 20 * Math.log10(velocityGain(velocity, 'medium') * levelMatch);
+    const named = tiltLayer === DEFAULT_MEDIUM_LAYER ? {} : { tiltLayer };
+    const draft: VelocityCalibration = { referenceDb: 0, ...named, layers };
+    const medium = layers[tiltLayer]!.roots;
     const today: number[] = [];
     const relative: number[] = [];
     for (let midi = ANCHOR_LOW_MIDI; midi <= ANCHOR_HIGH_MIDI; midi += 1) {
@@ -392,22 +408,26 @@ it('generates the velocity calibration', { timeout: 600_000 }, async () => {
         midi,
       )!;
       const recorded = medium.find((entry) => entry.midi === root)!.measuredDb;
-      const gain = calibratedGain(draft, velocity, midi, oldLayer, root)!;
+      const gain = calibratedGain(draft, velocity, midi, tiltLayer, root)!;
       today.push(recorded + oldGainDb);
       relative.push(recorded + 20 * Math.log10(gain));
     }
-    const calibration = { referenceDb: solveReferenceDb(today, relative), layers };
-    packs.push({ version: instrument.packVersion, calibration });
+    const calibration: VelocityCalibration = {
+      referenceDb: solveReferenceDb(today, relative),
+      ...named,
+      layers,
+    };
+    packs.push({ version: instrument.packVersion, calibration, labels });
 
     console.log(`\n${instrument.packVersion}: reference ${calibration.referenceDb.toFixed(2)} dB`);
     for (const [index, layer] of layers.entries()) {
       const fit = layer.fit.map((term) => term.toFixed(3)).join(', ');
       console.log(
-        `  ${LAYER_NAMES[index]}: fit [${fit}], RMS residual ${layer.rmsResidualDb.toFixed(2)} dB`,
+        `  ${labels[index]}: fit [${fit}], RMS residual ${layer.rmsResidualDb.toFixed(2)} dB`,
       );
     }
     const held = heldBackRoots(calibration);
-    console.log(`  furthest from its fit: ${furthestFromFit(calibration)}`);
+    console.log(`  furthest from its fit: ${furthestFromFit(calibration, labels)}`);
     console.log(`  held back: ${held.length > 0 ? held.join(', ') : 'none'}`);
     console.log(
       `  loudest voice peak at full velocity: ${loudestPeakDb(calibration).toFixed(2)} dBFS`,
