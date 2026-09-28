@@ -25,7 +25,7 @@ interface Gate {
 /**
  * Real banks over fake bytes: every pack lists a core C4 and two optional
  * roots, C2 and C7, and a decode waits on any gate whose key its URL contains.
- * A pack named in `pianissimo` also has a pianissimo C4 under them.
+ * A pack named in `pianissimo` also has a pianissimo C4 and C2 under them.
  */
 const packs = vi.hoisted(() => ({
   holds: new Map<string, Gate>(),
@@ -52,7 +52,12 @@ function manifest(url: string) {
     { file: 'c4.sample', midi: 60, layer: medium, pack: 'core', bytes: 1 },
     { file: 'c2.sample', midi: 36, layer: medium, pack: 'full', bytes: 1 },
     { file: 'c7.sample', midi: 96, layer: medium, pack: 'full', bytes: 1 },
-    ...(pianissimo ? [{ file: 'c4pp.sample', midi: 60, layer: 0, pack: 'core', bytes: 1 }] : []),
+    ...(pianissimo
+      ? [
+          { file: 'c4pp.sample', midi: 60, layer: 0, pack: 'core', bytes: 1 },
+          { file: 'c2pp.sample', midi: 36, layer: 0, pack: 'full', bytes: 1 },
+        ]
+      : []),
   ];
   return {
     version: `stub:${url}`,
@@ -73,6 +78,16 @@ function manifest(url: string) {
 /** Whether any decode so far came from a URL containing `path`. */
 function decodedFrom(path: string): boolean {
   return packs.decoded.some((url) => url.includes(path));
+}
+
+/** Whether anything so far fetched a URL containing `path`. */
+function fetchedFrom(path: string): boolean {
+  return vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes(path));
+}
+
+/** Let every load that can move, move. */
+async function settle(): Promise<void> {
+  for (let i = 0; i < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 class FakeAudioContext {
@@ -347,5 +362,65 @@ describe('a piano’s pianissimo recordings', () => {
     await switching;
     expect(engine.soundingInstrument.id).toBe('headroom-grand');
     await vi.waitFor(() => expect(decodedFrom(`/${HEADROOM}/c4pp.sample`)).toBe(true));
+  });
+
+  it('wait while a switch decodes the next piano, and go on once it is called off', async () => {
+    packs.pianissimo.add(SALAMANDER);
+    const engine = await playingEngine();
+    await vi.waitFor(() => expect(decodedFrom(`/${SALAMANDER}/c4pp.sample`)).toBe(true));
+    const headroomCore = hold(`/${HEADROOM}/c4.sample`);
+    const abandoned = engine.setInstrument('headroom-grand');
+    await vi.waitFor(() => expect(decodedFrom(`/${HEADROOM}/c4.sample`)).toBe(true));
+
+    // The player reaches down to C2 on the piano still playing: its keys load
+    // at once, and its pianissimo C2 waits for the piano being decoded.
+    await engine.ensurePlayableRange(30, 40);
+    expect(bank(engine, 'salamander-grand').isFileLoaded('c2.sample')).toBe(true);
+    await settle();
+    expect(fetchedFrom(`/${SALAMANDER}/c2pp.sample`)).toBe(false);
+
+    // Called off, the switch holds nothing back.
+    await engine.setInstrument('salamander-grand');
+    await vi.waitFor(() => expect(decodedFrom(`/${SALAMANDER}/c2pp.sample`)).toBe(true));
+    headroomCore.open();
+    await abandoned;
+  });
+
+  it('wait while a piano downloads for offline use', async () => {
+    packs.pianissimo.add(SALAMANDER);
+    const stored = new Map<string, unknown>();
+    vi.stubGlobal('caches', {
+      open: async () => ({
+        match: async (url: string) => stored.get(url),
+        put: async (url: string, response: unknown) => void stored.set(url, response),
+      }),
+    });
+    // Headroom's recordings download only once let go.
+    let letGo!: () => void;
+    const downloadHeld = new Promise<void>((resolve) => {
+      letGo = resolve;
+    });
+    const serve = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (url, init) => {
+      if (String(url).includes(`/${HEADROOM}/c`)) await downloadHeld;
+      return serve(url, init);
+    });
+
+    const core = hold(`/${SALAMANDER}/c4.sample`);
+    const engine = new AudioEngine();
+    engine.markInstrumentRestored();
+    engine.initialize();
+    const downloading = engine.downloadFullSamplePack('headroom-grand');
+    await vi.waitFor(() => expect(fetchedFrom(`/${HEADROOM}/c4.sample`)).toBe(true));
+    core.open();
+    await vi.waitFor(() => expect(engine.bank.isCoreReady()).toBe(true));
+    await settle();
+    // Ready to play, with its pianissimo C4 waiting for the download.
+    expect(fetchedFrom(`/${SALAMANDER}/c4pp.sample`)).toBe(false);
+
+    letGo();
+    await downloading;
+    expect(stored.size).toBe(3);
+    await vi.waitFor(() => expect(decodedFrom(`/${SALAMANDER}/c4pp.sample`)).toBe(true));
   });
 });

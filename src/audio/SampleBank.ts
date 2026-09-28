@@ -5,6 +5,7 @@ import type {
   SamplePackManifest,
   SampleSelection,
 } from './audioTypes';
+import { BACKGROUND_CONCURRENCY, SampleTraffic } from './sampleTraffic';
 import { releaseTcFor, UNDAMPED_FROM_MIDI } from './sampleVoice';
 import { TONE_CALIBRATIONS } from './toneCalibration';
 import { toneCalibrationCovers, voiceTone, type ToneCalibration } from './toneCalibrationMath';
@@ -37,6 +38,7 @@ const LOAD_CENTER_MIDI = 66;
 
 /** How far from its root a recording may be pitched to stand in for a key. */
 export const MAX_ROOT_DISTANCE_SEMITONES = 9;
+/** Files a load someone waits for fetches at once; see `SampleTraffic` for the rest. */
 const FETCH_CONCURRENCY = 4;
 const FETCH_RETRIES = 2;
 
@@ -122,6 +124,14 @@ export class SampleBank {
   private readonly layers = new Map<number, LayerRoots>();
   private readonly listeners = new Set<(progress: SampleLoadProgress) => void>();
   private readonly inFlight = new Map<string, Promise<void>>();
+  /** Shared with the engine's other banks, so a switch's loads go first; see `SampleTraffic`. */
+  private readonly traffic: SampleTraffic;
+  /**
+   * This bank's foreground loads under way, each holding the background back.
+   * A release ends them all, since nobody waits for a load called off, even
+   * while its last files land.
+   */
+  private readonly holds = new Set<() => void>();
 
   private phase: SampleLoadPhase = 'idle';
   private loadedFiles = 0;
@@ -135,8 +145,9 @@ export class SampleBank {
 
   private readonly baseUrl: string;
 
-  constructor(baseUrl: string) {
+  constructor(baseUrl: string, traffic: SampleTraffic = new SampleTraffic()) {
     this.baseUrl = baseUrl;
+    this.traffic = traffic;
   }
 
   getManifest(): SamplePackManifest | null {
@@ -199,6 +210,18 @@ export class SampleBank {
    * keyboard range becomes playable as early as possible.
    */
   async loadCorePack(context: BaseAudioContext): Promise<void> {
+    // Someone is waiting for this piano from its manifest on, so the
+    // background holds back from the first request to the last, and in
+    // between them.
+    const end = this.holdBackground();
+    try {
+      await this.loadCore(context);
+    } finally {
+      end();
+    }
+  }
+
+  private async loadCore(context: BaseAudioContext): Promise<void> {
     // A release calls a load off, from wherever it has got to — even its
     // manifest — and a load called off like that is no failure: it reports
     // nothing, and leaves nothing decoded behind it.
@@ -238,8 +261,9 @@ export class SampleBank {
    * loaded state afterwards (never captured-and-restored — that races).
    *
    * Resolves once the range plays. Its deferred recordings (`DEFERRED_LAYERS`)
-   * are nothing it waits for or reports on: on the piano that sounds, they
-   * follow in the background, and until they do the soft layer stands in.
+   * are nothing it waits for or reports on. On the piano that sounds they
+   * follow in the background (`SampleTraffic`), and until they do the soft
+   * layer stands in.
    */
   async ensureRangeLoaded(
     context: BaseAudioContext,
@@ -268,15 +292,18 @@ export class SampleBank {
         throw error;
       }
     }
-    if (this.deferredOn) void this.loadInBackground(context, later, generation);
+    if (this.deferredOn) void this.loadQuietly(context, later, generation, { background: true });
   }
 
   /**
    * Make this the piano whose deferred recordings load: every one of a key it
    * already plays, now, and from here on every one of a range it is asked for.
-   * The engine calls it on the piano that sounds, once it plays. Resolves when
-   * those it starts on are decoded, or have failed and left their stand-ins
-   * (logged, and tried again the next time they are needed); never rejects.
+   * The engine calls it on the piano that sounds, once it plays. They load in
+   * the background (`SampleTraffic`): two at a time across the pianos, at low
+   * priority, and no new one starts while a load someone waits for is under
+   * way. Resolves when those it starts on are decoded, or have failed and left
+   * their stand-ins (logged, and tried again the next time they are needed);
+   * never rejects.
    */
   loadDeferred(context: BaseAudioContext): Promise<void> {
     const manifest = this.manifest;
@@ -292,15 +319,17 @@ export class SampleBank {
           this.isDeferred(entry) && !this.buffers.has(entry.file) && playable.has(entry.midi),
       )
       .sort((a, b) => Math.abs(a.midi - LOAD_CENTER_MIDI) - Math.abs(b.midi - LOAD_CENTER_MIDI));
-    return this.loadInBackground(context, wanted, this.generation);
+    return this.loadQuietly(context, wanted, this.generation, { background: true });
   }
 
   /**
    * Decode the deferred recordings these notes ask for, and wait for them: an
    * export renders the recording each of its notes wants, not the one that
-   * stands in while it loads. One that cannot be had — offline before it was
-   * ever fetched, say — is left to its stand-in, as live, and `getSample`
-   * marks the note so the export knows. Never rejects.
+   * stands in while it loads. Someone is waiting for these, so they load the
+   * way the core does, four at a time at full priority, holding the
+   * background back rather than queueing behind it. One that cannot be had —
+   * offline before it was ever fetched, say — is left to its stand-in, as
+   * live, and `getSample` marks the note so the export knows. Never rejects.
    */
   async loadRecordingsFor(
     context: BaseAudioContext,
@@ -316,7 +345,7 @@ export class SampleBank {
       const entry = this.ownRecording(layer, note.midi);
       if (entry && !this.buffers.has(entry.file)) wanted.set(entry.file, entry);
     }
-    await this.loadInBackground(context, [...wanted.values()], generation);
+    await this.loadQuietly(context, [...wanted.values()], generation);
   }
 
   /**
@@ -332,19 +361,21 @@ export class SampleBank {
   }
 
   /**
-   * Decode `entries` without holding anything up or saying anything to the
-   * player: a file that fails is logged and left to its stand-in, and never
-   * sets the bank's error, which the Play page would show whatever the phase.
-   * (A player who saved this piano for offline use before its deferred layers
-   * existed plays offline without them, and that is no error.)
+   * Decode `entries` without saying anything to the player: a file that fails
+   * is logged and left to its stand-in, and never sets the bank's error, which
+   * the Play page would show whatever the phase. (A player who saved this
+   * piano for offline use before its deferred layers existed plays offline
+   * without them, and that is no error.) A `background` load is one nobody
+   * waits for, and it gives way to every load somebody does (`SampleTraffic`).
    */
-  private loadInBackground(
+  private loadQuietly(
     context: BaseAudioContext,
     entries: readonly SamplePackFileEntry[],
     generation: number,
+    { background = false }: { background?: boolean } = {},
   ): Promise<void> {
     if (entries.length === 0) return Promise.resolve();
-    return this.loadEntries(context, entries, generation, { quiet: true }).catch(
+    return this.loadEntries(context, entries, generation, { quiet: true, background }).catch(
       (error: unknown) => {
         if (generation !== this.generation) return;
         console.warn(
@@ -383,8 +414,10 @@ export class SampleBank {
     this.generation += 1;
     this.deferredOn = false;
     // The decodes still under way will drop what they bring, so a load after
-    // this one must not wait on them: it would wait for nothing.
+    // this one must not wait on them: it would wait for nothing. Nor must the
+    // background, on the load called off.
     this.inFlight.clear();
+    for (const end of [...this.holds]) end();
     this.buffers.clear();
     this.onsets.clear();
     for (const layer of this.layers.values()) layer.loadedRoots.length = 0;
@@ -569,33 +602,61 @@ export class SampleBank {
   }
 
   /**
+   * Hold the background back until the returned function is called, or this
+   * bank is released; see `SampleTraffic`.
+   */
+  private holdBackground(): () => void {
+    const done = this.traffic.foreground();
+    const end = () => {
+      this.holds.delete(end);
+      done();
+    };
+    this.holds.add(end);
+    return end;
+  }
+
+  /**
    * Load `entries`, stopping at the next file once `generation` is released.
    * A `quiet` load's failures are the caller's to handle; they never become the
-   * bank's error (see `loadInBackground`).
+   * bank's error (see `loadQuietly`).
+   *
+   * Someone waits for a load, unless it is `background`: then it takes a turn
+   * for each file (`SampleTraffic.backgroundTurn`), fetched at low priority,
+   * and every other load holds it back while it runs.
    */
   private async loadEntries(
     context: BaseAudioContext,
     entries: readonly SamplePackFileEntry[],
     generation: number,
-    { quiet = false }: { quiet?: boolean } = {},
+    { quiet = false, background = false }: { quiet?: boolean; background?: boolean } = {},
   ): Promise<void> {
+    const end = background ? null : this.holdBackground();
     const queue = [...entries];
     const failures: unknown[] = [];
-    const workers = Array.from({ length: FETCH_CONCURRENCY }, async () => {
+    const concurrency = background ? BACKGROUND_CONCURRENCY : FETCH_CONCURRENCY;
+    const workers = Array.from({ length: concurrency }, async () => {
       for (;;) {
         // Files still queued would start after the release, and keep what they
         // decode; a release has to stop them too, not only those under way.
-        if (generation !== this.generation) return;
-        const entry = queue.shift();
-        if (!entry) return;
+        if (generation !== this.generation || queue.length === 0) return;
+        const turn = background ? await this.traffic.backgroundTurn() : null;
+        // Released, or left with nothing, while it waited for its turn.
+        const entry = generation === this.generation ? queue.shift() : undefined;
         try {
-          await this.loadEntry(context, entry, quiet);
+          if (!entry) return;
+          await this.loadEntry(context, entry, { quiet, background });
         } catch (error) {
           failures.push(error);
+        } finally {
+          turn?.();
         }
       }
     });
-    await Promise.all(workers);
+    try {
+      await Promise.all(workers);
+    } finally {
+      end?.();
+    }
     if (failures.length > 0) {
       throw new Error(
         `${failures.length} piano sample${failures.length === 1 ? '' : 's'} could not be loaded.`,
@@ -607,13 +668,13 @@ export class SampleBank {
   private loadEntry(
     context: BaseAudioContext,
     entry: SamplePackFileEntry,
-    quiet: boolean,
+    { quiet, background }: { quiet: boolean; background: boolean },
   ): Promise<void> {
     if (this.buffers.has(entry.file)) return Promise.resolve();
     const existing = this.inFlight.get(entry.file);
     if (existing) return existing;
     const generation = this.generation;
-    const task: Promise<void> = this.fetchAndDecode(context, entry)
+    const task: Promise<void> = this.fetchAndDecode(context, entry, background)
       .catch((error: unknown) => {
         // A load released mid-flight has no one left to tell.
         if (generation === this.generation) {
@@ -637,16 +698,20 @@ export class SampleBank {
   private async fetchAndDecode(
     context: BaseAudioContext,
     entry: SamplePackFileEntry,
+    background: boolean,
   ): Promise<void> {
     let lastError: unknown;
     const generation = this.generation;
     // Released meanwhile, the load is called off: what is still to come — a
     // decode, a retry — would only fetch and decode something to discard.
     const released = () => generation !== this.generation;
+    const url = `${this.baseUrl}${entry.file}`;
     for (let attempt = 0; attempt <= FETCH_RETRIES; attempt += 1) {
       if (released()) return;
       try {
-        const response = await fetch(`${this.baseUrl}${entry.file}`);
+        // A hint, where the browser takes it (the Fetch Priority API): the
+        // connections and the bandwidth go to what someone is waiting for.
+        const response = await (background ? fetch(url, { priority: 'low' }) : fetch(url));
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const bytes = await response.arrayBuffer();
         if (released()) return;

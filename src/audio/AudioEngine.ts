@@ -20,6 +20,7 @@ import {
 } from './instruments';
 import { createPianoGraph, type PianoGraph } from './PianoGraphFactory';
 import { SampleBank } from './SampleBank';
+import { SampleTraffic } from './sampleTraffic';
 import { VoiceManager } from './VoiceManager';
 
 /**
@@ -108,6 +109,11 @@ export class AudioEngine {
    * would be ~620MB.
    */
   private readonly banks = new Map<PianoInstrumentId, SampleBank>();
+  /**
+   * Shared by every bank, and by the offline download: the loads someone waits
+   * for go ahead of the pianissimo recordings nobody does, whichever piano's.
+   */
+  private readonly traffic = new SampleTraffic();
   /** The piano the user chose, which takes are stamped with. */
   private selectedId: PianoInstrumentId = DEFAULT_PIANO_INSTRUMENT_ID;
   /** The piano that plays: behind `selectedId` while a seamless switch decodes. */
@@ -167,7 +173,10 @@ export class AudioEngine {
   bankFor(id: PianoInstrumentId): SampleBank {
     const existing = this.banks.get(id);
     if (existing) return existing;
-    const bank = new SampleBank(`${import.meta.env.BASE_URL}${pianoInstrument(id).path}`);
+    const bank = new SampleBank(
+      `${import.meta.env.BASE_URL}${pianoInstrument(id).path}`,
+      this.traffic,
+    );
     this.banks.set(id, bank);
     return bank;
   }
@@ -531,27 +540,34 @@ export class AudioEngine {
   /**
    * Pin every sample of the full pack into Cache Storage for offline use.
    * Shares PIANO_SAMPLE_CACHE with the service worker's runtime caching.
+   * The player watches it go, so the pianissimo recordings wait for it
+   * (`SampleTraffic`).
    */
   async downloadFullSamplePack(
     instrumentId: PianoInstrumentId = this.selectedId,
     onProgress?: (loadedBytes: number, totalBytes: number) => void,
   ): Promise<void> {
-    const bank = this.bankFor(instrumentId);
-    const manifest = await bank.loadManifest();
-    const cache = await caches.open(PIANO_SAMPLE_CACHE);
-    let loadedBytes = 0;
-    for (const entry of manifest.files) {
-      const url = bank.urlFor(entry.file);
-      const cached = await cache.match(url);
-      if (!cached) {
-        const response = await fetch(url);
-        if (!response.ok) {
-          throw new Error(`Sample download failed (${response.status}) for ${entry.file}`);
+    const end = this.traffic.foreground();
+    try {
+      const bank = this.bankFor(instrumentId);
+      const manifest = await bank.loadManifest();
+      const cache = await caches.open(PIANO_SAMPLE_CACHE);
+      let loadedBytes = 0;
+      for (const entry of manifest.files) {
+        const url = bank.urlFor(entry.file);
+        const cached = await cache.match(url);
+        if (!cached) {
+          const response = await fetch(url);
+          if (!response.ok) {
+            throw new Error(`Sample download failed (${response.status}) for ${entry.file}`);
+          }
+          await cache.put(url, response);
         }
-        await cache.put(url, response);
+        loadedBytes += entry.bytes;
+        onProgress?.(loadedBytes, manifest.totalBytes);
       }
-      loadedBytes += entry.bytes;
-      onProgress?.(loadedBytes, manifest.totalBytes);
+    } finally {
+      end();
     }
   }
 
