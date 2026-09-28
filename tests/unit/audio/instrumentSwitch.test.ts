@@ -35,14 +35,18 @@ const packs = vi.hoisted(() => ({
   pianissimo: new Set<string>(),
 }));
 
-function hold(key: string): Gate {
+function gate(): Gate {
   let open!: () => void;
   const promise = new Promise<void>((resolve) => {
     open = resolve;
   });
-  const gate = { promise, open };
-  packs.holds.set(key, gate);
-  return gate;
+  return { promise, open };
+}
+
+function hold(key: string): Gate {
+  const held = gate();
+  packs.holds.set(key, held);
+  return held;
 }
 
 function manifest(url: string) {
@@ -88,6 +92,52 @@ function fetchedFrom(path: string): boolean {
 /** Let every load that can move, move. */
 async function settle(): Promise<void> {
   for (let i = 0; i < 3; i += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+}
+
+/**
+ * Cache Storage, as far as a download for offline use goes. A put waits on any
+ * gate in `storing` whose key its URL contains, as one still committing a file
+ * it has read would, whatever calls the download off meanwhile.
+ */
+function stubSampleCache(storing: ReadonlyMap<string, Gate> = new Map()): Map<string, unknown> {
+  const stored = new Map<string, unknown>();
+  vi.stubGlobal('caches', {
+    open: async () => ({
+      match: async (url: string) => stored.get(url),
+      put: async (url: string, response: unknown) => {
+        for (const [key, held] of storing) if (url.includes(key)) await held.promise;
+        stored.set(url, response);
+      },
+    }),
+  });
+  return stored;
+}
+
+/**
+ * Hold each fetch of a Headroom recording until it is answered, and reject it
+ * the moment its signal calls it off.
+ */
+function holdHeadroomFetches() {
+  const fetches = new Map<string, { answer: (status: number) => void; signal?: AbortSignal }>();
+  const serve = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (url, init) => {
+    const file = String(url).split('/').pop()!;
+    if (!String(url).includes(`/${HEADROOM}/`) || !file.endsWith('.sample')) {
+      return serve(url, init);
+    }
+    const signal = init?.signal ?? undefined;
+    const status = await new Promise<number>((resolve, reject) => {
+      fetches.set(file, { answer: resolve, signal });
+      signal?.addEventListener('abort', () => reject(signal.reason));
+    });
+    return status === 200 ? serve(url, init) : ({ ok: false, status } as Response);
+  });
+  return {
+    /** The files asked for so far, in the order they were. */
+    started: () => [...fetches.keys()],
+    answer: (file: string, status = 200) => fetches.get(file)!.answer(status),
+    calledOff: (file: string) => fetches.get(file)!.signal?.aborted === true,
+  };
 }
 
 class FakeAudioContext {
@@ -388,13 +438,7 @@ describe('a piano’s pianissimo recordings', () => {
 
   it('wait while a piano downloads for offline use', async () => {
     packs.pianissimo.add(SALAMANDER);
-    const stored = new Map<string, unknown>();
-    vi.stubGlobal('caches', {
-      open: async () => ({
-        match: async (url: string) => stored.get(url),
-        put: async (url: string, response: unknown) => void stored.set(url, response),
-      }),
-    });
+    const stored = stubSampleCache();
     // Headroom's recordings download only once let go.
     let letGo!: () => void;
     const downloadHeld = new Promise<void>((resolve) => {
@@ -422,5 +466,90 @@ describe('a piano’s pianissimo recordings', () => {
     await downloading;
     expect(stored.size).toBe(3);
     await vi.waitFor(() => expect(decodedFrom(`/${SALAMANDER}/c4pp.sample`)).toBe(true));
+  });
+});
+
+describe('downloading a piano for offline use', () => {
+  it('fetches four recordings at a time, adding each one’s bytes as it is stored', async () => {
+    // Five recordings of a byte each: C4, C2, C7, and a pianissimo C4 and C2.
+    packs.pianissimo.add(HEADROOM);
+    const stored = stubSampleCache();
+    const fetches = holdHeadroomFetches();
+    const progress: Array<[number, number]> = [];
+    const downloading = new AudioEngine().downloadFullSamplePack(
+      'headroom-grand',
+      (loaded, total) => progress.push([loaded, total]),
+    );
+
+    await vi.waitFor(() => expect(fetches.started()).toHaveLength(4));
+    await settle();
+    // Four on their way at once, and the fifth waiting for one of them.
+    expect(fetches.started()).toEqual(['c4.sample', 'c2.sample', 'c7.sample', 'c4pp.sample']);
+    fetches.answer('c7.sample');
+    await vi.waitFor(() => expect(fetches.started()).toContain('c2pp.sample'));
+    expect(progress).toEqual([[1, 5]]);
+
+    // Each counts as it is stored, in whatever order they come back.
+    for (const file of ['c2pp.sample', 'c4.sample', 'c4pp.sample', 'c2.sample']) {
+      fetches.answer(file);
+    }
+    await downloading;
+    expect(progress).toEqual([
+      [1, 5],
+      [2, 5],
+      [3, 5],
+      [4, 5],
+      [5, 5],
+    ]);
+    expect(stored.size).toBe(5);
+  });
+
+  it('counts the recordings already stored, without fetching them again', async () => {
+    const stored = stubSampleCache();
+    const engine = new AudioEngine();
+    const earlier = engine.bankFor('headroom-grand').urlFor('c4.sample');
+    stored.set(earlier, 'stored earlier');
+    const progress: number[] = [];
+
+    await engine.downloadFullSamplePack('headroom-grand', (loaded) => progress.push(loaded));
+    expect(fetchedFrom(`/${HEADROOM}/c4.sample`)).toBe(false);
+    expect(fetchedFrom(`/${HEADROOM}/c2.sample`)).toBe(true);
+    expect(stored.get(earlier)).toBe('stored earlier');
+    expect(progress).toEqual([1, 2, 3]);
+  });
+
+  it('stops at the first recording that fails, once those it calls off have stopped', async () => {
+    packs.pianissimo.add(HEADROOM);
+    // The C4 comes back first, and is still being stored when the C2 fails.
+    const storingC4 = gate();
+    const stored = stubSampleCache(new Map([[`/${HEADROOM}/c4.sample`, storingC4]]));
+    const fetches = holdHeadroomFetches();
+    const engine = new AudioEngine();
+    const progress: number[] = [];
+    let outcome: unknown;
+    void engine
+      .downloadFullSamplePack('headroom-grand', (loaded) => progress.push(loaded))
+      .then(
+        () => (outcome = 'stored'),
+        (error: unknown) => (outcome = error),
+      );
+    await vi.waitFor(() => expect(fetches.started()).toHaveLength(4));
+    fetches.answer('c4.sample');
+    await settle();
+
+    fetches.answer('c2.sample', 404);
+    await settle();
+    // Those still on their way are called off, and the fifth never starts.
+    expect(['c7.sample', 'c4pp.sample'].map(fetches.calledOff)).toEqual([true, true]);
+    expect(fetches.started()).not.toContain('c2pp.sample');
+    // The download is not over while the C4 is still being stored.
+    expect(outcome).toBeUndefined();
+
+    storingC4.open();
+    await vi.waitFor(() => expect(outcome).toBeInstanceOf(Error));
+    expect((outcome as Error).message).toBe('Sample download failed (404) for c2.sample');
+    // Stored, but after the download failed: nothing counts it, and it stays.
+    expect(progress).toEqual([]);
+    expect([...stored.keys()]).toEqual([engine.bankFor('headroom-grand').urlFor('c4.sample')]);
   });
 });

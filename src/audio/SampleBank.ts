@@ -38,8 +38,12 @@ const LOAD_CENTER_MIDI = 66;
 
 /** How far from its root a recording may be pitched to stand in for a key. */
 export const MAX_ROOT_DISTANCE_SEMITONES = 9;
-/** Files a load someone waits for fetches at once; see `SampleTraffic` for the rest. */
-const FETCH_CONCURRENCY = 4;
+/**
+ * Files a load someone waits for fetches at once: a bank's own, and a download
+ * for offline use (`AudioEngine.downloadFullSamplePack`). See `SampleTraffic`
+ * for the rest.
+ */
+export const FETCH_CONCURRENCY = 4;
 const FETCH_RETRIES = 2;
 
 /** How far into a recording the attack is looked for. */

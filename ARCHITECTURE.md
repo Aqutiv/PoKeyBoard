@@ -216,12 +216,12 @@ handed over but not kept in the MP3 cache.
 
 Those background loads give way to every load someone is waiting for
 (`sampleTraffic.ts`): a piano's core from its manifest on (the next piano's,
-during a switch), the keys a range needs, an export's recordings (which it
-fetches as the core does, four at a time at full priority) and a download for
-offline use. The engine's banks share one `SampleTraffic`, because a switch
-decodes one piano while the other plays on and fetches its own. The background
-takes a turn for each file it starts. No turn is given while any of those
-loads is under way, and never more than two are out at once across the
+during a switch), the keys a range needs, an export's recordings and a
+download for offline use, each fetching four files at a time at full priority
+(`FETCH_CONCURRENCY`). The engine's banks share one `SampleTraffic`, because a
+switch decodes one piano while the other plays on and fetches its own. The
+background takes a turn for each file it starts. No turn is given while any of
+those loads is under way, and never more than two are out at once across the
 pianos. With a foreground load's four, that makes the six connections a
 browser opens to a host over HTTP/1.1. Each background file is asked for at
 `priority: 'low'` (the Fetch Priority API, a hint where the browser takes it).

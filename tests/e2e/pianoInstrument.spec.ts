@@ -106,9 +106,9 @@ test.describe('choosing a piano', () => {
       .locator('.piano-card')
       .filter({ has: page.locator('strong', { hasText: /^Headroom$/ }) });
     await acousticRow.getByRole('button', { name: /^Download / }).click();
-    // Under POKEYBOARD_E2E_REAL_PACK this is Headroom's whole 24 MB, one file
-    // after another: under 2 s on its own, some 25 s in the middle of a full
-    // parallel run. (The playing piano's pianissimo recordings wait for it.)
+    // Under POKEYBOARD_E2E_REAL_PACK this is Headroom's whole 24 MB, four files
+    // at a time: under a second on its own, some 12–19 s in the middle of a
+    // full parallel run. (The playing piano's pianissimo recordings wait for it.)
     await expect(acousticRow.getByRole('button', { name: /^Delete / })).toBeVisible({
       timeout: 30_000,
     });
@@ -135,7 +135,12 @@ test.describe('choosing a piano', () => {
     page.once('dialog', (dialog) => void dialog.accept());
     await packRow.getByRole('button', { name: /^Delete / }).click();
     await expect(packRow.getByRole('button', { name: /^Download / })).toBeVisible();
-    expect((await cachedUrls()).sort()).toEqual(other.sort());
+    // Only the Wurlitzer's entries go. Under POKEYBOARD_E2E_REAL_PACK the rest
+    // can grow meanwhile: the playing piano's pianissimo recordings, held back
+    // by the downloads, carry on loading, and the service worker caches each.
+    const after = await cachedUrls();
+    expect(after.filter((url) => url.includes(WURLITZER_PACK))).toEqual([]);
+    expect(after).toEqual(expect.arrayContaining(other));
     await expect(acousticRow.getByRole('button', { name: /^Delete / })).toBeVisible();
   });
   test('switches the live piano and remembers the choice', async ({ page }) => {

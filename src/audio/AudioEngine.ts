@@ -19,7 +19,7 @@ import {
   type PianoInstrumentId,
 } from './instruments';
 import { createPianoGraph, type PianoGraph } from './PianoGraphFactory';
-import { SampleBank } from './SampleBank';
+import { FETCH_CONCURRENCY, SampleBank } from './SampleBank';
 import { SampleTraffic } from './sampleTraffic';
 import { VoiceManager } from './VoiceManager';
 
@@ -540,6 +540,15 @@ export class AudioEngine {
   /**
    * Pin every sample of the full pack into Cache Storage for offline use.
    * Shares PIANO_SAMPLE_CACHE with the service worker's runtime caching.
+   *
+   * Files already cached are skipped, and the rest fetched FETCH_CONCURRENCY
+   * at a time, as any load someone waits for is, rather than each waiting out
+   * the round trip before it. Progress adds each file's bytes as it is stored.
+   * The first file that fails calls off the others on their way, and the
+   * download rejects with its error once they have stopped: none of it runs
+   * on, or reports progress, after that. What was stored stays, for the next
+   * attempt to skip.
+   *
    * The player watches it go, so the pianissimo recordings wait for it
    * (`SampleTraffic`).
    */
@@ -552,20 +561,27 @@ export class AudioEngine {
       const bank = this.bankFor(instrumentId);
       const manifest = await bank.loadManifest();
       const cache = await caches.open(PIANO_SAMPLE_CACHE);
+      const queue = [...manifest.files];
+      const failures: unknown[] = [];
+      const callOff = new AbortController();
       let loadedBytes = 0;
-      for (const entry of manifest.files) {
-        const url = bank.urlFor(entry.file);
-        const cached = await cache.match(url);
-        if (!cached) {
-          const response = await fetch(url);
-          if (!response.ok) {
-            throw new Error(`Sample download failed (${response.status}) for ${entry.file}`);
+      const workers = Array.from({ length: FETCH_CONCURRENCY }, async () => {
+        while (failures.length === 0 && queue.length > 0) {
+          const entry = queue.shift()!;
+          try {
+            await pinSample(cache, bank.urlFor(entry.file), entry.file, callOff.signal);
+            // Stored as another failed: the download is over, with nothing to add.
+            if (failures.length > 0) return;
+            loadedBytes += entry.bytes;
+            onProgress?.(loadedBytes, manifest.totalBytes);
+          } catch (error) {
+            failures.push(error);
+            callOff.abort();
           }
-          await cache.put(url, response);
         }
-        loadedBytes += entry.bytes;
-        onProgress?.(loadedBytes, manifest.totalBytes);
-      }
+      });
+      await Promise.all(workers);
+      if (failures.length > 0) throw failures[0];
     } finally {
       end();
     }
@@ -848,6 +864,19 @@ function spanUnion(a: KeySpan | null, b: KeySpan | null): KeySpan | null {
   if (!a) return b;
   if (!b) return a;
   return { low: Math.min(a.low, b.low), high: Math.max(a.high, b.high) };
+}
+
+/** Store one file of a pack in `cache` for offline use, unless it is there already. */
+async function pinSample(
+  cache: Cache,
+  url: string,
+  file: string,
+  signal: AbortSignal,
+): Promise<void> {
+  if (await cache.match(url)) return;
+  const response = await fetch(url, { signal });
+  if (!response.ok) throw new Error(`Sample download failed (${response.status}) for ${file}`);
+  await cache.put(url, response);
 }
 
 /** The app-wide piano engine instance. */
