@@ -106,8 +106,9 @@ test.describe('choosing a piano', () => {
       .locator('.piano-card')
       .filter({ has: page.locator('strong', { hasText: /^Headroom$/ }) });
     await acousticRow.getByRole('button', { name: /^Download / }).click();
-    // Under POKEYBOARD_E2E_REAL_PACK this is Headroom's whole 24 MB, file by
-    // file, beside the pianissimo recordings the playing piano fetches.
+    // Under POKEYBOARD_E2E_REAL_PACK this is Headroom's whole 24 MB, one file
+    // after another: under 2 s on its own, some 25 s in the middle of a full
+    // parallel run. (The playing piano's pianissimo recordings wait for it.)
     await expect(acousticRow.getByRole('button', { name: /^Delete / })).toBeVisible({
       timeout: 30_000,
     });
