@@ -128,7 +128,7 @@
 <path d="M274.5 299.77 L274.5 303.82 L389.17 303.82 L389.17 299.77" fill="none" stroke="#000000" stroke-width="0.8"/>
 <path d="M389.17 299.77 L389.17 303.82 L488.84 303.82 L488.84 299.77" fill="none" stroke="#000000" stroke-width="0.8"/>
 <path d="M488.84 299.77 L488.84 303.82 L555.28 303.82" fill="none" stroke="#000000" stroke-width="0.8"/>
-<use href="#dynamicMF" transform="matrix(0.0216 0 0 -0.0216 117.79 234)" fill="#000000"/>
+<use href="#dynamicMF" transform="matrix(0.0216 0 0 -0.0216 131.92 234)" fill="#000000"/>
 <use href="#brace" transform="matrix(0.077104 0 0 -0.077104 32.15 429.02)" fill="#000000"/>
 <path d="M40 351.87 L555.28 351.87" fill="none" stroke="#000000" stroke-width="0.9"/>
 <path d="M40 357.27 L555.28 357.27" fill="none" stroke="#000000" stroke-width="0.9"/>

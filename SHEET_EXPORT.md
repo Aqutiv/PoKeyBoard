@@ -203,7 +203,10 @@ takes seconds and never touches the audio engine.
 - **Pedal** brackets go under the bass staff, in a row of their own, from every
   press to its release; a press outliving the system is left open at that end.
   The events were always recorded and imported — this is where they finally get
-  drawn.
+  drawn. Like every mark placed by time (dynamics, hairpins, octave lines), a
+  press stands under the note it went down with, on a system's first downbeat
+  as on any other; only a mark running on from the system before starts where
+  the system's music does.
 - **Octave lines** (see _Known limitations_ for where they come from) stand 2.6
   spaces off their staff, or further out wherever the music under them reaches
   past that. The whole mark — label, dashed line, and a hook that turns in only
@@ -215,7 +218,9 @@ takes seconds and never touches the audio engine.
   one standing clear does not, however high it climbs; the printed spacing is
   known, where the live score's changes with zoom. A system reserves exactly
   the room the band needs past its music, with a tempo mark still on top and
-  the pedal row under an 8vb.
+  the pedal row under an 8vb. A line running on to the next system, if only to
+  its first note, stops open at the end of the staff and picks up at the start
+  of the next.
 - **Beaming** is decided once, in `layoutScore`, so the printed page and the
   live score group runs the same way and commit a run to the same stem
   direction; `beamGeometry.ts` holds the line arithmetic in staff spaces, read

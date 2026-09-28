@@ -750,11 +750,17 @@ const HAIRPIN_CLEARANCE_G = 1.2;
  * placed by the columns around it. Interpolating between the two nearest
  * anchors puts a press exactly under the note it was taken with, which is the
  * only placement a player reads it against.
+ *
+ * A bar that opens on a note has its bar line and that note at one moment, and
+ * a mark there belongs to the note: the search settles on the last anchor at
+ * that moment, the column, on a system's first downbeat as on any other. What
+ * runs on from the system before has no moment here; its caller starts it at
+ * the system's start.
  */
 function xAtTime(anchors: readonly { timeMs: number; xPt: number }[], timeMs: number): number {
   const first = anchors[0] as { timeMs: number; xPt: number };
   const last = anchors[anchors.length - 1] as { timeMs: number; xPt: number };
-  if (timeMs <= first.timeMs) return first.xPt;
+  if (timeMs < first.timeMs) return first.xPt;
   if (timeMs >= last.timeMs) return last.xPt;
   let low = 0;
   let high = anchors.length - 1;
@@ -830,18 +836,27 @@ function buildOctaves(
   const octaves: SheetOctave[] = [];
   for (const span of spans) {
     if (span.toMs < fromMs || span.fromMs >= toMs) continue;
-    // From the left edge of the first head it covers...
-    const x1Pt = xAtTime(anchors, Math.max(span.fromMs, fromMs)) - HEAD_RX_G * G;
-    // ...to past the last, so the line covers the note it applies to.
-    const x2Pt = xAtTime(anchors, Math.min(span.toMs, toMs)) + HEAD_RX_G * G * 2;
+    const continuesLeft = span.fromMs < fromMs;
+    // A line whose last note is on a later system, even the next one's
+    // downbeat, runs on to it.
+    const continuesRight = span.toMs >= toMs;
+    // From the left edge of the first head it covers, a head on the system's
+    // downbeat too; a line carried over from the system before picks up at
+    // this one's start instead...
+    const x1Pt = (continuesLeft ? first.xPt : xAtTime(anchors, span.fromMs)) - HEAD_RX_G * G;
+    // ...to past the last, so the line covers the note it applies to; one
+    // running on goes to the end of the staff, and no further.
+    const x2Pt = continuesRight
+      ? last.xPt + last.widthPt
+      : xAtTime(anchors, span.toMs) + HEAD_RX_G * G * 2;
     octaves.push({
       staff: span.staff,
       up: span.up,
       x1Pt,
       x2Pt,
       yPt: octaveLineRel(inkUnderRel(measures, ties, span, x1Pt, x2Pt), span.up),
-      continuesLeft: span.fromMs < fromMs,
-      continuesRight: span.toMs > toMs,
+      continuesLeft,
+      continuesRight,
     });
   }
   return octaves;
@@ -1056,12 +1071,15 @@ function buildPedals(measures: readonly SheetMeasure[], spans: readonly PedalSpa
   const pedals: SheetPedal[] = [];
   for (const span of spans) {
     if (span.toMs <= fromMs || span.fromMs >= toMs) continue;
-    const xFromPt = xAtTime(anchors, Math.max(span.fromMs, fromMs));
+    const continuesLeft = span.fromMs < fromMs;
+    // A press held over from the system before picks up at this one's start;
+    // one taken here goes down under its note, on the downbeat too.
+    const xFromPt = continuesLeft ? first.xPt : xAtTime(anchors, span.fromMs);
     const xToPt = xAtTime(anchors, Math.min(span.toMs, toMs));
     pedals.push({
       xFromPt,
       xToPt: Math.max(xToPt, xFromPt + G),
-      continuesLeft: span.fromMs < fromMs,
+      continuesLeft,
       continuesRight: span.toMs > toMs,
     });
   }
@@ -1118,7 +1136,8 @@ function buildDynamics(
       : endMark
         ? (dynamicInkG(endMark).left + HAIRPIN_GAP_G) * G
         : HAIRPIN_CLEARANCE_G * G;
-    const x1Pt = xAtTime(anchors, Math.max(hairpin.fromMs, fromMs)) + lead;
+    // A swell carried over from the system before opens at this one's start.
+    const x1Pt = (continuesLeft ? first.xPt : xAtTime(anchors, hairpin.fromMs)) + lead;
     const x2Pt = xAtTime(anchors, Math.min(hairpin.toMs, toMs)) - trail;
     // A wedge with no room left to open in says less than nothing.
     if (x2Pt - x1Pt < 3 * G) continue;

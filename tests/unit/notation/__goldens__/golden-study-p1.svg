@@ -92,7 +92,7 @@
 <path d="M276.82 286 L276.82 290.05 L407.25 290.05 L407.25 286" fill="none" stroke="#000000" stroke-width="0.8"/>
 <path d="M421.48 286 L421.48 290.05 L551.92 290.05 L551.92 286" fill="none" stroke="#000000" stroke-width="0.8"/>
 <path d="M555.28 226.71 L465.05 229.68 M465.05 229.68 L555.28 232.65" fill="none" stroke="#000000" stroke-width="0.7"/>
-<use href="#dynamicPiano" transform="matrix(0.0216 0 0 -0.0216 114.69 234)" fill="#000000"/>
+<use href="#dynamicPiano" transform="matrix(0.0216 0 0 -0.0216 125 234)" fill="#000000"/>
 <use href="#dynamicMP" transform="matrix(0.0216 0 0 -0.0216 444.53 234)" fill="#000000"/>
 <use href="#brace" transform="matrix(0.089089 0 0 -0.089089 31.32 427.24)" fill="#000000"/>
 <path d="M40 338.1 L555.28 338.1" fill="none" stroke="#000000" stroke-width="0.9"/>

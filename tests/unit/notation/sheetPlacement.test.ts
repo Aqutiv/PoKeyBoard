@@ -17,8 +17,10 @@ import {
 import { signatureSteps } from '@/features/notation/keySignature';
 import { layoutScore, type LayoutOptions } from '@/features/notation/notationLayout';
 import {
+  HEAD_RX_G,
   layoutSheet,
   metricsFor,
+  PEDAL_HOOK_G,
   SHEET_GAP_PT,
   staffYRel,
   type SheetBeam,
@@ -1073,6 +1075,60 @@ describe('octave lines', () => {
     expect(mark.top - Number(number![1])).toBeGreaterThanOrEqual(CLEAR);
   });
 
+  it('carries a line open over a system break on to the note it ends on, clear of it', async () => {
+    // Bars of E5 quarters, broken into systems, but for the last three beats of
+    // the first system and the second's downbeat: C7s, written C6 on two ledger
+    // lines under a line that runs from one system into the next. The spacing
+    // reads rhythm, not pitch, so raising them leaves the break where it was.
+    const beats = Array.from({ length: 96 }, (_, beat) => beat);
+    const plain = pageOf(played(beats.map((beat) => [beat, 76])));
+    const breakBeat = plain.systems[1]!.measures[0]!.startMs / 1000;
+    const raised = (beat: number): boolean => beat >= breakBeat - 3 && beat <= breakBeat;
+    const page = pageOf(played(beats.map((beat) => [beat, raised(beat) ? 96 : 76])));
+    const system = page.systems[1]!;
+    expect(system.measures[0]!.startMs).toBe(breakBeat * 1000);
+    const [octave] = system.octaves;
+    expect(octave).toMatchObject({ continuesLeft: true, continuesRight: false });
+    const drawn = await engrave(page);
+    const mark = markOf(drawn, octave!);
+
+    // The note it ends on, the first in the system: its hook stands past that
+    // head, not at the bar line before it...
+    const head = system.measures[0]!.columns[0]!;
+    const covered = usesOf(drawn, 'noteheadBlack')
+      .map(useInk)
+      .filter(
+        (ink) => ink.left < head.xPt && ink.right > head.xPt && ink.bottom < system.trebleTopPt,
+      );
+    expect(covered).toHaveLength(1);
+    expect(mark.right).toBeGreaterThan(covered[0]!.right);
+    // ...and the line stands clear of it, ledger lines and all.
+    const under = noteInk(drawn).filter(
+      (box) =>
+        box.right > mark.left - CLEAR &&
+        box.left < mark.right + CLEAR &&
+        box.bottom > mark.top &&
+        box.top < system.trebleTopPt + 4 * G,
+    );
+    expect(under.length).toBeGreaterThan(2);
+    expect(highest(under) - mark.bottom).toBeGreaterThanOrEqual(CLEAR - WRITTEN);
+
+    // On the system before, the line runs to the end of the staff and no
+    // further, and stays open there: no hook says it stops.
+    const before = page.systems[0]!;
+    const [runs] = before.octaves;
+    expect(runs).toMatchObject({ continuesLeft: false, continuesRight: true });
+    expectNear(markOf(drawn, runs!).right, before.xPt + before.widthPt);
+    const hooks = drawn.strokes.filter(
+      (stroke) =>
+        !stroke.dashed &&
+        stroke.points.length === 4 &&
+        near(stroke.points[0]!, stroke.points[2]!) &&
+        near(stroke.points[1]!, runs!.yPt),
+    );
+    expect(hooks).toHaveLength(0);
+  });
+
   it('keeps every 8va in the Waltz, Op. 64 No. 2 clear of the beams and stems it covers', async () => {
     // Its running eighths stem up to beams two to four spaces over the staff,
     // written an octave down; 2.6 spaces up, the line ran through them.
@@ -1120,5 +1176,61 @@ describe('octave lines', () => {
       }
     }
     expect(checked).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('marks on the first downbeat', () => {
+  it('stand over and under its note, not at the bar line before it', async () => {
+    // Six quarters high enough for an 8va from the downbeat on, pedalled from
+    // there and marked p there.
+    const notes = [96, 98, 100, 101, 103, 96].map((midi, i) => ({
+      id: `n${i}`,
+      midi,
+      startMs: i * 500,
+      durationMs: 400,
+      velocity: 0.5,
+    }));
+    const score = layoutScore(notes, {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      quantization: '1/16',
+      minMeasures: 1,
+      pedals: [
+        { atMs: 0, down: true },
+        { atMs: 1500, down: false },
+      ],
+    });
+    score.dynamics = [{ atMs: 0, mark: 'p' }];
+    score.hairpins = [];
+    const page = layoutSheet(score, {
+      paper: 'a4',
+      timeSignature: { numerator: 4, denominator: 4 },
+      bpm: 120,
+      title: 'Downbeat',
+      subtitle: '',
+      credit: 'PoKeyBoard',
+    }).pages[0]!;
+    const sheetSystem = page.systems[0]!;
+    const head = sheetSystem.measures[0]!.columns[0]!;
+    expect(head.timeMs).toBe(0);
+    expect(head.xPt - sheetSystem.measures[0]!.xPt).toBeGreaterThan(G);
+    const downbeat = await engrave(page);
+
+    // The 8va's label starts at the head's left edge.
+    const [label] = usesOf(downbeat, 'ottavaAlta');
+    expectNear(label!.x, head.xPt - HEAD_RX_G * G);
+    // The p is centred on the note by its optical centre.
+    const [piano] = usesOf(downbeat, 'dynamicPiano');
+    expectNear(piano!.x, head.xPt - dynamicOpticalCentre('p') * G);
+    // The pedal goes down under the note: its bracket's first hook.
+    const hookTop = sheetSystem.pedalRowPt - PEDAL_HOOK_G * G;
+    const pedal = downbeat.strokes.find(
+      (stroke) => stroke.points.length === 8 && near(stroke.points[1]!, hookTop),
+    );
+    expect(
+      pedal,
+      JSON.stringify(downbeat.strokes.filter((s) => s.points.length > 4)),
+    ).toBeDefined();
+    expectNear(pedal!.points[0]!, head.xPt);
   });
 });
