@@ -657,7 +657,7 @@ export const es: Messages = {
       salamander: {
         credit: 'Salamander Grand Piano v3 de Alexander Holm.',
         adapted:
-          'Adaptado para la web: 3 de sus 16 capas de velocidad, acortadas a 7–12 segundos con un fundido de salida y reducidas de 24 a 16 bits.',
+          'Adaptado para la web: 4 de sus 16 capas de velocidad, acortadas a 7–12 segundos con un fundido de salida y reducidas de 24 a 16 bits.',
       },
       headroom: {
         credit: 'Headroom Piano de Bengt Nilsson; mapeo SFZ de kinwie.',
@@ -668,7 +668,7 @@ export const es: Messages = {
         credit:
           'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: un Steinway D grabado en la Universidad de Princeton por Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers y Daniel Trueman.',
         adapted:
-          'Adaptado para la web: 3 de sus 16 capas de velocidad, acortadas a 7–12 segundos con un fundido de salida, con el nivel subido y reducidas de 24 a 16 bits.',
+          'Adaptado para la web: 4 de sus 16 capas de velocidad, acortadas a 7–12 segundos con un fundido de salida, con el nivel subido y reducidas de 24 a 16 bits.',
       },
       wurlitzer: {
         credit: 'Muestras del Wurlitzer EP203W de Greg Sullivan; mapeo SFZ de kinwie.',
