@@ -49,6 +49,7 @@ describe('onsetOffsetOf', () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
 /**
@@ -342,6 +343,134 @@ describe('SampleBank progress', () => {
     bank.releaseBuffers();
     expect(bank.getProgress()).toMatchObject({ coreLoadedBytes: 0, coreTotalBytes: 100 });
   });
+});
+
+/**
+ * Serve `manifest` only once `answer` is called, and every file at once.
+ * Counts the fetches of the manifest.
+ */
+function serveManifestOnCue(manifest: SamplePackManifest) {
+  let answer!: () => void;
+  const cue = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  let manifestFetches = 0;
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async (url: string) => {
+      if (!url.endsWith('manifest.json')) {
+        return { ok: true, arrayBuffer: async () => new ArrayBuffer(16) };
+      }
+      manifestFetches += 1;
+      await cue;
+      return { ok: true, json: async () => manifest };
+    }),
+  );
+  return { answer, manifestFetches: () => manifestFetches };
+}
+
+/** Every root the bank lists for `layer`, decoded or not. Nothing public shows them. */
+function rootsOf(bank: SampleBank, layer: number): number[] | undefined {
+  return bank['layers'].get(layer)?.roots;
+}
+
+describe('SampleBank.loadManifest', () => {
+  it('fetches the manifest once for every load that asks while it is on its way', async () => {
+    const { answer, manifestFetches } = serveManifestOnCue(stubManifest());
+    const context = stubContext();
+    const bank = new SampleBank('/samples/');
+
+    // The core and the keyboard's range both ask before the manifest is in.
+    const core = bank.loadCorePack(context);
+    const range = bank.ensureRangeLoaded(context, 60, 60);
+    answer();
+    await Promise.all([core, range]);
+
+    expect(manifestFetches()).toBe(1);
+    // Taken on once per fetch, the core was counted twice, and the Play page's
+    // readout (the core loaded over the core in all) stopped at half.
+    expect(bank.getProgress()).toMatchObject({
+      phase: 'core-ready',
+      coreLoadedBytes: 100,
+      coreTotalBytes: 100,
+    });
+    expect(rootsOf(bank, 0)).toEqual([60]);
+  });
+
+  it('shares its fetch with a load after a release, which keeps what the fetch brings', async () => {
+    const { answer, manifestFetches } = serveManifestOnCue(stubManifest());
+    const context = stubContext();
+    const bank = new SampleBank('/samples/');
+
+    // Chosen, called off and chosen again, all before the manifest is in.
+    const first = bank.loadCorePack(context);
+    bank.releaseBuffers();
+    const second = bank.loadCorePack(context);
+    answer();
+    await Promise.all([first, second]);
+
+    expect(manifestFetches()).toBe(1);
+    expect(bank.getProgress()).toMatchObject({
+      phase: 'core-ready',
+      coreLoadedBytes: 100,
+      coreTotalBytes: 100,
+    });
+    expect(rootsOf(bank, 0)).toEqual([60]);
+  });
+
+  it.each([
+    ['fails to load', { ok: false, status: 503 }, /503/],
+    [
+      'is refused',
+      {
+        ok: true,
+        json: async () => ({
+          ...stubManifest(),
+          velocityLayers: [{ index: 0, sourceLayer: 1, label: 'fortissimo' }],
+        }),
+      },
+      /fortissimo/,
+    ],
+  ])(
+    'takes on nothing from a manifest that %s, and fetches it afresh for the next load',
+    async (_, failure, message) => {
+      vi.spyOn(console, 'error').mockImplementation(() => undefined);
+      let reply: object = failure;
+      let manifestFetches = 0;
+      vi.stubGlobal(
+        'fetch',
+        vi.fn(async (url: string) => {
+          if (!url.endsWith('manifest.json')) {
+            return { ok: true, arrayBuffer: async () => new ArrayBuffer(16) };
+          }
+          manifestFetches += 1;
+          return reply;
+        }),
+      );
+      const context = stubContext();
+      const bank = new SampleBank('/samples/');
+
+      // Both loads waiting on the fetch hear how it ended.
+      await Promise.all([
+        expect(bank.loadCorePack(context)).rejects.toThrow(message),
+        expect(bank.ensureRangeLoaded(context, 60, 60)).rejects.toThrow(message),
+      ]);
+      expect(manifestFetches).toBe(1);
+      expect(bank.getManifest()).toBeNull();
+      expect(bank.getProgress()).toMatchObject({ phase: 'error', coreTotalBytes: 0 });
+
+      // The Play page's Retry: a fresh fetch, not the one that failed.
+      reply = { ok: true, json: async () => stubManifest() };
+      await bank.loadCorePack(context);
+      expect(manifestFetches).toBe(2);
+      expect(bank.getProgress()).toMatchObject({
+        phase: 'core-ready',
+        coreLoadedBytes: 100,
+        coreTotalBytes: 100,
+      });
+      expect(rootsOf(bank, 0)).toEqual([60]);
+    },
+  );
 });
 
 /**
