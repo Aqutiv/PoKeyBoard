@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AudioEngine } from '@/audio/AudioEngine';
-import type { PianoInstrumentId } from '@/audio/instruments';
+import { pianoInstrument, type PianoInstrumentId } from '@/audio/instruments';
+
+/** The packs of the two pianos switched between, as the registry names them. */
+const SALAMANDER = pianoInstrument('salamander-grand').packVersion;
+const HEADROOM = pianoInstrument('headroom-grand').packVersion;
 
 vi.mock('@/audio/PianoGraphFactory', () => ({
   createPianoGraph: () => ({
@@ -142,7 +146,7 @@ describe('changing piano while one is playing', () => {
   it('plays the old piano until the new one is decoded, then hands over without a cut', async () => {
     const engine = await playingEngine();
     const allNotesOff = vi.spyOn(engine, 'allNotesOff');
-    const headroomCore = hold('/headroom-grand-v2/c4.sample');
+    const headroomCore = hold(`/${HEADROOM}/c4.sample`);
 
     const switching = engine.setInstrument('headroom-grand', { cover: { low: 36, high: 62 } });
     // Chosen at once, so a take is stamped with it; heard once it is ready.
@@ -155,7 +159,7 @@ describe('changing piano while one is playing', () => {
       failed: null,
       progress: 0,
     });
-    expect(packHeard(engine)).toBe('salamander-grand-v3');
+    expect(packHeard(engine)).toBe(SALAMANDER);
     // What the page reports is the piano playing, which is ready.
     expect(engine.getLoadProgress().phase).toBe('core-ready');
 
@@ -169,7 +173,7 @@ describe('changing piano while one is playing', () => {
     headroomCore.open();
     await switching;
     expect(engine.soundingInstrument.id).toBe('headroom-grand');
-    expect(packHeard(engine)).toBe('headroom-grand-v2');
+    expect(packHeard(engine)).toBe(HEADROOM);
     expect(engine.isSwitching()).toBe(false);
     expect(engine.getLoadProgress().phase).toBe('core-ready');
     // The take's low C was decoded before the new piano took over.
@@ -182,7 +186,7 @@ describe('changing piano while one is playing', () => {
 
   it('reports how far the new piano has decoded, never running back', async () => {
     const engine = await playingEngine();
-    const lowC = hold('/headroom-grand-v2/c2.sample');
+    const lowC = hold(`/${HEADROOM}/c2.sample`);
     const seen: number[] = [];
     engine.subscribeSwitch(() => seen.push(engine.getSwitchState().progress));
 
@@ -208,9 +212,9 @@ describe('changing piano while one is playing', () => {
 
   it('decodes a range the keyboard asks for while it waits, before taking over', async () => {
     const engine = await playingEngine();
-    const lowC = hold('/headroom-grand-v2/c2.sample');
+    const lowC = hold(`/${HEADROOM}/c2.sample`);
     const switching = engine.setInstrument('headroom-grand', { cover: { low: 36, high: 60 } });
-    await vi.waitFor(() => expect(decodesOf('headroom-grand-v2')).toBe(2));
+    await vi.waitFor(() => expect(decodesOf(HEADROOM)).toBe(2));
 
     // The keyboard slides up while the take's low C is still decoding.
     await engine.ensurePlayableRange(90, 100);
@@ -235,8 +239,8 @@ describe('changing piano while one is playing', () => {
 
   it('calls off a switch when the playing piano is chosen again, decoding nothing twice', async () => {
     const engine = await playingEngine();
-    const headroom = hold('/headroom-grand-v2/');
-    const salamanderDecodes = decodesOf('salamander-grand-v3');
+    const headroom = hold(`/${HEADROOM}/`);
+    const salamanderDecodes = decodesOf(SALAMANDER);
 
     const abandoned = engine.setInstrument('headroom-grand');
     await engine.setInstrument('salamander-grand');
@@ -251,12 +255,12 @@ describe('changing piano while one is playing', () => {
     expect(engine.soundingInstrument.id).toBe('salamander-grand');
     expect(bank(engine, 'headroom-grand').isCoreReady()).toBe(false);
     expect(bank(engine, 'headroom-grand').getProgress().error).toBeUndefined();
-    expect(decodesOf('salamander-grand-v3')).toBe(salamanderDecodes);
+    expect(decodesOf(SALAMANDER)).toBe(salamanderDecodes);
   });
 
   it('lets a newer choice overtake one still decoding, and frees both others after', async () => {
     const engine = await playingEngine();
-    const headroom = hold('/headroom-grand-v2/');
+    const headroom = hold(`/${HEADROOM}/`);
 
     const overtaken = engine.setInstrument('headroom-grand');
     await engine.setInstrument('bitklavier-grand');
@@ -272,7 +276,7 @@ describe('changing piano while one is playing', () => {
   it('plays on with the old piano, and chooses it again, when the new one cannot load', async () => {
     const engine = await playingEngine();
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
-    packs.failures.add('/headroom-grand-v2/c4.sample');
+    packs.failures.add(`/${HEADROOM}/c4.sample`);
     const onSwitch = vi.fn();
     engine.subscribeSwitch(onSwitch);
     vi.useFakeTimers();
@@ -291,7 +295,7 @@ describe('changing piano while one is playing', () => {
     });
     expect(onSwitch).toHaveBeenCalled();
     expect(engine.bank.isCoreReady()).toBe(true);
-    expect(packHeard(engine)).toBe('salamander-grand-v3');
+    expect(packHeard(engine)).toBe(SALAMANDER);
     // Its partial decode is not kept.
     expect(bank(engine, 'headroom-grand').getProgress().phase).toBe('idle');
   });
@@ -299,7 +303,7 @@ describe('changing piano while one is playing', () => {
 
 describe('changing piano with nothing playable to keep', () => {
   it('switches at once, as on the first load', async () => {
-    hold('/salamander-grand-v3/');
+    hold(`/${SALAMANDER}/`);
     const engine = new AudioEngine();
     engine.markInstrumentRestored();
     engine.initialize();
@@ -311,37 +315,37 @@ describe('changing piano with nothing playable to keep', () => {
     expect(allNotesOff).toHaveBeenCalled();
     await switching;
     expect(engine.bank.isCoreReady()).toBe(true);
-    expect(packHeard(engine)).toBe('headroom-grand-v2');
+    expect(packHeard(engine)).toBe(HEADROOM);
   });
 });
 
 describe('a piano’s pianissimo recordings', () => {
   it('load once the first piano plays, never holding it up', async () => {
-    packs.pianissimo.add('salamander-grand-v3');
-    const pianissimo = hold('/salamander-grand-v3/c4pp.sample');
+    packs.pianissimo.add(SALAMANDER);
+    const pianissimo = hold(`/${SALAMANDER}/c4pp.sample`);
     const engine = await playingEngine();
     // Ready with its core, the pianissimo C4 still decoding behind it.
     expect(engine.getLoadProgress().phase).toBe('core-ready');
-    await vi.waitFor(() => expect(decodedFrom('/salamander-grand-v3/c4pp.sample')).toBe(true));
+    await vi.waitFor(() => expect(decodedFrom(`/${SALAMANDER}/c4pp.sample`)).toBe(true));
     expect(engine.bank.getSample(60, 0.2)?.standIn).toBe(true);
     pianissimo.open();
     await vi.waitFor(() => expect(engine.bank.getSample(60, 0.2)?.standIn).toBeUndefined());
   });
 
   it('are fetched by a new piano only once it takes over, never while it decodes for a switch', async () => {
-    packs.pianissimo.add('headroom-grand-v2');
+    packs.pianissimo.add(HEADROOM);
     const engine = await playingEngine();
-    const core = hold('/headroom-grand-v2/c4.sample');
+    const core = hold(`/${HEADROOM}/c4.sample`);
 
     const switching = engine.setInstrument('headroom-grand');
-    await vi.waitFor(() => expect(decodedFrom('/headroom-grand-v2/c4.sample')).toBe(true));
+    await vi.waitFor(() => expect(decodedFrom(`/${HEADROOM}/c4.sample`)).toBe(true));
     // The old piano plays on while the new one decodes: nothing of the
     // new one's that the switch does not need, and it does not need these.
-    expect(decodedFrom('/headroom-grand-v2/c4pp.sample')).toBe(false);
+    expect(decodedFrom(`/${HEADROOM}/c4pp.sample`)).toBe(false);
 
     core.open();
     await switching;
     expect(engine.soundingInstrument.id).toBe('headroom-grand');
-    await vi.waitFor(() => expect(decodedFrom('/headroom-grand-v2/c4pp.sample')).toBe(true));
+    await vi.waitFor(() => expect(decodedFrom(`/${HEADROOM}/c4pp.sample`)).toBe(true));
   });
 });

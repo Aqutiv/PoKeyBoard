@@ -9,13 +9,13 @@ PoKeyBoard bundles the following third-party assets and libraries.
   <https://creativecommons.org/licenses/by/3.0/>
 - **Source:** <https://github.com/sfzinstruments/SalamanderGrandPiano>
   (original distribution: <https://freepats.zenvoid.org/Piano/acoustic-grand-piano.html>)
-- **Files:** `public/piano/salamander-grand-v3/*.sample` (FLAC audio; the
-  neutral extension keeps download managers from intercepting sample fetches,
-  and browsers decode from the bytes rather than the extension). The superseded
-  `public/piano/salamander-grand-v2/*.sample` pack (mono MP3) is retained so
-  already-published URLs never 404 for clients still on the old app shell.
-- **Modifications:** subset of the original 16 velocity layers (layers 5, 10,
-  and 15) across the 30 minor-third root pitches; kept at the source's 48 kHz
+- **Files:** `public/piano/salamander-grand-v4/*.sample` and
+  `public/piano/salamander-grand-v3/*.sample` (FLAC audio; the neutral
+  extension keeps download managers from intercepting sample fetches, and
+  browsers decode from the bytes rather than the extension). v4 holds the
+  pianissimo layer and plays v3's files for the other three.
+- **Modifications:** subset of the original 16 velocity layers (layers 2, 5,
+  10 and 15) across the 30 minor-third root pitches; kept at the source's 48 kHz
   and stereo, with the 24-bit source reduced to 16-bit using triangular dither;
   encoded as FLAC; trimmed to 7–12 seconds with a fade-out (see
   `scripts/build-sample-pack.mjs` for the exact pipeline).
@@ -57,20 +57,23 @@ Attribution is also shown in the app's About view.
 - **Source:** Princeton Data Commons, DOI
   [10.34770/xm18-yr83](https://doi.org/10.34770/xm18-yr83), the 48 kHz / 24-bit
   release.
-- **Files:** `public/piano/bitklavier-grand-v1/*.sample` (FLAC audio under the
-  same neutral extension as the other packs).
-- **Modifications:** subset of the original 16 velocity layers (layers 7, 10
+- **Files:** `public/piano/bitklavier-grand-v2/*.sample` and
+  `public/piano/bitklavier-grand-v1/*.sample` (FLAC audio under the same
+  neutral extension as the other packs). v2 holds the pianissimo layer and
+  plays v1's files for the other three.
+- **Modifications:** subset of the original 16 velocity layers (layers 5, 7, 10
   and 14) across the 30 minor-third root pitches; the hammer-release,
   release-resonance and pedal samples are not used; each recording trimmed to
   7–12 seconds (kept whole where it is shorter) and ended with a 1.5-second
   fade-out; a gain applied to each layer
-  (+7.11, +5.80 and +0.33 dB) that brings it toward the Salamander pack's
+  (+6.29, +7.11, +5.80 and +0.33 dB) that brings it toward the Salamander pack's
   loudness without letting any sample exceed −1 dBFS; reduced from 24 to 16
   bits with triangular dither and encoded as FLAC, keeping the source's 48 kHz
   and stereo. See `scripts/build-sample-pack.mjs` and
   `scripts/lib/bitklavier.mjs` for the exact pipeline, and
-  `scripts/lib/bitklavier-grand-v1.pins.json` for the size and SHA-256 of every
-  source byte range used.
+  `scripts/lib/bitklavier-grand-v2.pins.json` (the pianissimo layer) and
+  `scripts/lib/bitklavier-grand-v1.pins.json` (the other three) for the size
+  and SHA-256 of every source byte range used.
 
 Attribution, with links to the dataset and the license, is also shown in the
 app's About view.

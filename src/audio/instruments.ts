@@ -28,16 +28,19 @@ export const DEFAULT_PIANO_INSTRUMENT_ID: PianoInstrumentId = 'salamander-grand'
 
 // The immediately-previous generation stays on disk untouched so already-
 // published URLs never 404 for clients still running an older app shell —
-// currently salamander-grand-v2 and headroom-grand-v1, the mono 128kbps MP3
-// packs this stereo FLAC generation replaces. Older generations than that are
-// retired: salamander-grand-v1 (*.mp3, from before the neutral extension) was
-// dropped when v3 shipped.
+// currently salamander-grand-v3, bitklavier-grand-v1 and headroom-grand-v1 (the
+// mono 128kbps MP3 pack its stereo FLAC generation replaced). The first two
+// are more than that: salamander-grand-v4 and bitklavier-grand-v2 add a
+// pianissimo layer and play the other three from where v3 and v1 published
+// them, so those stay on disk for as long as their successors do. Older
+// generations are retired: salamander-grand-v1 (*.mp3, from before the neutral
+// extension) was dropped when v3 shipped, and v2 (mono MP3) when v4 did.
 export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
   {
     id: 'salamander-grand',
-    packVersion: 'salamander-grand-v3',
+    packVersion: 'salamander-grand-v4',
     name: 'Salamander',
-    path: 'piano/salamander-grand-v3/',
+    path: 'piano/salamander-grand-v4/',
     midiProgram: 0, // Acoustic Grand Piano
   },
   {
@@ -51,9 +54,9 @@ export const PIANO_INSTRUMENTS: readonly PianoInstrument[] = [
     // The bitKlavier Grand's Steinway D, shown by the piano's name; the id and
     // the pack keep the library's, since takes and settings store them.
     id: 'bitklavier-grand',
-    packVersion: 'bitklavier-grand-v1',
+    packVersion: 'bitklavier-grand-v2',
     name: 'Steinway',
-    path: 'piano/bitklavier-grand-v1/',
+    path: 'piano/bitklavier-grand-v2/',
     midiProgram: 0, // Acoustic Grand Piano
   },
   {

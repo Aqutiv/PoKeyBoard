@@ -274,7 +274,14 @@ describe.each(GRANDS)('the tone of the calibrated $packVersion', ({ packVersion 
         let makeup = Number.POSITIVE_INFINITY;
         for (let velocity = from; velocity < to; velocity += 0.01) {
           const sample = bank.getSample(midi, velocity)!;
-          expect(sample.toneCutoffHz!).toBeGreaterThan(cutoff);
+          const entry = entryOf(manifest, sample);
+          // Brighter at every step, but on a ramp the generator left open (the
+          // layer below the brighter already), which stays open all the way.
+          if (rampOf(table, entry.layer, entry.midi).cutoffHz < OPEN_CUTOFF_HZ) {
+            expect(sample.toneCutoffHz!).toBeGreaterThan(cutoff);
+          } else {
+            expect(sample.toneCutoffHz! / sample.playbackRate).toBeCloseTo(OPEN_CUTOFF_HZ, 6);
+          }
           expect(sample.toneMakeupDb!).toBeLessThanOrEqual(makeup);
           cutoff = sample.toneCutoffHz!;
           makeup = sample.toneMakeupDb!;
@@ -332,13 +339,15 @@ describe.each(GRANDS)('the tone of the calibrated $packVersion', ({ packVersion 
       expect(sample.toneCutoffHz).toBeCloseTo(ramp.cutoffHz * sample.playbackRate, 6);
     }
     vi.unstubAllGlobals();
-    const softestOnly = await loadedBank(
+    // The layer under medium: soft, whether or not a pianissimo lies under it
+    // (which loads only beside the others, so never stands in for them alone).
+    const darkerOnly = await loadedBank(
       manifest,
-      manifest.files.filter((entry) => entry.layer === 0),
+      manifest.files.filter((entry) => entry.layer === medium - 1),
     );
     for (const midi of [30, 60, 90]) {
-      expect(softestOnly.getSample(midi, 0.6)!.toneCutoffHz).toBeUndefined();
-      expect(softestOnly.getSample(midi, 0.95)!.toneCutoffHz).toBeUndefined();
+      expect(darkerOnly.getSample(midi, 0.6)!.toneCutoffHz).toBeUndefined();
+      expect(darkerOnly.getSample(midi, 0.95)!.toneCutoffHz).toBeUndefined();
     }
   });
 

@@ -8,11 +8,11 @@
  * keeps is fetched: each WAV's header and the first trim + SOURCE_MARGIN_S
  * seconds of its audio — 252 MB of the 730 MB those 90 files hold whole.
  *
- * Every fetch is pinned in bitklavier-grand-v1.pins.json: the exact number of
- * bytes asked for and the SHA-256 of what came back. They are checked before
- * anything is staged, so a rebuild either works from the very bytes the pack
- * was made from or stops and says why. `--pin` wrote that file from what
- * upstream served; run again, it must leave the file unchanged.
+ * Every fetch is pinned in its pack's pins file (`pinsPathFor`): the exact
+ * number of bytes asked for and the SHA-256 of what came back. They are
+ * checked before anything is staged, so a rebuild either works from the very
+ * bytes the pack was made from or stops and says why. `--pin` wrote that file
+ * from what upstream served; run again, it must leave the file unchanged.
  *
  * Sharp-named recordings were renamed on the storage in 2024 to satisfy S3:
  * "D#1v7.wav" now lives at "D_1v7(280).wav", and 41 more of the 90. The
@@ -28,8 +28,15 @@ const DATASET = '10.34770/xm18-yr83/395';
 const FOLDER = 'bitKlavierGrand_LipCardioid_48k24b';
 const RENAME_LIST = 'renamed_files.txt';
 
-/** Committed next to this module. Relative to the repository root, where the build runs. */
-export const PINS_PATH = 'scripts/lib/bitklavier-grand-v1.pins.json';
+/**
+ * A pack's pins, committed next to this module, relative to the repository
+ * root where the build runs: one file per pack version, since each pins only
+ * the recordings it fetches — a pack that re-uses another's files fetches none
+ * of those, and they stay pinned where that pack was built from them.
+ */
+export function pinsPathFor(packVersion) {
+  return `scripts/lib/${packVersion}.pins.json`;
+}
 
 /**
  * Seconds of audio past its trim that each fetch keeps, so the conversion's
@@ -182,8 +189,8 @@ async function loadRenames(stagingDir, pin) {
   return parseRenames(bytes.toString('utf8'));
 }
 
-async function readPins() {
-  return JSON.parse(await readFile(PINS_PATH, 'utf8'));
+async function readPins(pinsPath) {
+  return JSON.parse(await readFile(pinsPath, 'utf8'));
 }
 
 /**
@@ -191,8 +198,8 @@ async function readPins() {
  * naming the file and both hashes — the moment upstream serves anything else.
  * A staged copy that already matches its pin is used as it is.
  */
-export async function bitKlavierFetcher(stagingDir, trimSecondsFor) {
-  const pins = await readPins();
+export async function bitKlavierFetcher(stagingDir, trimSecondsFor, pinsPath) {
+  const pins = await readPins(pinsPath);
   let renames = null;
   return async (job) => {
     const name = `${job.sourceName}.wav`;
@@ -231,8 +238,8 @@ export async function bitKlavierFetcher(stagingDir, trimSecondsFor) {
  * whole. The fetched bytes are staged too, so the build that follows reuses
  * them. Returns how many pins changed.
  */
-export async function pinBitKlavier(jobs, stagingDir, trimSecondsFor) {
-  const previous = await readPins().catch(() => null);
+export async function pinBitKlavier(jobs, stagingDir, trimSecondsFor, pinsPath) {
+  const previous = await readPins(pinsPath).catch(() => null);
   const list = await fetchWhole(urlFor(`${DATASET}/${RENAME_LIST}`));
   await writeAtomically(path.join(stagingDir, RENAME_LIST), list);
   const renames = parseRenames(list.toString('utf8'));
@@ -266,7 +273,7 @@ export async function pinBitKlavier(jobs, stagingDir, trimSecondsFor) {
     // Keyed by each recording's original name; the rename list says where it lives now.
     files: ordered,
   };
-  await writeFile(PINS_PATH, `${JSON.stringify(pins, null, 2)}\n`);
+  await writeFile(pinsPath, `${JSON.stringify(pins, null, 2)}\n`);
   const same = (a, b) => a?.bytes === b?.bytes && a?.sha256 === b?.sha256;
   const changed =
     Object.entries(ordered).filter(([name, pin]) => !same(previous?.files?.[name], pin)).length +

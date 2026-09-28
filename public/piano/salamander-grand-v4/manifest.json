@@ -1,0 +1,873 @@
+{
+  "version": "salamander-grand-v4",
+  "source": "Salamander Grand Piano v3 by Alexander Holm",
+  "license": "CC-BY 3.0",
+  "sourceUrl": "https://github.com/sfzinstruments/SalamanderGrandPiano",
+  "format": "flac-16bit-48khz-stereo",
+  "velocityLayers": [
+    {
+      "index": 0,
+      "sourceLayer": 2,
+      "label": "pianissimo"
+    },
+    {
+      "index": 1,
+      "sourceLayer": 5,
+      "label": "soft"
+    },
+    {
+      "index": 2,
+      "sourceLayer": 10,
+      "label": "medium"
+    },
+    {
+      "index": 3,
+      "sourceLayer": 15,
+      "label": "loud"
+    }
+  ],
+  "coreBytes": 17048474,
+  "totalBytes": 36734882,
+  "files": [
+    {
+      "file": "A0v2.sample",
+      "midi": 21,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 400494
+    },
+    {
+      "file": "../salamander-grand-v3/A0v5.sample",
+      "midi": 21,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 413847
+    },
+    {
+      "file": "../salamander-grand-v3/A0v10.sample",
+      "midi": 21,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 427569
+    },
+    {
+      "file": "../salamander-grand-v3/A0v15.sample",
+      "midi": 21,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 442505
+    },
+    {
+      "file": "C1v2.sample",
+      "midi": 24,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 404366
+    },
+    {
+      "file": "../salamander-grand-v3/C1v5.sample",
+      "midi": 24,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 416974
+    },
+    {
+      "file": "../salamander-grand-v3/C1v10.sample",
+      "midi": 24,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 427418
+    },
+    {
+      "file": "../salamander-grand-v3/C1v15.sample",
+      "midi": 24,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 445115
+    },
+    {
+      "file": "Ds1v2.sample",
+      "midi": 27,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 426710
+    },
+    {
+      "file": "../salamander-grand-v3/Ds1v5.sample",
+      "midi": 27,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 446796
+    },
+    {
+      "file": "../salamander-grand-v3/Ds1v10.sample",
+      "midi": 27,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 467567
+    },
+    {
+      "file": "../salamander-grand-v3/Ds1v15.sample",
+      "midi": 27,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 490429
+    },
+    {
+      "file": "Fs1v2.sample",
+      "midi": 30,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 393570
+    },
+    {
+      "file": "../salamander-grand-v3/Fs1v5.sample",
+      "midi": 30,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 427104
+    },
+    {
+      "file": "../salamander-grand-v3/Fs1v10.sample",
+      "midi": 30,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 442790
+    },
+    {
+      "file": "../salamander-grand-v3/Fs1v15.sample",
+      "midi": 30,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 463736
+    },
+    {
+      "file": "A1v2.sample",
+      "midi": 33,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 407944
+    },
+    {
+      "file": "../salamander-grand-v3/A1v5.sample",
+      "midi": 33,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 435632
+    },
+    {
+      "file": "../salamander-grand-v3/A1v10.sample",
+      "midi": 33,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 453356
+    },
+    {
+      "file": "../salamander-grand-v3/A1v15.sample",
+      "midi": 33,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 495166
+    },
+    {
+      "file": "C2v2.sample",
+      "midi": 36,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 401445
+    },
+    {
+      "file": "../salamander-grand-v3/C2v5.sample",
+      "midi": 36,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 430479
+    },
+    {
+      "file": "../salamander-grand-v3/C2v10.sample",
+      "midi": 36,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 454073
+    },
+    {
+      "file": "../salamander-grand-v3/C2v15.sample",
+      "midi": 36,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 493992
+    },
+    {
+      "file": "Ds2v2.sample",
+      "midi": 39,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 424419
+    },
+    {
+      "file": "../salamander-grand-v3/Ds2v5.sample",
+      "midi": 39,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 448065
+    },
+    {
+      "file": "../salamander-grand-v3/Ds2v10.sample",
+      "midi": 39,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 463106
+    },
+    {
+      "file": "../salamander-grand-v3/Ds2v15.sample",
+      "midi": 39,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 492956
+    },
+    {
+      "file": "Fs2v2.sample",
+      "midi": 42,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 409371
+    },
+    {
+      "file": "../salamander-grand-v3/Fs2v5.sample",
+      "midi": 42,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 435871
+    },
+    {
+      "file": "../salamander-grand-v3/Fs2v10.sample",
+      "midi": 42,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 453729
+    },
+    {
+      "file": "../salamander-grand-v3/Fs2v15.sample",
+      "midi": 42,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 490626
+    },
+    {
+      "file": "A2v2.sample",
+      "midi": 45,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 419946
+    },
+    {
+      "file": "../salamander-grand-v3/A2v5.sample",
+      "midi": 45,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 442658
+    },
+    {
+      "file": "../salamander-grand-v3/A2v10.sample",
+      "midi": 45,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 458841
+    },
+    {
+      "file": "../salamander-grand-v3/A2v15.sample",
+      "midi": 45,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 507924
+    },
+    {
+      "file": "C3v2.sample",
+      "midi": 48,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 300989
+    },
+    {
+      "file": "../salamander-grand-v3/C3v5.sample",
+      "midi": 48,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 318543
+    },
+    {
+      "file": "../salamander-grand-v3/C3v10.sample",
+      "midi": 48,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 339600
+    },
+    {
+      "file": "../salamander-grand-v3/C3v15.sample",
+      "midi": 48,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 363922
+    },
+    {
+      "file": "Ds3v2.sample",
+      "midi": 51,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 307060
+    },
+    {
+      "file": "../salamander-grand-v3/Ds3v5.sample",
+      "midi": 51,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 330268
+    },
+    {
+      "file": "../salamander-grand-v3/Ds3v10.sample",
+      "midi": 51,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 342327
+    },
+    {
+      "file": "../salamander-grand-v3/Ds3v15.sample",
+      "midi": 51,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 367549
+    },
+    {
+      "file": "Fs3v2.sample",
+      "midi": 54,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 307344
+    },
+    {
+      "file": "../salamander-grand-v3/Fs3v5.sample",
+      "midi": 54,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 322710
+    },
+    {
+      "file": "../salamander-grand-v3/Fs3v10.sample",
+      "midi": 54,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 340211
+    },
+    {
+      "file": "../salamander-grand-v3/Fs3v15.sample",
+      "midi": 54,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 366802
+    },
+    {
+      "file": "A3v2.sample",
+      "midi": 57,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 307909
+    },
+    {
+      "file": "../salamander-grand-v3/A3v5.sample",
+      "midi": 57,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 326777
+    },
+    {
+      "file": "../salamander-grand-v3/A3v10.sample",
+      "midi": 57,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 341072
+    },
+    {
+      "file": "../salamander-grand-v3/A3v15.sample",
+      "midi": 57,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 371130
+    },
+    {
+      "file": "C4v2.sample",
+      "midi": 60,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 307108
+    },
+    {
+      "file": "../salamander-grand-v3/C4v5.sample",
+      "midi": 60,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 325244
+    },
+    {
+      "file": "../salamander-grand-v3/C4v10.sample",
+      "midi": 60,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 348173
+    },
+    {
+      "file": "../salamander-grand-v3/C4v15.sample",
+      "midi": 60,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 370290
+    },
+    {
+      "file": "Ds4v2.sample",
+      "midi": 63,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 294934
+    },
+    {
+      "file": "../salamander-grand-v3/Ds4v5.sample",
+      "midi": 63,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 309927
+    },
+    {
+      "file": "../salamander-grand-v3/Ds4v10.sample",
+      "midi": 63,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 324548
+    },
+    {
+      "file": "../salamander-grand-v3/Ds4v15.sample",
+      "midi": 63,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 340580
+    },
+    {
+      "file": "Fs4v2.sample",
+      "midi": 66,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 285438
+    },
+    {
+      "file": "../salamander-grand-v3/Fs4v5.sample",
+      "midi": 66,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 300579
+    },
+    {
+      "file": "../salamander-grand-v3/Fs4v10.sample",
+      "midi": 66,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 317902
+    },
+    {
+      "file": "../salamander-grand-v3/Fs4v15.sample",
+      "midi": 66,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 336197
+    },
+    {
+      "file": "A4v2.sample",
+      "midi": 69,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 292206
+    },
+    {
+      "file": "../salamander-grand-v3/A4v5.sample",
+      "midi": 69,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 310600
+    },
+    {
+      "file": "../salamander-grand-v3/A4v10.sample",
+      "midi": 69,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 323546
+    },
+    {
+      "file": "../salamander-grand-v3/A4v15.sample",
+      "midi": 69,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 339318
+    },
+    {
+      "file": "C5v2.sample",
+      "midi": 72,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 226130
+    },
+    {
+      "file": "../salamander-grand-v3/C5v5.sample",
+      "midi": 72,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 242540
+    },
+    {
+      "file": "../salamander-grand-v3/C5v10.sample",
+      "midi": 72,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 252809
+    },
+    {
+      "file": "../salamander-grand-v3/C5v15.sample",
+      "midi": 72,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 268871
+    },
+    {
+      "file": "Ds5v2.sample",
+      "midi": 75,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 228823
+    },
+    {
+      "file": "../salamander-grand-v3/Ds5v5.sample",
+      "midi": 75,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 237052
+    },
+    {
+      "file": "../salamander-grand-v3/Ds5v10.sample",
+      "midi": 75,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 246867
+    },
+    {
+      "file": "../salamander-grand-v3/Ds5v15.sample",
+      "midi": 75,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 270450
+    },
+    {
+      "file": "Fs5v2.sample",
+      "midi": 78,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 223373
+    },
+    {
+      "file": "../salamander-grand-v3/Fs5v5.sample",
+      "midi": 78,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 232666
+    },
+    {
+      "file": "../salamander-grand-v3/Fs5v10.sample",
+      "midi": 78,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 242597
+    },
+    {
+      "file": "../salamander-grand-v3/Fs5v15.sample",
+      "midi": 78,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 256844
+    },
+    {
+      "file": "A5v2.sample",
+      "midi": 81,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 220358
+    },
+    {
+      "file": "../salamander-grand-v3/A5v5.sample",
+      "midi": 81,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 235603
+    },
+    {
+      "file": "../salamander-grand-v3/A5v10.sample",
+      "midi": 81,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 249156
+    },
+    {
+      "file": "../salamander-grand-v3/A5v15.sample",
+      "midi": 81,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 264104
+    },
+    {
+      "file": "C6v2.sample",
+      "midi": 84,
+      "layer": 0,
+      "pack": "core",
+      "bytes": 168738
+    },
+    {
+      "file": "../salamander-grand-v3/C6v5.sample",
+      "midi": 84,
+      "layer": 1,
+      "pack": "core",
+      "bytes": 204451
+    },
+    {
+      "file": "../salamander-grand-v3/C6v10.sample",
+      "midi": 84,
+      "layer": 2,
+      "pack": "core",
+      "bytes": 225504
+    },
+    {
+      "file": "../salamander-grand-v3/C6v15.sample",
+      "midi": 84,
+      "layer": 3,
+      "pack": "core",
+      "bytes": 241366
+    },
+    {
+      "file": "Ds6v2.sample",
+      "midi": 87,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 230727
+    },
+    {
+      "file": "../salamander-grand-v3/Ds6v5.sample",
+      "midi": 87,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 245254
+    },
+    {
+      "file": "../salamander-grand-v3/Ds6v10.sample",
+      "midi": 87,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 250974
+    },
+    {
+      "file": "../salamander-grand-v3/Ds6v15.sample",
+      "midi": 87,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 267673
+    },
+    {
+      "file": "Fs6v2.sample",
+      "midi": 90,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 147919
+    },
+    {
+      "file": "../salamander-grand-v3/Fs6v5.sample",
+      "midi": 90,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 195815
+    },
+    {
+      "file": "../salamander-grand-v3/Fs6v10.sample",
+      "midi": 90,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 221755
+    },
+    {
+      "file": "../salamander-grand-v3/Fs6v15.sample",
+      "midi": 90,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 222514
+    },
+    {
+      "file": "A6v2.sample",
+      "midi": 93,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 182781
+    },
+    {
+      "file": "../salamander-grand-v3/A6v5.sample",
+      "midi": 93,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 213342
+    },
+    {
+      "file": "../salamander-grand-v3/A6v10.sample",
+      "midi": 93,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 219083
+    },
+    {
+      "file": "../salamander-grand-v3/A6v15.sample",
+      "midi": 93,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 230332
+    },
+    {
+      "file": "C7v2.sample",
+      "midi": 96,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 130501
+    },
+    {
+      "file": "../salamander-grand-v3/C7v5.sample",
+      "midi": 96,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 135822
+    },
+    {
+      "file": "../salamander-grand-v3/C7v10.sample",
+      "midi": 96,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 150294
+    },
+    {
+      "file": "../salamander-grand-v3/C7v15.sample",
+      "midi": 96,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 149808
+    },
+    {
+      "file": "Ds7v2.sample",
+      "midi": 99,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 158604
+    },
+    {
+      "file": "../salamander-grand-v3/Ds7v5.sample",
+      "midi": 99,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 154283
+    },
+    {
+      "file": "../salamander-grand-v3/Ds7v10.sample",
+      "midi": 99,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 162785
+    },
+    {
+      "file": "../salamander-grand-v3/Ds7v15.sample",
+      "midi": 99,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 179168
+    },
+    {
+      "file": "Fs7v2.sample",
+      "midi": 102,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 162671
+    },
+    {
+      "file": "../salamander-grand-v3/Fs7v5.sample",
+      "midi": 102,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 170479
+    },
+    {
+      "file": "../salamander-grand-v3/Fs7v10.sample",
+      "midi": 102,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 178842
+    },
+    {
+      "file": "../salamander-grand-v3/Fs7v15.sample",
+      "midi": 102,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 188681
+    },
+    {
+      "file": "A7v2.sample",
+      "midi": 105,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 111156
+    },
+    {
+      "file": "../salamander-grand-v3/A7v5.sample",
+      "midi": 105,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 125640
+    },
+    {
+      "file": "../salamander-grand-v3/A7v10.sample",
+      "midi": 105,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 131345
+    },
+    {
+      "file": "../salamander-grand-v3/A7v15.sample",
+      "midi": 105,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 134374
+    },
+    {
+      "file": "C8v2.sample",
+      "midi": 108,
+      "layer": 0,
+      "pack": "full",
+      "bytes": 110851
+    },
+    {
+      "file": "../salamander-grand-v3/C8v5.sample",
+      "midi": 108,
+      "layer": 1,
+      "pack": "full",
+      "bytes": 102749
+    },
+    {
+      "file": "../salamander-grand-v3/C8v10.sample",
+      "midi": 108,
+      "layer": 2,
+      "pack": "full",
+      "bytes": 136892
+    },
+    {
+      "file": "../salamander-grand-v3/C8v15.sample",
+      "midi": 108,
+      "layer": 3,
+      "pack": "full",
+      "bytes": 156074
+    }
+  ]
+}

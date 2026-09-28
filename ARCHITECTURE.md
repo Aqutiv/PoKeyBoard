@@ -112,8 +112,9 @@ whose id and pack keep the library's name) and the Wurlitzer electric piano.
 The engine keeps a `SampleBank` per
 instrument but lets only the sounding one hold decoded buffers — plus, for the
 moment a switch takes, the one about to replace it. A full pack of stereo float32
-PCM is ~300 MB (its core ~130 MB), so resident packs are not an option on a phone,
-and a downloaded piano still has to be decoded before it can play.
+PCM is ~300 MB (its core ~130 MB), and ~100 MB more with a pianissimo layer (~45 MB
+of it in the core's keys), so resident packs are not an option on a phone, and a
+downloaded piano still has to be decoded before it can play.
 
 Switching (`AudioEngine.setInstrument`) keeps two ids: the piano _selected_
 (`activeInstrument`, which takes are stamped with, synchronously) and the one
@@ -186,9 +187,16 @@ Each kind takes over at its own velocity (soft 0.30, medium 0.45, loud 0.78,
 each a little above where its recording naturally sounds on the curve), and a
 pack's softest layer plays everything under the next, so a pack of soft,
 medium and loud splits at 0.45 and 0.78 as it always did, and one with a
-pianissimo layer under those at 0.30 too. During a partial load a note looks
-for a stand-in in the nearest layer, the softer of two as near. The velocity
-table names the medium layer (`tiltLayer`) where it is not layer 1.
+pianissimo layer under those at 0.30 too. Salamander and the Steinway have one:
+upstream's v2 and v5 of their sixteen, each playing at about 0.25–0.30 on the
+curve. Headroom's source has nothing softer than its soft layer, and the
+Wurlitzer maps its own velocities. Their packs (salamander-grand-v4,
+bitklavier-grand-v2) re-use the three layers the generation before published,
+listing them by relative path (`../salamander-grand-v3/C4v5.sample`), so those
+play exactly as they did, at the URLs players already have. During a partial
+load a note looks for a stand-in in the nearest layer, the softer of two as
+near. The velocity table names the medium layer (`tiltLayer`) where it is not
+layer 1.
 
 A pianissimo layer is **deferred**: the piano is ready, and its first note
 plays, on the core it always waited for, and the pianissimo recordings follow
@@ -214,7 +222,9 @@ of a layer above a grand's softest plays through a lowpass (`toneCalibration.ts`
 from `tests/tools/generateToneCalibration.ts`, keyed by pack version the same
 way): at its layer's bottom, the cutoff that brings its recording down to the
 brightness of the layer below at the same root, opening evenly in log
-frequency to its layer's top. The softest layer plays open. The filter's
+frequency to its layer's top. The softest layer plays open, and so does a ramp
+whose layer below is the brighter already, which no lowpass can meet: two
+pianissimo roots, brighter than their soft ones by 15 and 23 cents. The filter's
 K-weighted loss is given back as make-up, less as it opens, so the loudness
 stays on the curve. Brightness is measured as the voice plays (from its onset,
 under its attack, at 48 kHz), and the cutoffs, per root, climb from half a

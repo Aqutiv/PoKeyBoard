@@ -2,6 +2,11 @@
  * Cache Storage names shared between the service worker's runtime caching
  * and the explicit "Download piano for offline use" flow, so both write to
  * the same store and neither duplicates sample bytes.
+ *
+ * salamander-grand-v4 and bitklavier-grand-v2 did not bump it: each adds a
+ * pianissimo layer and lists the other three by where v3 and v1 published them
+ * (`../salamander-grand-v3/C4v5.sample`), the URLs this cache already holds, so
+ * nothing in it became dead but those two packs' manifests.
  */
 export const PIANO_SAMPLE_CACHE = 'pokeyboard-piano-samples-v3';
 

@@ -18,16 +18,16 @@ npm run dev        # http://localhost:5173
 The piano sample packs ship in `public/piano/` (committed) — one directory per selectable piano. To regenerate one from its upstream sources you need `ffmpeg` on PATH:
 
 ```bash
-node scripts/build-sample-pack.mjs salamander-grand-v3   # Yamaha C5, the default piano
+node scripts/build-sample-pack.mjs salamander-grand-v4   # Yamaha C5, the default piano
 node scripts/build-sample-pack.mjs headroom-grand-v2     # Yamaha C3, the warmer alternative
-node scripts/build-sample-pack.mjs bitklavier-grand-v1   # Steinway D (bitKlavier, Lip Cardioid)
+node scripts/build-sample-pack.mjs bitklavier-grand-v2   # Steinway D (bitKlavier, Lip Cardioid)
 node scripts/build-sample-pack.mjs wurlitzer-ep203w-v1   # Wurlitzer EP203W electric piano
 node scripts/build-icons.mjs                             # PWA icons from assets/branding
 ```
 
-Acoustic pack builds download the recordings they need into the gitignored `samples-staging/`, convert to stereo 16-bit FLAC (`.sample` files), and measure loudness against the default piano. Build the default piano first — it is the reference the others are matched against. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean.
+Acoustic pack builds download the recordings they need into the gitignored `samples-staging/`, convert to stereo 16-bit FLAC (`.sample` files), and measure loudness against the default piano. Build the default piano first — it is the reference the others are matched against. Re-running over an already-built pack is a no-op — it downloads nothing and leaves the working tree clean. A pack that adds a layer to an earlier generation of its piano re-uses that generation's published files rather than rebuilding them: Salamander's v4 and the Steinway's v2 add a pianissimo layer to v3's and v1's three.
 
-The bitKlavier pack fetches only the part of each 48 kHz / 24-bit WAV it keeps, by HTTP Range, and checks every fetch against the sizes and SHA-256 hashes in `scripts/lib/bitklavier-grand-v1.pins.json`, stopping on any mismatch (`--pin` rewrote them from what upstream served). Its layers are raised toward Salamander's level before the 16-bit quantisation, never past −1 dBFS, so the app's later gain does not lift the dither floor.
+The bitKlavier pack fetches only the part of each 48 kHz / 24-bit WAV it keeps, by HTTP Range, and checks every fetch against the sizes and SHA-256 hashes in its pins, stopping on any mismatch (`--pin` rewrote them from what upstream served): `scripts/lib/bitklavier-grand-v2.pins.json` for the pianissimo layer, and `bitklavier-grand-v1.pins.json` for the three it re-uses from v1. Its layers are raised toward Salamander's level before the 16-bit quantisation, never past −1 dBFS, so the app's later gain does not lift the dither floor.
 
 The Wurlitzer pack preserves all 42 original mono FLAC recordings (2.39 MB), four velocity layers, tuning, and embedded sustain loops. Its upstream revision is pinned; only the file extension changes. A single gain matches its level to Salamander, and its outer sample regions extend to the app's full A0–C8 range. Live playback and MP3 exports share the same loop and envelope scheduler.
 

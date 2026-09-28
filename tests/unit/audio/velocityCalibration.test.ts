@@ -109,14 +109,19 @@ function hear(
 
 const KEYS = Array.from({ length: 88 }, (_, index) => 21 + index);
 
+/** A table entry's SHA-256, over its JSON: the same only while every number is. */
+function digest(entry: unknown): string {
+  return createHash('sha256').update(JSON.stringify(entry)).digest('hex');
+}
+
 describe('the velocity calibration table', () => {
   it('covers every recording of every grand the app offers, and nothing else', () => {
     // A future grand pack without a table would quietly fall back to the old
     // per-layer trims, with their steps at every layer boundary.
     expect(CALIBRATED.map((instrument) => instrument.packVersion)).toEqual([
-      'salamander-grand-v3',
+      'salamander-grand-v4',
       'headroom-grand-v2',
-      'bitklavier-grand-v1',
+      'bitklavier-grand-v2',
     ]);
     for (const instrument of PIANO_INSTRUMENTS) {
       const manifest = manifestOf(instrument.packVersion);
@@ -140,15 +145,33 @@ describe('the velocity calibration table', () => {
     // A published pack never changes, so neither may what was measured from
     // it: regenerating the table for another pack has to leave these rows as
     // they were, byte for byte, or every take on them would change level.
-    const digest = (version: string) =>
-      createHash('sha256').update(JSON.stringify(VELOCITY_CALIBRATIONS[version])).digest('hex');
-    expect(digest('salamander-grand-v3')).toBe(
-      '777e2eb3b5945093f0fa6d06b6fbdd3fac019a3f5f424fa78b6d115b18141268',
+    expect(digest(VELOCITY_CALIBRATIONS['salamander-grand-v4'])).toBe(
+      '0942468a11216b4e7c19ad27edd6ce0408e1dbc7ab71c0bbe155fdbbcb4c8810',
     );
-    expect(digest('headroom-grand-v2')).toBe(
+    expect(digest(VELOCITY_CALIBRATIONS['headroom-grand-v2'])).toBe(
       'bc125a99c4c0d166122846bdec2f65a1f492d8c820c893f4a32e843e7afa8999',
     );
-    expect(digest('bitklavier-grand-v1')).toBe(
+    expect(digest(VELOCITY_CALIBRATIONS['bitklavier-grand-v2'])).toBe(
+      'add0dded8ad68af32a0fc5b50c6e3b6beffb68e5822748cf28fd742541bac5d9',
+    );
+  });
+
+  it('plays the layers a pack re-uses exactly as the pack that published them did', () => {
+    // salamander-grand-v4 and bitklavier-grand-v2 put a pianissimo layer under
+    // the three that v3 and v1 published, and re-use those. Their rows, and the
+    // reference the pack is anchored by, are v3's and v1's entries to the byte
+    // — the digests those carried — so no note above the pianissimo band
+    // changes level.
+    const reused = (version: string) => {
+      const { referenceDb, layers } = VELOCITY_CALIBRATIONS[version]!;
+      return digest({ referenceDb, layers: layers.slice(1) });
+    };
+    // salamander-grand-v3's entry.
+    expect(reused('salamander-grand-v4')).toBe(
+      '777e2eb3b5945093f0fa6d06b6fbdd3fac019a3f5f424fa78b6d115b18141268',
+    );
+    // bitklavier-grand-v1's entry.
+    expect(reused('bitklavier-grand-v2')).toBe(
       'beb94bd88beb98ca4ae2ef0443a6ec578ca0d7c8c8e03274813ff933312e1f90',
     );
   });
@@ -167,7 +190,7 @@ describe('the velocity calibration table', () => {
   it('keeps every bitKlavier recording under the ceiling its gain before dither was held to', () => {
     // scripts/build-sample-pack.mjs raised each layer in float, before the
     // 16-bit quantisation, but never past -1 dBFS.
-    for (const layer of VELOCITY_CALIBRATIONS['bitklavier-grand-v1']!.layers) {
+    for (const layer of VELOCITY_CALIBRATIONS['bitklavier-grand-v2']!.layers) {
       for (const root of layer.roots) expect(root.peakDb, `${root.midi}`).toBeLessThanOrEqual(-1);
     }
   });

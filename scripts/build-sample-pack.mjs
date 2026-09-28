@@ -2,23 +2,25 @@
  * Builds a PoKeyBoard piano sample pack from a freely licensed upstream source.
  *
  * Usage: node scripts/build-sample-pack.mjs <pack-version> [--pin]
- *   salamander-grand-v3  Salamander Grand Piano v3 (Yamaha C5, Alexander Holm)
+ *   salamander-grand-v4  Salamander Grand Piano v3 (Yamaha C5, Alexander Holm)
  *   headroom-grand-v2    Headroom Piano (Yamaha C3, Bengt Nilsson)
- *   bitklavier-grand-v1  bitKlavier Grand, Lip Cardioid (Steinway D, Princeton)
+ *   bitklavier-grand-v2  bitKlavier Grand, Lip Cardioid (Steinway D, Princeton)
  *   wurlitzer-ep203w-v1  Wurlitzer EP203W (Greg Sullivan), native looped FLACs
  *
  * Build the reference pack first — every other pack is level-matched against
  * its converted files on disk.
  *
- * Downloads a 3-velocity-layer, minor-third-root subset of the upstream
- * recordings into samples-staging/<pack-version>/, converts each to a trimmed,
+ * Downloads a few velocity layers of the upstream recordings at minor-third
+ * roots into samples-staging/<pack-version>/, converts each to a trimmed,
  * faded stereo 16-bit FLAC in public/piano/<pack-version>/ (the .sample
  * extension keeps download managers from intercepting fetches; browsers decode
  * from the bytes, never the extension or Content-Type), and writes a
  * manifest.json describing every file (midi root, layer, pack membership, size)
- * plus the per-layer level match against the reference pack.
+ * plus the per-layer level match against the reference pack. A layer the pack
+ * re-uses from an earlier generation is listed from where that one published
+ * it, never fetched or converted again.
  *
- * A pack whose source fetches are pinned (bitklavier-grand-v1) checks every
+ * A pack whose source fetches are pinned (bitklavier-grand-v2) checks every
  * one against its pins; `--pin` rewrites the pins from what upstream serves
  * now, and converts nothing.
  *
@@ -30,7 +32,7 @@ import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { bitKlavierFetcher, PINS_PATH, pinBitKlavier } from './lib/bitklavier.mjs';
+import { bitKlavierFetcher, pinBitKlavier, pinsPathFor } from './lib/bitklavier.mjs';
 import { END_WINDOW_S, endsFaded, FADE_S, fadeOut } from './lib/sampleFade.mjs';
 import { buildWurlitzer } from './lib/wurlitzer.mjs';
 
@@ -52,17 +54,24 @@ function safeName(sourceName) {
 
 /**
  * Every pack we can build. `layers` maps the upstream velocity layers we sample
- * onto our fixed soft/medium/loud triple, and `sourceName` names the upstream
- * file (extension excluded) for a given root and layer. A layer's `gainDb`,
- * where it has one, is applied before the 16-bit quantisation; see
- * `measureSourceGains`. A pack with its own `fetcher` (and `pin`) fetches its
- * sources that way instead of from `rawBase`.
+ * onto the app's labelled ones — pianissimo, soft, medium, loud, softest first
+ * (src/audio/velocityLayers.ts) — and `sourceName` names the upstream file
+ * (extension excluded) for a given root and layer. A layer's `gainDb`, where it
+ * has one, is applied before the 16-bit quantisation; see `measureSourceGains`.
+ * A pack with its own `fetcher` (and `pin`) fetches its sources that way
+ * instead of from `rawBase`.
  *
- * `fadeFromTrim` marks the two packs published before the fade-out learned a
- * short recording's length (scripts/lib/sampleFade.mjs): theirs starts 1.5 s
- * before the trim even where the recording ends sooner, so it starts past the
- * end or is cut off partway. Kept so this script still reproduces the files
- * they published, byte for byte; a new generation of either drops it.
+ * A layer with `from` re-uses that earlier generation's published files as
+ * they are (`reusedLayers`): the same recordings at the same URLs, so a new
+ * generation that only adds a layer costs players only that layer. The pack
+ * it names is then part of this one, and stays on disk as long as this does.
+ *
+ * `fadeFromTrim` marks a pack published before the fade-out learned a short
+ * recording's length (scripts/lib/sampleFade.mjs): its fade starts 1.5 s before
+ * the trim even where the recording ends sooner, so it starts past the end or
+ * is cut off partway. Kept so this script still reproduces the files it
+ * published, byte for byte; a new generation drops it, as salamander-grand-v4
+ * did — the v3 files it re-uses keep the fade they were published with.
  *
  * Only the *current* packs live here. Published packs are immutable (see
  * src/audio/instruments.ts), so a superseded version is never rebuilt — check
@@ -74,16 +83,22 @@ function safeName(sourceName) {
  * pitch-shifting already puts its resampler in the path of most notes.
  */
 const INSTRUMENTS = {
-  'salamander-grand-v3': {
+  'salamander-grand-v4': {
     rawBase: 'https://raw.githubusercontent.com/sfzinstruments/SalamanderGrandPiano/master/Samples',
     sampleRate: 48000,
+    // v3's three layers as they were published, and a pianissimo under them:
+    // upstream's v2, whose own level sits at a median velocity of 0.25 across
+    // the keyboard (0.09–0.38) where v5, the soft layer, sits at 0.42 — so it
+    // takes the band under 0.30 (BS.1770, 300 ms from the onset, as the velocity
+    // calibration measures). v3's files keep their fade from the trim; the new
+    // ones fade from the recording's end where that comes first.
     layers: [
-      { index: 0, sourceLayer: 5, label: 'soft' },
-      { index: 1, sourceLayer: 10, label: 'medium' },
-      { index: 2, sourceLayer: 15, label: 'loud' },
+      { index: 0, sourceLayer: 2, label: 'pianissimo' },
+      { index: 1, sourceLayer: 5, label: 'soft', from: 'salamander-grand-v3' },
+      { index: 2, sourceLayer: 10, label: 'medium', from: 'salamander-grand-v3' },
+      { index: 3, sourceLayer: 15, label: 'loud', from: 'salamander-grand-v3' },
     ],
     sourceName: (midi, layer) => `${midiToNoteName(midi)}v${layer.sourceLayer}`,
-    fadeFromTrim: true,
     source: 'Salamander Grand Piano v3 by Alexander Holm',
     license: 'CC-BY 3.0',
     sourceUrl: 'https://github.com/sfzinstruments/SalamanderGrandPiano',
@@ -107,29 +122,39 @@ const INSTRUMENTS = {
     license: 'CC-BY 4.0',
     sourceUrl: 'https://github.com/sfzinstruments/BengtNilsson.HeadroomPiano',
   },
-  'bitklavier-grand-v1': {
+  'bitklavier-grand-v2': {
     sampleRate: 48000,
     // Sixteen layers spread over the whole Steinway D, 1.4–2.4 dB apart, so the
     // v5/v10/v15 that Salamander ships would step 9.7 and 7.7 dB here, where
     // Salamander's own step 5.6 and 6.2 (K-weighted, 300 ms from the onset,
-    // over ten roots A0–C8). v7/v10/v14 step 5.4 and 6.3, with each layer
-    // inside the band the app's thresholds (0.45, 0.78) cut from bitKlavier's
-    // own linear velocity map: v1–v7, v8–v12, v13–v16. v14 also keeps the loud
-    // layer clear of F♯6's v15, which clips in the source.
+    // over ten roots A0–C8). v1 published v7/v10/v14, which step 5.4 and 6.3,
+    // each layer inside the band the app's thresholds (0.45, 0.78) cut from
+    // bitKlavier's own linear velocity map: v1–v7, v8–v12, v13–v16. v14 also
+    // keeps the loud layer clear of F♯6's v15, which clips in the source.
+    //
+    // v2 re-uses those three as published, and adds a pianissimo under them:
+    // upstream's v5, 4–5 dB under v7, whose own level sits at velocity 0.24–0.37
+    // across the keyboard (0.30 at middle C) — the band under 0.30, as
+    // Salamander's v2 takes it.
     //
     // The gains are measured (see `measureSourceGains`; the build insists on
-    // them): 7.1 and 5.8 dB bring the soft and medium layers to Salamander's
-    // level, while the loud layer's 5 dB is held to 0.33 by F♯6 v14, which
-    // peaks at −1.34 dBFS; its manifest levelMatch carries the rest.
+    // them). v1 found 7.1 and 5.8 dB bring the soft and medium layers to
+    // Salamander's level, while the loud layer's 5 dB is held to 0.33 by F♯6
+    // v14, which peaks at −1.34 dBFS; its manifest levelMatch carries the rest.
+    // v2 found 6.3 dB brings the pianissimo layer to Salamander's, far under
+    // its ceiling: its loudest recording, C6 v5, peaks at −19.6 dBFS.
     layers: [
-      { index: 0, sourceLayer: 7, label: 'soft', gainDb: 7.11 },
-      { index: 1, sourceLayer: 10, label: 'medium', gainDb: 5.8 },
-      { index: 2, sourceLayer: 14, label: 'loud', gainDb: 0.33 },
+      { index: 0, sourceLayer: 5, label: 'pianissimo', gainDb: 6.29 },
+      { index: 1, sourceLayer: 7, label: 'soft', from: 'bitklavier-grand-v1' },
+      { index: 2, sourceLayer: 10, label: 'medium', from: 'bitklavier-grand-v1' },
+      { index: 3, sourceLayer: 14, label: 'loud', from: 'bitklavier-grand-v1' },
     ],
     sourceName: (midi, layer) => `${midiToNoteName(midi)}v${layer.sourceLayer}`,
     sourceExtension: 'wav',
-    fetcher: (stagingDir) => bitKlavierFetcher(stagingDir, trimSecondsFor),
-    pin: (jobs, stagingDir) => pinBitKlavier(jobs, stagingDir, trimSecondsFor),
+    fetcher: (stagingDir) =>
+      bitKlavierFetcher(stagingDir, trimSecondsFor, pinsPathFor('bitklavier-grand-v2')),
+    pin: (jobs, stagingDir) =>
+      pinBitKlavier(jobs, stagingDir, trimSecondsFor, pinsPathFor('bitklavier-grand-v2')),
     source:
       'bitKlavier Grand Sample Library—Lip Cardioid Mic Image (Steinway D) by Matthew Wang, ' +
       'Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers and Daniel Trueman, ' +
@@ -142,16 +167,25 @@ const INSTRUMENTS = {
 /**
  * The pack every other pack is level-matched against, so switching pianos
  * changes their character and not their loudness. Its own manifest carries no
- * level match (SampleBank's LAYER_TRIM already describes it). It must be built
- * first, since every other pack is measured against its files on disk.
+ * level match (the uncalibrated trims in velocityLayers.ts already describe
+ * it). It must be built first, since every other pack is measured against its
+ * files on disk — layer by layer, by label.
  */
-const REFERENCE_PACK = 'salamander-grand-v3';
+const REFERENCE_PACK = 'salamander-grand-v4';
 
 /**
  * Published packs that are no longer built. Named rather than merely absent so
- * asking for one gives a reason instead of "unknown pack".
+ * asking for one gives a reason instead of "unknown pack". Retired is not gone:
+ * salamander-grand-v3 and bitklavier-grand-v1 are no longer built, but their
+ * successors list their files (`from`), so they stay on disk as part of them.
  */
-const RETIRED_PACKS = new Set(['salamander-grand-v1', 'salamander-grand-v2', 'headroom-grand-v1']);
+const RETIRED_PACKS = new Set([
+  'salamander-grand-v1',
+  'salamander-grand-v2',
+  'salamander-grand-v3',
+  'headroom-grand-v1',
+  'bitklavier-grand-v1',
+]);
 
 /** Core pack roots cover the default visible C3-B5 range (with margins). */
 const CORE_ROOT_MIN = 45; // A2
@@ -419,30 +453,34 @@ function samplePeak(filePath, seconds) {
  * manifest's `levelMatch`, which the app applies in float after decoding.
  */
 async function measureSourceGains(jobs, layers) {
-  const referenceFiles = await builtPackFiles(REFERENCE_PACK);
-  if (!referenceFiles) {
+  const referenceManifest = await builtPackManifest(REFERENCE_PACK);
+  if (!referenceManifest) {
     throw new Error(`Reference pack ${REFERENCE_PACK} is not built, so gains cannot be measured.`);
   }
-  const reference = await measurePackLevels(REFERENCE_PACK, referenceFiles);
+  const reference = await measurePackLevels(REFERENCE_PACK, referenceManifest);
   const levels = new Map();
   const failures = await runPool(
     jobs,
     async (job) => {
       const rms = await measureRms(job.staged);
       const peak = await samplePeak(job.staged, trimSecondsFor(job.midi));
-      const bucket = levels.get(job.layer.index) ?? { total: 0, count: 0, peak: 0, loudest: '' };
+      const bucket = levels.get(job.layer.label) ?? { total: 0, count: 0, peak: 0, loudest: '' };
       bucket.total += rms;
       bucket.count += 1;
       if (peak > bucket.peak) Object.assign(bucket, { peak, loudest: job.name });
-      levels.set(job.layer.index, bucket);
+      levels.set(job.layer.label, bucket);
     },
     4,
   );
   if (failures > 0) throw new Error('Source level measurement failed.');
   return layers.map((layer) => {
-    const bucket = levels.get(layer.index);
-    const referenceRms = reference.get(layer.index);
-    if (!bucket || !referenceRms) throw new Error(`No level for layer ${layer.index}.`);
+    const bucket = levels.get(layer.label);
+    // Matched by what the layers are, not where they are numbered: a pack's
+    // pianissimo layer against the reference's pianissimo, its soft against soft.
+    const referenceRms = reference.get(layer.label);
+    if (!bucket || !referenceRms) {
+      throw new Error(`No ${layer.label} layer to measure against in ${REFERENCE_PACK}.`);
+    }
     const matchDb = toDb(referenceRms / (bucket.total / bucket.count));
     const ceilingDb = GAIN_CEILING_DB - toDb(bucket.peak);
     // Rounded to a hundredth of a dB; down, where the ceiling decides, and
@@ -462,34 +500,87 @@ async function measureSourceGains(jobs, layers) {
   });
 }
 
-/** The file list of an already-built pack, read from its manifest on disk. */
-async function builtPackFiles(packVersion) {
+/**
+ * The layers a pack re-uses from one it extends (`from`): for each, keyed by
+ * label, the source pack's own description of it and its files as entries of
+ * this pack's manifest, each listed by its path from here
+ * (`../<source>/<file>`) — the very URL the source pack publishes it at, so a
+ * player who has it cached has it, and nothing is downloaded twice.
+ *
+ * Checked against the disk: every file there at the size its manifest gives,
+ * and the source the same piano. (Deleting a piano's saved samples matches
+ * every generation of that piano by name, so a file shared between two
+ * pianos would go with either.)
+ */
+async function reusedLayers(packVersion, layers) {
+  const reused = new Map();
+  for (const layer of layers) {
+    if (!layer.from) continue;
+    if (instrumentOf(layer.from) !== instrumentOf(packVersion)) {
+      throw new Error(`${packVersion} can re-use a pack of its own piano only, not ${layer.from}.`);
+    }
+    const source = await builtPackManifest(layer.from);
+    if (!source) {
+      throw new Error(`${layer.from} is not on disk, so ${packVersion} cannot re-use it.`);
+    }
+    const described = source.velocityLayers.find((entry) => entry.label === layer.label);
+    if (!described || described.sourceLayer !== layer.sourceLayer) {
+      throw new Error(
+        `${layer.from} has no ${layer.label} layer of upstream v${layer.sourceLayer} to re-use.`,
+      );
+    }
+    const entries = [];
+    for (const entry of source.files.filter((file) => file.layer === described.index)) {
+      const onDisk = await fileSize(path.join('public', 'piano', layer.from, entry.file));
+      if (onDisk !== entry.bytes) {
+        throw new Error(
+          `${layer.from}/${entry.file} is ${onDisk ? 'not the size its manifest gives' : 'missing'}.`,
+        );
+      }
+      // A URL path whatever the platform, so never path.join here.
+      entries.push({ ...entry, file: `../${layer.from}/${entry.file}`, layer: layer.index });
+    }
+    reused.set(layer.label, { layer: described, entries });
+  }
+  return reused;
+}
+
+/** The piano a pack version belongs to: its directory's name less the `-vN`. */
+function instrumentOf(packVersion) {
+  return packVersion.replace(/-v\d+$/, '');
+}
+
+/** An already-built pack's manifest, read from disk; null if it is not there. */
+async function builtPackManifest(packVersion) {
   const manifestPath = path.join('public', 'piano', packVersion, 'manifest.json');
   if (!existsSync(manifestPath)) return null;
-  const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
-  return manifest.files;
+  return JSON.parse(await readFile(manifestPath, 'utf8'));
 }
 
 /**
- * Mean attack RMS per layer index, energy-averaged across every root of a pack
- * already converted on disk. Used only to level-match packs against each other.
+ * Mean attack RMS per layer label, energy-averaged across every root of a pack
+ * already converted on disk (its `files`, all of them unless said). Used only
+ * to level-match packs against each other, layer for layer by what they are.
+ * A file listed as `../other-pack/…` is read where it lives.
  */
-async function measurePackLevels(packVersion, packFiles) {
+async function measurePackLevels(packVersion, manifest, files = manifest.files) {
+  const labelOf = new Map(manifest.velocityLayers.map((layer) => [layer.index, layer.label]));
   const sums = new Map();
-  const jobs = packFiles.map((entry) => ({
+  const jobs = files.map((entry) => ({
     name: entry.file,
     run: async () => {
       const rms = await measureRms(path.join('public', 'piano', packVersion, entry.file));
-      const bucket = sums.get(entry.layer) ?? { total: 0, count: 0 };
+      const label = labelOf.get(entry.layer);
+      const bucket = sums.get(label) ?? { total: 0, count: 0 };
       bucket.total += rms;
       bucket.count += 1;
-      sums.set(entry.layer, bucket);
+      sums.set(label, bucket);
     },
   }));
   const failures = await runPool(jobs, (job) => job.run(), 4);
   if (failures > 0) throw new Error(`Level measurement failed for ${packVersion}.`);
   const levels = new Map();
-  for (const [layer, bucket] of sums) levels.set(layer, bucket.total / bucket.count);
+  for (const [label, bucket] of sums) levels.set(label, bucket.total / bucket.count);
   return levels;
 }
 
@@ -530,7 +621,11 @@ async function verifySourceGains(jobs, layers) {
         `${matchDb.toFixed(3)} dB, ceiling ${ceilingDb.toFixed(3)} dB (loudest peak ` +
         `${peakDb.toFixed(3)} dBFS, ${loudest}) -> gainDb ${gainDb}`,
     );
-    if (Math.abs(gainDb - layer.gainDb) > 0.005) stale.push(`${layer.label} ${gainDb}`);
+    // A layer that names no gain at all is as stale as one that names the wrong
+    // one (a bare comparison with undefined would let it through as NaN).
+    if (layer.gainDb === undefined || Math.abs(gainDb - layer.gainDb) > 0.005) {
+      stale.push(`${layer.label} ${gainDb}`);
+    }
   }
   if (stale.length > 0) {
     throw new Error(
@@ -548,9 +643,12 @@ async function main(packVersion, { pin = false } = {}) {
   await mkdir(outDir, { recursive: true });
 
   const sourceExtension = instrument.sourceExtension ?? 'flac';
+  // Only the layers this pack records afresh are fetched and converted; one it
+  // re-uses (`from`) is another pack's published files, listed as they are.
+  const built = instrument.layers.filter((layer) => !layer.from);
   const jobs = [];
   for (const midi of rootMidis()) {
-    for (const layer of instrument.layers) {
+    for (const layer of built) {
       const sourceName = instrument.sourceName(midi, layer);
       // Output names are derived from the root and upstream layer rather than
       // the upstream filename, which may hold spaces or other awkward characters.
@@ -574,14 +672,18 @@ async function main(packVersion, { pin = false } = {}) {
     }
   }
   console.log(
-    `${packVersion}: ${jobs.length} samples (${rootMidis().length} roots x ${instrument.layers.length} layers)`,
+    `${packVersion}: ${jobs.length} samples to build (${rootMidis().length} roots x ` +
+      `${built.length} layers), ${instrument.layers.length - built.length} layers re-used`,
   );
+  const reused = await reusedLayers(packVersion, instrument.layers);
 
   if (pin) {
     if (!instrument.pin) throw new Error(`${packVersion} has no pinned sources.`);
     console.log('Pinning what upstream serves now...');
     const { pinned, changed } = await instrument.pin(jobs, stagingDir);
-    console.log(`Pinned ${pinned} sources in ${PINS_PATH}; ${changed} pins changed.`);
+    console.log(
+      `Pinned ${pinned} sources in ${pinsPathFor(packVersion)}; ${changed} pins changed.`,
+    );
     return;
   }
 
@@ -597,14 +699,14 @@ async function main(packVersion, { pin = false } = {}) {
     const fetchSource = instrument.fetcher ? await instrument.fetcher(stagingDir) : download;
     // A layer's gain is measured over all of its recordings, so a pack with
     // gains needs every source at hand to convert any one of them.
-    const gained = instrument.layers.some((layer) => layer.gainDb !== undefined);
+    const gained = built.some((layer) => layer.gainDb !== undefined);
     const needed = gained ? jobs : pending;
     console.log(`Fetching ${needed.length} sources...`);
     const downloadFailures = await runPool(needed, (job) => fetchSource(job), 6);
     if (downloadFailures > 0) {
       throw new Error(`${downloadFailures} downloads failed; rerun to retry.`);
     }
-    if (gained) await verifySourceGains(jobs, instrument.layers);
+    if (gained) await verifySourceGains(jobs, built);
     console.log('Downloads complete. Converting with ffmpeg...');
 
     const convertFailures = await runPool(pending, (job) => convert(job), 4);
@@ -614,34 +716,45 @@ async function main(packVersion, { pin = false } = {}) {
   }
 
   const files = [];
-  let coreBytes = 0;
-  let totalBytes = 0;
   for (const job of jobs) {
     const bytes = await fileSize(job.output);
     if (bytes === 0) throw new Error(`Missing converted file ${job.file}`);
     const pack = job.midi >= CORE_ROOT_MIN && job.midi <= CORE_ROOT_MAX ? 'core' : 'full';
-    if (pack === 'core') coreBytes += bytes;
-    totalBytes += bytes;
     files.push({ file: job.file, midi: job.midi, layer: job.layer.index, pack, bytes });
   }
-
+  const builtFiles = [...files];
+  for (const { entries } of reused.values()) files.push(...entries);
   files.sort((a, b) => a.midi - b.midi || a.layer - b.layer);
+  let coreBytes = 0;
+  let totalBytes = 0;
+  for (const entry of files) {
+    if (entry.pack === 'core') coreBytes += entry.bytes;
+    totalBytes += entry.bytes;
+  }
 
-  const velocityLayers = instrument.layers.map((layer) => ({ ...layer }));
-  if (packVersion !== REFERENCE_PACK) {
+  // What each layer is, for the manifest: a re-used one as the pack it comes
+  // from describes it (its gain before dither, its level match), renumbered.
+  const velocityLayers = instrument.layers.map(({ from, ...layer }) => {
+    if (!from) return { ...layer };
+    const { index: _, ...described } = reused.get(layer.label).layer;
+    return { index: layer.index, ...described };
+  });
+  if (packVersion !== REFERENCE_PACK && builtFiles.length > 0) {
     console.log(`Measuring levels against ${REFERENCE_PACK}...`);
-    const referenceFiles = await builtPackFiles(REFERENCE_PACK);
-    if (!referenceFiles) {
+    const referenceManifest = await builtPackManifest(REFERENCE_PACK);
+    if (!referenceManifest) {
       throw new Error(
         `Reference pack ${REFERENCE_PACK} is not built, so levels cannot be matched.`,
       );
     }
-    const reference = await measurePackLevels(REFERENCE_PACK, referenceFiles);
-    // Measured from the files just converted, which the manifest below describes.
-    const own = await measurePackLevels(packVersion, files);
+    const reference = await measurePackLevels(REFERENCE_PACK, referenceManifest);
+    // Measured from the files just converted, which the manifest below describes;
+    // a re-used layer keeps the match it was published with.
+    const own = await measurePackLevels(packVersion, { velocityLayers }, builtFiles);
     for (const layer of velocityLayers) {
-      const referenceRms = reference.get(layer.index);
-      const ownRms = own.get(layer.index);
+      if (reused.has(layer.label)) continue;
+      const referenceRms = reference.get(layer.label);
+      const ownRms = own.get(layer.label);
       if (!referenceRms || !ownRms) continue;
       // Sources are mastered at wildly different levels (Headroom sits ~15 dB
       // below Salamander), so the range is wide; the clamp only guards against a

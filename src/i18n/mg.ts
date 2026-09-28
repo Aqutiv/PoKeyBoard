@@ -665,7 +665,7 @@ export const mg: Messages = {
       salamander: {
         credit: 'Salamander Grand Piano v3 nataon’i Alexander Holm.',
         adapted:
-          'Nampifanaraka ho an’ny web: sosona hafainganam-pandeha 3 amin’ireo 16, nohafohezina ho 7–12 segondra tamin’ny fihenan’ny feo, ary nahena ho 16-bit avy amin’ny 24-bit.',
+          'Nampifanaraka ho an’ny web: sosona hafainganam-pandeha 4 amin’ireo 16, nohafohezina ho 7–12 segondra tamin’ny fihenan’ny feo, ary nahena ho 16-bit avy amin’ny 24-bit.',
       },
       headroom: {
         credit: 'Headroom Piano nataon’i Bengt Nilsson; fandrindrana SFZ nataon’i kinwie.',
@@ -676,7 +676,7 @@ export const mg: Messages = {
         credit:
           'bitKlavier Grand Sample Library—Lip Cardioid Mic Image: Steinway D noraketina tao amin’ny Oniversiten’i Princeton nataon’i Matthew Wang, Andrés Villalta, Jeffrey Gordon, Katie Chou, Christien Ayers ary Daniel Trueman.',
         adapted:
-          'Nampifanaraka ho an’ny web: sosona hafainganam-pandeha 3 amin’ireo 16, nohafohezina ho 7–12 segondra tamin’ny fihenan’ny feo, nampiakarina ny haavon’ny feony, ary nahena ho 16-bit avy amin’ny 24-bit.',
+          'Nampifanaraka ho an’ny web: sosona hafainganam-pandeha 4 amin’ireo 16, nohafohezina ho 7–12 segondra tamin’ny fihenan’ny feo, nampiakarina ny haavon’ny feony, ary nahena ho 16-bit avy amin’ny 24-bit.',
       },
       wurlitzer: {
         credit:
