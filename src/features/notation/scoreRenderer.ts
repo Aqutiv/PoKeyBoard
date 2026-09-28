@@ -459,9 +459,9 @@ interface InkPiece {
 }
 
 /**
- * The upper edge of a beam over its heads, from its first stem to its last:
- * `y1` to `y2`, straight between. Each stem stands `inset` off its chord's
- * onset, so the edge can be read at any spacing (see `beamLineRel`).
+ * The upper edge of a beam run, from its first stem to its last: `y1` to
+ * `y2`, straight between. Each stem stands `inset` off its chord's onset, so
+ * the edge can be read at any spacing (see `beamLineRel`).
  */
 interface BeamEdge {
   fromMs: number;
@@ -576,20 +576,25 @@ function trebleInkFor(layout: ScoreLayout): TrebleInk {
   const beams: BeamEdge[] = [];
   let longestMs = 0;
   for (const beam of layout.beams) {
-    if (beam.staff !== 'treble' || beam.stemDown) continue;
+    if (beam.staff !== 'treble') continue;
     const line = beamLineRel(beam);
     if (!line) continue;
-    const inset = stemInsetPx((beam.members[0] as ChordGroup).symbol.base);
-    const half = BEAM_THICKNESS_PX / 2;
+    const inset =
+      (beam.stemDown ? -1 : 1) * stemInsetPx((beam.members[0] as ChordGroup).symbol.base);
+    // The first beam's upper edge — or, under high heads stemmed down, the
+    // edge of the last beam, which the others stack up from, toward the heads.
+    const over =
+      BEAM_THICKNESS_PX / 2 + (beam.stemDown ? beam.secondary.length * BEAM_SPACING_PX : 0);
+    if (Math.min(line.span.y1, line.span.y2) - over >= 0) continue;
     beams.push({
       fromMs: line.fromMs,
       toMs: line.toMs,
       inset,
-      y1: line.span.y1 - half,
-      y2: line.span.y2 - half,
+      y1: line.span.y1 - over,
+      y2: line.span.y2 - over,
     });
     longestMs = Math.max(longestMs, line.toMs - line.fromMs);
-    if (beam.tupletCount !== null) {
+    if (beam.tupletCount !== null && !beam.stemDown) {
       // The numeral over the middle of the beam (see `drawBeams`).
       const across = (runAdvance(digitGlyphsFor('tuplet', beam.tupletCount)) * TUPLET_SPACE) / 2;
       const y = (line.span.y1 + line.span.y2) / 2 - TUPLET_GAP_PX;
