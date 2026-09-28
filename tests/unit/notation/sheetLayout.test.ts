@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { NoteEvent, TempoChange, TimeSignature } from '@/domain/takeTypes';
+import type { NoteEvent, PedalEvent, TempoChange, TimeSignature } from '@/domain/takeTypes';
 import { BEAM_SLANT_MAX_G, MIN_BEAM_STEM_G } from '@/features/notation/beamGeometry';
+import { dynamicInkG } from '@/features/notation/glyphs/engravingGlyphs';
 import { MUSIC_GLYPH_METRICS } from '@/features/notation/glyphs/musicGlyphMetrics';
-import { layoutScore } from '@/features/notation/notationLayout';
+import { layoutScore, type ScoreLayout } from '@/features/notation/notationLayout';
 import {
   ACCIDENTAL_LEAD_G,
+  HEAD_RX_G,
   PEDAL_HOOK_G,
   PEDAL_ROW_PT,
   SHEET_GAP_PT,
@@ -547,6 +549,124 @@ describe('layoutSheet', () => {
       const { marginTopPt, titleBlockHeightPt } = metricsFor('a4');
       expect(system.octaves).toEqual([]);
       expect(system.trebleTopPt - (marginTopPt + titleBlockHeightPt)).toBeCloseTo(3 * G, 6);
+    });
+  });
+
+  describe('marks on the first downbeat of a system', () => {
+    // Forty bars of quarters on E5 fill several systems. Raising a few of them
+    // to E6 writes those under an 8va without moving a single column, since the
+    // spacing reads rhythm and accidentals, never pitch.
+    const plain = allSystems(sheet(quarterMeasures(40)));
+    /** Where the second and third systems begin. */
+    const [second, third] = plain.slice(1, 3).map((system) => system.measures[0]!.startMs) as [
+      number,
+      number,
+    ];
+
+    function raised(fromMs: number, toMs: number): NoteEvent[] {
+      return quarterMeasures(40).map((n) =>
+        n.startMs >= fromMs && n.startMs <= toMs ? { ...n, midi: 88 } : n,
+      );
+    }
+
+    function layout(options: { pedals?: PedalEvent[] } = {}): ScoreLayout {
+      return layoutScore(quarterMeasures(40), {
+        bpm: SHEET_OPTS.bpm,
+        timeSignature: SHEET_OPTS.timeSignature,
+        quantization: '1/16',
+        minMeasures: 1,
+        ...options,
+      });
+    }
+
+    /** The system that begins at `startMs`, and the column on its downbeat. */
+    function systemAt(
+      result: SheetLayoutResult,
+      startMs: number,
+    ): { system: SheetSystem; column: SheetColumn } {
+      const system = allSystems(result).find((s) => s.measures[0]!.startMs === startMs);
+      expect(system, `a system starting at ${startMs}`).toBeDefined();
+      const column = system!.measures[0]!.columns[0]!;
+      expect(column.timeMs).toBe(startMs);
+      return { system: system!, column };
+    }
+
+    it('starts an 8va there at its first note, as on any other downbeat', () => {
+      // The piece's own first downbeat, and one a system break lands on.
+      for (const startMs of [0, second]) {
+        const { system, column } = systemAt(sheet(raised(startMs, startMs + 1500)), startMs);
+        const [octave] = system.octaves;
+        expect(octave?.continuesLeft).toBe(false);
+        // The label starts at the head's left edge, not at the bar line.
+        expect(octave!.x1Pt).toBeCloseTo(column.xPt - HEAD_RX_G * G, 6);
+      }
+    });
+
+    it('ends an 8va there past its last note, carried in from the system start', () => {
+      const { system, column } = systemAt(sheet(raised(second - 1500, second)), second);
+      const [octave] = system.octaves;
+      expect(octave).toMatchObject({ continuesLeft: true, continuesRight: false });
+      // The line picks up where the system starts, as a carried-over line always has...
+      expect(octave!.x1Pt).toBeCloseTo(system.measures[0]!.xPt - HEAD_RX_G * G, 6);
+      // ...and hooks past the one note it still has to cover.
+      expect(octave!.x2Pt).toBeCloseTo(column.xPt + 2 * HEAD_RX_G * G, 6);
+    });
+
+    it('writes a dynamic there under its note, and a hairpin from it clear of the mark', () => {
+      const score = layout();
+      score.dynamics = [
+        { atMs: 0, mark: 'p' },
+        { atMs: second, mark: 'f' },
+        // A downbeat inside the system, which has always been placed this way.
+        { atMs: second + 2000, mark: 'mp' },
+      ];
+      score.hairpins = [
+        { fromMs: second, toMs: second + 1500, grow: false },
+        { fromMs: third - 1000, toMs: third + 1000, grow: true },
+      ];
+      const result = layoutSheet(score, SHEET_OPTS);
+
+      const opening = systemAt(result, 0);
+      expect(opening.system.dynamics[0]).toEqual({ xPt: opening.column.xPt, mark: 'p' });
+
+      const { system, column } = systemAt(result, second);
+      const next = system.measures[1]!.columns[0]!;
+      expect(next.timeMs).toBe(second + 2000);
+      expect(system.dynamics).toEqual([
+        { xPt: column.xPt, mark: 'f' },
+        { xPt: next.xPt, mark: 'mp' },
+      ]);
+      // The diminuendo sets off from the f's ink where the f stands.
+      expect(system.hairpins[0]!.x1Pt).toBeCloseTo(
+        column.xPt + (dynamicInkG('f').right + 0.5) * G,
+        6,
+      );
+
+      // A swell carried over the break opens at the system start.
+      const carried = systemAt(result, third).system.hairpins[0]!;
+      expect(carried.continuesLeft).toBe(true);
+      expect(carried.x1Pt).toBeCloseTo(systemAt(result, third).system.measures[0]!.xPt, 6);
+    });
+
+    it('presses the pedal there under its note, and carries a held one in from the system start', () => {
+      const result = layoutSheet(
+        layout({
+          pedals: [
+            { atMs: second, down: true },
+            { atMs: second + 1900, down: false },
+            { atMs: third - 1000, down: true },
+            { atMs: third + 1000, down: false },
+          ],
+        }),
+        SHEET_OPTS,
+      );
+      const pressed = systemAt(result, second);
+      expect(pressed.system.pedals[0]!.continuesLeft).toBe(false);
+      expect(pressed.system.pedals[0]!.xFromPt).toBeCloseTo(pressed.column.xPt, 6);
+
+      const held = systemAt(result, third).system;
+      expect(held.pedals[0]!.continuesLeft).toBe(true);
+      expect(held.pedals[0]!.xFromPt).toBeCloseTo(held.measures[0]!.xPt, 6);
     });
   });
 
