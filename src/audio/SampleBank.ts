@@ -105,6 +105,8 @@ interface LayerRoots {
  */
 export class SampleBank {
   private manifest: SamplePackManifest | null = null;
+  /** The manifest's fetch while it is on its way; see `loadManifest`. */
+  private manifestLoad: Promise<SamplePackManifest> | null = null;
   /** The manifest's velocity calibration, when there is one covering all of it. */
   private calibration: VelocityCalibration | null = null;
   /** Its tone calibration, likewise; only ever with a velocity calibration. */
@@ -162,9 +164,27 @@ export class SampleBank {
     return `${this.baseUrl}${file}`;
   }
 
+  /**
+   * The pack's manifest, fetched once. A load that asks while it is on its way
+   * waits for that fetch rather than starting another: each fetch takes its
+   * manifest on, and a second would list every root again and count the core
+   * twice, stopping the loading readout at half. A fetch that fails, or brings
+   * a manifest that is refused, leaves nothing behind, so the next load to ask
+   * fetches afresh.
+   */
   async loadManifest(): Promise<SamplePackManifest> {
     if (this.manifest) return this.manifest;
     this.setPhase('loading-manifest');
+    // Once it is over, a manifest taken on answers for itself, and a failure is
+    // not what the next load waits on.
+    this.manifestLoad ??= this.fetchManifest().finally(() => {
+      this.manifestLoad = null;
+    });
+    return this.manifestLoad;
+  }
+
+  /** Fetch the manifest and take it on; see `loadManifest`. */
+  private async fetchManifest(): Promise<SamplePackManifest> {
     const response = await fetch(`${this.baseUrl}manifest.json`);
     if (!response.ok) {
       this.fail(`Sample manifest failed to load (${response.status}).`);
@@ -411,6 +431,9 @@ export class SampleBank {
   /**
    * Drop every decoded buffer, keeping the manifest and the root→entry index
    * (kilobytes of JSON, and refetching it would show a spurious manifest phase).
+   * A manifest still on its way is kept too: unlike a decode, its fetch brings
+   * what the bank keeps whenever it lands, so the next load waits for it rather
+   * than fetching the manifest again (see `loadManifest`).
    * Voices already sounding hold their buffer through their source node and
    * finish normally.
    */
