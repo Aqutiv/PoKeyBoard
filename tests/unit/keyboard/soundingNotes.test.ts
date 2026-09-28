@@ -5,35 +5,33 @@ import { SoundingNotes } from '@/features/keyboard/soundingNotes';
 
 /**
  * What a scan of the whole take says is sounding — the answer to match. Each
- * key is lit in the hand of its earliest note still sounding, at the velocity
- * of the strike heard on it: the last one struck by then, the louder of two at
- * one moment, and any note played over one that is not. A strike from before
- * the key's earliest note still sounding is an earlier press, over and done.
+ * key is lit in the hand of its earliest note still sounding. While a played
+ * note holds it down, it shows the velocity of the strike heard on it: the
+ * last played note struck by then, the louder of two at one moment. A key only
+ * notes written but not played are on shows none.
  */
 function scan(notes: readonly NoteEvent[], ms: number): Map<number, KeyCue> {
   const heard = new Map<number, NoteEvent>();
   const earliest = new Map<number, NoteEvent>();
+  const held = new Set<number>();
   for (const note of notes) {
     if (note.startMs > ms) break;
+    const played = note.velocity > 0;
     const best = heard.get(note.midi);
-    const silent = note.velocity <= 0;
-    const bestSilent = best !== undefined && best.velocity <= 0;
     if (
-      best === undefined ||
-      (silent !== bestSilent
-        ? !silent
-        : note.startMs > best.startMs || note.velocity > best.velocity)
+      played &&
+      (best === undefined || note.startMs > best.startMs || note.velocity > best.velocity)
     ) {
       heard.set(note.midi, note);
     }
-    if (ms < note.startMs + note.durationMs && !earliest.has(note.midi)) {
-      earliest.set(note.midi, note);
+    if (ms < note.startMs + note.durationMs) {
+      if (!earliest.has(note.midi)) earliest.set(note.midi, note);
+      if (played) held.add(note.midi);
     }
   }
   const keys = new Map<number, KeyCue>();
   for (const [midi, note] of earliest) {
-    const strike = heard.get(midi) as NoteEvent;
-    const velocity = strike.startMs >= note.startMs ? strike.velocity : 0;
+    const velocity = held.has(midi) ? (heard.get(midi) as NoteEvent).velocity : 0;
     keys.set(midi, { hand: noteHand(note), velocity });
   }
   return keys;
@@ -166,6 +164,24 @@ describe('the notes sounding under the playhead', () => {
     expect(cueAt([note('played', 0, 300, 0.8), note('silent', 500, 1000, 0)], 1000)?.velocity).toBe(
       0,
     );
+  });
+
+  it('lets a strike go once no played note holds the key, whatever a silent one still lights', () => {
+    // A trill as a score writes it out: the written note, not played, under
+    // hidden strikes that are. Between strikes nothing holds the key down.
+    const notes = [
+      note('written', 0, 2000, 0, 'treble'),
+      { ...note('first', 100, 50, 0.9), hidden: true as const },
+      { ...note('second', 300, 50, 0.8), hidden: true as const },
+    ];
+    const sounding = new SoundingNotes();
+    sounding.setNotes(notes);
+    expect(sounding.keysAt(120).get(60)).toEqual({ hand: 'right', velocity: 0.9 });
+    expect(sounding.keysAt(200).get(60)).toEqual({ hand: 'right', velocity: 0 });
+    expect(sounding.keysAt(320).get(60)?.velocity).toBe(0.8);
+    expect(sounding.keysAt(400).get(60)?.velocity).toBe(0);
+    // Found afresh after a jump, the same.
+    expect(sounding.keysAt(200).get(60)?.velocity).toBe(0);
   });
 
   it('forgets what a jump leaves behind', () => {

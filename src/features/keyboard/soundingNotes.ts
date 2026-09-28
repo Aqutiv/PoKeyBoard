@@ -1,4 +1,4 @@
-import { noteHand, type KeyCue } from '@/domain/hands';
+import { noteHand, type Hand, type KeyCue } from '@/domain/hands';
 import { isSilentNote } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 
@@ -21,16 +21,13 @@ function firstStartingAfter(notes: readonly NoteEvent[], ms: number): number {
 }
 
 /**
- * Whether `next`, struck on the same key no earlier than `heard`, is the one
- * heard from then on. A struck key gives way to the new strike, and of two
- * copies struck at one moment the louder is struck last (`compareStrikes`), so
- * the later strike wins and, at the same moment, the louder. A note written but
- * not played is never struck, so any note that sounds wins over one that does
- * not, whenever it came.
+ * Whether `next`, a played note struck on the same key no earlier than
+ * `heard`, is the one heard from then on. A struck key gives way to the new
+ * strike, and of two copies struck at one moment the louder is struck last
+ * (`compareStrikes`), so the later strike wins and, at the same moment, the
+ * louder.
  */
 function heardOver(next: NoteEvent, heard: NoteEvent): boolean {
-  const silent = isSilentNote(next);
-  if (silent !== isSilentNote(heard)) return !silent;
   return next.startMs > heard.startMs || next.velocity > heard.velocity;
 }
 
@@ -53,8 +50,9 @@ export class SoundingNotes {
   /** Notes sounding at `lastMs`, in the order they started. */
   private sounding: number[] = [];
   /**
-   * Each key's strike heard last among the notes started by `lastMs`; see
-   * `heardOver`. Kept past its own note's end: a note struck inside a longer one
+   * Each key's strike heard last among the played notes started by `lastMs`;
+   * see `heardOver`. A note written but not played is never struck, so it is
+   * never one. Kept past its own note's end: a note struck inside a longer one
    * on the same key is heard until that one lets the key go too, the way
    * `VoiceManager.scheduleNote` holds it.
    */
@@ -74,20 +72,25 @@ export class SoundingNotes {
    * The keys sounding at `ms`, each with the hand that plays it and the
    * velocity it is heard at. Where both hands sound one key, the earlier note
    * owns it rather than the light flickering between two shades; the velocity
-   * is the strike heard there, which is the later one. A key lit only by notes
-   * written but not played has none to show, and says 0.
+   * is the strike heard there, which is the later one. A key no played note
+   * holds down — lit only by notes written but not played — sounds nothing,
+   * and says 0: such a note is never scheduled, so it holds no strike either.
    */
   keysAt(ms: number): Map<number, KeyCue> {
     this.advanceTo(ms);
-    const keys = new Map<number, KeyCue>();
+    const hands = new Map<number, Hand>();
+    const held = new Set<number>();
     for (const index of this.sounding) {
       const note = this.notes[index] as NoteEvent;
-      if (keys.has(note.midi)) continue;
-      // The key's earliest note still sounding. A strike before it belongs to
-      // an earlier press of the key, heard only because no note since has been.
-      const heard = this.heard.get(note.midi);
-      const velocity = heard && heard.startMs >= note.startMs ? heard.velocity : 0;
-      keys.set(note.midi, { hand: noteHand(note), velocity });
+      if (!hands.has(note.midi)) hands.set(note.midi, noteHand(note));
+      if (!isSilentNote(note)) held.add(note.midi);
+    }
+    const keys = new Map<number, KeyCue>();
+    for (const [midi, hand] of hands) {
+      // A played note still down was struck, so the strike heard on its key is
+      // it or one struck since; it holds that one down with it.
+      const velocity = held.has(midi) ? (this.heard.get(midi)?.velocity ?? 0) : 0;
+      keys.set(midi, { hand, velocity });
     }
     return keys;
   }
@@ -135,6 +138,7 @@ export class SoundingNotes {
 
   /** Notes arrive in start order, so each is struck no earlier than the last. */
   private strike(note: NoteEvent): void {
+    if (isSilentNote(note)) return;
     const heard = this.heard.get(note.midi);
     if (!heard || heardOver(note, heard)) this.heard.set(note.midi, note);
   }
