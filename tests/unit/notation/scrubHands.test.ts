@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { audioEngine } from '@/audio/AudioEngine';
 import { curveDb } from '@/audio/velocityCurve';
+import type { KeyCue } from '@/domain/hands';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import {
@@ -22,8 +23,8 @@ vi.mock('@/audio/AudioEngine', () => ({
   },
 }));
 
-function note(id: string, startMs: number, staff: NoteEvent['staff']): NoteEvent {
-  return { id, midi: 60, startMs, durationMs: 200, velocity: 0.6, staff };
+function note(id: string, startMs: number, staff: NoteEvent['staff'], velocity = 0.6): NoteEvent {
+  return { id, midi: 60, startMs, durationMs: 200, velocity, staff };
 }
 
 describe('scrub key lights', () => {
@@ -38,12 +39,36 @@ describe('scrub key lights', () => {
 
   it('follows a key that changes hands within one flash', () => {
     scrubController.update(200);
-    expect(scrubController.getActiveHands()).toEqual(new Map([[60, 'left']]));
+    expect(scrubController.getActiveKeys()).toEqual(
+      new Map([[60, { hand: 'left', velocity: 0.6 }]]),
+    );
     // The same pitch again from the other staff, well inside the 260ms flash:
     // one key lit either way, so a size check alone would keep it green.
     scrubController.update(500);
-    expect(scrubController.getActiveHands()).toEqual(new Map([[60, 'right']]));
+    expect(scrubController.getActiveKeys()).toEqual(
+      new Map([[60, { hand: 'right', velocity: 0.6 }]]),
+    );
     scrubController.end();
+  });
+
+  it('follows a key struck again in the same hand at another velocity', () => {
+    scrubController.end();
+    const take = createEmptyTake({
+      notes: [note('soft', 100, 'treble', 0.3), note('loud', 400, 'treble', 0.9)],
+      durationMs: 5_000,
+    });
+    useTakeStore.getState().setTake(take);
+    expect(scrubController.begin()).toBe(true);
+    try {
+      scrubController.update(0);
+      scrubController.update(200);
+      expect(scrubController.getActiveKeys().get(60)).toEqual({ hand: 'right', velocity: 0.3 });
+      // Same key, same hand, inside the first flash: only the velocity tells.
+      scrubController.update(500);
+      expect(scrubController.getActiveKeys().get(60)).toEqual({ hand: 'right', velocity: 0.9 });
+    } finally {
+      scrubController.end();
+    }
   });
 
   it('puts the playhead back without a sound when a scrub is called off', () => {
@@ -58,7 +83,7 @@ describe('scrub key lights', () => {
     expect(transportController.getPlayheadMs()).toBe(start);
     // Crossing that note again on the way back auditions nothing.
     expect(audioEngine.scheduleNote).not.toHaveBeenCalled();
-    expect(scrubController.getActiveHands().size).toBe(0);
+    expect(scrubController.getActiveKeys().size).toBe(0);
   });
 });
 
@@ -124,13 +149,43 @@ describe('scrub auditions', () => {
   it('light a note written but not played, and audition nothing for it', () => {
     playCalibrated(true);
     const silent: NoteEvent = { ...soft, id: 'silent', velocity: 0, staff: 'treble' };
-    let lit: ReadonlyMap<number, string> = new Map();
+    let lit: ReadonlyMap<number, KeyCue> = new Map();
     const auditioned = audition([silent], (to) => {
       scrubController.update(to);
-      lit = scrubController.getActiveHands();
+      lit = scrubController.getActiveKeys();
     });
     expect(auditioned).toEqual([]);
-    expect([...lit.keys()]).toEqual([60]);
+    expect(lit).toEqual(new Map([[60, { hand: 'right', velocity: 0 }]]));
+  });
+
+  it('light a key at the velocity the take plays it at, not the audition floor', () => {
+    playCalibrated(true);
+    let lit: ReadonlyMap<number, KeyCue> = new Map();
+    const auditioned = audition([soft], (to) => {
+      scrubController.update(to);
+      lit = scrubController.getActiveKeys();
+    });
+    expect(auditioned).toEqual([[60, PREVIEW_VELOCITY_FLOOR]]);
+    expect(lit.get(60)?.velocity).toBe(0.2);
+  });
+
+  it('light the louder of two copies crossed together, either way across them', () => {
+    playCalibrated(true);
+    const first: NoteEvent = { ...loud, id: 'a', velocity: 0.9 };
+    const second: NoteEvent = { ...loud, id: 'b', velocity: 0.7 };
+    let forward: KeyCue | undefined;
+    audition([first, second], (to) => {
+      scrubController.update(to);
+      forward = scrubController.getActiveKeys().get(64);
+    });
+    expect(forward?.velocity).toBe(0.9);
+    let backward: KeyCue | undefined;
+    audition([second, first], (to) => {
+      scrubController.update(to);
+      scrubController.update(0);
+      backward = scrubController.getActiveKeys().get(64);
+    });
+    expect(backward?.velocity).toBe(0.9);
   });
 
   it('audition the louder of two copies of a key last, whichever is stored first', () => {

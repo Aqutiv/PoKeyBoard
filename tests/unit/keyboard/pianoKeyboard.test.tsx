@@ -4,10 +4,12 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { __resetForTests as resetRange } from '@/audio/playableRange';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
+import { keyShade } from '@/features/keyboard/keyShading';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import type { TransportState } from '@/features/transport/transportMachine';
 import { en } from '@/i18n/en';
 import { I18nContext } from '@/i18n/i18nContext';
+import { SETTINGS_DEFAULTS, useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 
 /** The transport as the key bed reads it: a state, a playhead, and who to tell. */
@@ -28,10 +30,10 @@ vi.mock('@/features/transport/transportController', () => ({
   },
 }));
 
-/** C4 alone from the start, then E4 with it from 500 ms. */
+/** C4 alone from the start, then E4 with it from 500 ms, played harder. */
 const NOTES: NoteEvent[] = [
   { id: 'c', midi: 60, startMs: 0, durationMs: 1_000, velocity: 0.6, staff: 'treble' },
-  { id: 'e', midi: 64, startMs: 500, durationMs: 1_000, velocity: 0.6, staff: 'treble' },
+  { id: 'e', midi: 64, startMs: 500, durationMs: 1_000, velocity: 0.9, staff: 'treble' },
 ];
 
 /** Frames run by hand, so a test says exactly when the key bed redraws. */
@@ -44,16 +46,23 @@ function runFrame(): void {
   for (const callback of callbacks) callback(performance.now());
 }
 
-/** The keys the player holds, as the engine reports them. */
-let held: ReadonlySet<number> = new Set();
+/** The keys the player holds, as the engine reports them, each by its velocity. */
+let held: ReadonlyMap<number, number> = new Map();
+let heldKeys: ReadonlySet<number> = new Set();
 const heldListeners = new Set<(midis: ReadonlySet<number>) => void>();
 
-function hold(...midis: number[]): void {
-  held = new Set(midis);
+/** Hold these keys, each a midi (struck at 0.75) or a midi and its velocity. */
+function hold(...keys: Array<number | [number, number]>): void {
+  held = new Map(keys.map((k) => (typeof k === 'number' ? [k, 0.75] : k)));
+  heldKeys = new Set(held.keys());
   act(() => {
-    for (const listener of [...heldListeners]) listener(held);
+    for (const listener of [...heldListeners]) listener(heldKeys);
   });
 }
+
+/** How deep the take lights a key, and how deep the player's hold does. */
+const takeShade = (element: HTMLElement) => element.style.getPropertyValue('--take-shade');
+const liveShade = (element: HTMLElement) => element.style.getPropertyValue('--live-shade');
 
 function setTransport(state: TransportState, playheadMs = transport.playheadMs): void {
   transport.state = state;
@@ -76,7 +85,9 @@ function key(note: string): HTMLElement {
 beforeEach(() => {
   transport.state = 'idle';
   transport.playheadMs = 0;
-  held = new Set();
+  held = new Map();
+  heldKeys = new Set();
+  useSettingsStore.setState({ ...SETTINGS_DEFAULTS });
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     frames.set(nextFrame, callback);
     return nextFrame++;
@@ -89,7 +100,8 @@ beforeEach(() => {
       disconnect(): void {}
     },
   );
-  vi.spyOn(audioEngine, 'getActiveNotes').mockImplementation(() => held);
+  vi.spyOn(audioEngine, 'getActiveNotes').mockImplementation(() => heldKeys);
+  vi.spyOn(audioEngine, 'getActiveVelocities').mockImplementation(() => held);
   vi.spyOn(audioEngine, 'subscribeActiveNotes').mockImplementation((listener) => {
     heldListeners.add(listener);
     return () => heldListeners.delete(listener);
@@ -157,6 +169,66 @@ describe('the keys the take plays, to a screen reader', () => {
     expect(key('C4')).toHaveAttribute('aria-pressed', 'false');
     // The stop lets go of the take's keys only: one the player holds stays down.
     expect(key('E4')).toHaveAttribute('aria-pressed', 'true');
+  });
+});
+
+describe('how deep the keys are lit', () => {
+  it('lights each key the take plays as deep as it is played, and clears it after', () => {
+    setTransport('playing', 600);
+    renderKeyboard();
+    runFrame();
+    expect(takeShade(key('C4'))).toBe(keyShade(0.6, true));
+    expect(takeShade(key('E4'))).toBe(keyShade(0.9, true));
+    expect(takeShade(key('C4'))).not.toBe(takeShade(key('E4')));
+
+    transport.playheadMs = 1_200;
+    runFrame();
+    expect(takeShade(key('C4'))).toBe('');
+    expect(takeShade(key('E4'))).toBe(keyShade(0.9, true));
+
+    setTransport('paused');
+    expect(takeShade(key('E4'))).toBe('');
+  });
+
+  it('lights them all alike while the shading is off, from the next frame on', () => {
+    setTransport('playing', 600);
+    renderKeyboard();
+    act(() => useSettingsStore.getState().setVelocityShading(false));
+    runFrame();
+    expect(takeShade(key('C4'))).toBe(keyShade(0.6, false));
+    expect(takeShade(key('E4'))).toBe(takeShade(key('C4')));
+
+    act(() => useSettingsStore.getState().setVelocityShading(true));
+    runFrame();
+    expect(takeShade(key('E4'))).toBe(keyShade(0.9, true));
+  });
+
+  it('lights a key the player holds as deep as they struck it', () => {
+    renderKeyboard();
+    hold([60, 0.3], [64, 1]);
+    expect(liveShade(key('C4'))).toBe(keyShade(0.3, true));
+    expect(liveShade(key('E4'))).toBe(keyShade(1, true));
+
+    act(() => useSettingsStore.getState().setVelocityShading(false));
+    expect(liveShade(key('C4'))).toBe(keyShade(0.3, false));
+    expect(liveShade(key('E4'))).toBe(liveShade(key('C4')));
+
+    hold();
+    expect(liveShade(key('C4'))).toBe('');
+  });
+
+  it('keeps the take’s shade on a key the player lets go of while the take still plays it', () => {
+    setTransport('playing', 200);
+    renderKeyboard();
+    runFrame();
+    hold([60, 0.95]);
+    expect(liveShade(key('C4'))).toBe(keyShade(0.95, true));
+    expect(takeShade(key('C4'))).toBe(keyShade(0.6, true));
+
+    // The render that takes the player's shade away must leave the take's.
+    hold();
+    expect(liveShade(key('C4'))).toBe('');
+    expect(takeShade(key('C4'))).toBe(keyShade(0.6, true));
   });
 });
 

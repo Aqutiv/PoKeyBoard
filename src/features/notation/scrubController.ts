@@ -1,6 +1,6 @@
 import { audioEngine } from '@/audio/AudioEngine';
 import { velocityForCurveDb } from '@/audio/velocityCurve';
-import { noteHand, type Hand } from '@/domain/hands';
+import { noteHand, type KeyCue } from '@/domain/hands';
 import { isSilentNote, sortStrikes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
@@ -61,9 +61,12 @@ class ScrubController {
   private sortedNotes: NoteEvent[] = [];
   private currentTimeMs = 0;
   private active = false;
-  /** midi → the flash's expiry (performance.now ms) and the hand playing it. */
-  private readonly flashes = new Map<number, { expiry: number; hand: Hand }>();
-  private activeSnapshot: ReadonlyMap<number, Hand> = new Map();
+  /**
+   * midi → the flash's expiry (performance.now ms) and how it lights the key:
+   * in the hand playing it, as hard as the take played it.
+   */
+  private readonly flashes = new Map<number, { expiry: number; cue: KeyCue }>();
+  private activeSnapshot: ReadonlyMap<number, KeyCue> = new Map();
 
   get isActive(): boolean {
     return this.active;
@@ -99,7 +102,12 @@ class ScrubController {
     const audition = useSettingsStore.getState().scrubAudition;
     const now = performance.now();
     for (const note of crossed) {
-      this.flashes.set(note.midi, { expiry: now + KEY_FLASH_MS, hand: noteHand(note) });
+      // The take's velocity, not the audition's: the key shows how the note was
+      // played, however the floor below lifts what is heard of it.
+      this.flashes.set(note.midi, {
+        expiry: now + KEY_FLASH_MS,
+        cue: { hand: noteHand(note), velocity: note.velocity },
+      });
       // A note written but not played flashes its key, as the score shows it,
       // but is not heard: the audition floor would otherwise lift it.
       if (audition && !isSilentNote(note)) {
@@ -140,9 +148,9 @@ class ScrubController {
 
   /**
    * Keys currently flashing from scrub auditions, each with the hand that
-   * plays it (for the keyboard).
+   * plays it and the velocity the take plays it at (for the keyboard).
    */
-  getActiveHands(): ReadonlyMap<number, Hand> {
+  getActiveKeys(): ReadonlyMap<number, KeyCue> {
     this.refreshActiveSnapshot(performance.now());
     return this.activeSnapshot;
   }
@@ -155,12 +163,13 @@ class ScrubController {
         changed = true;
       }
     }
-    // Size alone would miss a key re-flashed from the other staff before its
-    // first flash expired: same count, same pitch, other hand — and the key
-    // bed would wear the previous hand's colour for the whole new flash.
+    // Size alone would miss a key re-flashed before its first flash expired:
+    // same count, same pitch, but another hand or another velocity — and the
+    // key bed would wear the previous shade for the whole new flash. Each
+    // flash carries a cue of its own, so any re-flash reads as a change.
     if (!changed && this.flashes.size === this.activeSnapshot.size) {
       for (const [midi, flash] of this.flashes) {
-        if (this.activeSnapshot.get(midi) !== flash.hand) {
+        if (this.activeSnapshot.get(midi) !== flash.cue) {
           changed = true;
           break;
         }
@@ -168,7 +177,7 @@ class ScrubController {
       if (!changed) return;
     }
     this.activeSnapshot = new Map(
-      [...this.flashes].map(([midi, flash]) => [midi, flash.hand] as const),
+      [...this.flashes].map(([midi, flash]) => [midi, flash.cue] as const),
     );
   }
 }

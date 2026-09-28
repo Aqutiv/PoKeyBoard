@@ -177,6 +177,15 @@ export function SettingsPage() {
           />
         </label>
         <label className="setting-row">
+          <span>{m.settings.velocityShading}</span>
+          <input
+            type="checkbox"
+            checked={settings.velocityShading}
+            onChange={(e) => settings.setVelocityShading(e.target.checked)}
+          />
+        </label>
+        <p className="settings__hint">{m.settings.velocityShadingHint}</p>
+        <label className="setting-row">
           <span>{m.settings.followPlayback}</span>
           <input
             type="checkbox"

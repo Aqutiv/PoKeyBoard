@@ -55,6 +55,13 @@ export function useLiveActiveNotes(): ReadonlySet<number> {
   return useSyncExternalStore(subscribeActiveNotes, getActiveNotes);
 }
 
+const getActiveVelocities = () => audioEngine.getActiveVelocities();
+
+/** The keys played live right now, each with the velocity it was struck at. */
+export function useLiveKeyVelocities(): ReadonlyMap<number, number> {
+  return useSyncExternalStore(subscribeActiveNotes, getActiveVelocities);
+}
+
 const subscribeSustain = (onStoreChange: () => void) => audioEngine.subscribeSustain(onStoreChange);
 const getSustainDown = () => audioEngine.isSustainDown();
 

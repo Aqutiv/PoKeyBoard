@@ -130,6 +130,20 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).toneFollowsTouch).toBe(false);
   });
 
+  it('keeps velocity shading on keys, on unless it was switched off, and drops a value that is not one', async () => {
+    expect(SETTINGS_DEFAULTS.velocityShading).toBe(true);
+
+    useSettingsStore.getState().setVelocityShading(false);
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).velocityShading).toBe(false);
+
+    // Anything else loads as nothing, so the default stands: the shading on.
+    await db.settings.put({ key: 'velocityShading', value: 'no' });
+    expect((await loadSettings()).velocityShading).toBeUndefined();
+    await restoreSettingsFromBackup({ velocityShading: false });
+    expect((await loadSettings()).velocityShading).toBe(false);
+  });
+
   it('restores only known keys from a backup blob', async () => {
     await restoreSettingsFromBackup({ fixedVelocity: 0.9, metronomeVolume: -1, evil: 'x' });
     const loaded = await loadSettings();

@@ -548,6 +548,9 @@ export const mg: Messages = {
     midiCalibrateRejected:
       'Tsy maintsy mafy lavitra noho ny malefaka indrindra ny naoty mafy indrindra. Andramo indray.',
     noteLabels: 'Anaran’ny naoty eo amin’ny kitendry',
+    velocityShading: 'Loko araka ny hafainganam-pandeha eo amin’ny kitendry',
+    velocityShadingHint:
+      'Asehon’ny kitendry mirehitra ny herin’ny naoty tsirairay: malemy loko raha malefaka, mahery loko raha mafy, rehefa mitendry ianao sy mandritra ny famerenana. Raha vonoina, mitovy ny fireheditry ny kitendry na ahoana na ahoana hamafin’ny fitendrena azy.',
     followPlayback: 'Manaraka ny famerenana ny klavie',
     scrubAudition: 'Feo rehefa mandalo ny sori-kira',
     backgroundPlayback: 'Tohizo any ambadika ny fandefasana',

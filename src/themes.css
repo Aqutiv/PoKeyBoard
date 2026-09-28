@@ -60,24 +60,28 @@
   --ivory: #f5efe2; /* white key body */
   --ivory-shadow: #d5ccb9;
   --key-white-border: #a89f8c;
-  --key-white-active-1: #e8cf96;
-  --key-white-active-2: #f2dfae;
-  --key-white-active-3: #eed9a2;
+  /* A lit key's colours, as the loudest note lights it. A softer one mixes
+     them toward the key's own colour (keyboard.css, keyShading.ts): a pale
+     wash at pianissimo, about the gold every lit key once wore. */
+  --key-white-active-1: #e5b22d;
+  --key-white-active-2: #f0c759;
+  --key-white-active-3: #eabe42;
   --key-black-top: #3a3631;
   --key-black: #201d1a;
   --key-black-edge: #0b0908;
-  --key-black-active-1: #8c6b25;
-  --key-black-active-2: #6f5417;
-  --key-black-active-3: #52400f;
+  --key-black-active-1: #b78a16;
+  --key-black-active-2: #977103;
+  --key-black-active-3: #755900;
   /* Playback lights the left hand a few shades deeper down the same amber —
      a copper against the right hand's gold, so the two read apart without a
-     second colour arriving on the key bed. */
-  --key-white-left-1: #d0904a;
-  --key-white-left-2: #e3ac6c;
-  --key-white-left-3: #d9a05c;
-  --key-black-left-1: #a05f22;
-  --key-black-left-2: #83491a;
-  --key-black-left-3: #62350f;
+     second colour arriving on the key bed. Redder than the gold by enough
+     that they still do when a soft note pales them both toward the key. */
+  --key-white-left-1: #d56a02;
+  --key-white-left-2: #e8852c;
+  --key-white-left-3: #e07917;
+  --key-black-left-1: #ca6719;
+  --key-black-left-2: #a74f0c;
+  --key-black-left-3: #863e07;
   /* Training flags a wrong key against the record red, not the amber the
      key bed uses for everything that is going right. */
   --key-wrong: #8f3030;
@@ -123,21 +127,21 @@ html[data-theme='light'] {
   --ivory: #fbf7ec;
   --ivory-shadow: #e4dcc8;
   --key-white-border: #c9c0aa;
-  --key-white-active-1: #ecd49a;
-  --key-white-active-2: #f4e3b4;
-  --key-white-active-3: #eeda9f;
+  --key-white-active-1: #e9b732;
+  --key-white-active-2: #f2cb61;
+  --key-white-active-3: #eabf3c;
   --key-black-top: #453e36;
   --key-black: #26221e;
   --key-black-edge: #14110e;
-  --key-black-active-1: #9a7a33;
-  --key-black-active-2: #7d6122;
-  --key-black-active-3: #5f4a16;
-  --key-white-left-1: #d5964f;
-  --key-white-left-2: #e9b477;
-  --key-white-left-3: #dfa766;
-  --key-black-left-1: #ac6929;
-  --key-black-left-2: #8d5320;
-  --key-black-left-3: #6b3e16;
+  --key-black-active-1: #c69a2b;
+  --key-black-active-2: #a67e0b;
+  --key-black-active-3: #846305;
+  --key-white-left-1: #dc6f04;
+  --key-white-left-2: #ef8d3b;
+  --key-white-left-3: #e78029;
+  --key-black-left-1: #d77122;
+  --key-black-left-2: #b25a15;
+  --key-black-left-3: #8f4711;
   --key-wrong: #d98080;
   --key-wrong-edge: #a83636;
   --key-label: #5f553f;

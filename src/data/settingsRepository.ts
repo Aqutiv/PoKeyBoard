@@ -43,6 +43,7 @@ const SETTING_SCHEMAS = {
     .refine(({ min, max }) => max - min >= MIN_MIDI_RANGE_SPAN)
     .nullable(),
   showNoteLabels: z.boolean(),
+  velocityShading: z.boolean(),
   keyboardFollowsPlayback: z.boolean(),
   scrubAudition: z.boolean(),
   backgroundPlayback: z.boolean(),
