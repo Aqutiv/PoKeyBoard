@@ -34,7 +34,9 @@ const MIRROR = 124;
 /**
  * Two times this close are one to a hand: notes starting this close together
  * are struck together, and a silence this short is no rest. Wider than a hand
- * spreads a chord, narrower than any two successive notes in the library.
+ * spreads a chord, or the 11 ms a score's rounding leaves between two voices
+ * in the Ballade's closing run, and narrower than the library's fastest run,
+ * 39 ms a note.
  */
 const TIMING_SLACK_MS = 35;
 
