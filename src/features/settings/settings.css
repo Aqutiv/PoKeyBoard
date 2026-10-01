@@ -1,21 +1,89 @@
+/* Section switch: one segment per section, filling the page width. Twin of
+   .learn-levels, which mirrors the library's .library-folders — keep the three
+   in step. Four segments at 320px leave ~69px each, ~57px of it for text, so
+   the type steps down on narrow screens as Learn's does. */
+.settings-sections {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+}
+
+.settings-sections__option {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+  padding: 0 6px;
+  border-radius: calc(var(--radius-m) - 2px);
+  color: var(--text-dim);
+  font-size: clamp(11px, 3vw, 14px);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sections__option.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* An update waiting: above the switch, so it shows on every section. */
+.settings-update {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+  font-size: 14px;
+}
+
 .settings__scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 24px;
+  /* 4px of room either side, taken back by the margin so nothing moves: focus
+     rings and the ring of a piano switch are drawn outside their controls, and
+     the scroller would clip them. */
+  margin-inline: -4px;
+  padding: 0 4px 24px;
+  /* Keeps a row reached by Tab from settling under a group's sticky heading. */
+  scroll-padding-top: 44px;
 }
 
-.settings__section {
-  font-size: 12px;
-  font-weight: 650;
+/* Sticks to the top of the scroller while its group passes beneath it, hence
+   the opaque page background. Twin of Learn's .learn-part__heading; the inline
+   margin and padding also cover the scroller's side room. */
+.settings-group__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -4px;
+  padding: 14px 6px 6px;
+  background: var(--surface-0);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-faint);
-  margin: 22px 0 8px;
+  color: var(--text-dim);
 }
 
-.settings__section:first-child {
-  margin-top: 4px;
+.settings-group:first-child .settings-group__heading {
+  padding-top: 2px;
 }
 
 .setting-row {
@@ -149,6 +217,11 @@
   .piano-card--active:hover {
     background: var(--surface-3);
     border-color: var(--accent-strong);
+  }
+
+  .settings-sections__option:not(.is-selected):hover {
+    background: var(--surface-2);
+    color: var(--text);
   }
 }
 

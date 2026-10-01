@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { gotoAppReady, nav, recordShortTake, transport } from './helpers';
+import { gotoAppReady, nav, openSettings, recordShortTake, transport } from './helpers';
 
 test.use({ viewport: { width: 1440, height: 900 } });
 
@@ -172,7 +172,7 @@ for (const theme of ['dark', 'light']) {
   test(`desktop controls fit in ${theme} theme and tooltips work with focus`, async ({ page }) => {
     await gotoAppReady(page);
     if (theme === 'light') {
-      await nav(page).getByRole('button', { name: 'Settings' }).click();
+      await openSettings(page, 'Display');
       await page.getByRole('radio', { name: 'Ivory recital — light' }).check();
       await nav(page).getByRole('button', { name: 'Play', exact: true }).click();
     }

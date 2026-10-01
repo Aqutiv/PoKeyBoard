@@ -514,15 +514,27 @@ export interface Messages {
   };
   settings: {
     title: string;
+    /** The section switch's name, and its sections in switch order. */
+    sectionLabel: string;
+    sections: {
+      sound: string;
+      playing: string;
+      display: string;
+      app: string;
+    };
+    /** Group headings within the sections (Piano, Storage… are named below). */
+    playback: string;
+    touch: string;
+    controllers: string;
+    keys: string;
+    installUpdates: string;
     language: string;
     appearance: string;
     theme: string;
     themeDark: string;
     themeLight: string;
     themeSystem: string;
-    playing: string;
     storage: string;
-    app: string;
     diagnostics: string;
     reset: string;
     piano: string;

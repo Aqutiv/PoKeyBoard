@@ -1,4 +1,5 @@
-/* Folder switch: one segment per folder, filling the page width. */
+/* Folder switch: one segment per folder, filling the page width. Learn's level
+   switch and Settings' section switch are its twins — keep the three in step. */
 .library-folders {
   display: flex;
   flex-shrink: 0;

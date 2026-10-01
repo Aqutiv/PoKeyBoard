@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { chooseSettingsSection } from './helpers';
 
 const DARK_BG = 'rgb(20, 17, 16)'; // --surface-0 #141110
 const LIGHT_BG = 'rgb(247, 243, 234)'; // --surface-0 #f7f3ea
@@ -19,6 +20,7 @@ function themeMeta(page: Page) {
 
 async function gotoSettings(page: Page): Promise<void> {
   await page.goto('/#/settings');
+  await chooseSettingsSection(page, 'Display');
   await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
 }
 

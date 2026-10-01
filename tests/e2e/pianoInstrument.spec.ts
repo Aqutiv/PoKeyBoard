@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { pianoInstrument } from '../../src/audio/instruments';
-import { gotoAppReady, nav } from './helpers';
+import { chooseSettingsSection, gotoAppReady, nav, settingsSections } from './helpers';
 
 // Read from the registry so a pack-version bump cannot leave these stale.
 const SALAMANDER_PACK = pianoInstrument('salamander-grand').packVersion;
@@ -224,9 +224,15 @@ test.describe('choosing a piano', () => {
     await pianoRadio(page, HEADROOM).check();
     await expect.poll(() => storedTakePacks(page)).toEqual([HEADROOM_PACK]);
 
+    // Reset lives on App, and leaves the player there.
+    await chooseSettingsSection(page, 'App');
     page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Reset settings' }).click();
+    await expect(
+      settingsSections(page).getByRole('button', { name: 'App', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
 
+    await chooseSettingsSection(page, 'Sound');
     await expect(pianoRadio(page, SALAMANDER)).toBeChecked();
     // Reset goes through the store, not the radio handler. The take has to
     // follow the engine anyway, or an export would render on a piano the user

@@ -85,7 +85,6 @@ export function PianoSection() {
 
   return (
     <>
-      <h2 className="settings__section">{m.settings.piano}</h2>
       <p className="settings__hint">{m.settings.pianoHint}</p>
 
       <div className="piano-choice" role="radiogroup" aria-label={m.settings.piano}>
