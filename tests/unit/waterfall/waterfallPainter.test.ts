@@ -128,7 +128,15 @@ describe('paintWaterfall', () => {
     expect(new Set(fills).size).toBe(1);
   });
 
-  it('draws a written-only note hollow, before the bars that are played', () => {
+  it('keeps a written-only black key’s outline over its white neighbour’s bar', () => {
+    // C♯4 stands over the right half of C4: the white key's bar is filled and
+    // outlined first, then the black key's hollow outline goes over it.
+    const ops = paint(sceneOf([note(60, 500), note(61, 500, { velocity: 0 })]));
+    const drawn = ops.filter((op) => op.op === 'fill' || op.op === 'stroke');
+    expect(drawn.map((op) => op.op)).toEqual(['fill', 'stroke', 'stroke']);
+  });
+
+  it('draws a written-only note hollow, under the played bars on keys of its colour', () => {
     const ops = paint(sceneOf([note(64, 500), note(60, 600, { velocity: 0 })]));
     const drawn = ops.filter((op) => op.op === 'fill' || op.op === 'stroke');
     // The hollow C is outlined only, and first; the E is filled and outlined.

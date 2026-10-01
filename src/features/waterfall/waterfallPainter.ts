@@ -82,7 +82,7 @@ function outline(ctx: WaterfallSurface, bar: WaterfallBar, top: number, bottom: 
 /** How round each end of a bar is: only an end that is the note's own is rounded. */
 function radii(bar: WaterfallBar): [number, number] {
   const radius = Math.max(0, Math.min(BAR_RADIUS_PX, bar.width / 4, (bar.bottom - bar.top) / 2));
-  return [bar.cutTop ? 0 : radius, bar.cutBottom || !bar.onset ? 0 : radius];
+  return [bar.cutTop ? 0 : radius, bar.cutBottom ? 0 : radius];
 }
 
 function drawBar(ctx: WaterfallSurface, bar: WaterfallBar, paint: WaterfallPaint): void {
@@ -135,9 +135,10 @@ function drawMarker(ctx: WaterfallSurface, marker: WaterfallMarker, paint: Water
 /**
  * Paint `scene` in CSS pixels; the caller has already scaled the context for
  * the screen. From the bottom up: the stage, the octave guides, the lines
- * where a loop starts again, the hollow bars of notes written but not played,
- * the bars (white keys' first, so black keys' stand over them), and last the
- * marks of notes off the key bed.
+ * where a loop starts again, the white keys' bars, the black keys' bars, which
+ * stand over them, and last the marks of notes off the key bed. Within each
+ * key colour, the hollow bars of notes written but not played go under the
+ * played ones, so a strike drawn over its written note shows whole.
  */
 export function paintWaterfall(
   ctx: WaterfallSurface,
@@ -166,7 +167,10 @@ export function paintWaterfall(
     ctx.restore();
   }
 
-  for (const bar of scene.bars) if (bar.silent) drawHollow(ctx, bar, paint);
-  for (const bar of scene.bars) if (!bar.silent) drawBar(ctx, bar, paint);
+  for (const black of [false, true]) {
+    for (const bar of scene.bars)
+      if (bar.black === black && bar.silent) drawHollow(ctx, bar, paint);
+    for (const bar of scene.bars) if (bar.black === black && !bar.silent) drawBar(ctx, bar, paint);
+  }
   for (const marker of scene.markers) drawMarker(ctx, marker, paint);
 }
