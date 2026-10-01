@@ -3,6 +3,7 @@ import { useRouter } from '@/app/routerContext';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
+import { SegmentedSwitch } from '@/ui/SegmentedSwitch';
 import { formatDurationMs } from '@/utils/timing';
 import { filterLibrarySections, LIBRARY_FOLDER_SECTIONS } from './catalog';
 import { LIBRARY_FOLDER_IDS, type LibraryFolderId } from './folders';
@@ -112,19 +113,12 @@ export function LibraryPage() {
         <h1 className="page__title">{m.library.title}</h1>
       </header>
       <p className="page__hint">{m.library.hint}</p>
-      <div className="library-folders" role="group" aria-label={m.library.folderLabel}>
-        {LIBRARY_FOLDER_IDS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={`library-folders__option${id === folder ? ' is-selected' : ''}`}
-            aria-pressed={id === folder}
-            onClick={() => chooseFolder(id)}
-          >
-            {m.library.folders[id]}
-          </button>
-        ))}
-      </div>
+      <SegmentedSwitch
+        ariaLabel={m.library.folderLabel}
+        options={LIBRARY_FOLDER_IDS.map((id) => ({ value: id, label: m.library.folders[id] }))}
+        value={folder}
+        onChange={chooseFolder}
+      />
       {showFilter ? (
         <div className="library-filter">
           <svg

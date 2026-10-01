@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { loadLearnProgress, saveLearnProgress } from '@/data/learnProgressRepository';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
+import { SegmentedSwitch } from '@/ui/SegmentedSwitch';
 import { ChapterRunner } from './ChapterRunner';
 import { LEARN_SECTIONS_BY_LEVEL } from './chapters';
-import { LEARN_LEVEL_IDS, type LearnLevelId } from './levels';
+import { LEARN_LEVEL_IDS } from './levels';
 import { chapterStatus, EMPTY_LEARN_PROGRESS, type LearnProgress } from './progress';
 import { getOpenChapter, setOpenChapter } from './session';
 import type { LearnChapterId, LearnChapterMeta } from './types';
@@ -138,19 +139,15 @@ export function LearnPage() {
         <h1 className="page__title">{m.learn.title}</h1>
       </header>
       <p className="page__hint">{m.workflow.availableLessons({ count: availableCount })}</p>
-      <div className="learn-levels" role="group" aria-label={m.learn.levelLabel}>
-        {LEARN_LEVEL_IDS.map((id: LearnLevelId) => (
-          <button
-            key={id}
-            type="button"
-            className={`learn-levels__option${id === level ? ' is-selected' : ''}`}
-            aria-pressed={id === level}
-            onClick={() => setLevel(id)}
-          >
-            {m.learn.levels[id]}
-          </button>
-        ))}
-      </div>
+      {/* Three levels at 320px leave ~92px each, and "Intermediate" needs
+          ~88px at 14px, so the labels shrink. */}
+      <SegmentedSwitch
+        ariaLabel={m.learn.levelLabel}
+        options={LEARN_LEVEL_IDS.map((id) => ({ value: id, label: m.learn.levels[id] }))}
+        value={level}
+        onChange={setLevel}
+        shrink
+      />
       {/* One scroller over all the parts, not one per part, so the headings
           can stick as their chapters pass beneath them. */}
       <div className="learn-scroll">

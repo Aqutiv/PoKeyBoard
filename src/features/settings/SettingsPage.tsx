@@ -5,6 +5,7 @@ import { updateManager } from '@/pwa/updateManager';
 import { useUpdateAvailable } from '@/pwa/useUpdateAvailable';
 import { isBusyState } from '@/features/transport/transportMachine';
 import { useSettingsStore } from '@/state/useSettingsStore';
+import { SegmentedSwitch } from '@/ui/SegmentedSwitch';
 import { AppSection } from './AppSection';
 import { DisplaySection } from './DisplaySection';
 import { PlayingSection } from './PlayingSection';
@@ -33,19 +34,15 @@ export function SettingsPage() {
         <h1 className="page__title">{m.settings.title}</h1>
       </header>
       <UpdateBanner />
-      <div className="settings-sections" role="group" aria-label={m.settings.sectionLabel}>
-        {SETTINGS_SECTION_IDS.map((id) => (
-          <button
-            key={id}
-            type="button"
-            className={`settings-sections__option${id === section ? ' is-selected' : ''}`}
-            aria-pressed={id === section}
-            onClick={() => setSection(id)}
-          >
-            {m.settings.sections[id]}
-          </button>
-        ))}
-      </div>
+      {/* Four sections at 320px leave ~69px each, ~57px of it for text, so
+          the labels shrink as Learn's levels do. */}
+      <SegmentedSwitch
+        ariaLabel={m.settings.sectionLabel}
+        options={SETTINGS_SECTION_IDS.map((id) => ({ value: id, label: m.settings.sections[id] }))}
+        value={section}
+        onChange={setSection}
+        shrink
+      />
       {/* Keyed, so each section opens at its top. One scroller over all of a
           section's groups, not one per group, so their headings can stick. */}
       <div className="settings__scroll" key={section}>

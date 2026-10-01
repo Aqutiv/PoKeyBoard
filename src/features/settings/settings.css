@@ -1,40 +1,3 @@
-/* Section switch: one segment per section, filling the page width. Twin of
-   .learn-levels, which mirrors the library's .library-folders — keep the three
-   in step. Four segments at 320px leave ~69px each, ~57px of it for text, so
-   the type steps down on narrow screens as Learn's does. */
-.settings-sections {
-  display: flex;
-  flex-shrink: 0;
-  gap: 2px;
-  margin-bottom: 12px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  background: var(--surface-1);
-}
-
-.settings-sections__option {
-  flex: 1;
-  min-width: 0;
-  min-height: 40px;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-  padding: 0 6px;
-  border-radius: calc(var(--radius-m) - 2px);
-  color: var(--text-dim);
-  font-size: clamp(11px, 3vw, 14px);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.settings-sections__option.is-selected {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
 /* An update waiting: above the switch, so it shows on every section. */
 .settings-update {
   display: flex;
@@ -142,8 +105,9 @@
 }
 
 /* A few short choices on one row (ChoiceSwitch): the name, then segments
-   like the section switch's, smaller. The segments wrap beneath the name
-   when the two do not fit one line, and only then shrink, with ellipsis. */
+   like the section switch's (SegmentedSwitch), smaller. The segments wrap
+   beneath the name when the two do not fit one line, and only then shrink,
+   with ellipsis. */
 .choice-row {
   flex-wrap: wrap;
   row-gap: 6px;
@@ -286,7 +250,6 @@
     border-color: var(--accent-strong);
   }
 
-  .settings-sections__option:not(.is-selected):hover,
   .choice-switch__option:not(.is-selected):hover {
     background: var(--surface-2);
     color: var(--text);
