@@ -6,6 +6,7 @@ import {
   firstReaching,
   layoutWaterfall,
   MAX_LOOP_PASSES,
+  MAX_PASS_BARS,
   MIN_BAR_PX,
   noteReach,
   STRIKE_GAP_PX,
@@ -218,6 +219,27 @@ describe('layoutWaterfall', () => {
       // A restart every 100 ms, the last 2.5 px under the top edge.
       expect(scene.restartYs).toHaveLength(119);
       expect(Math.min(...scene.restartYs)).toBeCloseTo(2.5);
+    });
+
+    it('keeps a dense loop’s passes to a budget of bars, still marking every pass', () => {
+      // A thousand notes inside the shortest loop, over the tallest view.
+      const dense = Array.from({ length: 1_000 }, (_, i) =>
+        note(60 + (i % 12), Math.floor(i / 10), 20),
+      );
+      const shortest = { startMs: 0, endMs: MIN_LOOP_MS };
+      const started = performance.now();
+      let scene = layoutWaterfall(dense, at(0, 12_000, shortest), VIEW);
+      for (let frame = 1; frame < 60; frame += 1) {
+        scene = layoutWaterfall(dense, at(0, 12_000, shortest), VIEW);
+      }
+      const elapsed = performance.now() - started;
+      expect(scene.restartYs).toHaveLength(119);
+      // Whole passes until the budget is spent, then only their restart lines.
+      const passBars = scene.bars.filter((bar) => bar.pass > 0).length;
+      expect(passBars).toBeGreaterThanOrEqual(MAX_PASS_BARS);
+      expect(passBars).toBeLessThan(MAX_PASS_BARS + dense.length);
+      // A second's worth of frames, well inside a second.
+      expect(elapsed).toBeLessThan(500);
     });
 
     it('draws no more than its cap of passes, however short the loop', () => {

@@ -35,6 +35,14 @@ const WHITE_INSET_SHARE = 0.06;
 export const MAX_LOOP_PASSES =
   Math.ceil((SLOWEST_FALL_SECONDS * 1000 * MAX_PLAYBACK_SPEED) / MIN_LOOP_MS) + 1;
 
+/**
+ * The most bars and marks the passes round a loop add to a frame. A loop of
+ * music comes nowhere near it; a short one packed with notes — an import's,
+ * say — would otherwise add each of them over again for every pass up the
+ * view, every frame. Past it a pass keeps its restart line but not its notes.
+ */
+export const MAX_PASS_BARS = 2000;
+
 export interface WaterfallTimeline {
   /** The moment at the key tops, in take ms; before 0 while a recording counts in. */
   readonly nowMs: number;
@@ -256,10 +264,13 @@ export function layoutWaterfall(
       if (note.startMs + note.durationMs > fold.startMs) heldIn.push(note);
     }
     const end = lowerBoundByStart(notes, fold.endMs);
+    const placed = () => whites.length + blacks.length + markers.length;
+    const atKeys = placed();
     for (let pass = 1; pass <= MAX_LOOP_PASSES; pass += 1) {
       const offsetMs = pass * lengthMs;
       if (fold.startMs + offsetMs >= topMs) break;
       restartYs.push(y(fold.startMs + offsetMs));
+      if (placed() - atKeys >= MAX_PASS_BARS) continue;
       for (const note of heldIn) {
         const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
         place(note, fold.startMs + offsetMs, endMs + offsetMs, pass, false);
