@@ -76,7 +76,7 @@ const PAINT = { widthPx: 1400, heightPx: 300, palette: PALETTE, followsVelocity:
 function sceneOf(notes: NoteEvent[], loop = null as { startMs: number; endMs: number } | null) {
   return layoutWaterfall(
     notes,
-    { nowMs: 0, spanMs: 3000, loop },
+    { nowMs: 0, spanMs: 3000, loop, passStartMs: 0 },
     { widthPx: 1400, heightPx: 300, keys: KEYS },
   );
 }
@@ -154,7 +154,7 @@ describe('paintWaterfall', () => {
     // Sounding: the lower end runs into the keys, square.
     const sounding = layoutWaterfall(
       [note(64, 0, { durationMs: 1000 })],
-      { nowMs: 500, spanMs: 3000, loop: null },
+      { nowMs: 500, spanMs: 3000, loop: null, passStartMs: 500 },
       { widthPx: 1400, heightPx: 300, keys: KEYS },
     );
     expect(arcsOf(sounding)).toBe(4);

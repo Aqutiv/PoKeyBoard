@@ -38,6 +38,13 @@ export interface WaterfallTimeline {
   readonly spanMs: number;
   /** The passage playback repeats, or null. */
   readonly loop: PlaybackLoop | null;
+  /**
+   * Where the pass at the keys began: where playback started, or the loop's
+   * top once it came round; at rest, where it would start. Only a pass begun
+   * before the loop strikes a note held into it from before.
+   * See `TransportController.getPassStartMs`.
+   */
+  readonly passStartMs: number;
 }
 
 export interface WaterfallViewport {
@@ -141,18 +148,19 @@ function keysByMidi(keys: KeyboardLayout): Map<number, KeyLayout> {
  *
  * Round a loop, playback lets every key go at the loop's end and plays the
  * passage again from its start, striking the notes that start inside it — a
- * note held across the loop's start sounds on the first pass only. So the
- * passage is drawn again above its end, pass after pass up to the top edge,
- * with a restart line where each pass begins. That holds only while the
- * playhead is short of the loop's end; a playhead parked past it plays
- * straight on.
+ * note held across the loop's start sounds only on the first pass of a run
+ * started before the loop. So the passage is drawn again above its end, pass
+ * after pass up to the top edge, with a restart line where each pass begins;
+ * and the pass at the keys keeps such a note only if it began before the loop
+ * (`passStartMs`). That holds only while the playhead is short of the loop's
+ * end; a scrub past it shows the take straight on.
  */
 export function layoutWaterfall(
   notes: readonly NoteEvent[],
   timeline: WaterfallTimeline,
   view: WaterfallViewport,
 ): WaterfallScene {
-  const { nowMs, spanMs, loop } = timeline;
+  const { nowMs, spanMs, loop, passStartMs } = timeline;
   const { widthPx, heightPx, keys } = view;
   if (widthPx <= 0 || heightPx <= 0 || spanMs <= 0 || keys.whiteCount <= 0) return EMPTY_SCENE;
 
@@ -202,11 +210,11 @@ export function layoutWaterfall(
   const reach = noteReach(notes);
   const fold = loop !== null && nowMs < loop.endMs && loop.endMs > loop.startMs ? loop : null;
   const passEndMs = fold ? Math.min(topMs, fold.endMs) : topMs;
-  for (
-    let i = firstReaching(reach, nowMs), end = lowerBoundByStart(notes, passEndMs);
-    i < end;
-    i += 1
-  ) {
+  let start = firstReaching(reach, nowMs);
+  if (fold && passStartMs >= fold.startMs) {
+    start = Math.max(start, lowerBoundByStart(notes, fold.startMs));
+  }
+  for (let i = start, end = lowerBoundByStart(notes, passEndMs); i < end; i += 1) {
     const note = notes[i] as NoteEvent;
     const endMs = note.startMs + note.durationMs;
     place(note, note.startMs, fold ? Math.min(endMs, fold.endMs) : endMs, 0);

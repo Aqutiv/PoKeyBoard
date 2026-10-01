@@ -27,8 +27,13 @@ function note(
 const KEYS = layoutKeyboard(60, 71);
 const VIEW = { widthPx: 700, heightPx: 300, keys: KEYS };
 
-function at(nowMs: number, spanMs = 3000, loop: PlaybackLoop | null = null): WaterfallTimeline {
-  return { nowMs, spanMs, loop };
+function at(
+  nowMs: number,
+  spanMs = 3000,
+  loop: PlaybackLoop | null = null,
+  passStartMs = nowMs,
+): WaterfallTimeline {
+  return { nowMs, spanMs, loop, passStartMs };
 }
 
 describe('layoutWaterfall', () => {
@@ -167,6 +172,31 @@ describe('layoutWaterfall', () => {
         [64, 1],
         [64, 2],
       ]);
+    });
+
+    it('keeps such a note at the keys only on a pass begun before the loop', () => {
+      const notes = [note(60, 800, 400), note(64, 1100, 200)];
+      const passes = (passStartMs: number) =>
+        layoutWaterfall(notes, at(1050, 3000, LOOP, passStartMs), VIEW).bars.map((bar) => [
+          bar.note.midi,
+          bar.pass,
+        ]);
+      // A run from before the loop struck C4 on the way in, and it sounds on…
+      expect(passes(500)).toEqual([
+        [60, 0],
+        [64, 0],
+        [64, 1],
+        [64, 2],
+      ]);
+      // …but a pass begun at the loop's top, come round or started there, or
+      // one started inside it, never strikes it.
+      const inside = [
+        [64, 0],
+        [64, 1],
+        [64, 2],
+      ];
+      expect(passes(1000)).toEqual(inside);
+      expect(passes(1050)).toEqual(inside);
     });
 
     it('draws no more than its cap of passes, however short the loop', () => {

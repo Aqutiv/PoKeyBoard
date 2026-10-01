@@ -297,6 +297,33 @@ describe('playback speed and looping', () => {
     expect(h.scheduled.map((event) => event.midi)).toEqual([62]);
   });
 
+  it('begins each pass where it strikes from: the run’s start, then the loop’s top', () => {
+    transportController.setLoop({ startMs: 1000, endMs: 2000 });
+    transportController.seek(400);
+    // At rest, where Play would start.
+    expect(transportController.getPassStartMs()).toBe(400);
+    transportController.play();
+    while (transportController.getPlayheadMs() < 1500) run(0.01);
+    expect(transportController.getPassStartMs()).toBe(400);
+    run(1);
+    expect(transportController.getPassStartMs()).toBe(1000);
+    // A change of speed starts the clock's unwrapped timeline again from the
+    // playhead; the run has still come round.
+    transportController.setSpeed(0.5);
+    expect(transportController.getPassStartMs()).toBe(1000);
+    transportController.pause();
+    const pausedAt = transportController.getPlayheadMs();
+    expect(transportController.getPassStartMs()).toBe(pausedAt);
+    transportController.play();
+    expect(transportController.getPassStartMs()).toBe(pausedAt);
+    transportController.pause();
+    // From past the loop's end, Play starts at its top.
+    transportController.seek(3000);
+    expect(transportController.getPassStartMs()).toBe(1000);
+    transportController.play();
+    expect(transportController.getPassStartMs()).toBe(1000);
+  });
+
   it('jumps to the loop when one is set mid-playback outside it, and plays on when cleared', () => {
     transportController.play();
     run(0.3);

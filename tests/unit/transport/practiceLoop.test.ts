@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { createEmptyTake } from '@/domain/noteEvents';
-import { loopBetween, nearestBeatMs, playableLoop } from '@/features/transport/practiceLoop';
+import {
+  loopBetween,
+  nearestBeatMs,
+  playableLoop,
+  playFromMs,
+} from '@/features/transport/practiceLoop';
 import { MIN_LOOP_MS } from '@/features/transport/transportClock';
 import { useTakeStore } from '@/state/useTakeStore';
 
@@ -66,6 +71,21 @@ describe('a loop playback can play', () => {
     past.display = { ...past.display, loop: { startMs: 5000, endMs: 6000 } };
     expect(playableLoop(past)).toBeNull();
     expect(playableLoop(take())).toBeNull();
+  });
+});
+
+describe('where play starts', () => {
+  const LOOP = { startMs: 1000, endMs: 2000 };
+
+  it('is the playhead, before a loop or inside it, or with none', () => {
+    expect(playFromMs(LOOP, 400)).toBe(400);
+    expect(playFromMs(LOOP, 1999)).toBe(1999);
+    expect(playFromMs(null, 2500)).toBe(2500);
+  });
+
+  it('is the loop’s top, from its end on', () => {
+    expect(playFromMs(LOOP, 2000)).toBe(1000);
+    expect(playFromMs(LOOP, 3500)).toBe(1000);
   });
 });
 

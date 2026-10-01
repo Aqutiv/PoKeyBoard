@@ -147,6 +147,25 @@ describe('WaterfallView', () => {
     expect(h.painted).toHaveLength(5);
   });
 
+  it('stands where play would start: at a loop’s top, from a playhead parked past its end', () => {
+    // D4 is held into the loop from before it, which play from its top never strikes.
+    const held: NoteEvent = { id: 'held', midi: 62, startMs: 800, durationMs: 400, velocity: 0.7 };
+    const notes = [NOTES[0] as NoteEvent, held, NOTES[1] as NoteEvent];
+    act(() => useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 4000 })));
+    act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+    act(() => transportController.seek(2500));
+    show();
+    frame();
+    const { scene } = lastPainted();
+    // E4 starts the loop, on the keys; each pass after starts 100 px further up.
+    expect(scene.bars.map((bar) => [bar.note.midi, bar.pass, bar.bottom])).toEqual([
+      [64, 0, 300],
+      [64, 1, 200],
+      [64, 2, 100],
+    ]);
+    expect(scene.restartYs).toEqual([200, 100]);
+  });
+
   describe('while the transport moves', () => {
     let state: TransportState = 'idle';
     const listeners = new Set<() => void>();
@@ -178,6 +197,64 @@ describe('WaterfallView', () => {
       expect(h.painted.length).toBeGreaterThanOrEqual(3);
       become('paused');
       expect(frameSubscriberCount()).toBe(0);
+    });
+
+    it('leaves a note held into a loop out of the passes playback has come round to', () => {
+      const held: NoteEvent = {
+        id: 'held',
+        midi: 62,
+        startMs: 800,
+        durationMs: 400,
+        velocity: 0.7,
+      };
+      const notes = [NOTES[0] as NoteEvent, held, NOTES[1] as NoteEvent];
+      act(() => useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 4000 })));
+      vi.spyOn(transportController.clock, 'loop', 'get').mockReturnValue({
+        startMs: 1000,
+        endMs: 2000,
+      });
+      vi.spyOn(transportController, 'getPlayheadMs').mockReturnValue(1050);
+      // A run started at 500, before the loop.
+      const passStart = vi.spyOn(transportController, 'getPassStartMs').mockReturnValue(500);
+      const atKeys = () =>
+        lastPainted()
+          .scene.bars.filter((bar) => bar.pass === 0)
+          .map((bar) => bar.note.midi);
+      show();
+      become('playing');
+      frame();
+      // On the way in, the run struck D4 before the loop's top, and it sounds on…
+      expect(atKeys()).toEqual([62, 64]);
+      passStart.mockReturnValue(1000);
+      frame();
+      // …but come round, the run plays from the top, and D4 is not struck again.
+      expect(atKeys()).toEqual([64]);
+      become('idle');
+    });
+
+    it('shows a scrub where it is, past a loop’s end too, and play’s start once let go', () => {
+      const late: NoteEvent = {
+        id: 'late',
+        midi: 67,
+        startMs: 3000,
+        durationMs: 400,
+        velocity: 0.7,
+      };
+      const notes = [...NOTES, late];
+      act(() => useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 4000 })));
+      act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+      act(() => transportController.seek(2500));
+      show();
+      become('scrubbing');
+      frame();
+      // At 2500, straight on: G4 is half a second off, and no pass comes round.
+      expect(lastPainted().scene.bars.map((bar) => [bar.note.midi, bar.bottom])).toEqual([
+        [67, 250],
+      ]);
+      expect(lastPainted().scene.restartYs).toEqual([]);
+      become('paused');
+      frame();
+      expect(lastPainted().scene.restartYs).toEqual([200, 100]);
     });
 
     it('falls the notes in toward a recording’s start while it counts in', () => {
