@@ -70,7 +70,6 @@ describe('layoutWaterfall', () => {
     expect(bar?.top).toBe(0);
     expect(bar?.cutBottom).toBe(true);
     expect(bar?.cutTop).toBe(true);
-    expect(bar?.onset).toBe(true);
   });
 
   it('leaves out notes that have ended and notes beyond the top', () => {
@@ -157,12 +156,17 @@ describe('layoutWaterfall', () => {
       expect(scene.restartYs.map(Math.round)).toEqual([250, 150, 50]);
     });
 
-    it('cuts a note held across the loop’s start at the restart line, with no onset there', () => {
-      const notes = [note(60, 800, 400)];
-      const scene = layoutWaterfall(notes, at(1500, 3000, LOOP), VIEW);
-      const pass = scene.bars.find((bar) => bar.pass === 1);
-      expect(pass?.onset).toBe(false);
-      expect(pass?.bottom).toBeCloseTo(250);
+    it('leaves a note struck before the loop’s start out of the passes round it', () => {
+      // Each pass plays again from the loop's start, striking only the notes
+      // that start there or after: one held across the start sounds once.
+      const notes = [note(60, 800, 400), note(64, 1100, 200)];
+      const scene = layoutWaterfall(notes, at(900, 3000, LOOP), VIEW);
+      expect(scene.bars.map((bar) => [bar.note.midi, bar.pass])).toEqual([
+        [60, 0],
+        [64, 0],
+        [64, 1],
+        [64, 2],
+      ]);
     });
 
     it('draws no more than its cap of passes, however short the loop', () => {
