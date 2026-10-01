@@ -234,12 +234,29 @@ describe('layoutWaterfall', () => {
       }
       const elapsed = performance.now() - started;
       expect(scene.restartYs).toHaveLength(119);
-      // Whole passes until the budget is spent, then only their restart lines.
-      const passBars = scene.bars.filter((bar) => bar.pass > 0).length;
-      expect(passBars).toBeGreaterThanOrEqual(MAX_PASS_BARS);
-      expect(passBars).toBeLessThan(MAX_PASS_BARS + dense.length);
+      // Passes until the budget is spent, then only their restart lines.
+      expect(scene.bars.filter((bar) => bar.pass > 0)).toHaveLength(MAX_PASS_BARS);
       // A second's worth of frames, well inside a second.
       expect(elapsed).toBeLessThan(500);
+    });
+
+    it('stops at the budget partway through a pass, and draws a pass only to the top edge', () => {
+      // Five thousand notes in a one-second loop: the first pass above it alone
+      // would add every one of them.
+      const dense = Array.from({ length: 5_000 }, (_, i) =>
+        note(60 + (i % 12), Math.floor(i / 5), 10),
+      );
+      const second = { startMs: 0, endMs: 1000 };
+      const scene = layoutWaterfall(dense, at(0, 3000, second), VIEW);
+      expect(scene.bars.filter((bar) => bar.pass > 0)).toHaveLength(MAX_PASS_BARS);
+      // A pass the top edge cuts is drawn as far as the edge and no further.
+      const sparse = [note(60, 100, 50), note(62, 600, 50)];
+      const cut = layoutWaterfall(sparse, at(0, 1500, second), VIEW);
+      expect(cut.bars.map((bar) => [bar.note.midi, bar.pass])).toEqual([
+        [60, 0],
+        [62, 0],
+        [60, 1],
+      ]);
     });
 
     it('draws no more than its cap of passes, however short the loop', () => {

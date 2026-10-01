@@ -264,18 +264,20 @@ export function layoutWaterfall(
       if (note.startMs + note.durationMs > fold.startMs) heldIn.push(note);
     }
     const end = lowerBoundByStart(notes, fold.endMs);
-    const placed = () => whites.length + blacks.length + markers.length;
-    const atKeys = placed();
+    const atKeys = whites.length + blacks.length + markers.length;
+    const inBudget = () => whites.length + blacks.length + markers.length - atKeys < MAX_PASS_BARS;
     for (let pass = 1; pass <= MAX_LOOP_PASSES; pass += 1) {
       const offsetMs = pass * lengthMs;
       if (fold.startMs + offsetMs >= topMs) break;
       restartYs.push(y(fold.startMs + offsetMs));
-      if (placed() - atKeys >= MAX_PASS_BARS) continue;
-      for (const note of heldIn) {
+      for (let i = 0; i < heldIn.length && inBudget(); i += 1) {
+        const note = heldIn[i] as NoteEvent;
         const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
         place(note, fold.startMs + offsetMs, endMs + offsetMs, pass, false);
       }
-      for (let i = inside; i < end; i += 1) {
+      // The pass's own notes as far as the top edge, and no further.
+      const shown = Math.min(end, lowerBoundByStart(notes, topMs - offsetMs));
+      for (let i = inside; i < shown && inBudget(); i += 1) {
         const note = notes[i] as NoteEvent;
         const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
         place(note, note.startMs + offsetMs, endMs + offsetMs, pass, true);
