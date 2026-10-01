@@ -274,6 +274,37 @@ describe('WaterfallView', () => {
       fireEvent.pointerUp(canvas, { pointerId: 1 });
     });
 
+    it('goes round a loop past its end, as the view draws it, outlining the note held into it', () => {
+      const held: NoteEvent = {
+        id: 'held',
+        midi: 62,
+        startMs: 800,
+        durationMs: 400,
+        velocity: 0.7,
+      };
+      const notes = [NOTES[0] as NoteEvent, held, NOTES[1] as NoteEvent];
+      act(() => useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 4000 })));
+      act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+      act(() => transportController.seek(1500));
+      show();
+      const canvas = screen.getByRole('img');
+      press(canvas);
+      // 60 px down is 600 ms on: past the loop's end at 2000, and round to 1100.
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientY: 160 });
+      expect(transportController.getPlayheadMs()).toBe(1100);
+      frame();
+      // Come round, the scrub has crossed E4 at the top, but not D4, held into the loop.
+      const atKeys = lastPainted()
+        .scene.bars.filter((bar) => bar.pass === 0)
+        .map((bar) => [bar.note.midi, bar.silent]);
+      expect(atKeys).toEqual([
+        [62, true],
+        [64, false],
+      ]);
+      fireEvent.pointerUp(canvas, { pointerId: 1 });
+      expect(transportController.getPlayheadMs()).toBe(1100);
+    });
+
     it('answers only the main button of the main pointer, and never a running take', () => {
       const begin = vi.spyOn(scrubController, 'begin');
       show();

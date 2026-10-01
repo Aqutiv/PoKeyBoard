@@ -1,5 +1,6 @@
 import { lowerBoundByStart as lowerBound } from '@/domain/noteEvents';
-import type { NoteEvent } from '@/domain/takeTypes';
+import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
+import { foldIntoLoop, loopPassAt } from '@/features/transport/transportClock';
 
 /** First index whose startMs is > t. */
 function upperBound(notes: readonly NoteEvent[], t: number): number {
@@ -57,6 +58,45 @@ export function getCrossedNoteOnsets(
     }
     crossed.push(...passed.slice(first, last + 1));
     last = first - 1;
+  }
+  return crossed;
+}
+
+/**
+ * Note onsets crossed moving `fromVirtualMs` → `toVirtualMs` on a run that
+ * goes round `loop`, as playback's does: past the loop's end, virtual time
+ * folds back to its top (`foldIntoLoop`). Each pass crosses the loop's own
+ * notes, from its top, which plays, up to its end, which does not; the onsets
+ * come in movement order, as `getCrossedNoteOnsets` gives them.
+ */
+export function getCrossedNoteOnsetsRound(
+  loop: PlaybackLoop,
+  fromVirtualMs: number,
+  toVirtualMs: number,
+  sortedNotes: readonly NoteEvent[],
+): NoteEvent[] {
+  const fromPass = loopPassAt(loop, fromVirtualMs);
+  const toPass = loopPassAt(loop, toVirtualMs);
+  const from = foldIntoLoop(loop, fromVirtualMs);
+  const to = foldIntoLoop(loop, toVirtualMs);
+  if (fromPass === toPass) return getCrossedNoteOnsets(from, to, sortedNotes);
+  // Half a millisecond inside each edge: onsets fall on whole milliseconds,
+  // so a pass crosses the note on the loop's top and never one on its end.
+  const top = loop.startMs - 0.5;
+  const end = loop.endMs - 0.5;
+  const crossed: NoteEvent[] = [];
+  if (toPass > fromPass) {
+    crossed.push(...getCrossedNoteOnsets(from, end, sortedNotes));
+    for (let pass = fromPass + 1; pass < toPass; pass += 1) {
+      crossed.push(...getCrossedNoteOnsets(top, end, sortedNotes));
+    }
+    crossed.push(...getCrossedNoteOnsets(top, to, sortedNotes));
+  } else {
+    crossed.push(...getCrossedNoteOnsets(from, top, sortedNotes));
+    for (let pass = fromPass - 1; pass > toPass; pass -= 1) {
+      crossed.push(...getCrossedNoteOnsets(end, top, sortedNotes));
+    }
+    crossed.push(...getCrossedNoteOnsets(end, to, sortedNotes));
   }
   return crossed;
 }

@@ -2,13 +2,14 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { velocityForCurveDb } from '@/audio/velocityCurve';
 import { noteHand, type KeyCue } from '@/domain/hands';
 import { isSilentNote, sortStrikes } from '@/domain/noteEvents';
-import type { NoteEvent } from '@/domain/takeTypes';
+import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
 import { effectivePlaybackDurationMs } from '@/features/transport/sustainPedal';
+import { foldIntoLoop, loopPassAt } from '@/features/transport/transportClock';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { clamp } from '@/utils/timing';
-import { getCrossedNoteOnsets } from './scrubMath';
+import { getCrossedNoteOnsets, getCrossedNoteOnsetsRound } from './scrubMath';
 
 /** Pointer jitter below this many take-ms never triggers auditions. */
 const HYSTERESIS_MS = 3;
@@ -60,6 +61,12 @@ function previewVelocity(velocity: number): number {
 class ScrubController {
   private sortedNotes: NoteEvent[] = [];
   private currentTimeMs = 0;
+  /** The loop the scrub goes round, or null where it runs straight; see `begin`. */
+  private loop: PlaybackLoop | null = null;
+  /** Where the scrub is on its unwrapped run: the take time, until a loop folds it. */
+  private currentVirtualMs = 0;
+  /** The furthest back the scrub has reached on its first pass. */
+  private firstPassLowMs = 0;
   private active = false;
   /**
    * midi → the flash's expiry (performance.now ms) and how it lights the key:
@@ -72,27 +79,48 @@ class ScrubController {
     return this.active;
   }
 
-  /** Enter scrubbing (idle/paused only). Returns false when not allowed. */
-  begin(): boolean {
+  /**
+   * Enter scrubbing (idle/paused only). Returns false when not allowed. Given
+   * a `loop` it is short of, the scrub goes round it as playback does: then
+   * `update` takes times on the unwrapped run, and past the loop's end the
+   * scrub comes round to its top. The falling notes draw a loop's passes
+   * above its end, so their drag goes round; the score draws the take
+   * straight on, so its drag does not.
+   */
+  begin(loop: PlaybackLoop | null = null): boolean {
     if (!transportController.beginScrub()) return false;
     const take = useTakeStore.getState().take;
     this.sortedNotes = sortStrikes(take.notes);
     this.currentTimeMs = transportController.getPlayheadMs();
+    this.currentVirtualMs = this.currentTimeMs;
+    this.firstPassLowMs = this.currentTimeMs;
+    this.loop = loop && this.currentTimeMs < loop.endMs ? loop : null;
     this.active = true;
     return true;
   }
 
-  /** Move the scrub position; auditions whatever the playhead crossed. */
+  /**
+   * Move the scrub position — round a loop, on the unwrapped run; see
+   * `begin` — and audition whatever the playhead crossed.
+   */
   update(nextTimeMsRaw: number): void {
     if (!this.active) return;
-    const durationMs = effectivePlaybackDurationMs(useTakeStore.getState().take);
-    const nextTimeMs = clamp(nextTimeMsRaw, 0, Math.max(durationMs, 0));
-    const previous = this.currentTimeMs;
-    if (Math.abs(nextTimeMs - previous) < HYSTERESIS_MS) return;
+    const durationMs = Math.max(effectivePlaybackDurationMs(useTakeStore.getState().take), 0);
+    const loop = this.loop;
+    const nextVirtualMs = loop ? Math.max(0, nextTimeMsRaw) : clamp(nextTimeMsRaw, 0, durationMs);
+    const previousVirtualMs = this.currentVirtualMs;
+    if (Math.abs(nextVirtualMs - previousVirtualMs) < HYSTERESIS_MS) return;
+    const nextTimeMs = loop
+      ? clamp(foldIntoLoop(loop, nextVirtualMs), 0, durationMs)
+      : nextVirtualMs;
+    this.currentVirtualMs = nextVirtualMs;
     this.currentTimeMs = nextTimeMs;
+    if (this.loopPass() === 0) this.firstPassLowMs = Math.min(this.firstPassLowMs, nextTimeMs);
     transportController.setScrubTime(nextTimeMs);
 
-    let crossed = getCrossedNoteOnsets(previous, nextTimeMs, this.sortedNotes);
+    let crossed = loop
+      ? getCrossedNoteOnsetsRound(loop, previousVirtualMs, nextVirtualMs, this.sortedNotes)
+      : getCrossedNoteOnsets(previousVirtualMs, nextVirtualMs, this.sortedNotes);
     if (crossed.length > MAX_PREVIEW_NOTES) {
       // Keep the notes nearest the landing position (end of movement order).
       crossed = crossed.slice(crossed.length - MAX_PREVIEW_NOTES);
@@ -129,6 +157,7 @@ class ScrubController {
   end(): void {
     if (!this.active) return;
     this.active = false;
+    this.loop = null;
     transportController.endScrub(this.currentTimeMs);
     // Preview voices fade on their own scheduled releases; clear the lights.
     this.flashes.clear();
@@ -144,6 +173,21 @@ class ScrubController {
     if (!this.active) return;
     this.currentTimeMs = timeMs;
     this.end();
+  }
+
+  /**
+   * Where the pass the scrub is in began: the furthest back it has reached
+   * the first time through, or the loop's top once it has come round. It has
+   * not crossed a note that starts before that on this pass, so the falling
+   * notes draw such a note as playback would, unstruck.
+   */
+  getPassStartMs(): number {
+    return this.loop && this.loopPass() > 0 ? this.loop.startMs : this.firstPassLowMs;
+  }
+
+  /** Which pass of its loop the scrub is in: 0 until it first comes round. */
+  private loopPass(): number {
+    return this.loop ? loopPassAt(this.loop, this.currentVirtualMs) : 0;
   }
 
   /**

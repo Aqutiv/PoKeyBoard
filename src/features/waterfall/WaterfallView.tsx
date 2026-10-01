@@ -52,9 +52,9 @@ interface Drag {
  * fall in to meet it; recording itself runs straight through at the take's
  * own speed. A run falls at its own rate and round its own loop, and what it
  * does not play — a note held from before where its pass began — falls as an
- * outline. A scrub shows the take as written where it is dragged, and a
- * transport at rest shows what pressing play would play: from past a loop's
- * end, the loop from its top.
+ * outline. A scrub goes round the loop as the drag carries it, outlining what
+ * it has not crossed, and a transport at rest shows what pressing play would
+ * play: from past a loop's end, the loop from its top.
  */
 function timelineNow(loopAtRest: PlaybackLoop | null, fallMs: number): WaterfallTimeline {
   const state = transportController.getState();
@@ -68,7 +68,7 @@ function timelineNow(loopAtRest: PlaybackLoop | null, fallMs: number): Waterfall
     return { nowMs, spanMs: fallMs * clock.rate, loop: clock.loop, passStartMs };
   const spanMs = fallMs * transportController.getSpeed();
   if (state === 'scrubbing') {
-    return { nowMs, spanMs, loop: loopAtRest, passStartMs: Number.NEGATIVE_INFINITY };
+    return { nowMs, spanMs, loop: loopAtRest, passStartMs: scrubController.getPassStartMs() };
   }
   return { nowMs: passStartMs, spanMs, loop: loopAtRest, passStartMs };
 }
@@ -252,8 +252,9 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
 
   /**
    * A drag scrubs, at rest. It starts from where the view stands — Play's own
-   * start, which is a loop's top for a playhead parked past its end — so the
-   * notes never jump under the finger.
+   * start, which is a loop's top for a playhead parked past its end — and goes
+   * round the loop as the view draws it, so the notes never jump under the
+   * finger.
    */
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!event.isPrimary || event.button !== 0) return;
@@ -262,7 +263,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     if (!scrubController.isActive) {
       const standMs = transportController.getPassStartMs();
       if (standMs !== transportController.getPlayheadMs()) transportController.seek(standMs);
-      if (!scrubController.begin()) return;
+      if (!scrubController.begin(loopRef.current)) return;
     }
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
