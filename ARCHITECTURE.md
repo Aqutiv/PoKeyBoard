@@ -24,8 +24,9 @@ src/
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
                 tempoMap (piecewise beats↔ms; shared by import, library, score),
-                hands (which hand plays a note), midiExport (Standard MIDI
-                File writer), trainingGate (pure)
+                hands (which hand plays a note), fingering (pure: which finger
+                plays each note, the score's own or worked out), midiExport
+                (Standard MIDI File writer), trainingGate (pure)
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/
@@ -63,7 +64,7 @@ src/
                 folded round a loop, with the bar lines and the notes a hold
                 waits for), waterfallPalette (the lit keys' colours, mixed in
                 OKLab as keyboard.css mixes them), waterfallPainter (canvas:
-                bars, names, the hold's glow), WaterfallView (on the frame clock
+                bars, finger numbers and names, the hold's glow), WaterfallView (on the frame clock
                 while the notes move or a hold glows; fall speed, and a
                 vertical drag to scrub), fallSpeed (the fall-time steps)
     play/       PlayPage, PlayViewSwitch and playView (score or falling notes),
