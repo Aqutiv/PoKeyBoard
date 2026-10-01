@@ -45,6 +45,9 @@ export const es: Messages = {
     fallingLabel: ({ count }) => `Notas que caen, ${count} nota${count === 1 ? '' : 's'}`,
     fallingEmpty:
       'Graba una toma o abre una pieza de la Biblioteca, y sus notas caerán aquí sobre las teclas.',
+    fallSpeed: 'Velocidad de caída',
+    fallSlower: 'Caer más despacio, para ver más adelante',
+    fallFaster: 'Caer más deprisa',
     dismiss: 'Descartar',
     loadingPiano: ({ percent }) => `Cargando piano… ${percent}%`,
     retryLoadingPiano: 'Intentar de nuevo',

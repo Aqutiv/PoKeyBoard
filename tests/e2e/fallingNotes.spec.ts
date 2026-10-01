@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { gotoAppReady, persistedSetting, setCountIn, transport } from './helpers';
+import { gotoAppReady, persistedSetting, setCountIn, transport, transportTime } from './helpers';
 
 function viewSwitch(page: Page) {
   return page.getByRole('group', { name: 'View' });
@@ -141,6 +141,37 @@ test.describe('falling notes', () => {
     await page.keyboard.press('ArrowRight');
     await expect(range).toHaveText(/^D3\s/);
     await expectBarsOverKeys(page, ['C4', 'C#4']);
+  });
+
+  test('falls faster or slower, and remembers how fast', async ({ page }) => {
+    await gotoAppReady(page);
+    await showFallingNotes(page);
+    const faster = () =>
+      page.getByRole('group', { name: 'Fall speed' }).getByRole('button', { name: 'Fall faster' });
+    // From three seconds down to one: four steps, and then no further.
+    for (let step = 0; step < 4; step += 1) await faster().click();
+    await expect(faster()).toBeDisabled();
+    await expect.poll(() => persistedSetting(page, 'waterfallSeconds')).toBe(1);
+
+    await page.reload();
+    await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
+    await expect(faster()).toBeDisabled();
+  });
+
+  test('scrubs when the notes are dragged, down bringing the music on', async ({ page }) => {
+    await gotoAppReady(page);
+    await recordWhiteAndBlack(page);
+    await showFallingNotes(page);
+    await expect(transportTime(page)).toHaveText(/^0:00\.0 /);
+
+    const box = await page.locator('.waterfall__canvas').boundingBox();
+    if (!box) throw new Error('no falling notes');
+    const x = box.x + box.width / 2;
+    await page.mouse.move(x, box.y + 10);
+    await page.mouse.down();
+    await page.mouse.move(x, box.y + 10 + box.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect(transportTime(page)).not.toHaveText(/^0:00\.0 /);
   });
 });
 

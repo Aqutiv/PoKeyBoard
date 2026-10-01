@@ -46,6 +46,9 @@ export const mg: Messages = {
     fallingLabel: ({ count }) => `Naoty milatsaka, naoty ${count}`,
     fallingEmpty:
       'Raketo ny fitendrenao, na sokafy hira ao amin’ny Hira, dia hilatsaka eto amin’ny kitendry ny naotiny.',
+    fallSpeed: 'Hafainganam-pilatsahana',
+    fallSlower: 'Milatsaka moramora kokoa, mba hahitana lavitra kokoa',
+    fallFaster: 'Milatsaka haingana kokoa',
     dismiss: 'Esory',
     loadingPiano: ({ percent }) => `Am-pakàna ny piano… ${percent}%`,
     retryLoadingPiano: 'Andramo indray',

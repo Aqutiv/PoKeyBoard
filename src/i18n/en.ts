@@ -47,6 +47,9 @@ export const en: Messages = {
     fallingLabel: ({ count }) => `Falling notes, ${count} note${count === 1 ? '' : 's'}`,
     fallingEmpty:
       'Record a take, or open a piece from the Library, and its notes fall onto the keys here.',
+    fallSpeed: 'Fall speed',
+    fallSlower: 'Fall slower, to see further ahead',
+    fallFaster: 'Fall faster',
     dismiss: 'Dismiss',
     loadingPiano: ({ percent }) => `Loading piano… ${percent}%`,
     retryLoadingPiano: 'Try again',

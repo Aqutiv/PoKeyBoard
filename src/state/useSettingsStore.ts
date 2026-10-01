@@ -18,6 +18,7 @@ import type {
 import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
 import { DEFAULT_PLAY_VIEW, type PlayView } from '@/features/play/playView';
+import { DEFAULT_WATERFALL_SECONDS, type WaterfallSeconds } from '@/features/waterfall/fallSpeed';
 import type { PlaybackMode, RecordMode } from '@/features/transport/modes';
 import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
@@ -60,6 +61,8 @@ export interface SettingsState {
   keyboardFollowsPlayback: boolean;
   /** What the Play page shows above the keys: the score, or the falling notes. */
   playView: PlayView;
+  /** How many seconds of music the falling notes show: how long a note takes to fall. */
+  waterfallSeconds: WaterfallSeconds;
   scrubAudition: boolean;
   /** Keep recorded-take playback running while the page is hidden. */
   backgroundPlayback: boolean;
@@ -102,6 +105,7 @@ export interface SettingsState {
   setVelocityShading(enabled: boolean): void;
   setKeyboardFollowsPlayback(follow: boolean): void;
   setPlayView(view: PlayView): void;
+  setWaterfallSeconds(seconds: WaterfallSeconds): void;
   setScrubAudition(enabled: boolean): void;
   setBackgroundPlayback(enabled: boolean): void;
   setGamepadInput(enabled: boolean): void;
@@ -137,6 +141,7 @@ export const SETTINGS_DEFAULTS = {
   velocityShading: true,
   keyboardFollowsPlayback: true,
   playView: DEFAULT_PLAY_VIEW,
+  waterfallSeconds: DEFAULT_WATERFALL_SECONDS,
   scrubAudition: true,
   backgroundPlayback: false,
   gamepadInput: true,
@@ -183,6 +188,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setVelocityShading: (velocityShading) => set({ velocityShading }),
   setKeyboardFollowsPlayback: (keyboardFollowsPlayback) => set({ keyboardFollowsPlayback }),
   setPlayView: (playView) => set({ playView }),
+  setWaterfallSeconds: (waterfallSeconds) => set({ waterfallSeconds }),
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),

@@ -60,7 +60,9 @@ src/
     waterfall/  waterfallLayout (pure: where each note falls at one moment,
                 folded round a loop), waterfallPalette (the lit keys' colours,
                 mixed in OKLab as keyboard.css mixes them), waterfallPainter
-                (canvas), WaterfallView (on the frame clock while the notes move)
+                (canvas), WaterfallView (on the frame clock while the notes
+                move; fall speed, and a vertical drag to scrub), fallSpeed (the
+                fall-time steps)
     play/       PlayPage, PlayViewSwitch and playView (score or falling notes),
                 SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,

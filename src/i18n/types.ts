@@ -169,6 +169,9 @@ export interface Messages {
     fallingView: string;
     fallingLabel: (p: { count: number }) => string;
     fallingEmpty: string;
+    fallSpeed: string;
+    fallSlower: string;
+    fallFaster: string;
     dismiss: string;
     loadingPiano: (p: { percent: number }) => string;
     retryLoadingPiano: string;
