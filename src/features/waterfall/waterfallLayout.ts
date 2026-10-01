@@ -1,6 +1,7 @@
 import { noteHand, type Hand } from '@/domain/hands';
 import { isSilentNote, lowerBoundByStart } from '@/domain/noteEvents';
 import { MAX_PLAYBACK_SPEED, type NoteEvent, type PlaybackLoop } from '@/domain/takeTypes';
+import { CHORD_WINDOW_MS } from '@/domain/trainingGate';
 import type { KeyboardLayout, KeyLayout } from '@/features/keyboard/keyboardGeometry';
 import { MIN_LOOP_MS } from '@/features/transport/transportClock';
 import { SLOWEST_FALL_SECONDS } from './fallSpeed';
@@ -90,6 +91,8 @@ export interface WaterfallBar {
   readonly cutBottom: boolean;
   /** 0 for the take as it plays on; 1 and up for the passes round a loop above it. */
   readonly pass: number;
+  /** A Training hold is waiting for this note: a key it asks for, starting at the keys. */
+  readonly awaited: boolean;
 }
 
 /** A note whose key is off the key bed, shown as a mark at that edge. */
@@ -111,9 +114,25 @@ export interface WaterfallScene {
   readonly octaveXs: readonly number[];
   /** Where a looped passage starts again, down the view. */
   readonly restartYs: readonly number[];
+  /** Where each bar starts, down the view. */
+  readonly barYs: readonly number[];
 }
 
-const EMPTY_SCENE: WaterfallScene = { bars: [], markers: [], octaveXs: [], restartYs: [] };
+/** What the view shows over the notes themselves, each only when it is given. */
+export interface WaterfallCues {
+  /** Where the take's bars start between two moments; see `barStartsBetween`. */
+  readonly barsBetween?: (fromMs: number, toMs: number) => readonly number[];
+  /** The keys a Training hold is waiting for, with the playhead parked on their notes. */
+  readonly awaited?: ReadonlySet<number>;
+}
+
+export const EMPTY_SCENE: WaterfallScene = {
+  bars: [],
+  markers: [],
+  octaveXs: [],
+  restartYs: [],
+  barYs: [],
+};
 
 const reaches = new WeakMap<readonly NoteEvent[], Float64Array>();
 
@@ -177,11 +196,17 @@ function keysByMidi(keys: KeyboardLayout): Map<number, KeyLayout> {
  * loop from before is hollow on every pass but a first begun before it. That
  * holds only while the playhead is short of the loop's end; a scrub past it
  * shows the take straight on.
+ *
+ * `cues` adds the bar lines, folded round a loop as the notes are, where a
+ * restart line does not already stand; and marks the notes a Training hold is
+ * waiting for, the chord at the keys (`CHORD_WINDOW_MS`) on the keys it asks
+ * for.
  */
 export function layoutWaterfall(
   notes: readonly NoteEvent[],
   timeline: WaterfallTimeline,
   view: WaterfallViewport,
+  cues: WaterfallCues = {},
 ): WaterfallScene {
   const { nowMs, spanMs, loop, passStartMs } = timeline;
   const { widthPx, heightPx, keys } = view;
@@ -200,6 +225,8 @@ export function layoutWaterfall(
   const blacks: WaterfallBar[] = [];
   const markers: WaterfallMarker[] = [];
   const restartYs: number[] = [];
+  const barYs: number[] = [];
+  const { barsBetween, awaited } = cues;
 
   /**
    * Lay out the stretch of `note` from `fromMs` to `toMs` on `pass`, if any of
@@ -228,7 +255,23 @@ export function layoutWaterfall(
       markers.push({ side, note, hand, silent, top, bottom });
       return;
     }
-    const stretch = { note, hand, silent, top, bottom, cutTop, cutBottom, pass };
+    const waitedFor =
+      pass === 0 &&
+      awaited !== undefined &&
+      awaited.has(note.midi) &&
+      note.startMs >= nowMs &&
+      note.startMs - nowMs <= CHORD_WINDOW_MS;
+    const stretch = {
+      note,
+      hand,
+      silent,
+      top,
+      bottom,
+      cutTop,
+      cutBottom,
+      pass,
+      awaited: waitedFor,
+    };
     if (key.isBlack) {
       blacks.push({ ...stretch, black: true, x: key.x * keyWidth, width: key.width * keyWidth });
     } else {
@@ -253,6 +296,7 @@ export function layoutWaterfall(
     const toMs = fold ? Math.min(endMs, fold.endMs) : endMs;
     place(note, note.startMs, toMs, 0, note.startMs >= passStartMs);
   }
+  if (barsBetween) for (const ms of barsBetween(nowMs, passEndMs)) barYs.push(y(ms));
   if (fold) {
     // Each pass strikes only the notes that start inside the loop, as playback
     // does; one held into it from before comes round hollow, from its top.
@@ -264,12 +308,17 @@ export function layoutWaterfall(
       if (note.startMs + note.durationMs > fold.startMs) heldIn.push(note);
     }
     const end = lowerBoundByStart(notes, fold.endMs);
+    // The loop's own bars, but the one on its top: a restart line stands there.
+    const loopBars = (barsBetween?.(fold.startMs, fold.endMs) ?? []).filter(
+      (ms) => Math.abs(ms - fold.startMs) >= 0.5,
+    );
     const atKeys = whites.length + blacks.length + markers.length;
     const inBudget = () => whites.length + blacks.length + markers.length - atKeys < MAX_PASS_BARS;
     for (let pass = 1; pass <= MAX_LOOP_PASSES; pass += 1) {
       const offsetMs = pass * lengthMs;
       if (fold.startMs + offsetMs >= topMs) break;
       restartYs.push(y(fold.startMs + offsetMs));
+      for (const ms of loopBars) if (ms + offsetMs < topMs) barYs.push(y(ms + offsetMs));
       for (let i = 0; i < heldIn.length && inBudget(); i += 1) {
         const note = heldIn[i] as NoteEvent;
         const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
@@ -289,5 +338,5 @@ export function layoutWaterfall(
   for (const key of keys.keys) {
     if (!key.isBlack && key.midi % 12 === 0 && key.x > 0) octaveXs.push(key.x * keyWidth);
   }
-  return { bars: [...whites, ...blacks], markers, octaveXs, restartYs };
+  return { bars: [...whites, ...blacks], markers, octaveXs, restartYs, barYs };
 }

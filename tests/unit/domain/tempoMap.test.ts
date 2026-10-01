@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   barLineNearMs,
+  barStartsBetween,
   countInMsAt,
   createBeatTempoMap,
   createQuarterTempoMap,
@@ -149,6 +150,32 @@ describe('barLineNearMs', () => {
     const faster = createBeatTempoMap(120, FOUR_FOUR, [[4, 240]]);
     expect(barLineNearMs(faster, FOUR_FOUR, 2400)).toBe(2000);
     expect(barLineNearMs(faster, FOUR_FOUR, 2600)).toBe(3000);
+  });
+});
+
+describe('barStartsBetween', () => {
+  const map = createBeatTempoMap(120, FOUR_FOUR); // 2 s bars
+
+  it('lists the bars starting in a window: one on its start kept, one on its end not', () => {
+    expect(barStartsBetween(map, FOUR_FOUR, 1000, 7000)).toEqual([2000, 4000, 6000]);
+    expect(barStartsBetween(map, FOUR_FOUR, 2000, 6000)).toEqual([2000, 4000]);
+    expect(barStartsBetween(map, FOUR_FOUR, 2100, 3900)).toEqual([]);
+  });
+
+  it('starts at the first bar for a window reaching back before the take', () => {
+    expect(barStartsBetween(map, FOUR_FOUR, -1500, 2500)).toEqual([0, 2000]);
+  });
+
+  it('puts the bar lines where a tempo change inside a bar moves them', () => {
+    // From beat 2 the tempo doubles: bar 1 ends 500 ms later, and bars after take 1 s.
+    const changing = createBeatTempoMap(120, FOUR_FOUR, [[2, 240]]);
+    expect(barStartsBetween(changing, FOUR_FOUR, 0, 4000)).toEqual([0, 1500, 2500, 3500]);
+  });
+
+  it('counts a bar in the time signature’s own beats', () => {
+    // 120 quarters a minute: eighths of 250 ms, six to a bar of 1.5 s.
+    const eighths = createBeatTempoMap(120, SIX_EIGHT);
+    expect(barStartsBetween(eighths, SIX_EIGHT, 0, 5000)).toEqual([0, 1500, 3000, 4500]);
   });
 });
 

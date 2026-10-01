@@ -54,8 +54,11 @@ describe('WATERFALL_PALETTES', () => {
     expect(palette.ivory).toBe(tokens.get('--ivory'));
     expect(palette.keyBlack).toBe(tokens.get('--key-black'));
     expect(palette.restart).toBe(tokens.get('--key-white-active-1'));
-    // The guides are the ivory, faint.
+    expect(palette.inkOnWhite).toBe(tokens.get('--key-black-edge'));
+    expect(palette.inkOnBlack).toBe(tokens.get('--ivory'));
+    // The guides and bar lines are the ivory, faint.
     expect(channels(palette.guide)).toEqual(channels(tokens.get('--ivory') ?? ''));
+    expect(channels(palette.barLine)).toEqual(channels(tokens.get('--ivory') ?? ''));
   });
 });
 

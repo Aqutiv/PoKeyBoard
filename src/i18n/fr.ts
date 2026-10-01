@@ -549,7 +549,7 @@ export const fr: Messages = {
     midiCalibrateLoudest: ({ softest }) => `La plus douce : ${softest}. Maintenant, la plus forte…`,
     midiCalibrateRejected:
       'Votre note la plus forte doit être nettement plus forte que la plus douce. Réessayez.',
-    noteLabels: 'Étiquettes des notes sur les touches',
+    noteLabels: 'Noms des notes sur les touches et les notes qui tombent',
     velocityShading: 'Touches et notes qui tombent nuancées selon la vélocité',
     velocityShadingHint:
       'Les touches allumées et les notes qui tombent montrent la force de chaque note : pâles si elle est douce, profondes si elle est forte, quand vous jouez comme à la lecture. Désactivé, chaque note s’allume de la même façon, quelle que soit la force du jeu.',

@@ -2,32 +2,96 @@ import { describe, expect, it } from 'vitest';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
 import { layoutWaterfall, type WaterfallScene } from '@/features/waterfall/waterfallLayout';
-import { paintWaterfall, type WaterfallSurface } from '@/features/waterfall/waterfallPainter';
+import {
+  paintWaterfall,
+  type WaterfallPaint,
+  type WaterfallSurface,
+} from '@/features/waterfall/waterfallPainter';
 import { barColour, WATERFALL_PALETTES } from '@/features/waterfall/waterfallPalette';
 
 interface Op {
   op: string;
   args: unknown[];
-  fill: string;
+  fill: unknown;
   stroke: string;
   dash: number[];
+  /** The halo cast, when one is. */
+  shadow: string;
 }
 
 /** A 2D context stand-in that records what is drawn, in what colour. */
 function recorder(): { surface: WaterfallSurface; ops: Op[] } {
   const ops: Op[] = [];
-  let state = { fillStyle: '', strokeStyle: '', lineWidth: 1, dash: [] as number[] };
+  let state = {
+    fillStyle: '' as unknown,
+    strokeStyle: '',
+    lineWidth: 1,
+    dash: [] as number[],
+    font: '',
+    textAlign: 'start',
+    textBaseline: 'alphabetic',
+    shadowColor: '',
+    shadowBlur: 0,
+  };
   const stack: (typeof state)[] = [];
   const record =
     (op: string) =>
     (...args: unknown[]) => {
-      ops.push({ op, args, fill: state.fillStyle, stroke: state.strokeStyle, dash: state.dash });
+      ops.push({
+        op,
+        args,
+        fill: state.fillStyle,
+        stroke: state.strokeStyle,
+        dash: state.dash,
+        shadow: state.shadowBlur > 0 ? state.shadowColor : '',
+      });
     };
   const surface = {
+    get font() {
+      return state.font;
+    },
+    set font(value: string) {
+      state.font = value;
+    },
+    get textAlign() {
+      return state.textAlign;
+    },
+    set textAlign(value: string) {
+      state.textAlign = value;
+    },
+    get textBaseline() {
+      return state.textBaseline;
+    },
+    set textBaseline(value: string) {
+      state.textBaseline = value;
+    },
+    get shadowColor() {
+      return state.shadowColor;
+    },
+    set shadowColor(value: string) {
+      state.shadowColor = value;
+    },
+    get shadowBlur() {
+      return state.shadowBlur;
+    },
+    set shadowBlur(value: number) {
+      state.shadowBlur = value;
+    },
+    fillText: record('fillText'),
+    // Seven pixels a character, near enough a 13 px face.
+    measureText: (text: string) => ({ width: [...text].length * 7 }),
+    createLinearGradient: (...args: number[]) => {
+      const gradient = {
+        stops: [] as unknown[],
+        addColorStop: (...stop: unknown[]) => gradient.stops.push(stop),
+      };
+      record('gradient')(...args);
+      return gradient;
+    },
     get fillStyle() {
       return state.fillStyle;
     },
-    set fillStyle(value: string) {
+    set fillStyle(value: unknown) {
       state.fillStyle = value;
     },
     get strokeStyle() {
@@ -84,6 +148,12 @@ function sceneOf(notes: NoteEvent[], loop = null as { startMs: number; endMs: nu
 function paint(scene: WaterfallScene, followsVelocity = true): Op[] {
   const { surface, ops } = recorder();
   paintWaterfall(surface, scene, { ...PAINT, followsVelocity });
+  return ops;
+}
+
+function paintWith(scene: WaterfallScene, extra: Partial<WaterfallPaint>): Op[] {
+  const { surface, ops } = recorder();
+  paintWaterfall(surface, scene, { ...PAINT, ...extra });
   return ops;
 }
 
@@ -172,6 +242,78 @@ describe('paintWaterfall', () => {
     const scene = sceneOf([note(60, 100)], { startMs: 0, endMs: 1000 });
     const strokes = paint(scene).filter((op) => op.op === 'stroke' && op.dash.length > 0);
     expect(strokes.map((op) => op.stroke)).toEqual([PALETTE.restart, PALETTE.restart]);
+  });
+
+  it('lines each bar’s start across the stage, under the bars', () => {
+    const scene = { ...sceneOf([note(64, 500)]), barYs: [120.4, 60] };
+    const ops = paint(scene);
+    const lines = ops.filter((op) => op.op === 'fillRect' && op.fill === PALETTE.barLine);
+    expect(lines.map((op) => op.args)).toEqual([
+      [0, 120, 1400, 1],
+      [0, 60, 1400, 1],
+    ]);
+    expect(ops.indexOf(lines[1] as Op)).toBeLessThan(ops.findIndex((op) => op.op === 'fill'));
+  });
+
+  it('writes a played note’s name at its foot where it fits, in ink for its key', () => {
+    const notes = [
+      note(60, 500),
+      note(61, 500),
+      note(64, 600, { velocity: 0 }),
+      note(67, 700, { durationMs: 20 }),
+    ];
+    const names = new Map(notes.map((n, i) => [n.id, ['C', 'C♯', 'E', 'G'][i] as string]));
+    const written = paintWith(sceneOf(notes), { names }).filter((op) => op.op === 'fillText');
+    // C over the middle of its white key, 4 px up from its foot at 250, in the
+    // dark ink; C♯ on its black key in ivory. Not E, written but not played,
+    // nor G, too short a bar for a name.
+    expect(written.map((op) => [op.args, op.fill])).toEqual([
+      [['C', 750, 246], PALETTE.inkOnWhite],
+      [['C♯', 795, 246], PALETTE.inkOnBlack],
+    ]);
+    // Without names, none.
+    expect(paint(sceneOf(notes)).some((op) => op.op === 'fillText')).toBe(false);
+  });
+
+  it('lights the notes a hold waits for, as brightly as asked, and no others', () => {
+    const scene = layoutWaterfall(
+      [note(60, 0), note(64, 0)],
+      { nowMs: 0, spanMs: 3000, loop: null, passStartMs: 0 },
+      { widthPx: 1400, heightPx: 300, keys: KEYS },
+      { awaited: new Set([60]) },
+    );
+    expect(paintWith(scene, { glow: 0 }).some((op) => op.op === 'gradient')).toBe(false);
+    const lit = paintWith(scene, { glow: 0.8 });
+    // A column of light rising 90 px from the key…
+    expect(lit.filter((op) => op.op === 'gradient').map((op) => op.args)).toEqual([
+      [0, 300, 0, 210],
+    ]);
+    // …the note haloed…
+    expect(lit.some((op) => op.op === 'fill' && op.shadow !== '')).toBe(true);
+    // …and a cap of the light on C4's foot alone, where it meets the key.
+    const caps = lit.filter((op) => op.op === 'fillRect' && op.args[3] === 3);
+    expect(caps.map((op) => op.args.slice(0, 2))).toEqual([[702, 297]]);
+    // Its name is written over the glow, not lost under it.
+    const named = paintWith(scene, { glow: 0.8, names: new Map([[scene.bars[0]!.note.id, 'C']]) });
+    const halo = named.findIndex((op) => op.op === 'fill' && op.shadow !== '');
+    expect(named.findIndex((op) => op.op === 'fillText')).toBeGreaterThan(halo);
+  });
+
+  it('keeps a black key’s note over a white key’s that glows beside it', () => {
+    // A hold waits for C4 alone while C♯4, whose column overlaps C4's, sounds
+    // with it: the black key's note still stands over the glowing white one.
+    const scene = layoutWaterfall(
+      [note(60, 0), note(61, 0)],
+      { nowMs: 0, spanMs: 3000, loop: null, passStartMs: 0 },
+      { widthPx: 1400, heightPx: 300, keys: KEYS },
+      { awaited: new Set([60]) },
+    );
+    const ops = paintWith(scene, { glow: 0.8 });
+    const halo = ops.findIndex((op) => op.op === 'fill' && op.shadow !== '');
+    const blackFill = barColour(PALETTE, 'right', true, 0.7, true);
+    const black = ops.findLastIndex((op) => op.op === 'fill' && op.fill === blackFill);
+    expect(halo).toBeGreaterThan(-1);
+    expect(black).toBeGreaterThan(halo);
   });
 
   it('paints the stage, guides and restart lines under the bars, and edge marks over them', () => {

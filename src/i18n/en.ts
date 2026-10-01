@@ -548,7 +548,7 @@ export const en: Messages = {
     midiCalibrateLoudest: ({ softest }) => `Softest: ${softest}. Now your loudest…`,
     midiCalibrateRejected:
       'Your loudest note has to be clearly louder than your softest. Try again.',
-    noteLabels: 'Note labels on keys',
+    noteLabels: 'Note names on keys and falling notes',
     velocityShading: 'Velocity shading on keys and falling notes',
     velocityShadingHint:
       'Lit keys and falling notes show how hard each note is played, pale when soft and deep when loud, as you play and in playback. Off, every note lights the same however hard it is played.',

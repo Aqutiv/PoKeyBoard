@@ -546,7 +546,7 @@ export const es: Messages = {
     midiCalibrateLoudest: ({ softest }) => `La más suave: ${softest}. Ahora, la más fuerte…`,
     midiCalibrateRejected:
       'Tu nota más fuerte tiene que sonar claramente más fuerte que la más suave. Inténtalo de nuevo.',
-    noteLabels: 'Etiquetas de notas en las teclas',
+    noteLabels: 'Nombres de las notas en las teclas y en las notas que caen',
     velocityShading: 'Sombreado por velocidad en las teclas y las notas que caen',
     velocityShadingHint:
       'Las teclas iluminadas y las notas que caen muestran la fuerza de cada nota: pálidas si es suave e intensas si es fuerte, al tocar y en la reproducción. Desactivado, cada nota se ilumina igual por fuerte que se toque.',

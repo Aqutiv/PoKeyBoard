@@ -1041,7 +1041,7 @@ function applyMeasureAccidentals(chordsByMeasure: readonly ChordGroup[][]): void
  * up with nothing held is ignored, so a stream that never quite balances still
  * draws something sensible. A press left open at the end runs to the end.
  */
-function pedalSpans(events: readonly PedalEvent[], totalMs: number): PedalSpan[] {
+export function pedalSpans(events: readonly PedalEvent[], totalMs: number): PedalSpan[] {
   const sorted = [...events].sort((a, b) => a.atMs - b.atMs);
   const spans: PedalSpan[] = [];
   let downAt: number | null = null;
