@@ -212,11 +212,13 @@ function drawMarker(ctx: WaterfallSurface, marker: WaterfallMarker, paint: Water
  * Paint `scene` in CSS pixels; the caller has already scaled the context for
  * the screen. From the bottom up: the stage, the octave guides, the bar
  * lines, the lines where a loop starts again, the white keys' bars, the black
- * keys' bars, which stand over them, the glow on the notes a Training hold
- * waits for, the notes' names, which stay readable over it, and last the
- * marks of notes off the key bed.
+ * keys' bars, which stand over them, the notes' names, and last the marks of
+ * notes off the key bed.
  * Within each key colour, the hollow bars of notes not played go under the
- * played ones, so a strike drawn over an outline shows whole.
+ * played ones, so a strike drawn over an outline shows whole, and the glow on
+ * the notes a Training hold waits for goes over both: in its own colour's
+ * layer, so a black key's note still stands over a white key's glowing beside
+ * it, and under every name, which stays readable over it.
  */
 export function paintWaterfall(
   ctx: WaterfallSurface,
@@ -247,13 +249,16 @@ export function paintWaterfall(
     ctx.restore();
   }
 
+  const { names, glow = 0 } = paint;
   for (const black of [false, true]) {
     for (const bar of scene.bars)
       if (bar.black === black && bar.silent) drawHollow(ctx, bar, paint);
     for (const bar of scene.bars) if (bar.black === black && !bar.silent) drawBar(ctx, bar, paint);
+    if (glow > 0) {
+      for (const bar of scene.bars)
+        if (bar.black === black && bar.awaited) drawGlow(ctx, bar, paint, glow);
+    }
   }
-  const { names, glow = 0 } = paint;
-  if (glow > 0) for (const bar of scene.bars) if (bar.awaited) drawGlow(ctx, bar, paint, glow);
   if (names) {
     for (const bar of scene.bars) {
       const name = bar.silent ? undefined : names.get(bar.note.id);
