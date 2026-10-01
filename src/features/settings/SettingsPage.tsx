@@ -177,6 +177,15 @@ export function SettingsPage() {
           />
         </label>
         <label className="setting-row">
+          <span>{m.settings.fingerNumbers}</span>
+          <input
+            type="checkbox"
+            checked={settings.showFingerNumbers}
+            onChange={(e) => settings.setShowFingerNumbers(e.target.checked)}
+          />
+        </label>
+        <p className="settings__hint">{m.settings.fingerNumbersHint}</p>
+        <label className="setting-row">
           <span>{m.settings.velocityShading}</span>
           <input
             type="checkbox"

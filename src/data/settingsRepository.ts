@@ -45,6 +45,7 @@ const SETTING_SCHEMAS = {
     .refine(({ min, max }) => max - min >= MIN_MIDI_RANGE_SPAN)
     .nullable(),
   showNoteLabels: z.boolean(),
+  showFingerNumbers: z.boolean(),
   velocityShading: z.boolean(),
   keyboardFollowsPlayback: z.boolean(),
   playView: z.enum(PLAY_VIEWS),

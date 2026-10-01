@@ -144,6 +144,22 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).velocityShading).toBe(false);
   });
 
+  it('keeps finger numbers off until they are switched on, beside the note names', async () => {
+    expect(SETTINGS_DEFAULTS.showFingerNumbers).toBe(false);
+    const keys = Object.keys(SETTINGS_DEFAULTS);
+    expect(keys.indexOf('showFingerNumbers')).toBe(keys.indexOf('showNoteLabels') + 1);
+
+    useSettingsStore.getState().setShowFingerNumbers(true);
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).showFingerNumbers).toBe(true);
+
+    // Anything else loads as nothing, so the default stands: no numbers.
+    await db.settings.put({ key: 'showFingerNumbers', value: 'yes' });
+    expect((await loadSettings()).showFingerNumbers).toBeUndefined();
+    await restoreSettingsFromBackup({ showFingerNumbers: true });
+    expect((await loadSettings()).showFingerNumbers).toBe(true);
+  });
+
   it('remembers the Play page’s view, the score until the falling notes are chosen', async () => {
     expect(SETTINGS_DEFAULTS.playView).toBe('score');
 

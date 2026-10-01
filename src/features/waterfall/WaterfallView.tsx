@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } fr
 import { subscribeFrame } from '@/app/frameClock';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { themeController } from '@/app/theme';
+import { noteFingers } from '@/domain/fingering';
 import type { PlaybackLoop } from '@/domain/takeTypes';
 import { barStartsBetween, createTakeTempoMap } from '@/domain/tempoMap';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
@@ -125,6 +126,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   const loop = useMemo(() => playableLoop(take), [take]);
   const followsVelocity = useSettingsStore((s) => s.velocityShading);
   const showNames = useSettingsStore((s) => s.showNoteLabels);
+  const showFingerNumbers = useSettingsStore((s) => s.showFingerNumbers);
   const { tempo, pedalEvents } = take;
   // Where each bar starts, as the score's own tempo map puts it.
   const barsBetween = useMemo(() => {
@@ -143,6 +145,11 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     const spellings = scoreSpellings(notes, { keySignature }, pedalEvents);
     return new Map([...spellings].map(([id, spelling]) => [id, spellingName(spelling)]));
   }, [showNames, notes, keySignature, pedalEvents]);
+  // Each note's finger, the score's own or one worked out, only while they show.
+  const fingerNumbers = useMemo(
+    () => (showFingerNumbers ? noteFingers(notes) : undefined),
+    [showFingerNumbers, notes],
+  );
   const seconds = useSettingsStore((s) => s.waterfallSeconds);
   const setSeconds = useSettingsStore((s) => s.setWaterfallSeconds);
   const lowMidi = range?.lowMidi;
@@ -163,6 +170,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   const followsRef = useRef(followsVelocity);
   const barsRef = useRef(barsBetween);
   const namesRef = useRef(names);
+  const fingerNumbersRef = useRef(fingerNumbers);
   const fallMsRef = useRef(seconds * 1000);
   /** Draw on the next frame if nothing else will; see the render loop below. */
   const wakeRef = useRef<() => void>(() => {});
@@ -196,6 +204,10 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     namesRef.current = names;
     wakeRef.current();
   }, [names]);
+  useEffect(() => {
+    fingerNumbersRef.current = fingerNumbers;
+    wakeRef.current();
+  }, [fingerNumbers]);
   useEffect(() => {
     fallMsRef.current = seconds * 1000;
     wakeRef.current();
@@ -257,6 +269,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
         palette: WATERFALL_PALETTES[themeController.getResolved()],
         followsVelocity: followsRef.current,
         names: namesRef.current,
+        fingers: fingerNumbersRef.current,
         glow: waiting ? glowAt(performance.now()) : 0,
       });
     };

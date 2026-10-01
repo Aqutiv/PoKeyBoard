@@ -2,6 +2,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { frameSubscriberCount } from '@/app/frameClock';
 import { themeController } from '@/app/theme';
+import { noteFingers } from '@/domain/fingering';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import { scrubController } from '@/features/notation/scrubController';
@@ -190,6 +191,31 @@ describe('WaterfallView', () => {
     act(() => useSettingsStore.getState().setShowNoteLabels(false));
     frame();
     expect(names()).toBeUndefined();
+  });
+
+  it('numbers the notes’ fingers, the score’s own or worked out, only while numbers show', () => {
+    show();
+    frame();
+    const fingers = () => lastPainted().paint.fingers;
+    // Off until switched on.
+    expect(fingers()).toBeUndefined();
+    act(() => useSettingsStore.getState().setShowFingerNumbers(true));
+    frame();
+    expect(fingers()).toBe(noteFingers(useTakeStore.getState().take.notes));
+    expect(fingers()?.get('a')).toBe(1);
+    // A finger the score prints is the one shown.
+    act(() =>
+      useTakeStore
+        .getState()
+        .setTake(
+          createEmptyTake({ notes: NOTES.map((n) => ({ ...n, finger: 4 })), durationMs: 4000 }),
+        ),
+    );
+    frame();
+    expect(fingers()?.get('a')).toBe(4);
+    act(() => useSettingsStore.getState().setShowFingerNumbers(false));
+    frame();
+    expect(fingers()).toBeUndefined();
   });
 
   it('lines the bars where the take’s tempo puts them', () => {

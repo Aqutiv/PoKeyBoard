@@ -547,6 +547,9 @@ export const es: Messages = {
     midiCalibrateRejected:
       'Tu nota más fuerte tiene que sonar claramente más fuerte que la más suave. Inténtalo de nuevo.',
     noteLabels: 'Nombres de las notas en las teclas y en las notas que caen',
+    fingerNumbers: 'Números de dedos en las notas que caen',
+    fingerNumbersHint:
+      'Cada nota que cae muestra un dedo con el que tocarla, numerados desde el pulgar en ambas manos: pulgar 1, meñique 5. Si la partitura indica un dedo, se muestra ese; los demás se calculan para que la mano esté cómoda.',
     velocityShading: 'Sombreado por velocidad en las teclas y las notas que caen',
     velocityShadingHint:
       'Las teclas iluminadas y las notas que caen muestran la fuerza de cada nota: pálidas si es suave e intensas si es fuerte, al tocar y en la reproducción. Desactivado, cada nota se ilumina igual por fuerte que se toque.',

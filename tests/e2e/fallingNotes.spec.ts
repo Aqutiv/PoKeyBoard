@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import {
   gotoAppReady,
+  nav,
   persistedSetting,
   recordShortTake,
   setCountIn,
@@ -100,6 +101,32 @@ async function pixelAt(page: Page, x: number, y: number): Promise<number[]> {
       return at ? [at[0] ?? 0, at[1] ?? 0, at[2] ?? 0] : [];
     },
     [x, y],
+  );
+}
+
+/**
+ * How many pixels of near-black ink there are at a key's note's foot: inside
+ * its bar, clear of the rounded corners and the outline, over the bottom
+ * 16 px where a number or a name is written.
+ */
+async function inkAtFoot(page: Page, note: string): Promise<number> {
+  const key = await keySpan(page, note);
+  return page.locator('.waterfall__canvas').evaluate(
+    (element, [left, right]) => {
+      const canvas = element as HTMLCanvasElement;
+      const scale = canvas.width / canvas.getBoundingClientRect().width;
+      const x0 = Math.ceil(((left as number) + 6) * scale);
+      const x1 = Math.floor(((right as number) - 6) * scale);
+      const y0 = Math.round(canvas.height - 16 * scale);
+      const y1 = Math.round(canvas.height - 3 * scale);
+      const data = canvas.getContext('2d')?.getImageData(x0, y0, x1 - x0, y1 - y0).data ?? [];
+      let ink = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        if ((data[i] ?? 255) + (data[i + 1] ?? 255) + (data[i + 2] ?? 255) < 150) ink += 1;
+      }
+      return ink;
+    },
+    [key.left, key.right],
   );
 }
 
@@ -215,6 +242,34 @@ test.describe('falling notes', () => {
     // Over D4, which nothing is asked of, the stage stays as it is.
     const overD4 = await pixelAt(page, (d4.left + d4.right) / 2, foot);
     expect(apart(overD4, await pixelAt(page, 2, 2))).toBeLessThan(12);
+  });
+
+  test('numbers each note with a finger once switched on, and remembers it', async ({ page }) => {
+    await gotoAppReady(page);
+    await recordShortTake(page, 350); // C4, then E4
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    await showFallingNotes(page);
+    // Names off, so only a number can ink C4's foot; numbers are off to start.
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await page.getByLabel('Note names on keys and falling notes').uncheck();
+    const numbers = page.getByLabel('Finger numbers on falling notes');
+    await expect(numbers).not.toBeChecked();
+    await nav(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect.poll(() => inkAtFoot(page, 'C4')).toBe(0);
+
+    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await numbers.check();
+    await expect.poll(() => persistedSetting(page, 'showFingerNumbers')).toBe(true);
+    await expect.poll(() => persistedSetting(page, 'showNoteLabels')).toBe(false);
+    await page.reload();
+    await expect(numbers).toBeChecked();
+
+    await nav(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
+    await showFallingNotes(page);
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    // C4 is the thumb's, its number written in dark ink at its foot.
+    await expect.poll(() => inkAtFoot(page, 'C4')).toBeGreaterThan(10);
   });
 
   test('scrubs when the notes are dragged, down bringing the music on', async ({ page }) => {
