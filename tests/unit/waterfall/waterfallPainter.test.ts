@@ -342,6 +342,23 @@ describe('paintWaterfall', () => {
     expect(named.findIndex((op) => op.op === 'fillText')).toBeGreaterThan(halo);
   });
 
+  it('keeps a black key’s note over a white key’s that glows beside it', () => {
+    // A hold waits for C4 alone while C♯4, whose column overlaps C4's, sounds
+    // with it: the black key's note still stands over the glowing white one.
+    const scene = layoutWaterfall(
+      [note(60, 0), note(61, 0)],
+      { nowMs: 0, spanMs: 3000, loop: null, passStartMs: 0 },
+      { widthPx: 1400, heightPx: 300, keys: KEYS },
+      { awaited: new Set([60]) },
+    );
+    const ops = paintWith(scene, { glow: 0.8 });
+    const halo = ops.findIndex((op) => op.op === 'fill' && op.shadow !== '');
+    const blackFill = barColour(PALETTE, 'right', true, 0.7, true);
+    const black = ops.findLastIndex((op) => op.op === 'fill' && op.fill === blackFill);
+    expect(halo).toBeGreaterThan(-1);
+    expect(black).toBeGreaterThan(halo);
+  });
+
   it('paints the stage, guides and restart lines under the bars, and edge marks over them', () => {
     const scene = sceneOf([note(36, 200), note(60, 300, { velocity: 0 }), note(64, 400)], {
       startMs: 0,
