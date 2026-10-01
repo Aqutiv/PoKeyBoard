@@ -3,7 +3,9 @@ import { subscribeFrame } from '@/app/frameClock';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { themeController } from '@/app/theme';
 import type { PlaybackLoop } from '@/domain/takeTypes';
+import { barStartsBetween, createTakeTempoMap } from '@/domain/tempoMap';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
+import { scoreSpellings, spellingName } from '@/features/notation/scoreSpelling';
 import { wheelZoomSteps, ZOOM_STEP } from '@/features/notation/scoreZoom';
 import { scrubController } from '@/features/notation/scrubController';
 import { playableLoop } from '@/features/transport/practiceLoop';
@@ -20,7 +22,12 @@ import {
   waterfallSecondsAfter,
   type WaterfallSeconds,
 } from './fallSpeed';
-import { layoutWaterfall, type WaterfallScene, type WaterfallTimeline } from './waterfallLayout';
+import {
+  EMPTY_SCENE,
+  layoutWaterfall,
+  type WaterfallCues,
+  type WaterfallTimeline,
+} from './waterfallLayout';
 import { paintWaterfall } from './waterfallPainter';
 import { WATERFALL_PALETTES } from './waterfallPalette';
 import './waterfall.css';
@@ -28,7 +35,21 @@ import './waterfall.css';
 /** Past this a sharper canvas only costs memory, for a difference nobody sees. */
 const MAX_DPR = 2;
 
-const NO_SCENE: WaterfallScene = { bars: [], markers: [], octaveXs: [], restartYs: [] };
+/** How long the glow on a note a Training hold waits for takes to swell and ebb. */
+const GLOW_PERIOD_MS = 1200;
+
+/** Whether the reader asked for less motion: the glow then holds still. */
+function prefersLessMotion(): boolean {
+  return typeof window.matchMedia === 'function'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
+}
+
+/** How bright the glow is at `nowMs`: swelling and ebbing, or steady for less motion. */
+function glowAt(nowMs: number): number {
+  if (prefersLessMotion()) return 1;
+  return 0.55 + 0.45 * Math.sin((2 * Math.PI * nowMs) / GLOW_PERIOD_MS);
+}
 
 /** The keys under the view, as `PianoKeyboard` reports its window. */
 export interface KeyRange {
@@ -99,6 +120,25 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   // Only a loop playback will play is folded round; see `playableLoop`.
   const loop = useMemo(() => playableLoop(take), [take]);
   const followsVelocity = useSettingsStore((s) => s.velocityShading);
+  const showNames = useSettingsStore((s) => s.showNoteLabels);
+  const { tempo, pedalEvents } = take;
+  // Where each bar starts, as the score's own tempo map puts it.
+  const barsBetween = useMemo(() => {
+    const map = createTakeTempoMap({
+      bpm: tempo.bpm,
+      timeSignature: tempo.timeSignature,
+      changes: tempo.changes,
+    });
+    return (fromMs: number, toMs: number) =>
+      barStartsBetween(map, tempo.timeSignature, fromMs, toMs);
+  }, [tempo.bpm, tempo.timeSignature, tempo.changes]);
+  // Each note's name as the score spells it, worked out only while names show.
+  const keySignature = tempo.keySignature;
+  const names = useMemo(() => {
+    if (!showNames) return undefined;
+    const spellings = scoreSpellings(notes, { keySignature }, pedalEvents);
+    return new Map([...spellings].map(([id, spelling]) => [id, spellingName(spelling)]));
+  }, [showNames, notes, keySignature, pedalEvents]);
   const seconds = useSettingsStore((s) => s.waterfallSeconds);
   const setSeconds = useSettingsStore((s) => s.setWaterfallSeconds);
   const lowMidi = range?.lowMidi;
@@ -117,6 +157,8 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   const loopRef = useRef(loop);
   const keysRef = useRef(keys);
   const followsRef = useRef(followsVelocity);
+  const barsRef = useRef(barsBetween);
+  const namesRef = useRef(names);
   const fallMsRef = useRef(seconds * 1000);
   /** Draw on the next frame if nothing else will; see the render loop below. */
   const wakeRef = useRef<() => void>(() => {});
@@ -142,6 +184,14 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     followsRef.current = followsVelocity;
     wakeRef.current();
   }, [followsVelocity]);
+  useEffect(() => {
+    barsRef.current = barsBetween;
+    wakeRef.current();
+  }, [barsBetween]);
+  useEffect(() => {
+    namesRef.current = names;
+    wakeRef.current();
+  }, [names]);
   useEffect(() => {
     fallMsRef.current = seconds * 1000;
     wakeRef.current();
@@ -184,18 +234,26 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
       if (canvas.height !== backingHeight) canvas.height = backingHeight;
       ctx.setTransform(backingWidth / width, 0, 0, backingHeight / height, 0, 0);
       const keyBed = keysRef.current;
+      const waiting = transportController.isWaitingForTraining();
+      const cues: WaterfallCues = {
+        barsBetween: barsRef.current,
+        awaited: waiting ? transportController.getTrainingTargets() : undefined,
+      };
       const scene = keyBed
-        ? layoutWaterfall(notesRef.current, timelineNow(loopRef.current, fallMsRef.current), {
-            widthPx: width,
-            heightPx: height,
-            keys: keyBed,
-          })
-        : NO_SCENE;
+        ? layoutWaterfall(
+            notesRef.current,
+            timelineNow(loopRef.current, fallMsRef.current),
+            { widthPx: width, heightPx: height, keys: keyBed },
+            cues,
+          )
+        : EMPTY_SCENE;
       paintWaterfall(ctx, scene, {
         widthPx: width,
         heightPx: height,
         palette: WATERFALL_PALETTES[themeController.getResolved()],
         followsVelocity: followsRef.current,
+        names: namesRef.current,
+        glow: waiting ? glowAt(performance.now()) : 0,
       });
     };
 
@@ -209,7 +267,11 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
       });
     };
     const sync = () => {
-      const moving = moves(transportController.getState());
+      // A Training hold keeps the frames coming too, for its glow to swell and
+      // ebb, unless the reader asked for less motion.
+      const moving =
+        moves(transportController.getState()) ||
+        (transportController.isWaitingForTraining() && !prefersLessMotion());
       if (moving && !stopFrames) {
         stopFrames = subscribeFrame(draw);
       } else if (!moving && stopFrames) {

@@ -28,8 +28,14 @@ export interface WaterfallPalette {
   readonly keyBlack: string;
   /** The octave guides: the ivory, faint. */
   readonly guide: string;
-  /** Where a loop starts again: --key-white-active-1. */
+  /** Where each bar starts: the ivory, less faint than a guide. */
+  readonly barLine: string;
+  /** Where a loop starts again, and the glow on a note practice waits for: --key-white-active-1. */
   readonly restart: string;
+  /** A note's name on a white key's bar: --key-black-edge, as dark as a black key's edge. */
+  readonly inkOnWhite: string;
+  /** A note's name on a black key's bar: --ivory. */
+  readonly inkOnBlack: string;
 }
 
 export const WATERFALL_PALETTES: Readonly<Record<ResolvedTheme, WaterfallPalette>> = {
@@ -40,7 +46,10 @@ export const WATERFALL_PALETTES: Readonly<Record<ResolvedTheme, WaterfallPalette
     ivory: '#f5efe2',
     keyBlack: '#201d1a',
     guide: 'rgba(245, 239, 226, 0.07)',
+    barLine: 'rgba(245, 239, 226, 0.16)',
     restart: '#e5b22d',
+    inkOnWhite: '#0b0908',
+    inkOnBlack: '#f5efe2',
   },
   light: {
     stage: '#2e2822',
@@ -49,7 +58,10 @@ export const WATERFALL_PALETTES: Readonly<Record<ResolvedTheme, WaterfallPalette
     ivory: '#fbf7ec',
     keyBlack: '#26221e',
     guide: 'rgba(251, 247, 236, 0.08)',
+    barLine: 'rgba(251, 247, 236, 0.16)',
     restart: '#e9b732',
+    inkOnWhite: '#14110e',
+    inkOnBlack: '#fbf7ec',
   },
 };
 

@@ -148,6 +148,40 @@ describe('layoutWaterfall', () => {
     ]);
   });
 
+  it('lines each bar’s start across the view, folded round a loop clear of its restart lines', () => {
+    // A bar every half second, from the second on.
+    const BARS = [1000, 1500, 2000, 2500, 3000];
+    const barsBetween = (fromMs: number, toMs: number) =>
+      BARS.filter((ms) => ms >= fromMs && ms < toMs);
+    const straight = layoutWaterfall([], at(500), VIEW, { barsBetween });
+    expect(straight.barYs).toEqual([250, 200, 150, 100, 50]);
+    // Round a loop from 1000 to 2000: the bar on its top is where it starts
+    // again, so a restart line marks it instead.
+    const looped = layoutWaterfall([], at(500, 3000, { startMs: 1000, endMs: 2000 }), VIEW, {
+      barsBetween,
+    });
+    expect(looped.barYs).toEqual([250, 200, 100]);
+    expect(looped.restartYs).toEqual([150, 50]);
+  });
+
+  it('marks the notes a Training hold waits for: the chord at the keys, on the keys it asks for', () => {
+    const notes = [
+      note(62, 1000, 300),
+      note(60, 1000, 300),
+      note(64, 1030, 300),
+      note(60, 1100, 300),
+    ];
+    const scene = layoutWaterfall(notes, at(1000), VIEW, { awaited: new Set([60, 64]) });
+    expect(scene.bars.map((bar) => [bar.note.midi, bar.note.startMs, bar.awaited])).toEqual([
+      [62, 1000, false],
+      [60, 1000, true],
+      [64, 1030, true],
+      [60, 1100, false],
+    ]);
+    // With no hold, none is.
+    expect(layoutWaterfall(notes, at(1000), VIEW).bars.some((bar) => bar.awaited)).toBe(false);
+  });
+
   it('falls notes in toward a recording’s start while it counts in', () => {
     const bar = layoutWaterfall([note(64, 0, 500)], at(-1000), VIEW).bars[0];
     expect(bar?.bottom).toBeCloseTo(200);

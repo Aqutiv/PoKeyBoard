@@ -1,6 +1,13 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { gotoAppReady, persistedSetting, setCountIn, transport, transportTime } from './helpers';
+import {
+  gotoAppReady,
+  persistedSetting,
+  recordShortTake,
+  setCountIn,
+  transport,
+  transportTime,
+} from './helpers';
 
 function viewSwitch(page: Page) {
   return page.getByRole('group', { name: 'View' });
@@ -74,6 +81,31 @@ async function keySpan(page: Page, note: string): Promise<Run> {
   const key = await page.getByRole('button', { name: `${note} key` }).boundingBox();
   if (!canvas || !key) throw new Error(`no box for ${note}`);
   return { left: key.x - canvas.x, right: key.x + key.width - canvas.x };
+}
+
+/** The canvas's colour at a point, in CSS pixels from its top left. */
+async function pixelAt(page: Page, x: number, y: number): Promise<number[]> {
+  return page.locator('.waterfall__canvas').evaluate(
+    (element, [px, py]) => {
+      const canvas = element as HTMLCanvasElement;
+      const scale = canvas.width / canvas.getBoundingClientRect().width;
+      const at = canvas
+        .getContext('2d')
+        ?.getImageData(
+          Math.round((px as number) * scale),
+          Math.round((py as number) * scale),
+          1,
+          1,
+        ).data;
+      return at ? [at[0] ?? 0, at[1] ?? 0, at[2] ?? 0] : [];
+    },
+    [x, y],
+  );
+}
+
+/** How far apart two colours are, summed over their channels. */
+function apart(a: number[], b: number[]): number {
+  return a.reduce((sum, value, i) => sum + Math.abs(value - (b[i] ?? 0)), 0);
 }
 
 async function expectBarsOverKeys(page: Page, notes: string[]): Promise<void> {
@@ -156,6 +188,33 @@ test.describe('falling notes', () => {
     await page.reload();
     await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
     await expect(faster()).toBeDisabled();
+  });
+
+  test('glows on the note a Training hold waits for, and on no other', async ({ page }) => {
+    // Held still, as for a reader who asks for less motion, so it can be read.
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await gotoAppReady(page);
+    await recordShortTake(page, 350); // C4, then E4
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    await showFallingNotes(page);
+    await page.getByRole('button', { name: 'Practice both', exact: true }).click();
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'C4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+    );
+
+    const canvas = await page.locator('.waterfall__canvas').boundingBox();
+    if (!canvas) throw new Error('no falling notes');
+    const c4 = await keySpan(page, 'C4');
+    const d4 = await keySpan(page, 'D4');
+    const foot = canvas.height - 4;
+    await expect
+      .poll(async () => apart(await pixelAt(page, c4.left - 2, foot), await pixelAt(page, 2, 2)))
+      .toBeGreaterThan(60);
+    // Over D4, which nothing is asked of, the stage stays as it is.
+    const overD4 = await pixelAt(page, (d4.left + d4.right) / 2, foot);
+    expect(apart(overD4, await pixelAt(page, 2, 2))).toBeLessThan(12);
   });
 
   test('scrubs when the notes are dragged, down bringing the music on', async ({ page }) => {

@@ -38,7 +38,9 @@ src/
                 LearnPage (outline), ChapterRunner, KeyboardDiagram,
                 StaffSnippet, CircleOfFifths, per-locale lesson content
     notation/   staffMapping, pitchSpelling (letters in context), keyDetection
-                (key and mode), quantization, notationLayout, scoreRenderer
+                (key and mode), scoreSpelling (the score's spelling of every
+                note, for names shown elsewhere), quantization, notationLayout,
+                scoreRenderer
                 (canvas), MusicScore (rAF + scrub gestures), scrubMath,
                 scrubController, sheetLayout (pure paginated engraving),
                 accidentalStacking (accidental columns from the glyph
@@ -58,11 +60,12 @@ src/
                 reset), PianoSection (piano choice with its own offline pack,
                 levels, room, tone)
     waterfall/  waterfallLayout (pure: where each note falls at one moment,
-                folded round a loop), waterfallPalette (the lit keys' colours,
-                mixed in OKLab as keyboard.css mixes them), waterfallPainter
-                (canvas), WaterfallView (on the frame clock while the notes
-                move; fall speed, and a vertical drag to scrub), fallSpeed (the
-                fall-time steps)
+                folded round a loop, with the bar lines and the notes a hold
+                waits for), waterfallPalette (the lit keys' colours, mixed in
+                OKLab as keyboard.css mixes them), waterfallPainter (canvas:
+                bars, names, the hold's glow), WaterfallView (on the frame clock
+                while the notes move or a hold glows; fall speed, and a
+                vertical drag to scrub), fallSpeed (the fall-time steps)
     play/       PlayPage, PlayViewSwitch and playView (score or falling notes),
                 SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,

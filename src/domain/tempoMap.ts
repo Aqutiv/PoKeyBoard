@@ -232,6 +232,28 @@ export function barLineNearMs(map: TempoMap, timeSignature: TimeSignature, ms: n
   return Math.round(map.msAtBeat(bar * numerator));
 }
 
+/**
+ * Where each bar starts from `fromMs` up to, not including, `toMs`, in order.
+ * Walked in beat space, as `measureSpans` is, so a tempo change inside a bar
+ * still puts the next bar line where the music does. A bar that starts on
+ * `fromMs` itself is kept, whichever way the beats rounded.
+ */
+export function barStartsBetween(
+  map: TempoMap,
+  timeSignature: TimeSignature,
+  fromMs: number,
+  toMs: number,
+): number[] {
+  const { numerator } = timeSignature;
+  const starts: number[] = [];
+  let bar = Math.max(0, Math.ceil(map.beatAtMs(fromMs) / numerator - 1e-9));
+  for (let ms = map.msAtBeat(bar * numerator); ms < toMs; ms = map.msAtBeat(bar * numerator)) {
+    starts.push(ms);
+    bar += 1;
+  }
+  return starts;
+}
+
 /** How long a count-in lasts when it precedes `atMs`, at the tempo in force there. */
 export function countInMsAt(
   map: TempoMap,
