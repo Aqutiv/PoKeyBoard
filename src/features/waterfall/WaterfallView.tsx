@@ -254,17 +254,17 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
    * A drag scrubs, at rest. It starts from where the view stands — Play's own
    * start, which is a loop's top for a playhead parked past its end — and goes
    * round the loop as the view draws it, so the notes never jump under the
-   * finger.
+   * finger. A scrub still running from elsewhere ends where it is, and this
+   * one begins there afresh: it may not go round the loop.
    */
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (!event.isPrimary || event.button !== 0) return;
     const current = transportController.getState();
     if (current !== 'idle' && current !== 'paused' && current !== 'scrubbing') return;
-    if (!scrubController.isActive) {
-      const standMs = transportController.getPassStartMs();
-      if (standMs !== transportController.getPlayheadMs()) transportController.seek(standMs);
-      if (!scrubController.begin(loopRef.current)) return;
-    }
+    if (scrubController.isActive) scrubController.end();
+    const standMs = transportController.getPassStartMs();
+    if (standMs !== transportController.getPlayheadMs()) transportController.seek(standMs);
+    if (!scrubController.begin(loopRef.current)) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {
       pointerId: event.pointerId,

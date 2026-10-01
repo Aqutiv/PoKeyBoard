@@ -305,6 +305,22 @@ describe('WaterfallView', () => {
       expect(transportController.getPlayheadMs()).toBe(1100);
     });
 
+    it('takes over a scrub left running elsewhere, going round its own loop', () => {
+      act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+      act(() => transportController.seek(1500));
+      // The score's fling, still coasting as the view switched: a straight scrub.
+      act(() => {
+        scrubController.begin();
+      });
+      show();
+      const canvas = screen.getByRole('img');
+      press(canvas);
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientY: 160 });
+      // 600 ms on from 1500 comes round the loop to 1100.
+      expect(transportController.getPlayheadMs()).toBe(1100);
+      fireEvent.pointerUp(canvas, { pointerId: 1 });
+    });
+
     it('answers only the main button of the main pointer, and never a running take', () => {
       const begin = vi.spyOn(scrubController, 'begin');
       show();
