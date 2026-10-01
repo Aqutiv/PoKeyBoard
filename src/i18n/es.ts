@@ -600,6 +600,7 @@ export const es: Messages = {
     finishPlaying: 'Termina de reproducir primero…',
     applyUpdate: 'Aplicar actualización y recargar',
     upToDate: ({ version }) => `Actualizado — versión ${version}.`,
+    deviceDetails: 'Detalles del dispositivo',
     outputLatency: ({ ms }) => `Latencia de salida estimada: ${ms} ms`,
     iphoneHint:
       '¿Sin sonido en el iPhone? Comprueba el interruptor de silencio y el volumen — el iPhone silencia el audio web cuando el interruptor está en silencio.',

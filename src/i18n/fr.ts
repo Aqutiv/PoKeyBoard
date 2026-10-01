@@ -602,6 +602,7 @@ export const fr: Messages = {
     finishPlaying: 'Terminez de jouer d’abord…',
     applyUpdate: 'Appliquer la mise à jour et recharger',
     upToDate: ({ version }) => `À jour — version ${version}.`,
+    deviceDetails: 'Détails de l’appareil',
     outputLatency: ({ ms }) => `Latence de sortie estimée : ${ms} ms`,
     iphoneHint:
       'Pas de son sur iPhone ? Vérifiez le bouton silence et le volume — l’iPhone coupe l’audio web quand le bouton est en mode silencieux.',

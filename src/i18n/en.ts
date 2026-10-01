@@ -599,6 +599,7 @@ export const en: Messages = {
     finishPlaying: 'Finish playing first…',
     applyUpdate: 'Apply update and reload',
     upToDate: ({ version }) => `Up to date — version ${version}.`,
+    deviceDetails: 'Device details',
     outputLatency: ({ ms }) => `Estimated output latency: ${ms} ms`,
     iphoneHint:
       'No sound on iPhone? Check the ring/silent switch and volume — iPhones mute web audio while the switch is on silent.',

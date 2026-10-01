@@ -63,6 +63,16 @@ test.describe('Settings sections', () => {
     await expect.poll(() => persistedSetting(page, 'touchSensitivity')).toBe('firm');
   });
 
+  test('keeps the device details folded until asked for', async ({ page }) => {
+    await gotoAppReady(page);
+    await openSettings(page, 'App');
+    await expect(page.getByText(/^No sound on iPhone\?/)).toBeVisible();
+    await expect(page.getByText('Web MIDI API')).toBeHidden();
+    await page.getByText('Device details').click();
+    await expect(page.getByText('Web MIDI API')).toBeVisible();
+    await expect(page.getByText(/^Estimated output latency/)).toBeVisible();
+  });
+
   test('keeps a download going, and in view, through a visit to another section', async ({
     page,
   }) => {

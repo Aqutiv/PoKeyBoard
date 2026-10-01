@@ -121,18 +121,23 @@ export function AppSection() {
       </SettingsGroup>
 
       <SettingsGroup id="diagnostics" heading={m.settings.diagnostics}>
-        <ul className="caps-list">
-          {CAPABILITY_KEYS.map((key) => (
-            <li key={key} className="caps-list__item">
-              <span aria-hidden="true">{caps[key] ? '✓' : '—'}</span>
-              <span>{m.settings.capabilities[key]}</span>
+        {/* Folded: few players need the list, and it was the longest thing on
+            the page. The tip that solves the commonest problem stays out. */}
+        <details className="settings-details">
+          <summary>{m.settings.deviceDetails}</summary>
+          <ul className="caps-list">
+            {CAPABILITY_KEYS.map((key) => (
+              <li key={key} className="caps-list__item">
+                <span aria-hidden="true">{caps[key] ? '✓' : '—'}</span>
+                <span>{m.settings.capabilities[key]}</span>
+              </li>
+            ))}
+            <li className="caps-list__item">
+              <span aria-hidden="true">·</span>
+              <span>{m.settings.outputLatency({ ms: audioEngine.getOutputLatencyMs() })}</span>
             </li>
-          ))}
-          <li className="caps-list__item">
-            <span aria-hidden="true">·</span>
-            <span>{m.settings.outputLatency({ ms: audioEngine.getOutputLatencyMs() })}</span>
-          </li>
-        </ul>
+          </ul>
+        </details>
         <p className="settings__hint">{m.settings.iphoneHint}</p>
       </SettingsGroup>
 

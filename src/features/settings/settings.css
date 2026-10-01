@@ -391,6 +391,23 @@
   font-weight: 600;
 }
 
+/* The device details fold, drawn like Learn's "Upcoming lessons" one. Its
+   focus ring sits inside, where the scroller cannot clip it. */
+.settings-details > summary {
+  cursor: pointer;
+  padding: 12px 2px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.settings-details > summary:focus-visible {
+  outline-offset: -2px;
+}
+
+.settings-details[open] > summary {
+  padding-bottom: 6px;
+}
+
 .caps-list {
   list-style: none;
   margin: 0;

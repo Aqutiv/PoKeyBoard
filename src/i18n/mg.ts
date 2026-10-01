@@ -607,6 +607,7 @@ export const mg: Messages = {
     finishPlaying: 'Vitao aloha ny fitendrena…',
     applyUpdate: 'Ampiharo ny fanavaozana ary avereno alefa',
     upToDate: ({ version }) => `Vaovao — kinova ${version}.`,
+    deviceDetails: 'Antsipirian’ny fitaovana',
     outputLatency: ({ ms }) => `Latency famoahana tombanana: ${ms} ms`,
     iphoneHint:
       'Tsy misy feo amin’ny iPhone? Jereo ny bokotra mangina sy ny feo — mamono ny feon’ny web ny iPhone rehefa mangina ilay bokotra.',

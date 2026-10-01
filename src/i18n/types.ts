@@ -625,6 +625,8 @@ export interface Messages {
     finishPlaying: string;
     applyUpdate: string;
     upToDate: (p: { version: string }) => string;
+    /** The fold the capability list and output latency sit in. */
+    deviceDetails: string;
     outputLatency: (p: { ms: number }) => string;
     iphoneHint: string;
     resetSettings: string;

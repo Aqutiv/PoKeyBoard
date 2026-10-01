@@ -86,6 +86,14 @@ describe('Settings sections', () => {
     expect(screen.getByRole('button', { name: RESET })).toBeTruthy();
   });
 
+  it('folds the device details away, and keeps the iPhone tip out of the fold', () => {
+    useSettingsStore.setState({ settingsSection: 'app' });
+    renderPage();
+    expect(screen.getByText(en.settings.deviceDetails)).toBeVisible();
+    expect(screen.getByText(en.settings.capabilities.webMidi)).not.toBeVisible();
+    expect(screen.getByText(en.settings.iphoneHint)).toBeVisible();
+  });
+
   it('stays on App when its Reset puts everything else back', () => {
     useSettingsStore.setState({ settingsSection: 'app', showNoteLabels: false });
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
