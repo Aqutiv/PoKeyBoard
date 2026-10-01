@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { pianoInstrument } from '../../src/audio/instruments';
-import { gotoAppReady, nav } from './helpers';
+import { chooseSettingsSection, gotoAppReady, nav, settingsSections } from './helpers';
 
 // Read from the registry so a pack-version bump cannot leave these stale.
 const SALAMANDER_PACK = pianoInstrument('salamander-grand').packVersion;
@@ -224,9 +224,15 @@ test.describe('choosing a piano', () => {
     await pianoRadio(page, HEADROOM).check();
     await expect.poll(() => storedTakePacks(page)).toEqual([HEADROOM_PACK]);
 
+    // Reset lives on App, and leaves the player there.
+    await chooseSettingsSection(page, 'App');
     page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Reset settings' }).click();
+    await expect(
+      settingsSections(page).getByRole('button', { name: 'App', exact: true }),
+    ).toHaveAttribute('aria-pressed', 'true');
 
+    await chooseSettingsSection(page, 'Sound');
     await expect(pianoRadio(page, SALAMANDER)).toBeChecked();
     // Reset goes through the store, not the radio handler. The take has to
     // follow the engine anyway, or an export would render on a piano the user
@@ -250,6 +256,24 @@ test.describe('choosing a piano', () => {
       await expect(
         group.getByRole('button', { name: new RegExp(`^Download ${name} \\(\\d`) }),
       ).toHaveCount(1);
+    }
+
+    // The download sits at the end of its piano's name line, showing its size;
+    // the button's name says the rest.
+    for (const name of ['Salamander', 'Wurlitzer']) {
+      const card = page
+        .locator('.piano-card')
+        .filter({ has: page.locator('strong', { hasText: new RegExp(`^${name}$`) }) });
+      const download = card.getByRole('button', { name: /^Download / });
+      await expect(download).toHaveText(/^\d+\.\d MB$/);
+      const middle = async (box: Promise<{ y: number; height: number } | null>) => {
+        const { y, height } = (await box)!;
+        return y + height / 2;
+      };
+      const offset =
+        (await middle(download.boundingBox())) -
+        (await middle(card.locator('strong').boundingBox()));
+      expect(Math.abs(offset)).toBeLessThan(4);
     }
 
     // The description belongs to the choice, so no second row repeats it.

@@ -52,7 +52,7 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 
 1. `npm run build && npm run preview -- --host` and open `http://<your-ip>:4173` **only for quick layout checks** (no SW on plain http), or deploy to an HTTPS host for the full experience.
 2. First visit online; the app shell caches automatically.
-3. Settings → **Piano** → **Download Salamander** (or **Download Headroom** / **Download Steinway** / **Download Wurlitzer**) to pin a full sample pack — each piano card downloads on its own.
+3. Settings → **Sound** → the download button on **Salamander**'s card (or **Headroom**'s / **Steinway**'s / **Wurlitzer**'s), which shows the pack's size, to pin a full sample pack — each piano card downloads on its own.
 
 ## Installing
 
@@ -63,23 +63,23 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 ## Offline behavior
 
 - The app shell (HTML/JS/CSS/icons/fonts, ~2.0 MB) is precached on first visit — the app starts with no connection.
-- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use the **Download** button on a piano card in Settings → **Piano** (~24–28 MB per acoustic piano, 2.39 MB for Wurlitzer, downloaded and deleted independently, without touching takes).
-- Updates download in the background and apply only when you choose (Settings → App) — never mid-recording.
+- Piano samples load on demand and are runtime-cached as you play. For guaranteed full-range offline playing, use the download button on a piano's card in Settings → **Sound** (~24–28 MB per acoustic piano, 2.39 MB for Wurlitzer, downloaded and deleted independently, without touching takes).
+- Updates download in the background and apply only when you choose (Settings offers them above its sections) — never mid-recording.
 
 ## Your data
 
 - Takes are stored locally in this browser profile (IndexedDB), autosaved while you work, and restored (including the playhead) on the next visit.
-- After your first real take the app requests **persistent storage**; Settings shows whether it was granted and current usage.
+- After your first real take the app requests **persistent storage**; Settings → App shows whether it was granted and current usage.
 - **Backups:** Takes → _Backup all takes_ writes a single JSON with every take and your settings; _Restore backup_ merges it back (colliding ids become copies). Individual takes export/import as `*.pokeyboard.json`.
 - Cross-device sync is not part of version 1 — move takes with JSON files.
 
 ## Daily listening and practice
 
 - On desktop, **Play** includes piano selection and **Piano volume** beside the metronome. **Click volume** controls the metronome independently.
-- Changing piano never stops the music: the piano playing carries on while the new one loads — a ring runs round the picker (or the piano's card in Settings) as it does — and the new one takes over from the next note, mid-phrase. Notes already ringing finish on the piano they began on. Record waits the moment it takes for the new piano to be ready; if it cannot be loaded, the previous piano stays chosen and says so.
-- During playback the keyboard lights every note the take plays, each hand in its own shade, and slides to wherever the music is — a glow at the edge marks notes still off the keys. Turn the sliding off in Settings → **Playing** (**Keyboard follows playback**); it also waits a few seconds after you move the keyboard yourself, and never moves under a key you are holding.
-- Lit keys show how hard each note is played: a soft note lights its key with a pale wash of its hand's colour, a loud one with the colour in full. That holds for the take's notes and for the ones you play yourself — by touch, mouse, computer keyboard, game controller or MIDI — and for the falling notes. Turn it off in Settings → **Playing** (**Velocity shading on keys and falling notes**) to light every note alike.
-- **Falling notes:** the switch at the top of Play (**Notation | Falling notes**) shows the take's notes falling onto the keys instead of the score. Each note is a bar standing over its key, as long as the key is held, and reaches the key just as it lights — in its hand's colour, as deep as it is played. The bars move with the keyboard, go round an A–B loop with a dashed line where it starts again, and mark notes off either end of the keys at that edge. They take three seconds to fall at any playback speed: **−** and **+** in the corner (or Ctrl/⌘ + the mouse wheel) choose anything from one second to eight, and that is remembered too. Drag the notes up or down to scrub through the take, as the score scrubs sideways. Faint lines mark where each bar starts. Each bar carries its note's name, spelled as the score spells it, where there is room, following Settings → **Playing** (**Note names on keys and falling notes**). When a Training hold waits for you, the notes it asks for glow where they meet their keys, and the glow holds still if you ask your system for less motion. The choice is remembered. With a phone on its side the notes fall over a shorter keyboard, and **Keyboard** shows the keys alone.
+- Changing piano never stops the music: the piano playing carries on while the new one loads — a ring runs round the picker (or the piano's card in Settings → Sound) as it does — and the new one takes over from the next note, mid-phrase. Notes already ringing finish on the piano they began on. Record waits the moment it takes for the new piano to be ready; if it cannot be loaded, the previous piano stays chosen and says so.
+- During playback the keyboard lights every note the take plays, each hand in its own shade, and slides to wherever the music is — a glow at the edge marks notes still off the keys. Turn the sliding off in Settings → **Display** (**Keyboard follows playback**); it also waits a few seconds after you move the keyboard yourself, and never moves under a key you are holding.
+- Lit keys show how hard each note is played: a soft note lights its key with a pale wash of its hand's colour, a loud one with the colour in full. That holds for the take's notes and for the ones you play yourself — by touch, mouse, computer keyboard, game controller or MIDI — and for the falling notes. Turn it off in Settings → **Display** (**Velocity shading on keys and falling notes**) to light every note alike.
+- **Falling notes:** the switch at the top of Play (**Notation | Falling notes**) shows the take's notes falling onto the keys instead of the score. Each note is a bar standing over its key, as long as the key is held, and reaches the key just as it lights — in its hand's colour, as deep as it is played. The bars move with the keyboard, go round an A–B loop with a dashed line where it starts again, and mark notes off either end of the keys at that edge. They take three seconds to fall at any playback speed: **−** and **+** in the corner (or Ctrl/⌘ + the mouse wheel) choose anything from one second to eight, and that is remembered too. Drag the notes up or down to scrub through the take, as the score scrubs sideways. Faint lines mark where each bar starts. Each bar carries its note's name, spelled as the score spells it, where there is room, following Settings → **Display** (**Note names on keys and falling notes**). When a Training hold waits for you, the notes it asks for glow where they meet their keys, and the glow holds still if you ask your system for less motion. The choice is remembered. With a phone on its side the notes fall over a shorter keyboard, and **Keyboard** shows the keys alone.
 - Zoom the score with **−** and **+** above it, by pinching it with two fingers on a touch screen or a trackpad (Safari's included), or with Ctrl/⌘ + scroll; the zoom is kept with the take. A pinch never moves the playhead, even if the first finger had begun to scrub. Fast passages are spread out so their noteheads never touch.
 - Choose **Listen**, **Practice left**, **Practice right**, or **Practice both** next to the transport. Practice waits for you to play the highlighted notes. **Recording** holds Overdub/Replace; compact screens keep the combined **Modes** menu.
 - Library remembers your filter and scroll position while you move between pages during the current session. **Clear filter** restores the full list; reloading starts a fresh search.
@@ -87,7 +87,8 @@ Service workers, installation, `navigator.share`, and persistent storage all req
 - Paused practice offers **Return to practice** instead of Resume. Continue from Play, where the highlighted notes are visible.
 - Select a personal take's title on Play to rename it. Enter saves and Escape cancels; library titles stay fixed. Takes also supports title search.
 - Learn shows the available lesson count for the selected level. Expand **Upcoming lessons** to see the remaining curriculum.
-- A badge on Settings indicates a waiting update. Settings shows the running build's commit and date; updates still apply only when you choose at a safe time.
+- Settings comes in four sections — **Sound** (the pianos, volume, reverb, playback), **Playing** (touch, MIDI keyboard, game controller), **Display** (the keys, theme, language) and **App** (install, updates, storage, diagnostics, reset) — and opens on the one used last.
+- A badge on Settings indicates a waiting update, which Settings offers above its sections; Settings → App shows the running build's commit and date. Updates still apply only when you choose at a safe time.
 
 The BPM field changes the metronome and score grid, including tempo changes from a chosen bar. It does **not** change how fast recorded notes play back: the **speed** control beside the seek bar does, from 25% to 150%, without changing pitch (recording always runs at 100%). **A–B** repeats a passage: tap it as the passage starts and again as it ends — while playing or with the playhead parked at each end — and playback goes round it, the metronome and practice holds included, until a third tap. Both are kept with the take and never change its exported audio.
 
@@ -101,11 +102,11 @@ Every export leaves at the same loudness — −16 LUFS, the level music apps pl
 
 ## Browser support
 
-Core app: current Safari (iPhone/iPad), Chrome (Android/Windows/macOS/Linux), Edge (Windows). Optional APIs (install prompt, file sharing, persistent storage, wake lock, File System Access) are feature-detected — Settings → Diagnostics shows what this browser provides. Desktop Firefox works as a normal website (share falls back to download).
+Core app: current Safari (iPhone/iPad), Chrome (Android/Windows/macOS/Linux), Edge (Windows). Optional APIs (install prompt, file sharing, persistent storage, wake lock, File System Access) are feature-detected — Settings → App → **Device details** shows what this browser provides. Desktop Firefox works as a normal website (share falls back to download).
 
 ## Known limitations
 
-- Audio pauses when the app goes to the background by default. Settings can opt recorded-take playback into continuing while minimized or unfocused (device power policies may still stop it); recordings always finalize and save safely.
+- Audio pauses when the app goes to the background by default. Settings → Sound can opt recorded-take playback into continuing while minimized or unfocused (device power policies may still stop it); recordings always finalize and save safely.
 - iPhone mutes web audio while the ring/silent switch is on silent; PoKeyBoard applies the standard media-session workaround, but if you hear nothing, check the switch.
 - One sustain-pedal timeline (no half-pedaling), single instrument, no cloud sync in v1.
 - MIDI input needs Web MIDI (Chrome, Edge and Opera, on desktop and Android; not Safari or Firefox) and is off until you enable it in Settings → **Playing**, which is what raises the browser's permission prompt. Every connected input plays, from any tab rather than only from Play; pitch bend shifts the visible keys and CC7 moves the master volume, since a sampled piano has no pitch to bend.

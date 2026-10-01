@@ -485,15 +485,26 @@ export const es: Messages = {
   },
   settings: {
     title: 'Ajustes',
+    sectionLabel: 'Sección de ajustes',
+    sections: {
+      sound: 'Sonido',
+      // Not "Tocar": the Play tab already says it, on the same screen.
+      playing: 'Toque',
+      display: 'Pantalla',
+      app: 'Aplicación',
+    },
+    playback: 'Reproducción',
+    touch: 'Tacto',
+    controllers: 'Controladores',
+    keys: 'Teclas',
+    installUpdates: 'Instalación y actualizaciones',
     language: 'Idioma',
     appearance: 'Apariencia e idioma',
     theme: 'Tema',
     themeDark: 'Conservatory — oscuro',
     themeLight: 'Ivory recital — claro',
     themeSystem: 'Según el sistema',
-    playing: 'Interpretación',
     storage: 'Almacenamiento',
-    app: 'Aplicación',
     diagnostics: 'Diagnóstico',
     reset: 'Restablecer',
     piano: 'Piano',
@@ -520,7 +531,7 @@ export const es: Messages = {
     toneFollowsTouchHint:
       'En los pianos de cola, las notas más suaves suenan más oscuras y las más fuertes, más brillantes, así que el timbre pasa de suave a fuerte de forma gradual, sin saltos. Desactivado, cada nota suena con su grabación sin filtrar.',
     velocity: 'Velocidad',
-    velocityTouch: 'Según la posición del toque en la tecla',
+    velocityTouch: 'Posición del toque',
     velocityFixed: 'Fija',
     fixedVelocity: 'Velocidad fija',
     touchSensitivity: 'Sensibilidad al tacto',
@@ -577,7 +588,7 @@ export const es: Messages = {
     couldNotCheck: 'No se pudo comprobar el paquete de muestras.',
     downloadFailed: 'Error en la descarga.',
     downloading: ({ loaded, total }) => `Descargando… ${loaded} / ${total}`,
-    fullOffline: ({ size }) => `✓ Disponible sin conexión (${size})`,
+    offlineReady: '✓ Sin conexión',
     persistGranted:
       'Almacenamiento persistente concedido: el navegador evitará descartar tus tomas.',
     persistNotGranted:
@@ -596,6 +607,7 @@ export const es: Messages = {
     finishPlaying: 'Termina de reproducir primero…',
     applyUpdate: 'Aplicar actualización y recargar',
     upToDate: ({ version }) => `Actualizado — versión ${version}.`,
+    deviceDetails: 'Detalles del dispositivo',
     outputLatency: ({ ms }) => `Latencia de salida estimada: ${ms} ms`,
     iphoneHint:
       '¿Sin sonido en el iPhone? Comprueba el interruptor de silencio y el volumen — el iPhone silencia el audio web cuando el interruptor está en silencio.',

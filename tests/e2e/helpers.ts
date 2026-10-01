@@ -10,6 +10,31 @@ export function nav(page: Page): Locator {
   return page.getByRole('navigation', { name: 'Main' });
 }
 
+/** The Settings section switch (Sound, Playing, Display, App). */
+export function settingsSections(page: Page): Locator {
+  return page.getByRole('group', { name: 'Settings section' });
+}
+
+export type SettingsSectionName = 'Sound' | 'Playing' | 'Display' | 'App';
+
+/**
+ * Open Settings from the nav. It opens on the section last shown — Sound on a
+ * fresh visit — so a test that needs another one names it.
+ */
+export async function openSettings(page: Page, section?: SettingsSectionName): Promise<void> {
+  await nav(page).getByRole('button', { name: 'Settings' }).click();
+  if (section) await chooseSettingsSection(page, section);
+}
+
+/** Switch to a section of the Settings page already open. */
+export async function chooseSettingsSection(
+  page: Page,
+  section: SettingsSectionName,
+): Promise<void> {
+  // Exact: "App" alone would also match "Apply update and reload".
+  await settingsSections(page).getByRole('button', { name: section, exact: true }).click();
+}
+
 /** Fresh app visit: navigate and wait for the piano core pack to decode. */
 export async function gotoAppReady(page: Page): Promise<void> {
   await page.goto('/');
