@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
 import { REVERB_ROOMS, reverbRoomOf, type ReverbRoom } from '@/domain/takeTypes';
@@ -9,6 +9,7 @@ import { usePianoSwitchState } from '@/app/hooks/useAudioEngine';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { transportController } from '@/features/transport/transportController';
 import { formatMB } from './formatBytes';
+import { deletePack, downloadPack, getPacks, refreshPack, subscribePacks } from './packStates';
 import { PianoSwitchRing } from './PianoSwitchRing';
 import { PianoSwitchStatus } from './PianoSwitchStatus';
 
@@ -22,13 +23,6 @@ const PIANO_DESCRIPTION_KEYS: Record<
   'bitklavier-grand': 'pianoBitklavierDesc',
   'wurlitzer-ep203w': 'pianoWurlitzerDesc',
 };
-
-type PackState =
-  | { kind: 'checking' }
-  | { kind: 'not-downloaded'; totalBytes: number }
-  | { kind: 'downloading'; loadedBytes: number; totalBytes: number }
-  | { kind: 'offline-ready'; totalBytes: number }
-  | { kind: 'error'; message: string; totalBytes: number };
 
 // Standard preview note for instrument selection: middle C, mezzo-forte, long
 // enough for the reverb tail to be audible after it releases.
@@ -46,69 +40,25 @@ export function PianoSection() {
   const settings = useSettingsStore();
   const instrument = useTakeStore((state) => state.take.instrument);
 
-  const [packs, setPacks] = useState<Partial<Record<PianoInstrumentId, PackState>>>({});
+  const packs = useSyncExternalStore(subscribePacks, getPacks);
   const switchState = usePianoSwitchState();
   const transportState = useTransportState();
 
-  const setPack = useCallback((id: PianoInstrumentId, state: PackState) => {
-    setPacks((current) => ({ ...current, [id]: state }));
-  }, []);
-
-  const refreshPackState = useCallback(
-    async (id: PianoInstrumentId) => {
-      try {
-        const manifest = await audioEngine.bankFor(id).loadManifest();
-        const offline = await audioEngine.isFullPackOffline(id);
-        setPack(id, {
-          kind: offline ? 'offline-ready' : 'not-downloaded',
-          totalBytes: manifest.totalBytes,
-        });
-      } catch {
-        setPack(id, { kind: 'error', message: m.settings.couldNotCheck, totalBytes: 0 });
-      }
-    },
-    [m, setPack],
-  );
-
+  // Every time the cards show: the cache can change behind them (another tab,
+  // the browser clearing storage), and a running download is left alone.
   useEffect(() => {
     const timer = setTimeout(() => {
-      for (const piano of PIANO_INSTRUMENTS) void refreshPackState(piano.id);
+      for (const piano of PIANO_INSTRUMENTS) void refreshPack(piano.id);
     }, 0);
     return () => clearTimeout(timer);
-  }, [refreshPackState]);
+  }, []);
 
-  const downloadPack = useCallback(
-    (id: PianoInstrumentId) => {
-      setPacks((current) => {
-        const state = current[id];
-        if (state?.kind !== 'not-downloaded' && state?.kind !== 'error') return current;
-        return {
-          ...current,
-          [id]: { kind: 'downloading', loadedBytes: 0, totalBytes: state.totalBytes },
-        };
-      });
-      audioEngine
-        .downloadFullSamplePack(id, (loadedBytes, totalBytes) => {
-          setPack(id, { kind: 'downloading', loadedBytes, totalBytes });
-        })
-        .then(() => void refreshPackState(id))
-        .catch((error: unknown) => {
-          setPack(id, {
-            kind: 'error',
-            message: error instanceof Error ? error.message : m.settings.downloadFailed,
-            totalBytes: 0,
-          });
-        });
-    },
-    [refreshPackState, setPack, m],
-  );
-
-  const deletePack = useCallback(
+  const confirmDelete = useCallback(
     (id: PianoInstrumentId) => {
       if (!window.confirm(m.settings.deleteSamplesConfirm)) return;
-      void audioEngine.deleteDownloadedSamples(id).then(() => void refreshPackState(id));
+      void deletePack(id);
     },
-    [refreshPackState, m],
+    [m],
   );
 
   // Audition the selected piano through the current master and reverb settings.
@@ -206,7 +156,7 @@ export function PianoSection() {
                     <button
                       type="button"
                       className="btn btn--small btn--danger"
-                      onClick={() => deletePack(piano.id)}
+                      onClick={() => confirmDelete(piano.id)}
                     >
                       {m.settings.deletePiano({ piano: piano.name })}
                     </button>
@@ -215,7 +165,10 @@ export function PianoSection() {
                 {pack.kind === 'error' ? (
                   <>
                     <span role="alert" className="settings__error">
-                      {pack.message}
+                      {pack.detail ??
+                        (pack.failure === 'check'
+                          ? m.settings.couldNotCheck
+                          : m.settings.downloadFailed)}
                     </span>
                     <button
                       type="button"
