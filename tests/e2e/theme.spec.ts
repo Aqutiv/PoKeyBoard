@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { chooseSettingsSection } from './helpers';
 
 const DARK_BG = 'rgb(20, 17, 16)'; // --surface-0 #141110
 const LIGHT_BG = 'rgb(247, 243, 234)'; // --surface-0 #f7f3ea
@@ -17,9 +18,14 @@ function themeMeta(page: Page) {
   return page.locator('meta[name="theme-color"]');
 }
 
+function themeSelect(page: Page) {
+  return page.getByRole('combobox', { name: 'Theme' });
+}
+
 async function gotoSettings(page: Page): Promise<void> {
   await page.goto('/#/settings');
-  await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
+  await chooseSettingsSection(page, 'Display');
+  await expect(themeSelect(page)).toBeVisible();
 }
 
 test.describe('theme', () => {
@@ -34,7 +40,7 @@ test.describe('theme', () => {
     page,
   }) => {
     await gotoSettings(page);
-    await page.getByRole('radio', { name: 'Ivory recital — light' }).check();
+    await themeSelect(page).selectOption({ label: 'Ivory recital — light' });
     await expect(html(page)).toHaveAttribute('data-theme', 'light');
     await expect(page.locator('body')).toHaveCSS('background-color', LIGHT_BG);
     await expect(themeMeta(page)).toHaveAttribute('content', '#f7f3ea');
@@ -51,7 +57,7 @@ test.describe('theme', () => {
   test('Follow system tracks the OS scheme without a reload', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await gotoSettings(page);
-    await page.getByRole('radio', { name: 'Follow system' }).check();
+    await themeSelect(page).selectOption({ label: 'Follow system' });
     await expect(html(page)).toHaveAttribute('data-theme', 'light');
 
     await page.emulateMedia({ colorScheme: 'dark' });

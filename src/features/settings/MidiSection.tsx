@@ -9,6 +9,7 @@ import { registerRawVelocityListener } from '@/features/keyboard/midiInput';
 import { MIDI_VELOCITY_CURVES, type MidiVelocityCurve } from '@/features/keyboard/velocityResponse';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
+import { ChoiceSwitch } from './ChoiceSwitch';
 import {
   CALIBRATION_IDLE,
   calibrationReducer,
@@ -168,24 +169,15 @@ function MidiVelocity({ connected }: { connected: boolean }) {
 
   return (
     <>
-      <div
-        className="setting-row setting-row--stack"
-        role="radiogroup"
-        aria-label={m.settings.midiVelocityCurve}
-      >
-        <span>{m.settings.midiVelocityCurve}</span>
-        {MIDI_VELOCITY_CURVES.map((option) => (
-          <label key={option}>
-            <input
-              type="radio"
-              name="midi-velocity-curve"
-              checked={curve === option}
-              onChange={() => setCurve(option)}
-            />
-            {m.settings[CURVE_LABELS[option]]}
-          </label>
-        ))}
-      </div>
+      <ChoiceSwitch
+        label={m.settings.midiVelocityCurve}
+        value={curve}
+        options={MIDI_VELOCITY_CURVES.map((option) => ({
+          value: option,
+          label: m.settings[CURVE_LABELS[option]],
+        }))}
+        onChange={setCurve}
+      />
       <p className="settings__hint">{m.settings.midiCurveHint}</p>
 
       <div className="setting-row">

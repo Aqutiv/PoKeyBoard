@@ -14,6 +14,7 @@ import {
 } from '@/features/keyboard/velocityResponse';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
+import { SETTINGS_SECTION_IDS } from '@/features/settings/sections';
 import { PLAYBACK_MODES, RECORD_MODES } from '@/features/transport/modes';
 import { SETTINGS_DEFAULTS, type SettingsState } from '@/state/useSettingsStore';
 import { db } from './db';
@@ -58,6 +59,7 @@ const SETTING_SCHEMAS = {
   audioExportLoudness: z.enum(LOUDNESS_MODES),
   libraryFolder: z.enum(LIBRARY_FOLDER_IDS),
   learnLevel: z.enum(LEARN_LEVEL_IDS),
+  settingsSection: z.enum(SETTINGS_SECTION_IDS),
   recordMode: z.enum(RECORD_MODES),
   playbackMode: z.enum(PLAYBACK_MODES),
 } satisfies Record<keyof PersistableSettings, z.ZodType>;

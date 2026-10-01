@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { gotoAppReady, nav, persistedSetting } from './helpers';
+import { gotoAppReady, nav, openSettings, persistedSetting } from './helpers';
 
 /**
  * Hold C4 with the mouse at `depth` of its height — near the top plays soft,
@@ -41,7 +41,7 @@ test.describe('velocity shading on keys', () => {
     expect(hard.background).toContain('gradient');
     expect(soft.background).not.toBe(hard.background);
 
-    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await openSettings(page, 'Display');
     const toggle = page.getByRole('checkbox', { name: 'Velocity shading on keys' });
     await expect(toggle).toBeChecked();
     await toggle.uncheck();
@@ -59,7 +59,7 @@ test.describe('velocity shading on keys', () => {
     await page.reload();
     await page.locator('section[data-piano-ready="true"]').waitFor({ timeout: 30_000 });
     expect(await pressC4At(page, 0.1)).toEqual(evenHard);
-    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await openSettings(page, 'Display');
     await expect(
       page.getByRole('checkbox', { name: 'Velocity shading on keys' }),
     ).not.toBeChecked();

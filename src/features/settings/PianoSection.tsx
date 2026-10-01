@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useSyncExternalStore } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import { PIANO_INSTRUMENTS, type PianoInstrumentId } from '@/audio/instruments';
 import { REVERB_ROOMS, reverbRoomOf, type ReverbRoom } from '@/domain/takeTypes';
@@ -8,7 +8,9 @@ import { useTakeStore } from '@/state/useTakeStore';
 import { usePianoSwitchState } from '@/app/hooks/useAudioEngine';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { transportController } from '@/features/transport/transportController';
+import { TooltipButton } from '@/ui/TooltipButton';
 import { formatMB } from './formatBytes';
+import { deletePack, downloadPack, getPacks, refreshPack, subscribePacks } from './packStates';
 import { PianoSwitchRing } from './PianoSwitchRing';
 import { PianoSwitchStatus } from './PianoSwitchStatus';
 
@@ -23,18 +25,40 @@ const PIANO_DESCRIPTION_KEYS: Record<
   'wurlitzer-ep203w': 'pianoWurlitzerDesc',
 };
 
-type PackState =
-  | { kind: 'checking' }
-  | { kind: 'not-downloaded'; totalBytes: number }
-  | { kind: 'downloading'; loadedBytes: number; totalBytes: number }
-  | { kind: 'offline-ready'; totalBytes: number }
-  | { kind: 'error'; message: string; totalBytes: number };
-
 // Standard preview note for instrument selection: middle C, mezzo-forte, long
 // enough for the reverb tail to be audible after it releases.
 const PREVIEW_MIDI = 60;
 const PREVIEW_VELOCITY = 0.7;
 const PREVIEW_DURATION_MS = 600;
+
+/** The line icons the nav draws with, at the small buttons' size. */
+const ICON_PROPS = {
+  width: 16,
+  height: 16,
+  viewBox: '0 0 24 24',
+  fill: 'none',
+  stroke: 'currentColor',
+  strokeWidth: 2,
+  strokeLinecap: 'round',
+  strokeLinejoin: 'round',
+  'aria-hidden': true,
+} as const;
+
+function DownloadIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg {...ICON_PROPS}>
+      <path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l.9 12.1a1 1 0 0 0 1 .9h7.2a1 1 0 0 0 1-.9L17.5 7M10.5 11v5.5M13.5 11v5.5" />
+    </svg>
+  );
+}
 
 /**
  * Choosing a piano and downloading it are the same errand, so each piano is one
@@ -46,69 +70,27 @@ export function PianoSection() {
   const settings = useSettingsStore();
   const instrument = useTakeStore((state) => state.take.instrument);
 
-  const [packs, setPacks] = useState<Partial<Record<PianoInstrumentId, PackState>>>({});
+  const packs = useSyncExternalStore(subscribePacks, getPacks);
   const switchState = usePianoSwitchState();
   const transportState = useTransportState();
+  // Each radio has two labels, its name's and its description's.
+  const idPrefix = useId();
 
-  const setPack = useCallback((id: PianoInstrumentId, state: PackState) => {
-    setPacks((current) => ({ ...current, [id]: state }));
-  }, []);
-
-  const refreshPackState = useCallback(
-    async (id: PianoInstrumentId) => {
-      try {
-        const manifest = await audioEngine.bankFor(id).loadManifest();
-        const offline = await audioEngine.isFullPackOffline(id);
-        setPack(id, {
-          kind: offline ? 'offline-ready' : 'not-downloaded',
-          totalBytes: manifest.totalBytes,
-        });
-      } catch {
-        setPack(id, { kind: 'error', message: m.settings.couldNotCheck, totalBytes: 0 });
-      }
-    },
-    [m, setPack],
-  );
-
+  // Every time the cards show: the cache can change behind them (another tab,
+  // the browser clearing storage), and a running download is left alone.
   useEffect(() => {
     const timer = setTimeout(() => {
-      for (const piano of PIANO_INSTRUMENTS) void refreshPackState(piano.id);
+      for (const piano of PIANO_INSTRUMENTS) void refreshPack(piano.id);
     }, 0);
     return () => clearTimeout(timer);
-  }, [refreshPackState]);
+  }, []);
 
-  const downloadPack = useCallback(
-    (id: PianoInstrumentId) => {
-      setPacks((current) => {
-        const state = current[id];
-        if (state?.kind !== 'not-downloaded' && state?.kind !== 'error') return current;
-        return {
-          ...current,
-          [id]: { kind: 'downloading', loadedBytes: 0, totalBytes: state.totalBytes },
-        };
-      });
-      audioEngine
-        .downloadFullSamplePack(id, (loadedBytes, totalBytes) => {
-          setPack(id, { kind: 'downloading', loadedBytes, totalBytes });
-        })
-        .then(() => void refreshPackState(id))
-        .catch((error: unknown) => {
-          setPack(id, {
-            kind: 'error',
-            message: error instanceof Error ? error.message : m.settings.downloadFailed,
-            totalBytes: 0,
-          });
-        });
-    },
-    [refreshPackState, setPack, m],
-  );
-
-  const deletePack = useCallback(
+  const confirmDelete = useCallback(
     (id: PianoInstrumentId) => {
       if (!window.confirm(m.settings.deleteSamplesConfirm)) return;
-      void audioEngine.deleteDownloadedSamples(id).then(() => void refreshPackState(id));
+      void deletePack(id);
     },
-    [refreshPackState, m],
+    [m],
   );
 
   // Audition the selected piano through the current master and reverb settings.
@@ -135,16 +117,17 @@ export function PianoSection() {
 
   return (
     <>
-      <h2 className="settings__section">{m.settings.piano}</h2>
       <p className="settings__hint">{m.settings.pianoHint}</p>
 
       <div className="piano-choice" role="radiogroup" aria-label={m.settings.piano}>
         {PIANO_INSTRUMENTS.map((piano) => {
           const pack = packs[piano.id] ?? { kind: 'checking' as const };
           const active = settings.pianoInstrument === piano.id;
+          const radioId = `${idPrefix}-${piano.id}`;
           return (
             // A button cannot sit inside the label that wraps the radio, so the
-            // offline row is a sibling within the card.
+            // offline controls are siblings within the card: the steady ones on
+            // the name's line, a download's progress or failure on a line below.
             <div
               key={piano.id}
               className={`setting-row piano-card${active ? ' piano-card--active' : ''}${
@@ -153,6 +136,7 @@ export function PianoSection() {
             >
               <label className="piano-card__choice">
                 <input
+                  id={radioId}
                   type="radio"
                   name="piano-instrument"
                   checked={active}
@@ -164,69 +148,76 @@ export function PianoSection() {
                   }
                   onChange={() => selectPiano(piano.id)}
                 />
-                <span className="piano-card__text">
-                  <strong className="piano-card__name">{piano.name}</strong>
-                  <span className="piano-card__desc">
-                    {m.settings[PIANO_DESCRIPTION_KEYS[piano.id]]}
-                  </span>
-                </span>
+                <strong className="piano-card__name">{piano.name}</strong>
               </label>
 
-              <PianoSwitchRing state={switchState} piano={piano.id} />
-              <div className="piano-card__offline">
+              <span className="piano-card__offline">
                 {pack.kind === 'checking' ? (
                   <span className="settings__hint">{m.settings.checking}</span>
                 ) : null}
                 {pack.kind === 'not-downloaded' ? (
+                  <TooltipButton
+                    type="button"
+                    className="btn btn--small piano-card__download"
+                    aria-label={m.settings.downloadPiano({
+                      piano: piano.name,
+                      size: formatMB(pack.totalBytes),
+                    })}
+                    onClick={() => downloadPack(piano.id)}
+                  >
+                    <DownloadIcon />
+                    {formatMB(pack.totalBytes)}
+                  </TooltipButton>
+                ) : null}
+                {pack.kind === 'offline-ready' ? (
+                  <>
+                    <span className="settings__ok">{m.settings.offlineReady}</span>
+                    <TooltipButton
+                      type="button"
+                      className="btn btn--small btn--danger piano-card__icon-button"
+                      aria-label={m.settings.deletePiano({ piano: piano.name })}
+                      onClick={() => confirmDelete(piano.id)}
+                    >
+                      <TrashIcon />
+                    </TooltipButton>
+                  </>
+                ) : null}
+              </span>
+
+              {/* A second label for the same radio: the description names the
+                  choice too, and a tap on it chooses the piano. */}
+              <label className="piano-card__desc" htmlFor={radioId}>
+                {m.settings[PIANO_DESCRIPTION_KEYS[piano.id]]}
+              </label>
+
+              {pack.kind === 'downloading' ? (
+                <span className="piano-card__more piano-card__progress" aria-live="polite">
+                  {m.settings.downloading({
+                    loaded: formatMB(pack.loadedBytes),
+                    total: formatMB(pack.totalBytes),
+                  })}
+                  <progress value={pack.loadedBytes} max={pack.totalBytes} />
+                </span>
+              ) : null}
+              {pack.kind === 'error' ? (
+                <span className="piano-card__more">
+                  <span role="alert" className="settings__error">
+                    {pack.detail ??
+                      (pack.failure === 'check'
+                        ? m.settings.couldNotCheck
+                        : m.settings.downloadFailed)}
+                  </span>
                   <button
                     type="button"
                     className="btn btn--small"
                     onClick={() => downloadPack(piano.id)}
                   >
-                    {m.settings.downloadPiano({
-                      piano: piano.name,
-                      size: formatMB(pack.totalBytes),
-                    })}
+                    {m.settings.retryPiano({ piano: piano.name })}
                   </button>
-                ) : null}
-                {pack.kind === 'downloading' ? (
-                  <span className="piano-card__progress" aria-live="polite">
-                    {m.settings.downloading({
-                      loaded: formatMB(pack.loadedBytes),
-                      total: formatMB(pack.totalBytes),
-                    })}
-                    <progress value={pack.loadedBytes} max={pack.totalBytes} />
-                  </span>
-                ) : null}
-                {pack.kind === 'offline-ready' ? (
-                  <>
-                    <span className="settings__ok">
-                      {m.settings.fullOffline({ size: formatMB(pack.totalBytes) })}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn--small btn--danger"
-                      onClick={() => deletePack(piano.id)}
-                    >
-                      {m.settings.deletePiano({ piano: piano.name })}
-                    </button>
-                  </>
-                ) : null}
-                {pack.kind === 'error' ? (
-                  <>
-                    <span role="alert" className="settings__error">
-                      {pack.message}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn--small"
-                      onClick={() => downloadPack(piano.id)}
-                    >
-                      {m.settings.retryPiano({ piano: piano.name })}
-                    </button>
-                  </>
-                ) : null}
-              </div>
+                </span>
+              ) : null}
+
+              <PianoSwitchRing state={switchState} piano={piano.id} />
             </div>
           );
         })}

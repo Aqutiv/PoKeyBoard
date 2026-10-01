@@ -1,5 +1,5 @@
 import { expect, test } from './fixtures';
-import { gotoAppReady, nav, transport } from './helpers';
+import { gotoAppReady, nav, openSettings, transport } from './helpers';
 
 // A phone's key bed, about nine white keys from C3: Für Elise opens on the
 // E above the treble staff, well off the top of it.
@@ -32,7 +32,7 @@ test.describe('the keyboard during playback', () => {
 
   test('stays put when told to, and marks the edge the music is past', async ({ page }) => {
     await gotoAppReady(page);
-    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await openSettings(page, 'Display');
     await page.getByRole('checkbox', { name: 'Keyboard follows playback' }).uncheck();
     await openFurElise(page);
     const range = page.locator('.piano__range');

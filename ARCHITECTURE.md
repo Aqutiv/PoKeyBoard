@@ -54,9 +54,10 @@ src/
     export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService,
                 sheetPdfWriter (vector PDF via pdfSurface/vectorSurface and
                 pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
-    settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
-                reset), PianoSection (piano choice with its own offline pack,
-                levels, room, tone)
+    settings/   SettingsPage (a switch over its Sound, Playing, Display and
+                App sections, and the update banner), PianoSection (piano
+                choice with its own offline pack, kept by packStates; levels,
+                room, tone), MidiSection, ChoiceSwitch
     play/       PlayPage, SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
@@ -254,7 +255,7 @@ match would take the note's own fundamental, so no ramp starts below 2.5 times
 it, and the top keys keep a smaller correction. A stand-in from a brighter layer
 plays at its ramp's bottom, and one from a darker layer open. The cutoff is
 scaled by the playback rate, so a note pitched from its root keeps the root's
-tone. Settings → Piano → Tone follows touch, on by default, switches the ramps
+tone. Settings → Sound → Tone follows touch, on by default, switches the ramps
 off: `getSample` with `tone: false` leaves out the cutoff and its make-up
 together, and every recording plays open, as all of them did before exporter
 version 9. The engine takes the setting from the next note it plays, and an
@@ -332,4 +333,4 @@ The export service copies the rendered buffer's channels, **transfers** them to 
 
 ## PWA
 
-Workbox `injectManifest`: shell precache (~2.0 MB), SPA navigation fallback, Cache First runtime caching for every versioned sample pack in one named cache shared with the explicit per-piano download flow in Settings → Piano (which downloads and deletes per piano, enumerating the cache by pack path). Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.
+Workbox `injectManifest`: shell precache (~2.0 MB), SPA navigation fallback, Cache First runtime caching for every versioned sample pack in one named cache shared with the explicit per-piano download flow in Settings → Sound (which downloads and deletes per piano, enumerating the cache by pack path). Updates wait until the user applies them (`SKIP_WAITING` message) and the UI refuses to offer them while the transport is busy.

@@ -6,6 +6,7 @@ import { SettingsPage } from '@/features/settings/SettingsPage';
 import { APP_BUILD_LABEL } from '@/app/version';
 import { I18nContext } from '@/i18n/i18nContext';
 import { en } from '@/i18n/en';
+import { SETTINGS_DEFAULTS, useSettingsStore } from '@/state/useSettingsStore';
 
 const mock = vi.hoisted(() => ({
   waiting: false,
@@ -46,6 +47,8 @@ function renderUi() {
 
 describe('update discovery and safe application', () => {
   beforeEach(() => {
+    // Settings opens on the section last shown, which the store keeps.
+    useSettingsStore.setState({ ...SETTINGS_DEFAULTS });
     mock.waiting = false;
     mock.state = 'idle';
     mock.apply.mockClear();
@@ -55,14 +58,26 @@ describe('update discovery and safe application', () => {
 
   it('shows the running build and reacts to a waiting update without applying it', () => {
     renderUi();
-    expect(screen.getByText(en.settings.upToDate({ version: APP_BUILD_LABEL }))).toBeTruthy();
-    // "Up to date" is only worth saying after asking; opening Settings asks.
+    // "Up to date" is only worth saying after asking; opening Settings asks,
+    // whichever section it opens on, and switching sections does not ask again.
     expect(mock.check).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: en.settings.sections.app }));
+    const upToDate = en.settings.upToDate({ version: APP_BUILD_LABEL });
+    expect(screen.getByText(upToDate)).toBeTruthy();
+    expect(mock.check).toHaveBeenCalledTimes(1);
+
     act(() => {
       mock.waiting = true;
       mock.listeners.forEach((listener) => listener());
     });
     expect(screen.getByRole('button', { name: 'Settings Update available' })).toBeTruthy();
+    // App still names the build that runs, no longer as up to date.
+    expect(screen.queryByText(upToDate)).toBeNull();
+    expect(screen.getByText(en.about.version({ version: APP_BUILD_LABEL }))).toBeTruthy();
+
+    // The update is offered above the switch, so any section shows it.
+    fireEvent.click(screen.getByRole('button', { name: en.settings.sections.sound }));
+    expect(screen.getAllByRole('button', { name: en.settings.applyUpdate })).toHaveLength(1);
     expect(mock.apply).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: en.settings.applyUpdate }));
     expect(mock.apply).toHaveBeenCalledOnce();

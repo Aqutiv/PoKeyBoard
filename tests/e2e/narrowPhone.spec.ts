@@ -1,13 +1,20 @@
-import { expect, test, type Page } from '@playwright/test';
-import { gotoAppReady, recordShortTake, transport } from './helpers';
+import { expect, test, type Locator, type Page } from '@playwright/test';
+import {
+  gotoAppReady,
+  openSettings,
+  recordShortTake,
+  settingsSections,
+  transport,
+} from './helpers';
 
 /**
  * The app shell hides horizontal overflow, so a control row that outgrows its
  * width loses whatever sits at its right edge with nothing to scroll it back
  * into view. Every row therefore has to either fit or wrap.
  */
-async function clippedControls(page: Page, selector: string): Promise<string[]> {
-  return page.locator(selector).evaluate((element) => {
+async function clippedControls(page: Page, target: string | Locator): Promise<string[]> {
+  const locator = typeof target === 'string' ? page.locator(target) : target;
+  return locator.evaluate((element) => {
     const box = element.getBoundingClientRect();
     return (
       [...element.children]
@@ -53,6 +60,37 @@ test.describe('narrow portrait phone', () => {
     await page.goto('/#/learn');
     await expect(page.getByRole('group', { name: 'Learn level' })).toBeVisible();
     expect(await clippedControls(page, '.learn-levels')).toEqual([]);
+  });
+
+  test('keeps the four Settings section labels inside their segments', async ({ page }) => {
+    // Four segments share ~69px each here, ~57px of it for text — the same
+    // type step-down as Learn's levels, with ellipsis behind it.
+    await gotoAppReady(page);
+    await openSettings(page);
+    await expect(settingsSections(page)).toBeVisible();
+    expect(await clippedControls(page, '.settings-sections')).toEqual([]);
+    const truncated = await page
+      .locator('.settings-sections__option')
+      .evaluateAll((options) =>
+        options
+          .filter((option) => option.scrollWidth > option.clientWidth + 0.5)
+          .map((option) => option.textContent ?? ''),
+      );
+    expect(truncated).toEqual([]);
+  });
+
+  test('wraps the Settings choices beneath their names rather than clipping them', async ({
+    page,
+  }) => {
+    await gotoAppReady(page);
+    await openSettings(page, 'Playing');
+    for (const name of ['Velocity', 'Touch sensitivity']) {
+      const choice = page.getByRole('radiogroup', { name, exact: true });
+      expect.soft(await clippedControls(page, choice), name).toEqual([]);
+      expect
+        .soft(await clippedControls(page, choice.locator('.choice-switch')), `${name} segments`)
+        .toEqual([]);
+    }
   });
 
   test('keeps every nav label inside its own tab', async ({ page }) => {

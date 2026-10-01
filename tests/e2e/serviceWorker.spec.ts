@@ -1,7 +1,7 @@
 import { copyFileSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import { expect, test } from './fixtures';
 import { SW_BACKUP_PATH, SW_PATH, writeServiceWorkerAtomically } from './serviceWorkerFile';
-import { gotoAppReady, nav } from './helpers';
+import { chooseSettingsSection, gotoAppReady, nav } from './helpers';
 
 /**
  * Every test that needs a real service worker, in one file on purpose.
@@ -69,6 +69,12 @@ test.describe('service worker update prompt', () => {
       await nav(page).getByRole('button', { name: 'Settings Update available' }).click();
       await expect(page.getByText('An update is ready.')).toBeVisible({ timeout: 20_000 });
       await expect(page.getByRole('button', { name: 'Apply update and reload' })).toBeEnabled();
+      // Said above the section switch, so every section shows it — and App,
+      // where the version is, no longer calls this build up to date.
+      await chooseSettingsSection(page, 'Display');
+      await expect(page.getByRole('button', { name: 'Apply update and reload' })).toBeEnabled();
+      await chooseSettingsSection(page, 'App');
+      await expect(page.getByText(/^Up to date/)).toHaveCount(0);
     } finally {
       copyFileSync(SW_BACKUP_PATH, `${SW_PATH}.e2e-tmp`);
       renameSync(`${SW_PATH}.e2e-tmp`, SW_PATH);
