@@ -528,12 +528,43 @@ describe('WaterfallView', () => {
       it('holds the glow still, with no frames, for a reader who asked for less motion', () => {
         vi.stubGlobal('matchMedia', (query: string) => ({
           matches: query.includes('reduced-motion'),
+          addEventListener: () => {},
+          removeEventListener: () => {},
         }));
         show();
         become('paused');
         expect(frameSubscriberCount()).toBe(0);
         frame();
         expect(lastPainted().paint.glow).toBe(1);
+      });
+
+      it('stills the glow or sets it going as the reader asks for less motion or no longer', () => {
+        const listeners = new Set<() => void>();
+        const media = {
+          matches: false,
+          addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+          removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+        };
+        vi.stubGlobal('matchMedia', () => media);
+        const askForLessMotion = (less: boolean) => {
+          media.matches = less;
+          act(() => {
+            for (const listener of [...listeners]) listener();
+          });
+        };
+        show();
+        become('paused');
+        expect(frameSubscriberCount()).toBe(1);
+        askForLessMotion(true);
+        expect(frameSubscriberCount()).toBe(0);
+        frame();
+        expect(lastPainted().paint.glow).toBe(1);
+        askForLessMotion(false);
+        expect(frameSubscriberCount()).toBe(1);
+        // And the view stops listening when it goes.
+        cleanup();
+        expect(listeners.size).toBe(0);
+        become('idle');
       });
     });
 
