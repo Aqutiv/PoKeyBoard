@@ -17,9 +17,15 @@ export const SLOWEST_FALL_SECONDS: WaterfallSeconds = WATERFALL_SECONDS[
   WATERFALL_SECONDS.length - 1
 ] as WaterfallSeconds;
 
+/** `steps` steps on from `from`, quicker falls for more: held at either end. */
+export function waterfallSecondsAfter(from: WaterfallSeconds, steps: number): WaterfallSeconds {
+  const index = WATERFALL_SECONDS.indexOf(from) - steps;
+  return WATERFALL_SECONDS[
+    Math.min(WATERFALL_SECONDS.length - 1, Math.max(0, index))
+  ] as WaterfallSeconds;
+}
+
 /** The step after `current`: a quicker fall when `faster`, held at either end. */
 export function stepWaterfallSeconds(current: WaterfallSeconds, faster: boolean): WaterfallSeconds {
-  const index = WATERFALL_SECONDS.indexOf(current);
-  const next = Math.min(WATERFALL_SECONDS.length - 1, Math.max(0, index + (faster ? -1 : 1)));
-  return WATERFALL_SECONDS[next] as WaterfallSeconds;
+  return waterfallSecondsAfter(current, faster ? 1 : -1);
 }

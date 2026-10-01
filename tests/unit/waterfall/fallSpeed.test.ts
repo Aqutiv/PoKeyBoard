@@ -5,6 +5,7 @@ import {
   SLOWEST_FALL_SECONDS,
   stepWaterfallSeconds,
   WATERFALL_SECONDS,
+  waterfallSecondsAfter,
 } from '@/features/waterfall/fallSpeed';
 
 describe('the fall speed', () => {
@@ -20,6 +21,14 @@ describe('the fall speed', () => {
     expect(stepWaterfallSeconds(3, false)).toBe(4);
     expect(stepWaterfallSeconds(FASTEST_FALL_SECONDS, true)).toBe(FASTEST_FALL_SECONDS);
     expect(stepWaterfallSeconds(SLOWEST_FALL_SECONDS, false)).toBe(SLOWEST_FALL_SECONDS);
+  });
+
+  it('goes several steps at once, quicker for more, held at either end', () => {
+    expect(waterfallSecondsAfter(3, 2)).toBe(2);
+    expect(waterfallSecondsAfter(3, -3)).toBe(6);
+    expect(waterfallSecondsAfter(3, 0)).toBe(3);
+    expect(waterfallSecondsAfter(3, 20)).toBe(FASTEST_FALL_SECONDS);
+    expect(waterfallSecondsAfter(3, -20)).toBe(SLOWEST_FALL_SECONDS);
   });
 
   it('comes back to where it began, a step slower and a step faster', () => {

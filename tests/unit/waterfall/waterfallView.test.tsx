@@ -233,6 +233,28 @@ describe('WaterfallView', () => {
     expect(seconds()).toBe(3);
   });
 
+  it('steps the fall speed with Safari’s trackpad pinch, from where the pinch began', () => {
+    show();
+    const canvas = screen.getByRole('img');
+    const gesture = (type: string, scale = 1) => {
+      const event = Object.assign(new Event(type, { cancelable: true }), { scale });
+      act(() => {
+        canvas.dispatchEvent(event);
+      });
+      return event;
+    };
+    const seconds = () => useSettingsStore.getState().waterfallSeconds;
+    // Every gesture is the view's, so the page never zooms instead.
+    expect(gesture('gesturestart').defaultPrevented).toBe(true);
+    // Spread to 1.6 times: two steps of 1.25 in, two quicker falls.
+    expect(gesture('gesturechange', 1.6).defaultPrevented).toBe(true);
+    expect(seconds()).toBe(2);
+    // Closed to half, from where the pinch began: three steps out.
+    gesture('gesturechange', 0.5);
+    expect(seconds()).toBe(6);
+    expect(gesture('gestureend', 0.5).defaultPrevented).toBe(true);
+  });
+
   describe('dragged', () => {
     beforeEach(() => {
       // jsdom has no pointer capture; the view only asks for it.
@@ -319,6 +341,29 @@ describe('WaterfallView', () => {
       // 600 ms on from 1500 comes round the loop to 1100.
       expect(transportController.getPlayheadMs()).toBe(1100);
       fireEvent.pointerUp(canvas, { pointerId: 1 });
+    });
+
+    it('only stops Safari’s gestures for fingers on a touch screen', () => {
+      show();
+      const canvas = screen.getByRole('img');
+      const gesture = (type: string, scale = 1) => {
+        const event = Object.assign(new Event(type, { cancelable: true }), { scale });
+        act(() => {
+          canvas.dispatchEvent(event);
+        });
+        return event;
+      };
+      fireEvent.pointerDown(canvas, {
+        pointerId: 7,
+        pointerType: 'touch',
+        isPrimary: true,
+        clientY: 100,
+      });
+      gesture('gesturestart');
+      expect(gesture('gesturechange', 2).defaultPrevented).toBe(true);
+      expect(useSettingsStore.getState().waterfallSeconds).toBe(3);
+      gesture('gestureend', 2);
+      fireEvent.pointerUp(canvas, { pointerId: 7, pointerType: 'touch' });
     });
 
     it('answers only the main button of the main pointer, and never a running take', () => {

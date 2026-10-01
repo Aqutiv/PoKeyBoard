@@ -4,7 +4,7 @@ import { useTransportState } from '@/app/hooks/useTransport';
 import { themeController } from '@/app/theme';
 import type { PlaybackLoop } from '@/domain/takeTypes';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
-import { wheelZoomSteps } from '@/features/notation/scoreZoom';
+import { wheelZoomSteps, ZOOM_STEP } from '@/features/notation/scoreZoom';
 import { scrubController } from '@/features/notation/scrubController';
 import { playableLoop } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
@@ -13,7 +13,13 @@ import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { TooltipButton } from '@/ui/TooltipButton';
-import { FASTEST_FALL_SECONDS, SLOWEST_FALL_SECONDS, stepWaterfallSeconds } from './fallSpeed';
+import {
+  FASTEST_FALL_SECONDS,
+  SLOWEST_FALL_SECONDS,
+  stepWaterfallSeconds,
+  waterfallSecondsAfter,
+  type WaterfallSeconds,
+} from './fallSpeed';
 import { layoutWaterfall, type WaterfallScene, type WaterfallTimeline } from './waterfallLayout';
 import { paintWaterfall } from './waterfallPainter';
 import { WATERFALL_PALETTES } from './waterfallPalette';
@@ -35,6 +41,11 @@ function moves(state: TransportState): boolean {
   return (
     state === 'playing' || state === 'recording' || state === 'countIn' || state === 'scrubbing'
   );
+}
+
+/** Safari's own pinch: a trackpad's arrives as this, not as Ctrl + wheel. */
+interface SafariGestureEvent extends UIEvent {
+  scale: number;
 }
 
 /** A drag on the notes: the pointer, where it came down, and the playhead then. */
@@ -112,6 +123,8 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   const dragRef = useRef<Drag | null>(null);
   /** Wheel travel not yet a whole step of the fall speed: a pinch sends it in slivers. */
   const wheelStepsRef = useRef(0);
+  /** The fingers on the notes, by pointer: a touch screen's, not a trackpad's. */
+  const fingersRef = useRef(new Set<number>());
 
   useEffect(() => {
     notesRef.current = notes;
@@ -240,6 +253,42 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     return () => canvas.removeEventListener('wheel', onWheel);
   }, []);
 
+  // Safari sends a trackpad pinch as gestures of its own, which set the fall
+  // speed as the wheel does: a step for each ZOOM_STEP the fingers spread or
+  // close, as the score's zoom takes them. It sends them for fingers on a
+  // touch screen too, alongside their pointers; there they are only stopped,
+  // or the page would zoom instead.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let from: WaterfallSeconds | null = null;
+    const onGestureStart = (event: Event) => {
+      event.preventDefault();
+      from = fingersRef.current.size > 0 ? null : useSettingsStore.getState().waterfallSeconds;
+    };
+    const onGestureChange = (event: Event) => {
+      event.preventDefault();
+      const { scale } = event as SafariGestureEvent;
+      if (from === null || !(scale > 0)) return;
+      const steps = Math.round(Math.log(scale) / Math.log(ZOOM_STEP));
+      const settings = useSettingsStore.getState();
+      const next = waterfallSecondsAfter(from, steps);
+      if (next !== settings.waterfallSeconds) settings.setWaterfallSeconds(next);
+    };
+    const onGestureEnd = (event: Event) => {
+      event.preventDefault();
+      from = null;
+    };
+    canvas.addEventListener('gesturestart', onGestureStart);
+    canvas.addEventListener('gesturechange', onGestureChange);
+    canvas.addEventListener('gestureend', onGestureEnd);
+    return () => {
+      canvas.removeEventListener('gesturestart', onGestureStart);
+      canvas.removeEventListener('gesturechange', onGestureChange);
+      canvas.removeEventListener('gestureend', onGestureEnd);
+    };
+  }, []);
+
   // A drag cut short by the view going away still lets the scrub go.
   useEffect(
     () => () => {
@@ -258,6 +307,12 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
    * one begins there afresh: it may not go round the loop.
    */
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (event.pointerType === 'touch') {
+      // A new touch's first finger: any left over, whose lifting never reached
+      // the notes, are gone.
+      if (event.isPrimary) fingersRef.current.clear();
+      fingersRef.current.add(event.pointerId);
+    }
     if (!event.isPrimary || event.button !== 0) return;
     const current = transportController.getState();
     if (current !== 'idle' && current !== 'paused' && current !== 'scrubbing') return;
@@ -283,6 +338,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   };
 
   const onPointerEnd = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    fingersRef.current.delete(event.pointerId);
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;
