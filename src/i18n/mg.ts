@@ -42,6 +42,10 @@ export const mg: Messages = {
     viewLabel: 'Fijery',
     notationView: 'Partitiora',
     keyboardView: 'Kitendry',
+    fallingView: 'Naoty milatsaka',
+    fallingLabel: ({ count }) => `Naoty milatsaka, naoty ${count}`,
+    fallingEmpty:
+      'Raketo ny fitendrenao, na sokafy hira ao amin’ny Hira, dia hilatsaka eto amin’ny kitendry ny naotiny.',
     dismiss: 'Esory',
     loadingPiano: ({ percent }) => `Am-pakàna ny piano… ${percent}%`,
     retryLoadingPiano: 'Andramo indray',
@@ -548,9 +552,9 @@ export const mg: Messages = {
     midiCalibrateRejected:
       'Tsy maintsy mafy lavitra noho ny malefaka indrindra ny naoty mafy indrindra. Andramo indray.',
     noteLabels: 'Anaran’ny naoty eo amin’ny kitendry',
-    velocityShading: 'Loko araka ny hafainganam-pandeha eo amin’ny kitendry',
+    velocityShading: 'Loko araka ny hafainganam-pandeha eo amin’ny kitendry sy ny naoty milatsaka',
     velocityShadingHint:
-      'Asehon’ny kitendry mirehitra ny herin’ny naoty tsirairay: malemy loko raha malefaka, mahery loko raha mafy, rehefa mitendry ianao sy mandritra ny famerenana. Raha vonoina, mitovy ny fireheditry ny kitendry na ahoana na ahoana hamafin’ny fitendrena azy.',
+      'Asehon’ny kitendry mirehitra sy ny naoty milatsaka ny herin’ny naoty tsirairay: malemy loko raha malefaka, mahery loko raha mafy, rehefa mitendry ianao sy mandritra ny famerenana. Raha vonoina, mitovy ny fireheditry ny naoty rehetra na ahoana na ahoana hamafin’ny fitendrena azy.',
     followPlayback: 'Manaraka ny famerenana ny klavie',
     scrubAudition: 'Feo rehefa mandalo ny sori-kira',
     backgroundPlayback: 'Tohizo any ambadika ny fandefasana',

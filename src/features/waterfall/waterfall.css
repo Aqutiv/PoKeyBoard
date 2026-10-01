@@ -1,0 +1,36 @@
+/* The falling notes: a stage in the key bed's own colour, standing straight on
+   the keys (index.css joins the two), so the notes fall out of the bed itself.
+   No border and no padding: the canvas must be exactly as wide as the keys. */
+.waterfall {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  background: var(--keybed);
+  border-radius: var(--radius-m) var(--radius-m) 0 0;
+  overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.waterfall__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* On the key bed's colour in both themes, so in the keys' ivory rather than
+   the page's text colour. */
+.waterfall__empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 24px;
+  text-align: center;
+  color: var(--ivory-shadow);
+  font-size: 14px;
+  pointer-events: none;
+}

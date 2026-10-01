@@ -166,7 +166,9 @@ test.describe('compact landscape play view', () => {
     await expect(metronome).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
-    await expect(viewSwitch).toBeHidden();
+    // Upright, the switch offers the two views; the keys alone are short landscape's.
+    await expect(viewSwitch).toBeVisible();
+    await expect(viewSwitch.getByRole('button', { name: 'Keyboard' })).toHaveCount(0);
     await expect(score).toBeVisible();
     await expect(keyboard).toBeVisible();
     await expect(metronome).toBeVisible();

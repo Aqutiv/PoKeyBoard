@@ -42,7 +42,9 @@ test.describe('velocity shading on keys', () => {
     expect(soft.background).not.toBe(hard.background);
 
     await nav(page).getByRole('button', { name: 'Settings' }).click();
-    const toggle = page.getByRole('checkbox', { name: 'Velocity shading on keys' });
+    const toggle = page.getByRole('checkbox', {
+      name: 'Velocity shading on keys and falling notes',
+    });
     await expect(toggle).toBeChecked();
     await toggle.uncheck();
     // Settings save on a debounce; the reload below waits for the row.
@@ -61,7 +63,7 @@ test.describe('velocity shading on keys', () => {
     expect(await pressC4At(page, 0.1)).toEqual(evenHard);
     await nav(page).getByRole('button', { name: 'Settings' }).click();
     await expect(
-      page.getByRole('checkbox', { name: 'Velocity shading on keys' }),
+      page.getByRole('checkbox', { name: 'Velocity shading on keys and falling notes' }),
     ).not.toBeChecked();
   });
 });

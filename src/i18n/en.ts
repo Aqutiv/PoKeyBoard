@@ -43,6 +43,10 @@ export const en: Messages = {
     viewLabel: 'View',
     notationView: 'Notation',
     keyboardView: 'Keyboard',
+    fallingView: 'Falling notes',
+    fallingLabel: ({ count }) => `Falling notes, ${count} note${count === 1 ? '' : 's'}`,
+    fallingEmpty:
+      'Record a take, or open a piece from the Library, and its notes fall onto the keys here.',
     dismiss: 'Dismiss',
     loadingPiano: ({ percent }) => `Loading piano… ${percent}%`,
     retryLoadingPiano: 'Try again',
@@ -542,9 +546,9 @@ export const en: Messages = {
     midiCalibrateRejected:
       'Your loudest note has to be clearly louder than your softest. Try again.',
     noteLabels: 'Note labels on keys',
-    velocityShading: 'Velocity shading on keys',
+    velocityShading: 'Velocity shading on keys and falling notes',
     velocityShadingHint:
-      'Lit keys show how hard each note is played, pale when soft and deep when loud, as you play and in playback. Off, a key lights the same however hard it is played.',
+      'Lit keys and falling notes show how hard each note is played, pale when soft and deep when loud, as you play and in playback. Off, every note lights the same however hard it is played.',
     followPlayback: 'Keyboard follows playback',
     scrubAudition: 'Sound while scrubbing the score',
     backgroundPlayback: 'Continue playback in the background',

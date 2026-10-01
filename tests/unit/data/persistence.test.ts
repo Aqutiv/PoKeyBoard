@@ -144,6 +144,20 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).velocityShading).toBe(false);
   });
 
+  it('remembers the Play page’s view, the score until the falling notes are chosen', async () => {
+    expect(SETTINGS_DEFAULTS.playView).toBe('score');
+
+    useSettingsStore.getState().setPlayView('waterfall');
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).playView).toBe('waterfall');
+
+    // A view the page does not have loads as nothing, so the score stands.
+    await db.settings.put({ key: 'playView', value: 'pianoRoll' });
+    expect((await loadSettings()).playView).toBeUndefined();
+    await restoreSettingsFromBackup({ playView: 'waterfall' });
+    expect((await loadSettings()).playView).toBe('waterfall');
+  });
+
   it('restores only known keys from a backup blob', async () => {
     await restoreSettingsFromBackup({ fixedVelocity: 0.9, metronomeVolume: -1, evil: 'x' });
     const loaded = await loadSettings();

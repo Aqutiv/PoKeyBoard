@@ -41,6 +41,10 @@ export const fr: Messages = {
     viewLabel: 'Affichage',
     notationView: 'Partition',
     keyboardView: 'Clavier',
+    fallingView: 'Notes qui tombent',
+    fallingLabel: ({ count }) => `Notes qui tombent, ${count} note${count === 1 ? '' : 's'}`,
+    fallingEmpty:
+      'Enregistrez une prise ou ouvrez un morceau de la Bibliothèque : ses notes tomberont ici sur les touches.',
     dismiss: 'Ignorer',
     loadingPiano: ({ percent }) => `Chargement du piano… ${percent} %`,
     retryLoadingPiano: 'Réessayer',
@@ -543,9 +547,9 @@ export const fr: Messages = {
     midiCalibrateRejected:
       'Votre note la plus forte doit être nettement plus forte que la plus douce. Réessayez.',
     noteLabels: 'Étiquettes des notes sur les touches',
-    velocityShading: 'Touches nuancées selon la vélocité',
+    velocityShading: 'Touches et notes qui tombent nuancées selon la vélocité',
     velocityShadingHint:
-      'Les touches allumées montrent la force de chaque note : pâles si elle est douce, profondes si elle est forte, quand vous jouez comme à la lecture. Désactivé, une touche s’allume de la même façon, quelle que soit la force du jeu.',
+      'Les touches allumées et les notes qui tombent montrent la force de chaque note : pâles si elle est douce, profondes si elle est forte, quand vous jouez comme à la lecture. Désactivé, chaque note s’allume de la même façon, quelle que soit la force du jeu.',
     followPlayback: 'Le clavier suit la lecture',
     scrubAudition: 'Son lors du défilement de la partition',
     backgroundPlayback: 'Continuer la lecture en arrière-plan',

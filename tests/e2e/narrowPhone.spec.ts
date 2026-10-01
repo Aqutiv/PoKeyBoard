@@ -33,7 +33,10 @@ async function rowCount(page: Page, selector: string): Promise<number> {
   });
 }
 
-const ROWS = ['.transport__buttons', '.metronome', '.piano__controls', '.app-nav'];
+const ROWS = ['.play-header', '.transport__buttons', '.metronome', '.piano__controls', '.app-nav'];
+
+/** The header row stays one line, the view switch in it included. */
+const MAX_HEADER_PX = 40;
 
 test.describe('narrow portrait phone', () => {
   test.use({ viewport: { width: 320, height: 568 } });
@@ -44,6 +47,8 @@ test.describe('narrow portrait phone', () => {
     for (const selector of ROWS) {
       expect.soft(await clippedControls(page, selector), selector).toEqual([]);
     }
+    const header = await page.locator('.play-header').boundingBox();
+    expect(header?.height).toBeLessThanOrEqual(MAX_HEADER_PX);
   });
 
   test('keeps the three Learn level labels inside their segments', async ({ page }) => {
@@ -80,6 +85,8 @@ test.describe('portrait phone', () => {
     expect(await rowCount(page, '.transport__buttons')).toBe(1);
     expect(await rowCount(page, '.piano__controls')).toBe(1);
     expect(await rowCount(page, '.metronome')).toBe(1);
+    const header = await page.locator('.play-header').boundingBox();
+    expect(header?.height).toBeLessThanOrEqual(MAX_HEADER_PX);
   });
 
   test('does not clip the transport row once Undo joins it', async ({ page }) => {

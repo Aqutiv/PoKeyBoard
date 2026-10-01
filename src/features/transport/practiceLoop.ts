@@ -18,6 +18,15 @@ export function playableLoop(take: Take): PlaybackLoop | null {
 }
 
 /**
+ * Where playback starts from a playhead parked at `playheadMs`: right there,
+ * unless that is past the end of `loop`, which then starts again at its top.
+ * Playing from before a loop runs into it.
+ */
+export function playFromMs(loop: PlaybackLoop | null, playheadMs: number): number {
+  return loop && playheadMs >= loop.endMs ? loop.startMs : playheadMs;
+}
+
+/**
  * The beat nearest `ms`. A loop is marked by ear — a tap as the passage
  * starts, another as it ends — and lands on the music's own pulse, so it
  * repeats in time rather than a few milliseconds off every pass.

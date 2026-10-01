@@ -30,7 +30,7 @@ import { newId } from '@/utils/ids';
 import { beatDurationMs, clamp } from '@/utils/timing';
 import { trainingHandFor, type RecordMode } from './modes';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
-import { playableLoop } from './practiceLoop';
+import { playableLoop, playFromMs } from './practiceLoop';
 import { foldIntoLoop, loopPassAt, TransportClock, type ClockRun } from './transportClock';
 import {
   canTransition,
@@ -100,6 +100,13 @@ export class TransportController {
   private playLoop: PlaybackLoop | null = null;
   /** Which pass of the loop the scheduler's cursor is in; see `TransportClock`. */
   private schedulePass = 0;
+  /** Where the run now playing started; see `getPassStartMs`. */
+  private runFromMs = 0;
+  /**
+   * The passes of its loop the run had come round before its clock's
+   * unwrapped timeline last started again from the playhead; see `retimeRun`.
+   */
+  private loopPassesBefore = 0;
   /**
    * The notes handed to the engine that have not begun, in the order they were
    * walked: where each sits in the walk, and the audio time it starts at.
@@ -585,11 +592,10 @@ export class TransportController {
     this.playDurationMs = effectivePlaybackDurationMs(take);
 
     const loop = playableLoop(take);
-    // Playing from before the loop runs into it; from past its end, it starts
-    // at the top.
-    const fromMs =
-      loop && this.pausedPlayheadMs >= loop.endMs ? loop.startMs : this.pausedPlayheadMs;
+    const fromMs = playFromMs(loop, this.pausedPlayheadMs);
     this.playLoop = loop;
+    this.runFromMs = fromMs;
+    this.loopPassesBefore = 0;
     this.clock.start(fromMs, audioEngine.currentTime + START_SLACK_S, {
       rate: this.getSpeed(),
       loop,
@@ -853,6 +859,23 @@ export class TransportController {
   }
 
   /**
+   * Where the pass now playing began: where the run started, the first time
+   * through, and the loop's top once it has come round; where the recording
+   * started, for its backing; otherwise, where Play would start. Playback
+   * strikes the notes that start from there on, so a note held across it does
+   * not sound: nor, on a loop's later passes, one held into the loop.
+   */
+  getPassStartMs(): number {
+    if (this.state === 'recording' || this.state === 'countIn') return this.recordStartMs;
+    if (this.state !== 'playing') return playFromMs(this.getLoop(), this.pausedPlayheadMs);
+    const loop = this.playLoop;
+    if (loop && this.loopPassesBefore + loopPassAt(loop, this.clock.currentVirtualMs()) > 0) {
+      return loop.startMs;
+    }
+    return this.runFromMs;
+  }
+
+  /**
    * Repeat a passage, or stop repeating one. Mid-playback the run starts again
    * from where it is — or from the top of the new loop, when that is outside it.
    */
@@ -901,6 +924,7 @@ export class TransportController {
         : 0;
     this.clock.retime(run);
     this.schedulePass = Math.max(0, this.schedulePass - playheadPass);
+    this.loopPassesBefore += playheadPass;
     // The notes a training hold let through belong to the run's first pass,
     // which is behind the playhead for good once it has gone round.
     if (playheadPass > 0) this.trainingSkipNoteIds = null;
