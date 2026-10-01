@@ -476,6 +476,19 @@ export function MusicScore() {
     };
   }, [designX, momentAt, setDisplayZoom, showZoom]);
 
+  // A drag or a fling cut short by the score going away — the Play page
+  // switched to the falling notes mid-coast — still lets its scrub go, or the
+  // transport would be left scrubbing with nothing to end it.
+  useEffect(
+    () => () => {
+      if (!dragRef.current && !inertiaRef.current) return;
+      dragRef.current = null;
+      inertiaRef.current = null;
+      scrubController.end();
+    },
+    [],
+  );
+
   /**
    * Two fingers on the score pinch it. Whatever the first began is undone, so
    * its drag never counts as a seek — though a flick it caught still coasting

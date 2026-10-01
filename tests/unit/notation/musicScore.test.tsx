@@ -1,4 +1,4 @@
-import { act, cleanup, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
@@ -78,5 +78,32 @@ describe('MusicScore', () => {
     act(() => useTakeStore.getState().setPlaybackLoop(null));
     frame();
     expect(h.drawnLoops).toEqual([null, { startMs: 1000, endMs: 2000 }, null]);
+  });
+
+  it('lets its scrub go when it goes away mid-fling', () => {
+    // jsdom has no pointer capture; the score only asks for it.
+    HTMLElement.prototype.setPointerCapture = () => {};
+    let now = 1000;
+    vi.spyOn(performance, 'now').mockImplementation(() => now);
+    try {
+      const { container } = render(
+        <I18nContext.Provider value={{ language: 'en', locale: 'en', m: en }}>
+          <MusicScore />
+        </I18nContext.Provider>,
+      );
+      frame();
+      const canvas = container.querySelector('canvas') as HTMLCanvasElement;
+      fireEvent.pointerDown(canvas, { pointerId: 1, isPrimary: true, clientX: 400 });
+      now += 10;
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientX: 300 });
+      now += 10;
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientX: 300 });
+      // Flung: the score coasts on, still scrubbing, as the Play page switches away.
+      expect(transportController.getState()).toBe('scrubbing');
+      cleanup();
+      expect(transportController.getState()).toBe('idle');
+    } finally {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).setPointerCapture;
+    }
   });
 });

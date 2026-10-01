@@ -158,6 +158,20 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).playView).toBe('waterfall');
   });
 
+  it('remembers how fast the notes fall, three seconds until changed', async () => {
+    expect(SETTINGS_DEFAULTS.waterfallSeconds).toBe(3);
+
+    useSettingsStore.getState().setWaterfallSeconds(1.5);
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).waterfallSeconds).toBe(1.5);
+
+    // A time between the steps loads as nothing, so the default stands.
+    await db.settings.put({ key: 'waterfallSeconds', value: 7 });
+    expect((await loadSettings()).waterfallSeconds).toBeUndefined();
+    await restoreSettingsFromBackup({ waterfallSeconds: 8 });
+    expect((await loadSettings()).waterfallSeconds).toBe(8);
+  });
+
   it('restores only known keys from a backup blob', async () => {
     await restoreSettingsFromBackup({ fixedVelocity: 0.9, metronomeVolume: -1, evil: 'x' });
     const loaded = await loadSettings();

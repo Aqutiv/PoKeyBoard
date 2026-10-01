@@ -1,9 +1,10 @@
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { frameSubscriberCount } from '@/app/frameClock';
 import { themeController } from '@/app/theme';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
+import { scrubController } from '@/features/notation/scrubController';
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import type { WaterfallScene } from '@/features/waterfall/waterfallLayout';
@@ -178,6 +179,211 @@ describe('WaterfallView', () => {
       [64, 2, 100, false],
     ]);
     expect(scene.restartYs).toEqual([200, 100]);
+  });
+
+  it('falls in the time the fall speed sets', () => {
+    show();
+    frame();
+    const e4 = () => lastPainted().scene.bars.find((bar) => bar.note.midi === 64)?.bottom;
+    expect(e4()).toBeCloseTo(200);
+    act(() => useSettingsStore.getState().setWaterfallSeconds(1.5));
+    frame();
+    // 300 px for a second and a half: E4, a second off, is two thirds of the way down.
+    expect(e4()).toBeCloseTo(100);
+  });
+
+  it('steps the fall speed with − and +, each stopping at its end', () => {
+    show();
+    const slower = screen.getByRole('button', { name: en.play.fallSlower });
+    const faster = screen.getByRole('button', { name: en.play.fallFaster });
+    fireEvent.click(faster);
+    expect(useSettingsStore.getState().waterfallSeconds).toBe(2.5);
+    fireEvent.click(slower);
+    fireEvent.click(slower);
+    expect(useSettingsStore.getState().waterfallSeconds).toBe(4);
+    act(() => useSettingsStore.getState().setWaterfallSeconds(1));
+    expect(faster).toHaveProperty('disabled', true);
+    expect(slower).toHaveProperty('disabled', false);
+    act(() => useSettingsStore.getState().setWaterfallSeconds(8));
+    expect(slower).toHaveProperty('disabled', true);
+  });
+
+  it('steps the fall speed with Ctrl/⌘ + wheel, a notch or a pinch’s slivers at a time', () => {
+    show();
+    const canvas = screen.getByRole('img');
+    const wheel = (init: WheelEventInit) => {
+      const event = new WheelEvent('wheel', { cancelable: true, ...init });
+      act(() => {
+        canvas.dispatchEvent(event);
+      });
+      return event;
+    };
+    const seconds = () => useSettingsStore.getState().waterfallSeconds;
+    // A plain wheel is the page's to scroll.
+    expect(wheel({ deltaY: -100 }).defaultPrevented).toBe(false);
+    expect(seconds()).toBe(3);
+    // A notch in: the notes fall faster, in taller bars, as the score zooms in.
+    expect(wheel({ deltaY: -100, ctrlKey: true }).defaultPrevented).toBe(true);
+    expect(seconds()).toBe(2.5);
+    // A pinch out sends slivers, which step only once they add up to one.
+    wheel({ deltaY: 40, metaKey: true });
+    wheel({ deltaY: 40, metaKey: true });
+    expect(seconds()).toBe(2.5);
+    wheel({ deltaY: 40, metaKey: true });
+    expect(seconds()).toBe(3);
+  });
+
+  it('steps the fall speed with Safari’s trackpad pinch, from where the pinch began', () => {
+    show();
+    const canvas = screen.getByRole('img');
+    const gesture = (type: string, scale = 1) => {
+      const event = Object.assign(new Event(type, { cancelable: true }), { scale });
+      act(() => {
+        canvas.dispatchEvent(event);
+      });
+      return event;
+    };
+    const seconds = () => useSettingsStore.getState().waterfallSeconds;
+    // Every gesture is the view's, so the page never zooms instead.
+    expect(gesture('gesturestart').defaultPrevented).toBe(true);
+    // Spread to 1.6 times: two steps of 1.25 in, two quicker falls.
+    expect(gesture('gesturechange', 1.6).defaultPrevented).toBe(true);
+    expect(seconds()).toBe(2);
+    // Closed to half, from where the pinch began: three steps out.
+    gesture('gesturechange', 0.5);
+    expect(seconds()).toBe(6);
+    expect(gesture('gestureend', 0.5).defaultPrevented).toBe(true);
+  });
+
+  describe('dragged', () => {
+    beforeEach(() => {
+      // jsdom has no pointer capture; the view only asks for it.
+      HTMLElement.prototype.setPointerCapture = () => {};
+      useSettingsStore.getState().setScrubAudition(false);
+    });
+
+    afterEach(() => {
+      delete (HTMLElement.prototype as Partial<HTMLElement>).setPointerCapture;
+    });
+
+    const press = (canvas: HTMLElement, init: PointerEventInit = {}) =>
+      fireEvent.pointerDown(canvas, { pointerId: 1, isPrimary: true, clientY: 100, ...init });
+
+    it('scrubs, the notes following the finger: down brings the music on', () => {
+      const update = vi.spyOn(scrubController, 'update');
+      show();
+      const canvas = screen.getByRole('img');
+      press(canvas);
+      expect(transportController.getState()).toBe('scrubbing');
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientY: 160 });
+      // 60 px of a 300 px view that shows three seconds: 600 ms on.
+      expect(update).toHaveBeenLastCalledWith(600);
+      fireEvent.pointerUp(canvas, { pointerId: 1, clientY: 160 });
+      expect(transportController.getState()).toBe('idle');
+      expect(transportController.getPlayheadMs()).toBe(600);
+    });
+
+    it('starts from a loop’s top when the playhead is parked past its end, as the view shows', () => {
+      act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+      act(() => transportController.seek(2500));
+      const update = vi.spyOn(scrubController, 'update');
+      show();
+      const canvas = screen.getByRole('img');
+      press(canvas);
+      expect(transportController.getPlayheadMs()).toBe(1000);
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientY: 130 });
+      expect(update).toHaveBeenLastCalledWith(1300);
+      fireEvent.pointerUp(canvas, { pointerId: 1 });
+    });
+
+    it('goes round a loop past its end, as the view draws it, outlining the note held into it', () => {
+      const held: NoteEvent = {
+        id: 'held',
+        midi: 62,
+        startMs: 800,
+        durationMs: 400,
+        velocity: 0.7,
+      };
+      const notes = [NOTES[0] as NoteEvent, held, NOTES[1] as NoteEvent];
+      act(() => useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 4000 })));
+      act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+      act(() => transportController.seek(1500));
+      show();
+      const canvas = screen.getByRole('img');
+      press(canvas);
+      // 60 px down is 600 ms on: past the loop's end at 2000, and round to 1100.
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientY: 160 });
+      expect(transportController.getPlayheadMs()).toBe(1100);
+      frame();
+      // Come round, the scrub has crossed E4 at the top, but not D4, held into the loop.
+      const atKeys = lastPainted()
+        .scene.bars.filter((bar) => bar.pass === 0)
+        .map((bar) => [bar.note.midi, bar.silent]);
+      expect(atKeys).toEqual([
+        [62, true],
+        [64, false],
+      ]);
+      fireEvent.pointerUp(canvas, { pointerId: 1 });
+      expect(transportController.getPlayheadMs()).toBe(1100);
+    });
+
+    it('takes over a scrub left running elsewhere, going round its own loop', () => {
+      act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+      act(() => transportController.seek(1500));
+      // The score's fling, still coasting as the view switched: a straight scrub.
+      act(() => {
+        scrubController.begin();
+      });
+      show();
+      const canvas = screen.getByRole('img');
+      press(canvas);
+      fireEvent.pointerMove(canvas, { pointerId: 1, clientY: 160 });
+      // 600 ms on from 1500 comes round the loop to 1100.
+      expect(transportController.getPlayheadMs()).toBe(1100);
+      fireEvent.pointerUp(canvas, { pointerId: 1 });
+    });
+
+    it('only stops Safari’s gestures for fingers on a touch screen', () => {
+      show();
+      const canvas = screen.getByRole('img');
+      const gesture = (type: string, scale = 1) => {
+        const event = Object.assign(new Event(type, { cancelable: true }), { scale });
+        act(() => {
+          canvas.dispatchEvent(event);
+        });
+        return event;
+      };
+      fireEvent.pointerDown(canvas, {
+        pointerId: 7,
+        pointerType: 'touch',
+        isPrimary: true,
+        clientY: 100,
+      });
+      gesture('gesturestart');
+      expect(gesture('gesturechange', 2).defaultPrevented).toBe(true);
+      expect(useSettingsStore.getState().waterfallSeconds).toBe(3);
+      gesture('gestureend', 2);
+      fireEvent.pointerUp(canvas, { pointerId: 7, pointerType: 'touch' });
+    });
+
+    it('answers only the main button of the main pointer, and never a running take', () => {
+      const begin = vi.spyOn(scrubController, 'begin');
+      show();
+      const canvas = screen.getByRole('img');
+      press(canvas, { button: 2 });
+      press(canvas, { pointerId: 2, isPrimary: false });
+      vi.spyOn(transportController, 'getState').mockReturnValue('playing');
+      press(canvas);
+      expect(begin).not.toHaveBeenCalled();
+    });
+
+    it('lets the scrub go if the view goes away mid-drag', () => {
+      show();
+      press(screen.getByRole('img'));
+      expect(transportController.getState()).toBe('scrubbing');
+      cleanup();
+      expect(transportController.getState()).toBe('idle');
+    });
   });
 
   describe('while the transport moves', () => {

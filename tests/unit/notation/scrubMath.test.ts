@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent } from '@/domain/takeTypes';
-import { getCrossedNoteOnsets } from '@/features/notation/scrubMath';
+import { getCrossedNoteOnsets, getCrossedNoteOnsetsRound } from '@/features/notation/scrubMath';
 
 function note(id: string, startMs: number, midi = 60): NoteEvent {
   return { id, midi, startMs, durationMs: 200, velocity: 0.6 };
@@ -98,5 +98,49 @@ describe('getCrossedNoteOnsets', () => {
     const crossed = getCrossedNoteOnsets(750, 0, NOTES);
     // Start onset (750) excluded, landing onset (0) excluded (open interval).
     expect(crossed.map((n) => n.id)).toEqual(['c3', 'c2', 'c1', 'b']);
+  });
+});
+
+describe('getCrossedNoteOnsetsRound', () => {
+  // b and the chord c are the loop's own; d starts on its end, outside it.
+  const LOOP = { startMs: 250, endMs: 750 };
+  const ids = (from: number, to: number) =>
+    getCrossedNoteOnsetsRound(LOOP, from, to, NOTES).map((n) => n.id);
+
+  it('crosses within a pass as a straight run does', () => {
+    expect(ids(300, 600)).toEqual(['c1', 'c2', 'c3']);
+  });
+
+  it('comes round past the end to the top: never the note on the end, always the one on the top', () => {
+    // 800 on the run is 300 on the second pass.
+    expect(ids(600, 800)).toEqual(['b']);
+    expect(ids(100, 800)).toEqual(['b', 'c1', 'c2', 'c3', 'b']);
+  });
+
+  it('crosses every pass a long movement goes round', () => {
+    // 1800 on the run is 300 on the fourth pass.
+    expect(ids(600, 1800)).toEqual(['b', 'c1', 'c2', 'c3', 'b', 'c1', 'c2', 'c3', 'b']);
+  });
+
+  it('goes back across the top to the pass before, crossing the note on the top', () => {
+    expect(ids(800, 700)).toEqual(['b']);
+  });
+
+  it('keeps only the last of them within its limit, nearest the landing', () => {
+    const crossed = getCrossedNoteOnsetsRound(LOOP, 600, 1800, NOTES, 5);
+    expect(crossed.map((n) => n.id)).toEqual(['b', 'c1', 'c2', 'c3', 'b']);
+  });
+
+  it('never walks the passes its limit leaves out, however many a movement goes round', () => {
+    // Ten onsets a millisecond round a 100 ms loop, and 10,000 passes in one movement.
+    const dense: NoteEvent[] = [];
+    for (let i = 0; i < 1_000; i += 1) dense.push(note(`d${i}`, Math.floor(i / 10)));
+    const shortest = { startMs: 0, endMs: 100 };
+    const started = performance.now();
+    const crossed = getCrossedNoteOnsetsRound(shortest, 50, 1_000_050, dense, 24);
+    const elapsed = performance.now() - started;
+    expect(crossed).toHaveLength(24);
+    expect(crossed[crossed.length - 1]!.startMs).toBe(50);
+    expect(elapsed).toBeLessThan(50);
   });
 });

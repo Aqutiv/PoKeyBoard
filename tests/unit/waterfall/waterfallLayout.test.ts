@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
+import { MIN_LOOP_MS } from '@/features/transport/transportClock';
 import {
   firstReaching,
   layoutWaterfall,
   MAX_LOOP_PASSES,
+  MAX_PASS_BARS,
   MIN_BAR_PX,
   noteReach,
   STRIKE_GAP_PX,
@@ -208,6 +210,53 @@ describe('layoutWaterfall', () => {
       ];
       expect(atKeys(1000)).toEqual(unstruck);
       expect(atKeys(1050)).toEqual(unstruck);
+    });
+
+    it('fills the tallest view with passes of the shortest loop', () => {
+      // The slowest fall at the fastest playback shows 12 s of the take.
+      const shortest = { startMs: 0, endMs: MIN_LOOP_MS };
+      const scene = layoutWaterfall([note(60, 0, 50)], at(0, 12_000, shortest), VIEW);
+      // A restart every 100 ms, the last 2.5 px under the top edge.
+      expect(scene.restartYs).toHaveLength(119);
+      expect(Math.min(...scene.restartYs)).toBeCloseTo(2.5);
+    });
+
+    it('keeps a dense loop’s passes to a budget of bars, still marking every pass', () => {
+      // A thousand notes inside the shortest loop, over the tallest view.
+      const dense = Array.from({ length: 1_000 }, (_, i) =>
+        note(60 + (i % 12), Math.floor(i / 10), 20),
+      );
+      const shortest = { startMs: 0, endMs: MIN_LOOP_MS };
+      const started = performance.now();
+      let scene = layoutWaterfall(dense, at(0, 12_000, shortest), VIEW);
+      for (let frame = 1; frame < 60; frame += 1) {
+        scene = layoutWaterfall(dense, at(0, 12_000, shortest), VIEW);
+      }
+      const elapsed = performance.now() - started;
+      expect(scene.restartYs).toHaveLength(119);
+      // Passes until the budget is spent, then only their restart lines.
+      expect(scene.bars.filter((bar) => bar.pass > 0)).toHaveLength(MAX_PASS_BARS);
+      // A second's worth of frames, well inside a second.
+      expect(elapsed).toBeLessThan(500);
+    });
+
+    it('stops at the budget partway through a pass, and draws a pass only to the top edge', () => {
+      // Five thousand notes in a one-second loop: the first pass above it alone
+      // would add every one of them.
+      const dense = Array.from({ length: 5_000 }, (_, i) =>
+        note(60 + (i % 12), Math.floor(i / 5), 10),
+      );
+      const second = { startMs: 0, endMs: 1000 };
+      const scene = layoutWaterfall(dense, at(0, 3000, second), VIEW);
+      expect(scene.bars.filter((bar) => bar.pass > 0)).toHaveLength(MAX_PASS_BARS);
+      // A pass the top edge cuts is drawn as far as the edge and no further.
+      const sparse = [note(60, 100, 50), note(62, 600, 50)];
+      const cut = layoutWaterfall(sparse, at(0, 1500, second), VIEW);
+      expect(cut.bars.map((bar) => [bar.note.midi, bar.pass])).toEqual([
+        [60, 0],
+        [62, 0],
+        [60, 1],
+      ]);
     });
 
     it('draws no more than its cap of passes, however short the loop', () => {

@@ -1,7 +1,9 @@
 import { noteHand, type Hand } from '@/domain/hands';
 import { isSilentNote, lowerBoundByStart } from '@/domain/noteEvents';
-import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
+import { MAX_PLAYBACK_SPEED, type NoteEvent, type PlaybackLoop } from '@/domain/takeTypes';
 import type { KeyboardLayout, KeyLayout } from '@/features/keyboard/keyboardGeometry';
+import { MIN_LOOP_MS } from '@/features/transport/transportClock';
+import { SLOWEST_FALL_SECONDS } from './fallSpeed';
 
 /**
  * Where each note of a take falls toward its key: the falling-notes view's
@@ -26,10 +28,20 @@ const WHITE_INSET_PX = 2;
 const WHITE_INSET_SHARE = 0.06;
 
 /**
- * The most passes of a loop drawn above its end. A loop is at least
- * `MIN_LOOP_MS` long and the view only seconds tall, so this is only a guard.
+ * The most passes of a loop drawn above its end: enough to fill the tallest
+ * view — the slowest fall, at the fastest playback — with the shortest loop
+ * playback will play, and a guard against anything more.
  */
-export const MAX_LOOP_PASSES = 64;
+export const MAX_LOOP_PASSES =
+  Math.ceil((SLOWEST_FALL_SECONDS * 1000 * MAX_PLAYBACK_SPEED) / MIN_LOOP_MS) + 1;
+
+/**
+ * The most bars and marks the passes round a loop add to a frame. A loop of
+ * music comes nowhere near it; a short one packed with notes — an import's,
+ * say — would otherwise add each of them over again for every pass up the
+ * view, every frame. Past it a pass keeps its restart line but not its notes.
+ */
+export const MAX_PASS_BARS = 2000;
 
 export interface WaterfallTimeline {
   /** The moment at the key tops, in take ms; before 0 while a recording counts in. */
@@ -252,15 +264,20 @@ export function layoutWaterfall(
       if (note.startMs + note.durationMs > fold.startMs) heldIn.push(note);
     }
     const end = lowerBoundByStart(notes, fold.endMs);
+    const atKeys = whites.length + blacks.length + markers.length;
+    const inBudget = () => whites.length + blacks.length + markers.length - atKeys < MAX_PASS_BARS;
     for (let pass = 1; pass <= MAX_LOOP_PASSES; pass += 1) {
       const offsetMs = pass * lengthMs;
       if (fold.startMs + offsetMs >= topMs) break;
       restartYs.push(y(fold.startMs + offsetMs));
-      for (const note of heldIn) {
+      for (let i = 0; i < heldIn.length && inBudget(); i += 1) {
+        const note = heldIn[i] as NoteEvent;
         const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
         place(note, fold.startMs + offsetMs, endMs + offsetMs, pass, false);
       }
-      for (let i = inside; i < end; i += 1) {
+      // The pass's own notes as far as the top edge, and no further.
+      const shown = Math.min(end, lowerBoundByStart(notes, topMs - offsetMs));
+      for (let i = inside; i < shown && inBudget(); i += 1) {
         const note = notes[i] as NoteEvent;
         const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
         place(note, note.startMs + offsetMs, endMs + offsetMs, pass, true);

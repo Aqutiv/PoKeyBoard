@@ -8,6 +8,8 @@
   background: var(--keybed);
   border-radius: var(--radius-m) var(--radius-m) 0 0;
   overflow: hidden;
+  /* A scrub gesture surface, as the score is: it owns its vertical drags. */
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -33,4 +35,43 @@
   color: var(--ivory-shadow);
   font-size: 14px;
   pointer-events: none;
+}
+
+/* The fall speed, in the top corner where the score keeps its zoom. */
+.waterfall__speed {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  gap: 2px;
+}
+
+.waterfall__speed button {
+  min-width: 30px;
+  min-height: 30px;
+  background: var(--surface-2);
+  color: var(--text-dim);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  font-size: 15px;
+  line-height: 1;
+}
+
+.waterfall__speed button:disabled {
+  opacity: 0.4;
+}
+
+/* Portrait phones: smaller, and quieter over the notes until touched, as the
+   score's zoom is. Keep the query in sync with src/index.css. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .waterfall__speed {
+    top: 4px;
+    right: 4px;
+  }
+
+  .waterfall__speed button {
+    min-width: 26px;
+    min-height: 26px;
+    opacity: 0.75;
+  }
 }

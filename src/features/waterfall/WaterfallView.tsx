@@ -1,22 +1,29 @@
-import { useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { subscribeFrame } from '@/app/frameClock';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { themeController } from '@/app/theme';
 import type { PlaybackLoop } from '@/domain/takeTypes';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
+import { wheelZoomSteps, ZOOM_STEP } from '@/features/notation/scoreZoom';
+import { scrubController } from '@/features/notation/scrubController';
 import { playableLoop } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
+import { TooltipButton } from '@/ui/TooltipButton';
+import {
+  FASTEST_FALL_SECONDS,
+  SLOWEST_FALL_SECONDS,
+  stepWaterfallSeconds,
+  waterfallSecondsAfter,
+  type WaterfallSeconds,
+} from './fallSpeed';
 import { layoutWaterfall, type WaterfallScene, type WaterfallTimeline } from './waterfallLayout';
 import { paintWaterfall } from './waterfallPainter';
 import { WATERFALL_PALETTES } from './waterfallPalette';
 import './waterfall.css';
-
-/** How long a note takes to fall from the top of the view onto its key, in real ms. */
-export const FALL_SPAN_MS = 3000;
 
 /** Past this a sharper canvas only costs memory, for a difference nobody sees. */
 const MAX_DPR = 2;
@@ -36,30 +43,43 @@ function moves(state: TransportState): boolean {
   );
 }
 
+/** Safari's own pinch: a trackpad's arrives as this, not as Ctrl + wheel. */
+interface SafariGestureEvent extends UIEvent {
+  scale: number;
+}
+
+/** A drag on the notes: the pointer, where it came down, and the playhead then. */
+interface Drag {
+  readonly pointerId: number;
+  readonly startY: number;
+  readonly playhead0: number;
+}
+
 /**
  * Where the view stands now, and how fast the take falls through it. A note
- * takes `FALL_SPAN_MS` to fall at any speed, so the view shows less of the
- * take when it plays slower. While a recording counts in, the clock already
- * runs toward the recording's start, so the take's notes fall in to meet it;
- * recording itself runs straight through at the take's own speed. A run falls
- * at its own rate and round its own loop, and what it does not play — a note
- * held from before where its pass began — falls as an outline. A scrub shows
- * the take as written where it is dragged, and a transport at rest shows what
- * pressing play would play: from past a loop's end, the loop from its top.
+ * takes `fallMs` (the fall speed) to fall at any playback speed, so the view
+ * shows less of the take when it plays slower. While a recording counts in,
+ * the clock already runs toward the recording's start, so the take's notes
+ * fall in to meet it; recording itself runs straight through at the take's
+ * own speed. A run falls at its own rate and round its own loop, and what it
+ * does not play — a note held from before where its pass began — falls as an
+ * outline. A scrub goes round the loop as the drag carries it, outlining what
+ * it has not crossed, and a transport at rest shows what pressing play would
+ * play: from past a loop's end, the loop from its top.
  */
-function timelineNow(loopAtRest: PlaybackLoop | null): WaterfallTimeline {
+function timelineNow(loopAtRest: PlaybackLoop | null, fallMs: number): WaterfallTimeline {
   const state = transportController.getState();
   const { clock } = transportController;
   const passStartMs = transportController.getPassStartMs();
   if (state === 'countIn')
-    return { nowMs: clock.currentTakeMs(), spanMs: FALL_SPAN_MS, loop: null, passStartMs };
+    return { nowMs: clock.currentTakeMs(), spanMs: fallMs, loop: null, passStartMs };
   const nowMs = transportController.getPlayheadMs();
-  if (state === 'recording') return { nowMs, spanMs: FALL_SPAN_MS, loop: null, passStartMs };
+  if (state === 'recording') return { nowMs, spanMs: fallMs, loop: null, passStartMs };
   if (state === 'playing')
-    return { nowMs, spanMs: FALL_SPAN_MS * clock.rate, loop: clock.loop, passStartMs };
-  const spanMs = FALL_SPAN_MS * transportController.getSpeed();
+    return { nowMs, spanMs: fallMs * clock.rate, loop: clock.loop, passStartMs };
+  const spanMs = fallMs * transportController.getSpeed();
   if (state === 'scrubbing') {
-    return { nowMs, spanMs, loop: loopAtRest, passStartMs: Number.NEGATIVE_INFINITY };
+    return { nowMs, spanMs, loop: loopAtRest, passStartMs: scrubController.getPassStartMs() };
   }
   return { nowMs: passStartMs, spanMs, loop: loopAtRest, passStartMs };
 }
@@ -68,7 +88,8 @@ function timelineNow(loopAtRest: PlaybackLoop | null): WaterfallTimeline {
  * The take's notes falling onto the keys below, each bar standing over its
  * key and reaching it as the key lights. It sits straight on the key bed
  * (index.css joins the two) and is told the bed's range, so the two line up
- * key for key as the bed moves.
+ * key for key as the bed moves. − and + (or Ctrl/⌘ + wheel) set how fast the
+ * notes fall, and a drag up or down scrubs, the notes following the finger.
  */
 export function WaterfallView({ range }: { range: KeyRange | null }) {
   const m = useMessages();
@@ -78,6 +99,8 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   // Only a loop playback will play is folded round; see `playableLoop`.
   const loop = useMemo(() => playableLoop(take), [take]);
   const followsVelocity = useSettingsStore((s) => s.velocityShading);
+  const seconds = useSettingsStore((s) => s.waterfallSeconds);
+  const setSeconds = useSettingsStore((s) => s.setWaterfallSeconds);
   const lowMidi = range?.lowMidi;
   const highMidi = range?.highMidi;
   const keys = useMemo(
@@ -94,8 +117,14 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   const loopRef = useRef(loop);
   const keysRef = useRef(keys);
   const followsRef = useRef(followsVelocity);
+  const fallMsRef = useRef(seconds * 1000);
   /** Draw on the next frame if nothing else will; see the render loop below. */
   const wakeRef = useRef<() => void>(() => {});
+  const dragRef = useRef<Drag | null>(null);
+  /** Wheel travel not yet a whole step of the fall speed: a pinch sends it in slivers. */
+  const wheelStepsRef = useRef(0);
+  /** The fingers on the notes, by pointer: a touch screen's, not a trackpad's. */
+  const fingersRef = useRef(new Set<number>());
 
   useEffect(() => {
     notesRef.current = notes;
@@ -113,6 +142,10 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     followsRef.current = followsVelocity;
     wakeRef.current();
   }, [followsVelocity]);
+  useEffect(() => {
+    fallMsRef.current = seconds * 1000;
+    wakeRef.current();
+  }, [seconds]);
 
   // Measured in fractional pixels, as the keys are placed by percentages: a
   // width rounded to whole pixels would drift a bar off its key across a
@@ -152,7 +185,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
       ctx.setTransform(backingWidth / width, 0, 0, backingHeight / height, 0, 0);
       const keyBed = keysRef.current;
       const scene = keyBed
-        ? layoutWaterfall(notesRef.current, timelineNow(loopRef.current), {
+        ? layoutWaterfall(notesRef.current, timelineNow(loopRef.current, fallMsRef.current), {
             widthPx: width,
             heightPx: height,
             keys: keyBed,
@@ -199,6 +232,119 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     };
   }, []);
 
+  // Ctrl/⌘ + wheel sets the fall speed, as it zooms the score: in, and the
+  // notes fall faster in taller bars. Native and not passive, so the page
+  // itself does not zoom instead.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onWheel = (event: WheelEvent) => {
+      if (!event.ctrlKey && !event.metaKey) return;
+      event.preventDefault();
+      wheelStepsRef.current += wheelZoomSteps(event.deltaY, event.deltaMode);
+      while (Math.abs(wheelStepsRef.current) >= 1) {
+        const faster = wheelStepsRef.current > 0;
+        wheelStepsRef.current -= faster ? 1 : -1;
+        const settings = useSettingsStore.getState();
+        settings.setWaterfallSeconds(stepWaterfallSeconds(settings.waterfallSeconds, faster));
+      }
+    };
+    canvas.addEventListener('wheel', onWheel, { passive: false });
+    return () => canvas.removeEventListener('wheel', onWheel);
+  }, []);
+
+  // Safari sends a trackpad pinch as gestures of its own, which set the fall
+  // speed as the wheel does: a step for each ZOOM_STEP the fingers spread or
+  // close, as the score's zoom takes them. It sends them for fingers on a
+  // touch screen too, alongside their pointers; there they are only stopped,
+  // or the page would zoom instead.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    let from: WaterfallSeconds | null = null;
+    const onGestureStart = (event: Event) => {
+      event.preventDefault();
+      from = fingersRef.current.size > 0 ? null : useSettingsStore.getState().waterfallSeconds;
+    };
+    const onGestureChange = (event: Event) => {
+      event.preventDefault();
+      const { scale } = event as SafariGestureEvent;
+      if (from === null || !(scale > 0)) return;
+      const steps = Math.round(Math.log(scale) / Math.log(ZOOM_STEP));
+      const settings = useSettingsStore.getState();
+      const next = waterfallSecondsAfter(from, steps);
+      if (next !== settings.waterfallSeconds) settings.setWaterfallSeconds(next);
+    };
+    const onGestureEnd = (event: Event) => {
+      event.preventDefault();
+      from = null;
+    };
+    canvas.addEventListener('gesturestart', onGestureStart);
+    canvas.addEventListener('gesturechange', onGestureChange);
+    canvas.addEventListener('gestureend', onGestureEnd);
+    return () => {
+      canvas.removeEventListener('gesturestart', onGestureStart);
+      canvas.removeEventListener('gesturechange', onGestureChange);
+      canvas.removeEventListener('gestureend', onGestureEnd);
+    };
+  }, []);
+
+  // A drag cut short by the view going away still lets the scrub go.
+  useEffect(
+    () => () => {
+      if (!dragRef.current) return;
+      dragRef.current = null;
+      scrubController.end();
+    },
+    [],
+  );
+
+  /**
+   * A drag scrubs, at rest. It starts from where the view stands — Play's own
+   * start, which is a loop's top for a playhead parked past its end — and goes
+   * round the loop as the view draws it, so the notes never jump under the
+   * finger. A scrub still running from elsewhere ends where it is, and this
+   * one begins there afresh: it may not go round the loop.
+   */
+  const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    if (event.pointerType === 'touch') {
+      // A new touch's first finger: any left over, whose lifting never reached
+      // the notes, are gone.
+      if (event.isPrimary) fingersRef.current.clear();
+      fingersRef.current.add(event.pointerId);
+    }
+    if (!event.isPrimary || event.button !== 0) return;
+    const current = transportController.getState();
+    if (current !== 'idle' && current !== 'paused' && current !== 'scrubbing') return;
+    if (scrubController.isActive) scrubController.end();
+    const standMs = transportController.getPassStartMs();
+    if (standMs !== transportController.getPlayheadMs()) transportController.seek(standMs);
+    if (!scrubController.begin(loopRef.current)) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    dragRef.current = {
+      pointerId: event.pointerId,
+      startY: event.clientY,
+      playhead0: transportController.getPlayheadMs(),
+    };
+  };
+
+  const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const drag = dragRef.current;
+    const { height } = sizeRef.current;
+    if (!drag || drag.pointerId !== event.pointerId || height <= 0) return;
+    // The notes follow the finger: down brings the music on toward the keys.
+    const spanMs = fallMsRef.current * transportController.getSpeed();
+    scrubController.update(drag.playhead0 + ((event.clientY - drag.startY) * spanMs) / height);
+  };
+
+  const onPointerEnd = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    fingersRef.current.delete(event.pointerId);
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    dragRef.current = null;
+    scrubController.end();
+  };
+
   const showEmptyHint = notes.length === 0 && state === 'idle';
 
   return (
@@ -208,8 +354,30 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
         className="waterfall__canvas"
         role="img"
         aria-label={m.play.fallingLabel({ count: notes.length })}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerEnd}
+        onPointerCancel={onPointerEnd}
       />
       {showEmptyHint ? <div className="waterfall__empty">{m.play.fallingEmpty}</div> : null}
+      <div className="waterfall__speed" role="group" aria-label={m.play.fallSpeed}>
+        <TooltipButton
+          type="button"
+          onClick={() => setSeconds(stepWaterfallSeconds(seconds, false))}
+          disabled={seconds >= SLOWEST_FALL_SECONDS}
+          aria-label={m.play.fallSlower}
+        >
+          −
+        </TooltipButton>
+        <TooltipButton
+          type="button"
+          onClick={() => setSeconds(stepWaterfallSeconds(seconds, true))}
+          disabled={seconds <= FASTEST_FALL_SECONDS}
+          aria-label={m.play.fallFaster}
+        >
+          +
+        </TooltipButton>
+      </div>
     </div>
   );
 }
