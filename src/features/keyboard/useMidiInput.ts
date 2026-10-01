@@ -35,9 +35,9 @@ const LOOKAHEAD_SEMITONES = 12;
  * A MIDI keyboard is a physical instrument sitting in front of the player, so
  * it keeps sounding while they read Settings or browse takes — the same way a
  * recorded take does. That is also what lets the controller's volume knob move
- * the Piano volume slider while the player is watching it. Mounted once, in
- * the shell; the key bed contributes the on-screen half through
- * `registerMidiKeyboard` when it happens to be there.
+ * the Piano volume slider (Settings → Sound) while the player is watching it.
+ * Mounted once, in the shell; the key bed contributes the on-screen half
+ * through `registerMidiKeyboard` when it happens to be there.
  */
 export function useMidiInput(): void {
   const enabled = useSettingsStore((s) => s.midiInput);

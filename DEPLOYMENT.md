@@ -34,8 +34,8 @@ PoKeyBoard deploys to **any static HTTPS host** (no backend). The reference CI i
 - [ ] Fresh profile: app loads, piano ready, a key sounds after first tap
 - [ ] DevTools → Application: manifest parsed (installable), service worker **activated**
 - [ ] Reload offline: shell loads
-- [ ] Settings → Piano: the download completes for **each** piano; airplane-mode launch plays all keys
-- [ ] Settings → Piano: switching sounds different, survives a reload, keeps playback going through the switch, and leaves no stuck key when a note is held across the switch
+- [ ] Settings → Sound: the download completes for **each** piano; airplane-mode launch plays all keys
+- [ ] Settings → Sound: switching sounds different, survives a reload, keeps playback going through the switch, and leaves no stuck key when a note is held across the switch
 - [ ] Record → Share → Audio → an MP3 and a FLAC render; share sheet (mobile) or download (desktop); the FLAC plays in the OS's own player
 - [ ] Second deploy later: "Update available" appears and applies on request
 
@@ -49,8 +49,8 @@ each PR would only produce a merge counter that rots the first time someone forg
   fix-only release. `1.0.0` is reserved for the milestone [README.md](README.md) describes.
 - **Don't bump per PR.** Individual builds identify themselves: `vite.config.ts` stamps the short
   commit SHA and commit date into the bundle, and About shows `Version 0.2.0 (a1b2c3d · 2026-08-02)`.
-  That is what to ask a user for when triaging a bug report. Settings shows the bare semver, since
-  that line is about service-worker update state.
+  That is what to ask a user for when triaging a bug report. Settings → App shows the same label
+  beside the service-worker update state.
 - The version is **decorative for caching.** Shell invalidation is Workbox revision hashing; sample
   invalidation is the cache names below. Bumping the semver invalidates nothing.
 
