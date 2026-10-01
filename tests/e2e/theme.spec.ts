@@ -18,10 +18,14 @@ function themeMeta(page: Page) {
   return page.locator('meta[name="theme-color"]');
 }
 
+function themeSelect(page: Page) {
+  return page.getByRole('combobox', { name: 'Theme' });
+}
+
 async function gotoSettings(page: Page): Promise<void> {
   await page.goto('/#/settings');
   await chooseSettingsSection(page, 'Display');
-  await expect(page.getByRole('radiogroup', { name: 'Theme' })).toBeVisible();
+  await expect(themeSelect(page)).toBeVisible();
 }
 
 test.describe('theme', () => {
@@ -36,7 +40,7 @@ test.describe('theme', () => {
     page,
   }) => {
     await gotoSettings(page);
-    await page.getByRole('radio', { name: 'Ivory recital — light' }).check();
+    await themeSelect(page).selectOption({ label: 'Ivory recital — light' });
     await expect(html(page)).toHaveAttribute('data-theme', 'light');
     await expect(page.locator('body')).toHaveCSS('background-color', LIGHT_BG);
     await expect(themeMeta(page)).toHaveAttribute('content', '#f7f3ea');
@@ -53,7 +57,7 @@ test.describe('theme', () => {
   test('Follow system tracks the OS scheme without a reload', async ({ page }) => {
     await page.emulateMedia({ colorScheme: 'light' });
     await gotoSettings(page);
-    await page.getByRole('radio', { name: 'Follow system' }).check();
+    await themeSelect(page).selectOption({ label: 'Follow system' });
     await expect(html(page)).toHaveAttribute('data-theme', 'light');
 
     await page.emulateMedia({ colorScheme: 'dark' });

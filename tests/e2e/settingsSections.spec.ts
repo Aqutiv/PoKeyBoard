@@ -53,6 +53,16 @@ test.describe('Settings sections', () => {
     await expect(page.getByRole('checkbox', { name: 'Note labels on keys' })).toBeChecked();
   });
 
+  test('moves a choice with the arrow keys, as radio buttons do', async ({ page }) => {
+    await gotoAppReady(page);
+    await openSettings(page, 'Playing');
+    const sensitivity = page.getByRole('radiogroup', { name: 'Touch sensitivity' });
+    await sensitivity.getByRole('radio', { name: 'Normal' }).focus();
+    await page.keyboard.press('ArrowRight');
+    await expect(sensitivity.getByRole('radio', { name: 'Firm' })).toBeChecked();
+    await expect.poll(() => persistedSetting(page, 'touchSensitivity')).toBe('firm');
+  });
+
   test('keeps a download going, and in view, through a visit to another section', async ({
     page,
   }) => {

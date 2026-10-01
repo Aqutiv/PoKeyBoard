@@ -1,6 +1,7 @@
 import { TOUCH_SENSITIVITIES, type TouchSensitivity } from '@/features/keyboard/velocityResponse';
 import { useMessages } from '@/i18n/i18nContext';
-import { useSettingsStore } from '@/state/useSettingsStore';
+import { useSettingsStore, type VelocityMode } from '@/state/useSettingsStore';
+import { ChoiceSwitch } from './ChoiceSwitch';
 import { MidiSection } from './MidiSection';
 import { SettingsGroup } from './SettingsGroup';
 
@@ -21,31 +22,15 @@ export function PlayingSection() {
   return (
     <>
       <SettingsGroup id="touch" heading={m.settings.touch}>
-        <div
-          className="setting-row setting-row--stack"
-          role="radiogroup"
-          aria-label={m.settings.velocity}
-        >
-          <span>{m.settings.velocity}</span>
-          <label>
-            <input
-              type="radio"
-              name="velocity-mode"
-              checked={settings.velocityMode === 'touch'}
-              onChange={() => settings.setVelocityMode('touch')}
-            />
-            {m.settings.velocityTouch}
-          </label>
-          <label>
-            <input
-              type="radio"
-              name="velocity-mode"
-              checked={settings.velocityMode === 'fixed'}
-              onChange={() => settings.setVelocityMode('fixed')}
-            />
-            {m.settings.velocityFixed}
-          </label>
-        </div>
+        <ChoiceSwitch<VelocityMode>
+          label={m.settings.velocity}
+          value={settings.velocityMode}
+          options={[
+            { value: 'touch', label: m.settings.velocityTouch },
+            { value: 'fixed', label: m.settings.velocityFixed },
+          ]}
+          onChange={settings.setVelocityMode}
+        />
         {settings.velocityMode === 'fixed' ? (
           <label className="setting-row">
             <span>{m.settings.fixedVelocity}</span>
@@ -60,24 +45,15 @@ export function PlayingSection() {
           </label>
         ) : (
           <>
-            <div
-              className="setting-row setting-row--stack"
-              role="radiogroup"
-              aria-label={m.settings.touchSensitivity}
-            >
-              <span>{m.settings.touchSensitivity}</span>
-              {TOUCH_SENSITIVITIES.map((sensitivity) => (
-                <label key={sensitivity}>
-                  <input
-                    type="radio"
-                    name="touch-sensitivity"
-                    checked={settings.touchSensitivity === sensitivity}
-                    onChange={() => settings.setTouchSensitivity(sensitivity)}
-                  />
-                  {m.settings[TOUCH_SENSITIVITY_LABELS[sensitivity]]}
-                </label>
-              ))}
-            </div>
+            <ChoiceSwitch
+              label={m.settings.touchSensitivity}
+              value={settings.touchSensitivity}
+              options={TOUCH_SENSITIVITIES.map((sensitivity) => ({
+                value: sensitivity,
+                label: m.settings[TOUCH_SENSITIVITY_LABELS[sensitivity]],
+              }))}
+              onChange={settings.setTouchSensitivity}
+            />
             <p className="settings__hint">{m.settings.touchSensitivityHint}</p>
           </>
         )}

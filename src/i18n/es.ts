@@ -524,7 +524,7 @@ export const es: Messages = {
     toneFollowsTouchHint:
       'En los pianos de cola, las notas más suaves suenan más oscuras y las más fuertes, más brillantes, así que el timbre pasa de suave a fuerte de forma gradual, sin saltos. Desactivado, cada nota suena con su grabación sin filtrar.',
     velocity: 'Velocidad',
-    velocityTouch: 'Según la posición del toque en la tecla',
+    velocityTouch: 'Posición del toque',
     velocityFixed: 'Fija',
     fixedVelocity: 'Velocidad fija',
     touchSensitivity: 'Sensibilidad al tacto',

@@ -173,7 +173,9 @@ for (const theme of ['dark', 'light']) {
     await gotoAppReady(page);
     if (theme === 'light') {
       await openSettings(page, 'Display');
-      await page.getByRole('radio', { name: 'Ivory recital — light' }).check();
+      await page
+        .getByRole('combobox', { name: 'Theme' })
+        .selectOption({ label: 'Ivory recital — light' });
       await nav(page).getByRole('button', { name: 'Play', exact: true }).click();
     }
     await expect(page.getByRole('button', { name: 'Listen', exact: true })).toHaveAttribute(

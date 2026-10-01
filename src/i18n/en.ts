@@ -525,7 +525,7 @@ export const en: Messages = {
     toneFollowsTouchHint:
       'On the grand pianos, softer notes sound darker and harder ones brighter, so the tone changes smoothly from soft to loud instead of in steps. Off, each note plays its recording unfiltered.',
     velocity: 'Velocity',
-    velocityTouch: 'From touch position on the key',
+    velocityTouch: 'Touch position',
     velocityFixed: 'Fixed',
     fixedVelocity: 'Fixed velocity',
     touchSensitivity: 'Touch sensitivity',

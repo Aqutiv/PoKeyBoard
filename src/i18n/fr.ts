@@ -525,7 +525,7 @@ export const fr: Messages = {
     toneFollowsTouchHint:
       'Sur les pianos à queue, les notes plus douces sonnent plus sombres et les plus fortes plus brillantes : le timbre passe ainsi du doux au fort progressivement, sans à-coups. Désactivé, chaque note joue son enregistrement sans filtre.',
     velocity: 'Vélocité',
-    velocityTouch: 'Selon la position du toucher sur la touche',
+    velocityTouch: 'Position du toucher',
     velocityFixed: 'Fixe',
     fixedVelocity: 'Vélocité fixe',
     touchSensitivity: 'Sensibilité du toucher',
