@@ -18,19 +18,32 @@ import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
 import { isBusyState } from '@/features/transport/transportMachine';
+import { WaterfallView, type KeyRange } from '@/features/waterfall/WaterfallView';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
+import type { PlayView } from './playView';
+import { PlayViewSwitch } from './PlayViewSwitch';
 import { SaveStatusBadge } from './SaveStatusBadge';
 
 const subscribeLifecycle = (onStoreChange: () => void) => lifecycleService.subscribe(onStoreChange);
 const getLifecycle = () => lifecycleService.getSnapshot();
 
-/** The main instrument view: transport, score, metronome, keyboard. */
+/** What the layout shows over the keys: a view, or in short landscape the keys alone. */
+type PlayStage = PlayView | 'keys';
+
+/** The main instrument view: transport, score or falling notes, metronome, keyboard. */
 export function PlayPage() {
   const m = useMessages();
   const transportState = useTransportState();
-  const [compactView, setCompactView] = useState<'notation' | 'keyboard'>('notation');
+  const playView = useSettingsStore((s) => s.playView);
+  const setPlayView = useSettingsStore((s) => s.setPlayView);
+  // Short landscape has no room for a view and the keys together, so it can
+  // show the keys alone. Kept while the page is open, so turning the phone
+  // upright and back returns to it, but never remembered beyond that.
+  const [keysOnly, setKeysOnly] = useState(false);
+  // Where the key bed is, so the falling notes can stand over their keys.
+  const [keyboardRange, setKeyboardRange] = useState<KeyRange | null>(null);
   const interruption = useSyncExternalStore(subscribeLifecycle, getLifecycle);
   const status = useEngineStatus();
   const progress = useSampleLoadProgress();
@@ -50,7 +63,26 @@ export function PlayPage() {
   // embedded in the piano controls row instead. Render one or the other,
   // never both (duplicate groups would confuse assistive tech).
   const compactLandscape = useMediaQuery(COMPACT_LANDSCAPE_QUERY);
+  const showKeysOnly = compactLandscape && keysOnly;
+  const stage: PlayStage = showKeysOnly ? 'keys' : playView;
+  const falling = playView === 'waterfall';
 
+  const chooseView = (view: PlayView) => {
+    setPlayView(view);
+    setKeysOnly(false);
+  };
+
+  const soundRow = compactLandscape ? null : (
+    <div key="sound" className="play-sound-row">
+      <MetronomeControls />
+      <PianoControls />
+    </div>
+  );
+
+  // Every child is keyed, so the sound row moves rather than remounts when
+  // the view changes: under the score it sits above the keys; under the
+  // falling notes, which stand straight on the keys, it moves below them, and
+  // the page reads in the order it is drawn.
   return (
     <section
       className="page page--play"
@@ -58,28 +90,17 @@ export function PlayPage() {
       // The piano chosen is ready — not merely one playing while it decodes.
       data-piano-ready={progress.phase === 'core-ready' && !pianoSwitching ? 'true' : 'false'}
     >
-      <div className="play-layout" data-compact-view={compactView}>
-        <header className="play-header">
+      <div className="play-layout" data-stage={stage}>
+        <header key="header" className="play-header">
           <TakeTitle key={takeId} disabled={isBusyState(transportState)} />
           {isLibrary ? <span className="play-header__library">{m.library.chip}</span> : null}
-          <div className="play-view-switch" role="group" aria-label={m.play.viewLabel}>
-            <button
-              type="button"
-              className={`play-view-switch__option${compactView === 'notation' ? ' is-selected' : ''}`}
-              aria-pressed={compactView === 'notation'}
-              onClick={() => setCompactView('notation')}
-            >
-              {m.play.notationView}
-            </button>
-            <button
-              type="button"
-              className={`play-view-switch__option${compactView === 'keyboard' ? ' is-selected' : ''}`}
-              aria-pressed={compactView === 'keyboard'}
-              onClick={() => setCompactView('keyboard')}
-            >
-              {m.play.keyboardView}
-            </button>
-          </div>
+          <PlayViewSwitch
+            view={playView}
+            keysOnly={showKeysOnly}
+            offerKeys={compactLandscape}
+            onView={chooseView}
+            onKeysOnly={() => setKeysOnly(true)}
+          />
           <span className="play-header__side">
             {isLibrary ? null : <SaveStatusBadge />}
             <ShareMenu
@@ -91,7 +112,7 @@ export function PlayPage() {
           </span>
         </header>
         {interruption.message ? (
-          <p className="play-interruption" role="alert">
+          <p key="interruption" className="play-interruption" role="alert">
             {m.play[interruption.message]}{' '}
             <button
               type="button"
@@ -102,8 +123,8 @@ export function PlayPage() {
             </button>
           </p>
         ) : null}
-        <TransportControls />
-        <div className="play-layout__score">
+        <TransportControls key="transport" />
+        <div key="score" className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (
             <p className="page__hint" role="status">
               {m.play.loadingPiano({ percent })}
@@ -126,15 +147,10 @@ export function PlayPage() {
               {m.play.audioUnavailable}
             </p>
           ) : null}
-          <MusicScore />
+          {falling ? <WaterfallView range={keyboardRange} /> : <MusicScore />}
         </div>
-        {compactLandscape ? null : (
-          <div className="play-sound-row">
-            <MetronomeControls />
-            <PianoControls />
-          </div>
-        )}
-        <div className="play-layout__keyboard">
+        {falling ? null : soundRow}
+        <div key="keyboard" className="play-layout__keyboard">
           <PianoKeyboard
             playbackCues
             followPlayback={followPlayback}
@@ -142,8 +158,10 @@ export function PlayPage() {
             wrongMidis={trainingWrong}
             revealTargets
             controlsExtra={compactLandscape ? <MetronomeControls compact /> : null}
+            onRangeChange={falling ? setKeyboardRange : undefined}
           />
         </div>
+        {falling ? soundRow : null}
       </div>
     </section>
   );

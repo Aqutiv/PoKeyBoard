@@ -14,6 +14,7 @@ import {
 } from '@/features/keyboard/velocityResponse';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
+import { PLAY_VIEWS } from '@/features/play/playView';
 import { PLAYBACK_MODES, RECORD_MODES } from '@/features/transport/modes';
 import { SETTINGS_DEFAULTS, type SettingsState } from '@/state/useSettingsStore';
 import { db } from './db';
@@ -45,6 +46,7 @@ const SETTING_SCHEMAS = {
   showNoteLabels: z.boolean(),
   velocityShading: z.boolean(),
   keyboardFollowsPlayback: z.boolean(),
+  playView: z.enum(PLAY_VIEWS),
   scrubAudition: z.boolean(),
   backgroundPlayback: z.boolean(),
   gamepadInput: z.boolean(),

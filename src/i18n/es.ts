@@ -41,6 +41,10 @@ export const es: Messages = {
     viewLabel: 'Vista',
     notationView: 'Partitura',
     keyboardView: 'Teclado',
+    fallingView: 'Notas que caen',
+    fallingLabel: ({ count }) => `Notas que caen, ${count} nota${count === 1 ? '' : 's'}`,
+    fallingEmpty:
+      'Graba una toma o abre una pieza de la Biblioteca, y sus notas caerán aquí sobre las teclas.',
     dismiss: 'Descartar',
     loadingPiano: ({ percent }) => `Cargando piano… ${percent}%`,
     retryLoadingPiano: 'Intentar de nuevo',
@@ -540,9 +544,9 @@ export const es: Messages = {
     midiCalibrateRejected:
       'Tu nota más fuerte tiene que sonar claramente más fuerte que la más suave. Inténtalo de nuevo.',
     noteLabels: 'Etiquetas de notas en las teclas',
-    velocityShading: 'Sombreado por velocidad en las teclas',
+    velocityShading: 'Sombreado por velocidad en las teclas y las notas que caen',
     velocityShadingHint:
-      'Las teclas iluminadas muestran la fuerza de cada nota: pálidas si es suave e intensas si es fuerte, al tocar y en la reproducción. Desactivado, una tecla se ilumina igual por fuerte que se toque.',
+      'Las teclas iluminadas y las notas que caen muestran la fuerza de cada nota: pálidas si es suave e intensas si es fuerte, al tocar y en la reproducción. Desactivado, cada nota se ilumina igual por fuerte que se toque.',
     followPlayback: 'El teclado sigue la reproducción',
     scrubAudition: 'Sonido al desplazar la partitura',
     backgroundPlayback: 'Continuar la reproducción en segundo plano',

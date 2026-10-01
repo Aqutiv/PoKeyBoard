@@ -17,6 +17,7 @@ import type {
 } from '@/features/keyboard/velocityResponse';
 import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
+import { DEFAULT_PLAY_VIEW, type PlayView } from '@/features/play/playView';
 import type { PlaybackMode, RecordMode } from '@/features/transport/modes';
 import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
@@ -57,6 +58,8 @@ export interface SettingsState {
   velocityShading: boolean;
   /** Slide the Play keyboard to where playback is playing. */
   keyboardFollowsPlayback: boolean;
+  /** What the Play page shows above the keys: the score, or the falling notes. */
+  playView: PlayView;
   scrubAudition: boolean;
   /** Keep recorded-take playback running while the page is hidden. */
   backgroundPlayback: boolean;
@@ -98,6 +101,7 @@ export interface SettingsState {
   setShowNoteLabels(show: boolean): void;
   setVelocityShading(enabled: boolean): void;
   setKeyboardFollowsPlayback(follow: boolean): void;
+  setPlayView(view: PlayView): void;
   setScrubAudition(enabled: boolean): void;
   setBackgroundPlayback(enabled: boolean): void;
   setGamepadInput(enabled: boolean): void;
@@ -132,6 +136,7 @@ export const SETTINGS_DEFAULTS = {
   showNoteLabels: true,
   velocityShading: true,
   keyboardFollowsPlayback: true,
+  playView: DEFAULT_PLAY_VIEW,
   scrubAudition: true,
   backgroundPlayback: false,
   gamepadInput: true,
@@ -177,6 +182,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
   setVelocityShading: (velocityShading) => set({ velocityShading }),
   setKeyboardFollowsPlayback: (keyboardFollowsPlayback) => set({ keyboardFollowsPlayback }),
+  setPlayView: (playView) => set({ playView }),
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),

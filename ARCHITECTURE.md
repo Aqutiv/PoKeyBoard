@@ -2,7 +2,7 @@
 
 ## Principles
 
-1. **The audio clock owns time.** `AudioContext.currentTime` is the only timing authority. React never schedules sound; components read clocks on one shared animation-frame loop (`app/frameClock.ts`), which runs only while something on screen is moving — key lights (each in its hand's shade, as deep as its note is played) and the pedal cue are drawn straight onto the keys from it, and React renders only when a readout changes.
+1. **The audio clock owns time.** `AudioContext.currentTime` is the only timing authority. React never schedules sound; components read clocks on one shared animation-frame loop (`app/frameClock.ts`), which runs only while something on screen is moving — key lights (each in its hand's shade, as deep as its note is played) and the pedal cue are drawn straight onto the keys from it, the falling notes onto their canvas, and React renders only when a readout changes.
 2. **Services are module singletons outside React.** The audio engine, transport controller, metronome, scrub controller, persistence, and lifecycle services are plain objects; React subscribes via `useSyncExternalStore` with referentially stable subscribe functions and stable snapshots.
 3. **One piano, two contexts.** Live playback and offline export share the same sample bank (decoded `AudioBuffer`s), the same graph factory, and the same envelope constants — so exports sound like the performance.
 4. **Structured events are the source of truth.** A take is JSON note/pedal events (see TAKE_FORMAT.md); audio is always derived, never recorded from a microphone.
@@ -57,7 +57,12 @@ src/
     settings/   SettingsPage (playing, appearance, app, storage, diagnostics,
                 reset), PianoSection (piano choice with its own offline pack,
                 levels, room, tone)
-    play/       PlayPage, SaveStatusBadge
+    waterfall/  waterfallLayout (pure: where each note falls at one moment,
+                folded round a loop), waterfallPalette (the lit keys' colours,
+                mixed in OKLab as keyboard.css mixes them), waterfallPainter
+                (canvas), WaterfallView (on the frame clock while the notes move)
+    play/       PlayPage, PlayViewSwitch and playView (score or falling notes),
+                SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
   state/        zustand stores: take, settings, export-ui
@@ -324,7 +329,7 @@ Export caching (MP3 only; a FLAC export is never cached): `takeHash` hashes only
 
 ## Theming
 
-Two named themes share one token vocabulary in `src/themes.css`: Conservatory (dark) is the default on `:root`, Ivory recital (light) overrides colors under `html[data-theme='light']`; `color-scheme` flips with them so native controls follow. The preference (`dark | light | system`, default dark) is an ordinary setting (store + zod schema + Dexie row). `src/app/theme.ts` resolves preference × `prefers-color-scheme`, stamps `html[data-theme]`, updates the `theme-color` meta, and mirrors the preference to `localStorage['pokeyboard.theme']`; a tiny inline script in `index.html` reads that mirror **before first paint** so a light-theme user never flashes dark while Dexie loads (the controller deliberately applies nothing at init — the first store emit after hydration reconciles mirror vs Dexie truth, Dexie winning). The live score canvas can't read CSS variables at draw time, so `SCORE_PALETTES` in `scoreRenderer.ts` duplicates both palettes (kept in sync by comment convention) and the theme joins `MusicScore`'s redraw signature; sheet/PDF engraving stays print-monochrome and is untouched by theming. A lit key's tokens (`--key-*-active-*`, `--key-*-left-*`) are the loudest note's colours; `keyboard.css` mixes each toward the key's own colour in OKLab by how hard the note was played (`--live-shade` and `--take-shade`, from `keyShading.ts`: the velocity that sounds, as `SoundingNotes.keysAt`, the scrub flashes and `AudioEngine.getActiveVelocities` report it), inside `@supports (color-mix)` so a browser without it lights keys at full strength. Display type is a self-hosted Fraunces 600 latin subset (`@fontsource/fraunces`), precached by the existing `woff2` glob.
+Two named themes share one token vocabulary in `src/themes.css`: Conservatory (dark) is the default on `:root`, Ivory recital (light) overrides colors under `html[data-theme='light']`; `color-scheme` flips with them so native controls follow. The preference (`dark | light | system`, default dark) is an ordinary setting (store + zod schema + Dexie row). `src/app/theme.ts` resolves preference × `prefers-color-scheme`, stamps `html[data-theme]`, updates the `theme-color` meta, and mirrors the preference to `localStorage['pokeyboard.theme']`; a tiny inline script in `index.html` reads that mirror **before first paint** so a light-theme user never flashes dark while Dexie loads (the controller deliberately applies nothing at init — the first store emit after hydration reconciles mirror vs Dexie truth, Dexie winning). The live score canvas can't read CSS variables at draw time, so `SCORE_PALETTES` in `scoreRenderer.ts` duplicates both palettes (kept in sync by comment convention) and the theme joins `MusicScore`'s redraw signature; sheet/PDF engraving stays print-monochrome and is untouched by theming. A lit key's tokens (`--key-*-active-*`, `--key-*-left-*`) are the loudest note's colours; `keyboard.css` mixes each toward the key's own colour in OKLab by how hard the note was played (`--live-shade` and `--take-shade`, from `keyShading.ts`: the velocity that sounds, as `SoundingNotes.keysAt`, the scrub flashes and `AudioEngine.getActiveVelocities` report it), inside `@supports (color-mix)` so a browser without it lights keys at full strength. The falling notes' canvas cannot read the tokens either: `WATERFALL_PALETTES` in `waterfallPalette.ts` copies the key colours (a test reads `themes.css` and compares), and `mixOklab` mixes them as `color-mix(in oklab, …)` does — pinned against Chromium's own mixes — so each bar is the colour its key lights with. Display type is a self-hosted Fraunces 600 latin subset (`@fontsource/fraunces`), precached by the existing `woff2` glob.
 
 ## Audio encoding
 
