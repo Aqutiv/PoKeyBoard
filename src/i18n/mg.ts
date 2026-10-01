@@ -588,7 +588,7 @@ export const mg: Messages = {
     couldNotCheck: 'Tsy afaka nanamarina ny fonosana santionany.',
     downloadFailed: 'Tsy nahomby ny fakàna.',
     downloading: ({ loaded, total }) => `Maka… ${loaded} / ${total}`,
-    fullOffline: ({ size }) => `✓ Misy tsy an-tserasera (${size})`,
+    offlineReady: '✓ Tsy an-tserasera',
     persistGranted: 'Nomena ny fitehirizana maharitra — tsy hofafan’ny navigatera ny rakitrao.',
     persistNotGranted:
       'Tsy nomena ny fitehirizana maharitra; mety hofafan’ny navigatera ny angona rehefa tsy ampy toerana.',

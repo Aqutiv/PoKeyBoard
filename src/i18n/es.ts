@@ -581,7 +581,7 @@ export const es: Messages = {
     couldNotCheck: 'No se pudo comprobar el paquete de muestras.',
     downloadFailed: 'Error en la descarga.',
     downloading: ({ loaded, total }) => `Descargando… ${loaded} / ${total}`,
-    fullOffline: ({ size }) => `✓ Disponible sin conexión (${size})`,
+    offlineReady: '✓ Sin conexión',
     persistGranted:
       'Almacenamiento persistente concedido: el navegador evitará descartar tus tomas.',
     persistNotGranted:

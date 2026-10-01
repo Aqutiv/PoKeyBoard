@@ -582,7 +582,7 @@ export const en: Messages = {
     couldNotCheck: 'Could not check the sample pack.',
     downloadFailed: 'Download failed.',
     downloading: ({ loaded, total }) => `Downloading… ${loaded} / ${total}`,
-    fullOffline: ({ size }) => `✓ Available offline (${size})`,
+    offlineReady: '✓ Offline',
     persistGranted: 'Persistent storage granted — the browser will avoid evicting your takes.',
     persistNotGranted: 'Persistent storage not granted; the browser may clear data under pressure.',
     persistUnknown: 'Persistent storage status unknown in this browser.',

@@ -609,7 +609,8 @@ export interface Messages {
     couldNotCheck: string;
     downloadFailed: string;
     downloading: (p: { loaded: string; total: string }) => string;
-    fullOffline: (p: { size: string }) => string;
+    /** A piano downloaded for offline use, beside its Delete button. */
+    offlineReady: string;
     persistGranted: string;
     persistNotGranted: string;
     persistUnknown: string;

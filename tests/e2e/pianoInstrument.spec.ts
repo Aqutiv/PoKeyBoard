@@ -258,6 +258,24 @@ test.describe('choosing a piano', () => {
       ).toHaveCount(1);
     }
 
+    // The download sits at the end of its piano's name line, showing its size;
+    // the button's name says the rest.
+    for (const name of ['Salamander', 'Wurlitzer']) {
+      const card = page
+        .locator('.piano-card')
+        .filter({ has: page.locator('strong', { hasText: new RegExp(`^${name}$`) }) });
+      const download = card.getByRole('button', { name: /^Download / });
+      await expect(download).toHaveText(/^\d+\.\d MB$/);
+      const middle = async (box: Promise<{ y: number; height: number } | null>) => {
+        const { y, height } = (await box)!;
+        return y + height / 2;
+      };
+      const offset =
+        (await middle(download.boundingBox())) -
+        (await middle(card.locator('strong').boundingBox()));
+      expect(Math.abs(offset)).toBeLessThan(4);
+    }
+
     // The description belongs to the choice, so no second row repeats it.
     await expect(page.getByText('Yamaha C5 concert grand, bright and close')).toHaveCount(1);
     await expect(page.getByText('Yamaha C3 grand, warm and intimate')).toHaveCount(1);

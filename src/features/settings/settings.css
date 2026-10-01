@@ -238,10 +238,18 @@
 .piano-card {
   /* Holds the ring a change of piano draws round the card. */
   position: relative;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  padding: 10px 12px;
+  /* The name's line ends with the steady offline controls (Download, or
+     Offline and Delete); the description runs full width beneath it, and a
+     download's progress or failure on a line of its own below that. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'choice offline'
+    'desc desc'
+    'more more';
+  align-items: center;
+  gap: 2px 10px;
+  padding: 6px 8px 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   background: var(--surface-1);
@@ -286,58 +294,79 @@
 }
 
 .piano-card__choice {
+  grid-area: choice;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
-  min-height: var(--touch-target);
+  min-width: 0;
+  min-height: 34px;
   /* The takes and library cards are buttons and get this for free; the piano
-     card's target is a label, so it has to say so. The offline row beside it
-     is not a selection target, which is why this sits on the label only. */
+     card's targets are labels (the name's and the description's), so they
+     have to say so. The offline controls are not selection targets. */
   cursor: pointer;
 }
 
-.piano-card__choice:has(input:disabled) {
+.piano-card__choice:has(input:disabled),
+.piano-card:has(input:disabled) .piano-card__desc {
   cursor: default;
 }
 
 .piano-card__choice input[type='radio'] {
-  /* Optically align the control with the name line, not the label box. */
-  margin-top: 3px;
   flex: none;
-}
-
-.piano-card__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .piano-card__name {
   font-weight: 600;
 }
 
+.piano-card__offline {
+  grid-area: offline;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.piano-card__download {
+  gap: 4px;
+}
+
+/* Delete, as its icon alone: its tooltip and accessible name say whose. */
+.piano-card__icon-button {
+  width: 34px;
+  padding: 0;
+}
+
+/* Indented past the radio, so it reads as part of the choice. */
 .piano-card__desc {
+  grid-area: desc;
+  padding-left: 30px;
   font-size: 13px;
   color: var(--text-dim);
   line-height: 1.4;
+  cursor: pointer;
 }
 
-.piano-card__offline {
+.piano-card__more {
+  grid-area: more;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  /* Indent past the radio so the status reads as part of the choice. */
+  margin-top: 6px;
   padding-left: 30px;
   font-size: 13px;
 }
 
 .piano-card__progress {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
+  flex-wrap: nowrap;
   min-width: 0;
+}
+
+.piano-card__progress progress {
+  flex: 1;
+  width: auto;
+  min-width: 64px;
 }
 
 .settings__hint {

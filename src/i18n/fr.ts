@@ -583,7 +583,7 @@ export const fr: Messages = {
     couldNotCheck: 'Impossible de vérifier le pack d’échantillons.',
     downloadFailed: 'Échec du téléchargement.',
     downloading: ({ loaded, total }) => `Téléchargement… ${loaded} / ${total}`,
-    fullOffline: ({ size }) => `✓ Disponible hors ligne (${size})`,
+    offlineReady: '✓ Hors ligne',
     persistGranted: 'Stockage persistant accordé — le navigateur évitera de supprimer vos prises.',
     persistNotGranted:
       'Stockage persistant non accordé ; le navigateur peut effacer les données en cas de manque d’espace.',
