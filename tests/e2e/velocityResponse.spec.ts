@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { gotoAppReady, setCountIn, transport } from './helpers';
+import { chooseSettingsSection, gotoAppReady, setCountIn, transport } from './helpers';
 
 /**
  * Every note-on in a file as [key, velocity] — the same scan export-midi.spec.ts
@@ -78,6 +78,7 @@ test.describe('velocity response', () => {
     // access; granted up front, so no prompt is left hanging.
     await context.grantPermissions(['midi']);
     await page.goto('/#/settings');
+    await chooseSettingsSection(page, 'Playing');
 
     const sensitivity = page.getByRole('radiogroup', { name: 'Touch sensitivity' });
     await expect(sensitivity.getByRole('radio', { name: 'Normal' })).toBeChecked();

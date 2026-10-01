@@ -18,6 +18,7 @@ import type {
 import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
 import { DEFAULT_PLAY_VIEW, type PlayView } from '@/features/play/playView';
+import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '@/features/settings/sections';
 import { DEFAULT_WATERFALL_SECONDS, type WaterfallSeconds } from '@/features/waterfall/fallSpeed';
 import type { PlaybackMode, RecordMode } from '@/features/transport/modes';
 import type { PaperSize } from '@/features/notation/sheetLayout';
@@ -89,6 +90,8 @@ export interface SettingsState {
   libraryFolder: LibraryFolderId;
   /** The Learn level last browsed, restored on the next visit. */
   learnLevel: LearnLevelId;
+  /** The Settings section last shown, restored on the next visit and kept through Reset. */
+  settingsSection: SettingsSectionId;
   /** What a recording pass does to what is already there. */
   recordMode: RecordMode;
   /** Straight-through playback, or training on one hand (or both). */
@@ -125,6 +128,7 @@ export interface SettingsState {
   setAudioExportLoudness(loudness: LoudnessMode): void;
   setLibraryFolder(folder: LibraryFolderId): void;
   setLearnLevel(level: LearnLevelId): void;
+  setSettingsSection(section: SettingsSectionId): void;
   setRecordMode(mode: RecordMode): void;
   setPlaybackMode(mode: PlaybackMode): void;
   resetSettings(): void;
@@ -162,6 +166,7 @@ export const SETTINGS_DEFAULTS = {
   audioExportLoudness: 'normalized' as LoudnessMode,
   libraryFolder: DEFAULT_LIBRARY_FOLDER,
   learnLevel: DEFAULT_LEARN_LEVEL,
+  settingsSection: DEFAULT_SETTINGS_SECTION,
   recordMode: 'overdub' as RecordMode,
   playbackMode: 'simple' as PlaybackMode,
 };
@@ -210,10 +215,13 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setAudioExportLoudness: (audioExportLoudness) => set({ audioExportLoudness }),
   setLibraryFolder: (libraryFolder) => set({ libraryFolder }),
   setLearnLevel: (learnLevel) => set({ learnLevel }),
+  setSettingsSection: (settingsSection) => set({ settingsSection }),
   setRecordMode: (recordMode) => set({ recordMode }),
   setPlaybackMode: (playbackMode) => set({ playbackMode }),
   resetSettings: () => {
     void audioEngine.setInstrument(SETTINGS_DEFAULTS.pianoInstrument);
-    set({ ...SETTINGS_DEFAULTS });
+    // Everything but where the player is: Reset is pressed from a Settings
+    // section, and is no reason to leave it.
+    set((state) => ({ ...SETTINGS_DEFAULTS, settingsSection: state.settingsSection }));
   },
 }));

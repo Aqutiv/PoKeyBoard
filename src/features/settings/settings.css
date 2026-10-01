@@ -1,21 +1,89 @@
+/* Section switch: one segment per section, filling the page width. Twin of
+   .learn-levels, which mirrors the library's .library-folders — keep the three
+   in step. Four segments at 320px leave ~69px each, ~57px of it for text, so
+   the type steps down on narrow screens as Learn's does. */
+.settings-sections {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+}
+
+.settings-sections__option {
+  flex: 1;
+  min-width: 0;
+  min-height: 40px;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+  padding: 0 6px;
+  border-radius: calc(var(--radius-m) - 2px);
+  color: var(--text-dim);
+  font-size: clamp(11px, 3vw, 14px);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.settings-sections__option.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* An update waiting: above the switch, so it shows on every section. */
+.settings-update {
+  display: flex;
+  flex-wrap: wrap;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-bottom: 12px;
+  padding: 8px 8px 8px 12px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+  font-size: 14px;
+}
+
 .settings__scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding-bottom: 24px;
+  /* 4px of room either side, taken back by the margin so nothing moves: focus
+     rings and the ring of a piano switch are drawn outside their controls, and
+     the scroller would clip them. */
+  margin-inline: -4px;
+  padding: 0 4px 24px;
+  /* Keeps a row reached by Tab from settling under a group's sticky heading. */
+  scroll-padding-top: 44px;
 }
 
-.settings__section {
-  font-size: 12px;
-  font-weight: 650;
+/* Sticks to the top of the scroller while its group passes beneath it, hence
+   the opaque page background. Twin of Learn's .learn-part__heading; the inline
+   margin and padding also cover the scroller's side room. */
+.settings-group__heading {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  margin: 0 -4px;
+  padding: 14px 6px 6px;
+  background: var(--surface-0);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--text-faint);
-  margin: 22px 0 8px;
+  color: var(--text-dim);
 }
 
-.settings__section:first-child {
-  margin-top: 4px;
+.settings-group:first-child .settings-group__heading {
+  padding-top: 2px;
 }
 
 .setting-row {
@@ -73,17 +141,76 @@
   border-radius: var(--radius-m);
 }
 
-.setting-row--stack {
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
+/* A few short choices on one row (ChoiceSwitch): the name, then segments
+   like the section switch's, smaller. The segments wrap beneath the name
+   when the two do not fit one line, and only then shrink, with ellipsis. */
+.choice-row {
+  flex-wrap: wrap;
+  row-gap: 6px;
 }
 
-.setting-row--stack label {
+.choice-switch {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+}
+
+.choice-switch__option {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
   align-items: center;
-  gap: 8px;
-  min-height: 30px;
+  justify-content: center;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: calc(var(--radius-m) - 2px);
+  color: var(--text-dim);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.choice-switch__option.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* The radio itself, spread invisibly over its segment: it takes the taps,
+   the focus and the arrow keys. Outranks `.setting-row input[type='radio']`. */
+.setting-row .choice-switch__option input[type='radio'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.choice-switch__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The radio is invisible, so its segment shows the focus — inside its edge,
+   which the scroller would otherwise clip at the row's end. */
+.choice-switch__option:has(input:focus-visible) {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+
+.choice-switch__option.is-selected:has(input:focus-visible) {
+  outline-color: var(--accent-contrast);
 }
 
 /* Buttons at the end of a row, such as the MIDI calibration's. */
@@ -111,10 +238,18 @@
 .piano-card {
   /* Holds the ring a change of piano draws round the card. */
   position: relative;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 6px;
-  padding: 10px 12px;
+  /* The name's line ends with the steady offline controls (Download, or
+     Offline and Delete); the description runs full width beneath it, and a
+     download's progress or failure on a line of its own below that. */
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'choice offline'
+    'desc desc'
+    'more more';
+  align-items: center;
+  gap: 2px 10px;
+  padding: 6px 8px 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-m);
   background: var(--surface-1);
@@ -150,61 +285,88 @@
     background: var(--surface-3);
     border-color: var(--accent-strong);
   }
+
+  .settings-sections__option:not(.is-selected):hover,
+  .choice-switch__option:not(.is-selected):hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
 }
 
 .piano-card__choice {
+  grid-area: choice;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
-  min-height: var(--touch-target);
+  min-width: 0;
+  min-height: 34px;
   /* The takes and library cards are buttons and get this for free; the piano
-     card's target is a label, so it has to say so. The offline row beside it
-     is not a selection target, which is why this sits on the label only. */
+     card's targets are labels (the name's and the description's), so they
+     have to say so. The offline controls are not selection targets. */
   cursor: pointer;
 }
 
-.piano-card__choice:has(input:disabled) {
+.piano-card__choice:has(input:disabled),
+.piano-card:has(input:disabled) .piano-card__desc {
   cursor: default;
 }
 
 .piano-card__choice input[type='radio'] {
-  /* Optically align the control with the name line, not the label box. */
-  margin-top: 3px;
   flex: none;
-}
-
-.piano-card__text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
 }
 
 .piano-card__name {
   font-weight: 600;
 }
 
+.piano-card__offline {
+  grid-area: offline;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.piano-card__download {
+  gap: 4px;
+}
+
+/* Delete, as its icon alone: its tooltip and accessible name say whose. */
+.piano-card__icon-button {
+  width: 34px;
+  padding: 0;
+}
+
+/* Indented past the radio, so it reads as part of the choice. */
 .piano-card__desc {
+  grid-area: desc;
+  padding-left: 30px;
   font-size: 13px;
   color: var(--text-dim);
   line-height: 1.4;
+  cursor: pointer;
 }
 
-.piano-card__offline {
+.piano-card__more {
+  grid-area: more;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  /* Indent past the radio so the status reads as part of the choice. */
+  margin-top: 6px;
   padding-left: 30px;
   font-size: 13px;
 }
 
 .piano-card__progress {
-  display: flex;
-  flex: 1;
-  align-items: center;
-  gap: 8px;
+  flex-wrap: nowrap;
   min-width: 0;
+}
+
+.piano-card__progress progress {
+  flex: 1;
+  width: auto;
+  min-width: 64px;
 }
 
 .settings__hint {
@@ -227,6 +389,23 @@
 .settings__prompt {
   color: var(--text);
   font-weight: 600;
+}
+
+/* The device details fold, drawn like Learn's "Upcoming lessons" one. Its
+   focus ring sits inside, where the scroller cannot clip it. */
+.settings-details > summary {
+  cursor: pointer;
+  padding: 12px 2px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.settings-details > summary:focus-visible {
+  outline-offset: -2px;
+}
+
+.settings-details[open] > summary {
+  padding-bottom: 6px;
 }
 
 .caps-list {

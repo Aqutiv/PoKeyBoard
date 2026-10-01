@@ -82,7 +82,7 @@ export interface ExportHashInput {
   metronomeVolume: number;
   /** Normalized or as played; see `LoudnessMode`. */
   loudness: string;
-  /** Whether a grand's tone follows the touch (Settings → Piano). */
+  /** Whether a grand's tone follows the touch (Settings → Sound). */
   toneFollowsTouch: boolean;
 }
 

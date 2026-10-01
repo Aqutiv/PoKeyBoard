@@ -76,6 +76,31 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).reverbRoom).toBe('hall');
   });
 
+  it('remembers the Settings section, Sound until another is shown, and keeps it through Reset', async () => {
+    expect(SETTINGS_DEFAULTS.settingsSection).toBe('sound');
+    // Stored beside its peers, the library folder and the Learn level.
+    const keys = Object.keys(SETTINGS_DEFAULTS);
+    expect(keys.indexOf('settingsSection')).toBe(keys.indexOf('learnLevel') + 1);
+
+    useSettingsStore.getState().setSettingsSection('app');
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).settingsSection).toBe('app');
+
+    await db.settings.put({ key: 'settingsSection', value: 'piano' });
+    expect((await loadSettings()).settingsSection).toBeUndefined();
+    await restoreSettingsFromBackup({ settingsSection: 'display' });
+    expect((await loadSettings()).settingsSection).toBe('display');
+
+    // Reset is pressed on App: everything else goes back, and the page stays.
+    useSettingsStore.setState({ settingsSection: 'app', learnLevel: 'advanced', theme: 'light' });
+    useSettingsStore.getState().resetSettings();
+    expect(useSettingsStore.getState()).toMatchObject({
+      settingsSection: 'app',
+      learnLevel: 'beginner',
+      theme: 'dark',
+    });
+  });
+
   it('remembers the audio export’s choices, MP3 at 128 kbps and Even until one is made', async () => {
     expect(SETTINGS_DEFAULTS).toMatchObject({
       audioExportFormat: 'mp3',

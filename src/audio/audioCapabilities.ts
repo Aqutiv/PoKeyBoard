@@ -1,4 +1,4 @@
-/** Typed capability snapshot per spec §3, shown in Settings diagnostics. */
+/** Typed capability snapshot per spec §3, shown in Settings → App → Device details. */
 export interface AppCapabilities {
   standaloneDisplayMode: boolean;
   beforeInstallPrompt: boolean;

@@ -1,8 +1,10 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import {
+  chooseSettingsSection,
   gotoAppReady,
   nav,
+  openSettings,
   persistedSetting,
   recordShortTake,
   setCountIn,
@@ -250,18 +252,19 @@ test.describe('falling notes', () => {
     await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
     await showFallingNotes(page);
     // Names off, so only a number can ink C4's foot; numbers are off to start.
-    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await openSettings(page, 'Display');
     await page.getByLabel('Note names on keys and falling notes').uncheck();
     const numbers = page.getByLabel('Finger numbers on falling notes');
     await expect(numbers).not.toBeChecked();
     await nav(page).getByRole('button', { name: 'Play', exact: true }).click();
     await expect.poll(() => inkAtFoot(page, 'C4')).toBe(0);
 
-    await nav(page).getByRole('button', { name: 'Settings' }).click();
+    await openSettings(page, 'Display');
     await numbers.check();
     await expect.poll(() => persistedSetting(page, 'showFingerNumbers')).toBe(true);
     await expect.poll(() => persistedSetting(page, 'showNoteLabels')).toBe(false);
     await page.reload();
+    await chooseSettingsSection(page, 'Display');
     await expect(numbers).toBeChecked();
 
     await nav(page).getByRole('button', { name: 'Play', exact: true }).click();

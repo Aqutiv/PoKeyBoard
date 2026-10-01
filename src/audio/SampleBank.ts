@@ -501,7 +501,7 @@ export class SampleBank {
    * plays it at the brightness its velocity asks for (`voiceTone`): a
    * recording of the layer asked for follows its ramp, and a stand-in from
    * another layer during a partial load plays as near that tone as it can.
-   * With `tone: false` (Settings → Piano → Tone follows touch, off) it gets
+   * With `tone: false` (Settings → Sound → Tone follows touch, off) it gets
    * neither the lowpass nor its make-up, and plays its recording open, as every
    * note did before the ramps.
    *

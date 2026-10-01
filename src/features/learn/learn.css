@@ -1,5 +1,6 @@
 /* Level switch: one segment per level, filling the page width. Mirrors the
-   library folder switch so the two browsing surfaces feel like one app. */
+   library folder switch so the two browsing surfaces feel like one app; Settings'
+   section switch is a third twin — keep the three in step. */
 .learn-levels {
   display: flex;
   flex-shrink: 0;
