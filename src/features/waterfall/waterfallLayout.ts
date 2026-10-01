@@ -1,7 +1,9 @@
 import { noteHand, type Hand } from '@/domain/hands';
 import { isSilentNote, lowerBoundByStart } from '@/domain/noteEvents';
-import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
+import { MAX_PLAYBACK_SPEED, type NoteEvent, type PlaybackLoop } from '@/domain/takeTypes';
 import type { KeyboardLayout, KeyLayout } from '@/features/keyboard/keyboardGeometry';
+import { MIN_LOOP_MS } from '@/features/transport/transportClock';
+import { SLOWEST_FALL_SECONDS } from './fallSpeed';
 
 /**
  * Where each note of a take falls toward its key: the falling-notes view's
@@ -26,10 +28,12 @@ const WHITE_INSET_PX = 2;
 const WHITE_INSET_SHARE = 0.06;
 
 /**
- * The most passes of a loop drawn above its end. A loop is at least
- * `MIN_LOOP_MS` long and the view only seconds tall, so this is only a guard.
+ * The most passes of a loop drawn above its end: enough to fill the tallest
+ * view — the slowest fall, at the fastest playback — with the shortest loop
+ * playback will play, and a guard against anything more.
  */
-export const MAX_LOOP_PASSES = 64;
+export const MAX_LOOP_PASSES =
+  Math.ceil((SLOWEST_FALL_SECONDS * 1000 * MAX_PLAYBACK_SPEED) / MIN_LOOP_MS) + 1;
 
 export interface WaterfallTimeline {
   /** The moment at the key tops, in take ms; before 0 while a recording counts in. */

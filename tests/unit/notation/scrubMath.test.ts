@@ -125,4 +125,22 @@ describe('getCrossedNoteOnsetsRound', () => {
   it('goes back across the top to the pass before, crossing the note on the top', () => {
     expect(ids(800, 700)).toEqual(['b']);
   });
+
+  it('keeps only the last of them within its limit, nearest the landing', () => {
+    const crossed = getCrossedNoteOnsetsRound(LOOP, 600, 1800, NOTES, 5);
+    expect(crossed.map((n) => n.id)).toEqual(['b', 'c1', 'c2', 'c3', 'b']);
+  });
+
+  it('never walks the passes its limit leaves out, however many a movement goes round', () => {
+    // Ten onsets a millisecond round a 100 ms loop, and 10,000 passes in one movement.
+    const dense: NoteEvent[] = [];
+    for (let i = 0; i < 1_000; i += 1) dense.push(note(`d${i}`, Math.floor(i / 10)));
+    const shortest = { startMs: 0, endMs: 100 };
+    const started = performance.now();
+    const crossed = getCrossedNoteOnsetsRound(shortest, 50, 1_000_050, dense, 24);
+    const elapsed = performance.now() - started;
+    expect(crossed).toHaveLength(24);
+    expect(crossed[crossed.length - 1]!.startMs).toBe(50);
+    expect(elapsed).toBeLessThan(50);
+  });
 });

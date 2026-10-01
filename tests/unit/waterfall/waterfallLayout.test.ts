@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
+import { MIN_LOOP_MS } from '@/features/transport/transportClock';
 import {
   firstReaching,
   layoutWaterfall,
@@ -208,6 +209,15 @@ describe('layoutWaterfall', () => {
       ];
       expect(atKeys(1000)).toEqual(unstruck);
       expect(atKeys(1050)).toEqual(unstruck);
+    });
+
+    it('fills the tallest view with passes of the shortest loop', () => {
+      // The slowest fall at the fastest playback shows 12 s of the take.
+      const shortest = { startMs: 0, endMs: MIN_LOOP_MS };
+      const scene = layoutWaterfall([note(60, 0, 50)], at(0, 12_000, shortest), VIEW);
+      // A restart every 100 ms, the last 2.5 px under the top edge.
+      expect(scene.restartYs).toHaveLength(119);
+      expect(Math.min(...scene.restartYs)).toBeCloseTo(2.5);
     });
 
     it('draws no more than its cap of passes, however short the loop', () => {

@@ -119,7 +119,13 @@ class ScrubController {
     transportController.setScrubTime(nextTimeMs);
 
     let crossed = loop
-      ? getCrossedNoteOnsetsRound(loop, previousVirtualMs, nextVirtualMs, this.sortedNotes)
+      ? getCrossedNoteOnsetsRound(
+          loop,
+          previousVirtualMs,
+          nextVirtualMs,
+          this.sortedNotes,
+          MAX_PREVIEW_NOTES,
+        )
       : getCrossedNoteOnsets(previousVirtualMs, nextVirtualMs, this.sortedNotes);
     if (crossed.length > MAX_PREVIEW_NOTES) {
       // Keep the notes nearest the landing position (end of movement order).

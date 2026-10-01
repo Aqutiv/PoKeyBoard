@@ -68,35 +68,42 @@ export function getCrossedNoteOnsets(
  * folds back to its top (`foldIntoLoop`). Each pass crosses the loop's own
  * notes, from its top, which plays, up to its end, which does not; the onsets
  * come in movement order, as `getCrossedNoteOnsets` gives them.
+ *
+ * Only the last `limit` of them, nearest where the movement lands: a long one
+ * round a short loop crosses its notes many times over, and the passes whose
+ * notes would be dropped are never walked.
  */
 export function getCrossedNoteOnsetsRound(
   loop: PlaybackLoop,
   fromVirtualMs: number,
   toVirtualMs: number,
   sortedNotes: readonly NoteEvent[],
+  limit = Number.POSITIVE_INFINITY,
 ): NoteEvent[] {
+  const lastOf = (notes: NoteEvent[]) =>
+    notes.length > limit ? notes.slice(notes.length - limit) : notes;
   const fromPass = loopPassAt(loop, fromVirtualMs);
   const toPass = loopPassAt(loop, toVirtualMs);
   const from = foldIntoLoop(loop, fromVirtualMs);
   const to = foldIntoLoop(loop, toVirtualMs);
-  if (fromPass === toPass) return getCrossedNoteOnsets(from, to, sortedNotes);
+  if (fromPass === toPass) return lastOf(getCrossedNoteOnsets(from, to, sortedNotes));
   // Half a millisecond inside each edge: onsets fall on whole milliseconds,
   // so a pass crosses the note on the loop's top and never one on its end.
   const top = loop.startMs - 0.5;
   const end = loop.endMs - 0.5;
-  const crossed: NoteEvent[] = [];
-  if (toPass > fromPass) {
-    crossed.push(...getCrossedNoteOnsets(from, end, sortedNotes));
-    for (let pass = fromPass + 1; pass < toPass; pass += 1) {
-      crossed.push(...getCrossedNoteOnsets(top, end, sortedNotes));
-    }
-    crossed.push(...getCrossedNoteOnsets(top, to, sortedNotes));
-  } else {
-    crossed.push(...getCrossedNoteOnsets(from, top, sortedNotes));
-    for (let pass = fromPass - 1; pass > toPass; pass -= 1) {
-      crossed.push(...getCrossedNoteOnsets(end, top, sortedNotes));
-    }
-    crossed.push(...getCrossedNoteOnsets(end, to, sortedNotes));
+  const forward = toPass > fromPass;
+  // Out to the edge of the pass it starts in, round whole passes, and on to
+  // where it lands; gathered from the landing back, as far as the limit.
+  const leaving = getCrossedNoteOnsets(from, forward ? end : top, sortedNotes);
+  const whole = getCrossedNoteOnsets(forward ? top : end, forward ? end : top, sortedNotes);
+  const landing = getCrossedNoteOnsets(forward ? top : end, to, sortedNotes);
+  const parts = [landing];
+  let count = landing.length;
+  const wholePasses = Math.abs(toPass - fromPass) - 1;
+  for (let pass = 0; pass < wholePasses && count < limit && whole.length > 0; pass += 1) {
+    parts.push(whole);
+    count += whole.length;
   }
-  return crossed;
+  if (count < limit) parts.push(leaving);
+  return lastOf(parts.reverse().flat());
 }
