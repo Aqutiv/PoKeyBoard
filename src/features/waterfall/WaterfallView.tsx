@@ -38,11 +38,15 @@ const MAX_DPR = 2;
 /** How long the glow on a note a Training hold waits for takes to swell and ebb. */
 const GLOW_PERIOD_MS = 1200;
 
-/** Whether the reader asked for less motion: the glow then holds still. */
-function prefersLessMotion(): boolean {
+/** The reader's ask for less motion, which holds the glow still; null where a browser cannot say. */
+function lessMotionQuery(): MediaQueryList | null {
   return typeof window.matchMedia === 'function'
-    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
-    : false;
+    ? window.matchMedia('(prefers-reduced-motion: reduce)')
+    : null;
+}
+
+function prefersLessMotion(): boolean {
+  return lessMotionQuery()?.matches ?? false;
 }
 
 /** How bright the glow is at `nowMs`: swelling and ebbing, or steady for less motion. */
@@ -285,9 +289,14 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     sync();
     const unsubscribeTransport = transportController.subscribeState(sync);
     const unsubscribeTheme = themeController.subscribe(drawSoon);
+    // Asking for less motion partway through a hold stills its glow, and
+    // asking no longer sets it going again.
+    const lessMotion = lessMotionQuery();
+    lessMotion?.addEventListener('change', sync);
     return () => {
       unsubscribeTransport();
       unsubscribeTheme();
+      lessMotion?.removeEventListener('change', sync);
       stopFrames?.();
       if (pending !== 0) cancelAnimationFrame(pending);
       wakeRef.current = () => {};
