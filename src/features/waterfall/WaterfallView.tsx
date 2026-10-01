@@ -42,26 +42,26 @@ function moves(state: TransportState): boolean {
  * take when it plays slower. While a recording counts in, the clock already
  * runs toward the recording's start, so the take's notes fall in to meet it;
  * recording itself runs straight through at the take's own speed. A run falls
- * at its own rate and round its own loop, from where its pass began. A scrub
- * stands where it is dragged, and a transport at rest shows what pressing play
- * would play: from past a loop's end, the loop from its top.
+ * at its own rate and round its own loop, and what it does not play — a note
+ * held from before where its pass began — falls as an outline. A scrub shows
+ * the take as written where it is dragged, and a transport at rest shows what
+ * pressing play would play: from past a loop's end, the loop from its top.
  */
 function timelineNow(loopAtRest: PlaybackLoop | null): WaterfallTimeline {
   const state = transportController.getState();
   const { clock } = transportController;
-  if (state === 'countIn') {
-    const nowMs = clock.currentTakeMs();
-    return { nowMs, spanMs: FALL_SPAN_MS, loop: null, passStartMs: nowMs };
-  }
+  const passStartMs = transportController.getPassStartMs();
+  if (state === 'countIn')
+    return { nowMs: clock.currentTakeMs(), spanMs: FALL_SPAN_MS, loop: null, passStartMs };
   const nowMs = transportController.getPlayheadMs();
-  if (state === 'recording') return { nowMs, spanMs: FALL_SPAN_MS, loop: null, passStartMs: nowMs };
-  if (state === 'playing') {
-    const passStartMs = transportController.getPassStartMs();
+  if (state === 'recording') return { nowMs, spanMs: FALL_SPAN_MS, loop: null, passStartMs };
+  if (state === 'playing')
     return { nowMs, spanMs: FALL_SPAN_MS * clock.rate, loop: clock.loop, passStartMs };
-  }
   const spanMs = FALL_SPAN_MS * transportController.getSpeed();
-  const restMs = state === 'scrubbing' ? nowMs : transportController.getPassStartMs();
-  return { nowMs: restMs, spanMs, loop: loopAtRest, passStartMs: restMs };
+  if (state === 'scrubbing') {
+    return { nowMs, spanMs, loop: loopAtRest, passStartMs: Number.NEGATIVE_INFINITY };
+  }
+  return { nowMs: passStartMs, spanMs, loop: loopAtRest, passStartMs };
 }
 
 /**

@@ -31,7 +31,7 @@ function at(
   nowMs: number,
   spanMs = 3000,
   loop: PlaybackLoop | null = null,
-  passStartMs = nowMs,
+  passStartMs = Number.NEGATIVE_INFINITY,
 ): WaterfallTimeline {
   return { nowMs, spanMs, loop, passStartMs };
 }
@@ -137,6 +137,15 @@ describe('layoutWaterfall', () => {
     expect(layoutWaterfall([], at(0), wide).octaveXs).toEqual([(7 * 700) / 21, (14 * 700) / 21]);
   });
 
+  it('outlines a note held across where its pass began, which playback never strikes', () => {
+    const notes = [note(60, 0, 1000), note(64, 600, 300)];
+    const scene = layoutWaterfall(notes, at(500, 3000, null, 500), VIEW);
+    expect(scene.bars.map((bar) => [bar.note.midi, bar.silent, bar.cutBottom])).toEqual([
+      [60, true, true],
+      [64, false, false],
+    ]);
+  });
+
   it('falls notes in toward a recording’s start while it counts in', () => {
     const bar = layoutWaterfall([note(64, 0, 500)], at(-1000), VIEW).bars[0];
     expect(bar?.bottom).toBeCloseTo(200);
@@ -161,42 +170,44 @@ describe('layoutWaterfall', () => {
       expect(scene.restartYs.map(Math.round)).toEqual([250, 150, 50]);
     });
 
-    it('leaves a note struck before the loop’s start out of the passes round it', () => {
+    it('outlines a note held into the loop on its later passes, from the loop’s top', () => {
       // Each pass plays again from the loop's start, striking only the notes
       // that start there or after: one held across the start sounds once.
       const notes = [note(60, 800, 400), note(64, 1100, 200)];
-      const scene = layoutWaterfall(notes, at(900, 3000, LOOP), VIEW);
-      expect(scene.bars.map((bar) => [bar.note.midi, bar.pass])).toEqual([
-        [60, 0],
-        [64, 0],
-        [64, 1],
-        [64, 2],
+      const scene = layoutWaterfall(notes, at(900, 3000, LOOP, 500), VIEW);
+      expect(scene.bars.map((bar) => [bar.note.midi, bar.pass, bar.silent])).toEqual([
+        [60, 0, false],
+        [64, 0, false],
+        [60, 1, true],
+        [64, 1, false],
+        [60, 2, true],
+        [64, 2, false],
       ]);
+      // Taken up at the loop's top, C4 has no start of its own there.
+      const later = scene.bars.find((bar) => bar.note.midi === 60 && bar.pass === 1);
+      expect(later?.bottom).toBeCloseTo(190);
+      expect(later?.cutBottom).toBe(true);
     });
 
-    it('keeps such a note at the keys only on a pass begun before the loop', () => {
+    it('outlines it at the keys too, on a pass begun at the loop’s top or inside it', () => {
       const notes = [note(60, 800, 400), note(64, 1100, 200)];
-      const passes = (passStartMs: number) =>
-        layoutWaterfall(notes, at(1050, 3000, LOOP, passStartMs), VIEW).bars.map((bar) => [
-          bar.note.midi,
-          bar.pass,
-        ]);
+      const atKeys = (passStartMs: number) =>
+        layoutWaterfall(notes, at(1050, 3000, LOOP, passStartMs), VIEW)
+          .bars.filter((bar) => bar.pass === 0)
+          .map((bar) => [bar.note.midi, bar.silent]);
       // A run from before the loop struck C4 on the way in, and it sounds on…
-      expect(passes(500)).toEqual([
-        [60, 0],
-        [64, 0],
-        [64, 1],
-        [64, 2],
+      expect(atKeys(500)).toEqual([
+        [60, false],
+        [64, false],
       ]);
       // …but a pass begun at the loop's top, come round or started there, or
       // one started inside it, never strikes it.
-      const inside = [
-        [64, 0],
-        [64, 1],
-        [64, 2],
+      const unstruck = [
+        [60, true],
+        [64, false],
       ];
-      expect(passes(1000)).toEqual(inside);
-      expect(passes(1050)).toEqual(inside);
+      expect(atKeys(1000)).toEqual(unstruck);
+      expect(atKeys(1050)).toEqual(unstruck);
     });
 
     it('draws no more than its cap of passes, however short the loop', () => {

@@ -421,6 +421,19 @@ describe('playback speed and looping', () => {
     expect(midis.slice(0, 4)).toEqual([60, 61, 62, 63]);
     expect(h.scheduled[1]!.when - h.scheduled[0]!.when).toBeCloseTo(0.5, 6);
   });
+
+  it('begins a recording’s backing where the recording starts, past a loop’s end too', async () => {
+    transportController.setLoop({ startMs: 0, endMs: 1000 });
+    useTakeStore.getState().setTempo({
+      ...useTakeStore.getState().take.tempo,
+      countInBars: 0,
+    });
+    transportController.seek(1500);
+    await transportController.record('overdub');
+    run(0.3);
+    expect(transportController.getState()).toBe('recording');
+    expect(transportController.getPassStartMs()).toBe(1500);
+  });
 });
 
 describe('what playback strikes', () => {

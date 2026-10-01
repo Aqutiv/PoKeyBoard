@@ -154,7 +154,7 @@ describe('paintWaterfall', () => {
     // Sounding: the lower end runs into the keys, square.
     const sounding = layoutWaterfall(
       [note(64, 0, { durationMs: 1000 })],
-      { nowMs: 500, spanMs: 3000, loop: null, passStartMs: 500 },
+      { nowMs: 500, spanMs: 3000, loop: null, passStartMs: 0 },
       { widthPx: 1400, heightPx: 300, keys: KEYS },
     );
     expect(arcsOf(sounding)).toBe(4);

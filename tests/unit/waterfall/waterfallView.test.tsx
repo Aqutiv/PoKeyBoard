@@ -147,8 +147,19 @@ describe('WaterfallView', () => {
     expect(h.painted).toHaveLength(5);
   });
 
+  it('outlines a note held across where play would start, which it never strikes', () => {
+    act(() => transportController.seek(200));
+    show();
+    frame();
+    expect(lastPainted().scene.bars.map((bar) => [bar.note.midi, bar.silent])).toEqual([
+      [60, true],
+      [64, false],
+    ]);
+  });
+
   it('stands where play would start: at a loop’s top, from a playhead parked past its end', () => {
-    // D4 is held into the loop from before it, which play from its top never strikes.
+    // D4 is held into the loop from before it, which play from its top never
+    // strikes: an outline on every pass.
     const held: NoteEvent = { id: 'held', midi: 62, startMs: 800, durationMs: 400, velocity: 0.7 };
     const notes = [NOTES[0] as NoteEvent, held, NOTES[1] as NoteEvent];
     act(() => useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 4000 })));
@@ -158,10 +169,13 @@ describe('WaterfallView', () => {
     frame();
     const { scene } = lastPainted();
     // E4 starts the loop, on the keys; each pass after starts 100 px further up.
-    expect(scene.bars.map((bar) => [bar.note.midi, bar.pass, bar.bottom])).toEqual([
-      [64, 0, 300],
-      [64, 1, 200],
-      [64, 2, 100],
+    expect(scene.bars.map((bar) => [bar.note.midi, bar.pass, bar.bottom, bar.silent])).toEqual([
+      [62, 0, 300, true],
+      [64, 0, 300, false],
+      [62, 1, 200, true],
+      [64, 1, 200, false],
+      [62, 2, 100, true],
+      [64, 2, 100, false],
     ]);
     expect(scene.restartYs).toEqual([200, 100]);
   });
@@ -199,7 +213,7 @@ describe('WaterfallView', () => {
       expect(frameSubscriberCount()).toBe(0);
     });
 
-    it('leaves a note held into a loop out of the passes playback has come round to', () => {
+    it('outlines a note held into a loop once playback has come round', () => {
       const held: NoteEvent = {
         id: 'held',
         midi: 62,
@@ -219,16 +233,22 @@ describe('WaterfallView', () => {
       const atKeys = () =>
         lastPainted()
           .scene.bars.filter((bar) => bar.pass === 0)
-          .map((bar) => bar.note.midi);
+          .map((bar) => [bar.note.midi, bar.silent]);
       show();
       become('playing');
       frame();
       // On the way in, the run struck D4 before the loop's top, and it sounds on…
-      expect(atKeys()).toEqual([62, 64]);
+      expect(atKeys()).toEqual([
+        [62, false],
+        [64, false],
+      ]);
       passStart.mockReturnValue(1000);
       frame();
       // …but come round, the run plays from the top, and D4 is not struck again.
-      expect(atKeys()).toEqual([64]);
+      expect(atKeys()).toEqual([
+        [62, true],
+        [64, false],
+      ]);
       become('idle');
     });
 

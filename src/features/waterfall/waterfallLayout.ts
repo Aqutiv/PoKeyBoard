@@ -40,9 +40,9 @@ export interface WaterfallTimeline {
   readonly loop: PlaybackLoop | null;
   /**
    * Where the pass at the keys began: where playback started, or the loop's
-   * top once it came round; at rest, where it would start. Only a pass begun
-   * before the loop strikes a note held into it from before.
-   * See `TransportController.getPassStartMs`.
+   * top once it came round; at rest, where it would start. Playback strikes
+   * the notes from there on, so one held from before it is drawn as an
+   * outline. See `TransportController.getPassStartMs`.
    */
   readonly passStartMs: number;
 }
@@ -59,7 +59,10 @@ export interface WaterfallBar {
   readonly note: NoteEvent;
   readonly hand: Hand;
   readonly black: boolean;
-  /** Written but not played, so drawn hollow. */
+  /**
+   * Not played on this pass, so drawn hollow: written but never struck, or
+   * held from before where the pass began.
+   */
   readonly silent: boolean;
   readonly x: number;
   readonly width: number;
@@ -67,7 +70,11 @@ export interface WaterfallBar {
   readonly bottom: number;
   /** The view's top edge cuts the bar, so its upper end is not the note's. */
   readonly cutTop: boolean;
-  /** The note is sounding, so the bar runs on into its key. */
+  /**
+   * The bar's lower end is not where its note starts: the note is sounding,
+   * so the bar runs on into its key; or it is held into a loop from before,
+   * and a later pass takes it up at the loop's top.
+   */
   readonly cutBottom: boolean;
   /** 0 for the take as it plays on; 1 and up for the passes round a loop above it. */
   readonly pass: number;
@@ -78,6 +85,7 @@ export interface WaterfallMarker {
   readonly side: 'low' | 'high';
   readonly note: NoteEvent;
   readonly hand: Hand;
+  /** Not played on this pass; see `WaterfallBar.silent`. */
   readonly silent: boolean;
   readonly top: number;
   readonly bottom: number;
@@ -146,14 +154,17 @@ function keysByMidi(keys: KeyboardLayout): Map<number, KeyLayout> {
  * the keys of `view`. Each frame walks only the notes that can be in view:
  * from the first still sounding to the last starting below the top edge.
  *
+ * Playback strikes the notes from where its pass began (`passStartMs`), so a
+ * note held across that point is drawn hollow, as one written but not played
+ * is: it is in the music, but it will not sound.
+ *
  * Round a loop, playback lets every key go at the loop's end and plays the
- * passage again from its start, striking the notes that start inside it — a
- * note held across the loop's start sounds only on the first pass of a run
- * started before the loop. So the passage is drawn again above its end, pass
- * after pass up to the top edge, with a restart line where each pass begins;
- * and the pass at the keys keeps such a note only if it began before the loop
- * (`passStartMs`). That holds only while the playhead is short of the loop's
- * end; a scrub past it shows the take straight on.
+ * passage again from its start, striking the notes that start inside it. So
+ * the passage is drawn again above its end, pass after pass up to the top
+ * edge, with a restart line where each pass begins, and a note held into the
+ * loop from before is hollow on every pass but a first begun before it. That
+ * holds only while the playhead is short of the loop's end; a scrub past it
+ * shows the take straight on.
  */
 export function layoutWaterfall(
   notes: readonly NoteEvent[],
@@ -170,24 +181,35 @@ export function layoutWaterfall(
   const topMs = nowMs + spanMs;
   const byMidi = keysByMidi(keys);
   const y = (ms: number) => heightPx - (ms - nowMs) * pxPerMs;
+  const fold = loop !== null && nowMs < loop.endMs && loop.endMs > loop.startMs ? loop : null;
+  const lengthMs = fold ? fold.endMs - fold.startMs : 0;
 
   const whites: WaterfallBar[] = [];
   const blacks: WaterfallBar[] = [];
   const markers: WaterfallMarker[] = [];
   const restartYs: number[] = [];
 
-  /** Lay out the stretch of `note` from `fromMs` to `toMs`, if any of it is in view. */
-  const place = (note: NoteEvent, fromMs: number, toMs: number, pass: number): void => {
+  /**
+   * Lay out the stretch of `note` from `fromMs` to `toMs` on `pass`, if any of
+   * it is in view: `struck` when playback plays it there.
+   */
+  const place = (
+    note: NoteEvent,
+    fromMs: number,
+    toMs: number,
+    pass: number,
+    struck: boolean,
+  ): void => {
     if (fromMs >= topMs || toMs <= nowMs || toMs <= fromMs) return;
     const lower = y(fromMs);
     const upper = y(toMs);
     const cutTop = upper < 0;
-    const cutBottom = lower > heightPx;
+    const cutBottom = lower > heightPx || fromMs > note.startMs + pass * lengthMs;
     const bottom = Math.min(heightPx, lower);
     let top = cutTop ? 0 : upper + STRIKE_GAP_PX;
     if (bottom - top < MIN_BAR_PX) top = bottom - MIN_BAR_PX;
     const hand = noteHand(note);
-    const silent = isSilentNote(note);
+    const silent = !struck || isSilentNote(note);
     const key = byMidi.get(note.midi);
     if (!key) {
       const side = note.midi < keys.lowMidi ? 'low' : 'high';
@@ -208,30 +230,40 @@ export function layoutWaterfall(
   };
 
   const reach = noteReach(notes);
-  const fold = loop !== null && nowMs < loop.endMs && loop.endMs > loop.startMs ? loop : null;
   const passEndMs = fold ? Math.min(topMs, fold.endMs) : topMs;
-  let start = firstReaching(reach, nowMs);
-  if (fold && passStartMs >= fold.startMs) {
-    start = Math.max(start, lowerBoundByStart(notes, fold.startMs));
-  }
-  for (let i = start, end = lowerBoundByStart(notes, passEndMs); i < end; i += 1) {
+  for (
+    let i = firstReaching(reach, nowMs), end = lowerBoundByStart(notes, passEndMs);
+    i < end;
+    i += 1
+  ) {
     const note = notes[i] as NoteEvent;
     const endMs = note.startMs + note.durationMs;
-    place(note, note.startMs, fold ? Math.min(endMs, fold.endMs) : endMs, 0);
+    const toMs = fold ? Math.min(endMs, fold.endMs) : endMs;
+    place(note, note.startMs, toMs, 0, note.startMs >= passStartMs);
   }
   if (fold) {
-    const lengthMs = fold.endMs - fold.startMs;
-    // Each pass strikes only the notes that start inside the loop, as playback does.
-    const first = lowerBoundByStart(notes, fold.startMs);
+    // Each pass strikes only the notes that start inside the loop, as playback
+    // does; one held into it from before comes round hollow, from its top.
+    // Those are found once, not once a pass.
+    const inside = lowerBoundByStart(notes, fold.startMs);
+    const heldIn: NoteEvent[] = [];
+    for (let i = firstReaching(reach, fold.startMs); i < inside; i += 1) {
+      const note = notes[i] as NoteEvent;
+      if (note.startMs + note.durationMs > fold.startMs) heldIn.push(note);
+    }
     const end = lowerBoundByStart(notes, fold.endMs);
     for (let pass = 1; pass <= MAX_LOOP_PASSES; pass += 1) {
       const offsetMs = pass * lengthMs;
       if (fold.startMs + offsetMs >= topMs) break;
       restartYs.push(y(fold.startMs + offsetMs));
-      for (let i = first; i < end; i += 1) {
+      for (const note of heldIn) {
+        const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
+        place(note, fold.startMs + offsetMs, endMs + offsetMs, pass, false);
+      }
+      for (let i = inside; i < end; i += 1) {
         const note = notes[i] as NoteEvent;
         const endMs = Math.min(note.startMs + note.durationMs, fold.endMs);
-        place(note, note.startMs + offsetMs, endMs + offsetMs, pass);
+        place(note, note.startMs + offsetMs, endMs + offsetMs, pass, true);
       }
     }
   }

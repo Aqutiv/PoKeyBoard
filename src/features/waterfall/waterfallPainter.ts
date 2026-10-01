@@ -98,7 +98,10 @@ function drawBar(ctx: WaterfallSurface, bar: WaterfallBar, paint: WaterfallPaint
   ctx.stroke();
 }
 
-/** A note written but not played is never struck, so its bar is only an outline. */
+/**
+ * A note playback does not play on this pass — written but never struck, or
+ * held from before where the pass began — is only an outline.
+ */
 function drawHollow(ctx: WaterfallSurface, bar: WaterfallBar, paint: WaterfallPaint): void {
   const [top, bottom] = radii(bar);
   outline(ctx, bar, top, bottom);
@@ -137,8 +140,8 @@ function drawMarker(ctx: WaterfallSurface, marker: WaterfallMarker, paint: Water
  * the screen. From the bottom up: the stage, the octave guides, the lines
  * where a loop starts again, the white keys' bars, the black keys' bars, which
  * stand over them, and last the marks of notes off the key bed. Within each
- * key colour, the hollow bars of notes written but not played go under the
- * played ones, so a strike drawn over its written note shows whole.
+ * key colour, the hollow bars of notes not played go under the played ones,
+ * so a strike drawn over an outline shows whole.
  */
 export function paintWaterfall(
   ctx: WaterfallSurface,

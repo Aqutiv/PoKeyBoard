@@ -860,12 +860,13 @@ export class TransportController {
 
   /**
    * Where the pass now playing began: where the run started, the first time
-   * through, and the loop's top once it has come round; while nothing plays,
-   * where Play would start. Playback strikes the notes that start from there
-   * on, so a note held into a loop from before it sounds only on the first
-   * pass of a run started before the loop.
+   * through, and the loop's top once it has come round; where the recording
+   * started, for its backing; otherwise, where Play would start. Playback
+   * strikes the notes that start from there on, so a note held across it does
+   * not sound: nor, on a loop's later passes, one held into the loop.
    */
   getPassStartMs(): number {
+    if (this.state === 'recording' || this.state === 'countIn') return this.recordStartMs;
     if (this.state !== 'playing') return playFromMs(this.getLoop(), this.pausedPlayheadMs);
     const loop = this.playLoop;
     if (loop && this.loopPassesBefore + loopPassAt(loop, this.clock.currentVirtualMs()) > 0) {
