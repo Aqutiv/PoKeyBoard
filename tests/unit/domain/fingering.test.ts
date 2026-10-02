@@ -232,8 +232,9 @@ describe('noteFingers against the library’s printed fingers', () => {
     // Every finger the scores print on a note that is struck, grace notes and
     // held ties aside.
     expect(printed).toBe(1428);
-    // 781 of them (55%) when this was written. A change to the costs that
-    // agrees with the editors less often should be a deliberate one.
-    expect(agreed).toBeGreaterThanOrEqual(781);
+    // 809 of them (57%) since The Entertainer's two parts were read as its two
+    // hands. A change to the costs that agrees with the editors less often
+    // should be a deliberate one.
+    expect(agreed).toBeGreaterThanOrEqual(809);
   }, 60_000);
 });
