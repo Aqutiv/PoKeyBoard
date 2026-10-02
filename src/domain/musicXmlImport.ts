@@ -234,6 +234,73 @@ function collectTieTypes(note: Element): Set<string> {
   return types;
 }
 
+/** Whether a part ever declares more than one staff. */
+function hasSeveralStaves(part: Element): boolean {
+  for (const measure of part.children) {
+    if (measure.tagName !== 'measure') continue;
+    for (const el of measure.children) {
+      if (el.tagName !== 'attributes') continue;
+      const staves = numberByTag(el, 'staves');
+      if (staves !== null && Math.round(staves) >= 2) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * The staff each part's notes belong on, for the one case where the parts
+ * themselves say it: a piano written as two single-staff parts that the
+ * part-list braces together. The first is then the upper staff and the second
+ * the lower, as staffs 1 and 2 of one part would be.
+ *
+ * Only the first two parts qualify, and only when the brace holds exactly
+ * them. Any other part keeps no staff, so the notation splits it at middle C as
+ * before; a bracket groups instruments rather than staves, so it says nothing.
+ */
+function pianoPairStaves(root: Element, parts: readonly Element[]): Map<Element, NoteStaff> {
+  const staves = new Map<Element, NoteStaff>();
+  const partList = childByTag(root, 'part-list');
+  if (partList === null) return staves;
+  const ids: string[] = [];
+  /** Group number → whether it is a brace, and the parts listed inside it. */
+  const open = new Map<string, { brace: boolean; members: string[] }>();
+  const braced: string[][] = [];
+  for (const el of partList.children) {
+    if (el.tagName === 'score-part') {
+      const id = el.getAttribute('id');
+      if (id === null) continue;
+      ids.push(id);
+      for (const group of open.values()) group.members.push(id);
+    } else if (el.tagName === 'part-group') {
+      const number = el.getAttribute('number') ?? '1';
+      const type = el.getAttribute('type');
+      if (type === 'start') {
+        open.set(number, { brace: textByTag(el, 'group-symbol') === 'brace', members: [] });
+      } else if (type === 'stop') {
+        const group = open.get(number);
+        open.delete(number);
+        if (group?.brace) braced.push(group.members);
+      }
+    }
+  }
+  // A brace the file never closes runs to the end of the list.
+  for (const group of open.values()) if (group.brace) braced.push(group.members);
+
+  const [upperId, lowerId] = ids;
+  if (upperId === undefined || lowerId === undefined) return staves;
+  const pairBraced = braced.some(
+    (members) => members.length === 2 && members[0] === upperId && members[1] === lowerId,
+  );
+  if (!pairBraced) return staves;
+  const upper = parts.find((part) => part.getAttribute('id') === upperId);
+  const lower = parts.find((part) => part.getAttribute('id') === lowerId);
+  if (upper === undefined || lower === undefined) return staves;
+  if (hasSeveralStaves(upper) || hasSeveralStaves(lower)) return staves;
+  staves.set(upper, 'treble');
+  staves.set(lower, 'bass');
+  return staves;
+}
+
 /**
  * The finger a note's `<notations><technical><fingering>` prints: the first
  * finger of the first one. A substitution — "3-1", or a second `<fingering>`
@@ -259,11 +326,15 @@ function fingerOf(note: Element): Finger | undefined {
  * Walk one part's measures in document order, appending events to `out`.
  * Returns the part's final divisions value, used to seed the next part in
  * case a malformed file omits its declaration.
+ *
+ * `partStaff` is the staff a single-staff part's notes belong on when the
+ * score wrote one piano as two parts (see `pianoPairStaves`).
  */
 function collectPart(
   part: Element,
   seedDivisions: number | null,
   out: CollectedScore,
+  partStaff?: NoteStaff,
 ): number | null {
   let divisions = seedDivisions;
   let cursorQ = 0;
@@ -296,10 +367,11 @@ function collectPart(
    * part's staffs from the top down, so staff 1 is the right hand and anything
    * under it belongs on the bass staff; an omitted <staff> means staff 1. A
    * part with a single staff says nothing about hands, so it stays undefined
-   * and the notation falls back to splitting at middle C.
+   * and the notation falls back to splitting at middle C — unless it is one
+   * half of a braced pair, which says which staff it is.
    */
   const staffOf = (note: Element): NoteStaff | undefined => {
-    if (staffCount < 2) return undefined;
+    if (staffCount < 2) return partStaff;
     const declared = numberByTag(note, 'staff');
     return declared !== null && Math.round(declared) >= 2 ? 'bass' : 'treble';
   };
@@ -790,9 +862,11 @@ function collectScore(root: Element): CollectedScore {
   const work = childByTag(root, 'work');
   out.title = (work ? textByTag(work, 'work-title') : null) ?? textByTag(root, 'movement-title');
 
+  const parts = Array.from(root.children).filter((el) => el.tagName === 'part');
+  const partStaves = pianoPairStaves(root, parts);
   let divisions: number | null = null;
-  for (const part of root.children) {
-    if (part.tagName === 'part') divisions = collectPart(part, divisions, out);
+  for (const part of parts) {
+    divisions = collectPart(part, divisions, out, partStaves.get(part));
   }
   return out;
 }

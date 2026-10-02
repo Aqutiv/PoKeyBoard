@@ -373,6 +373,125 @@ describe('staves and voices', () => {
   });
 });
 
+describe('one piano written as two parts', () => {
+  const clef = (sign: string): string =>
+    `<clef><sign>${sign}</sign><line>${sign === 'G' ? 2 : 4}</line></clef>`;
+  // The shape of one edition of The Entertainer: the right hand dips below
+  // middle C while the left climbs above it, each on a single-staff part.
+  const RIGHT_HAND = measure(
+    1,
+    `<attributes><divisions>1</divisions><time><beats>4</beats><beat-type>4</beat-type></time>${clef('G')}</attributes>` +
+      note('B', 3, 2, '<voice>1</voice>') +
+      note('E', 5, 2, '<voice>1</voice>'),
+  );
+  const LEFT_HAND = measure(
+    1,
+    `<attributes><divisions>1</divisions>${clef('F')}</attributes>` +
+      note('C', 3, 2, '<voice>1</voice>') +
+      note('E', 4, 2, '<voice>1</voice>'),
+  );
+  const scorePart = (id: string): string =>
+    `<score-part id="${id}"><part-name>${id}</part-name></score-part>`;
+  const scoreWithPartList = (partList: string, parts: string[]): string =>
+    '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1">' +
+    `<part-list>${partList}</part-list>` +
+    parts.map((measures, i) => `<part id="P${i + 1}">${measures}</part>`).join('') +
+    '</score-partwise>';
+  const group = (symbol: string, members: string): string =>
+    `<part-group type="start" number="1"><group-symbol>${symbol}</group-symbol></part-group>` +
+    members +
+    '<part-group type="stop" number="1"/>';
+  const byOnset = (take: ReturnType<typeof musicXmlToTake>) =>
+    take.notes.map((n) => [n.midi, n.staff, n.voice, n.clef]);
+
+  it('reads a braced pair of single-staff parts as the two staves of one piano', () => {
+    const take = musicXmlToTake(
+      scoreWithPartList(group('brace', scorePart('P1') + scorePart('P2')), [RIGHT_HAND, LEFT_HAND]),
+    );
+    // The first part is the upper staff and the second the lower, wherever
+    // their notes sit around middle C. Each staff carries its own clef, so no
+    // note records one, and each renumbers its voices from 0.
+    expect(byOnset(take)).toEqual([
+      [48, 'bass', 0, undefined],
+      [59, 'treble', 0, undefined],
+      [64, 'bass', 0, undefined],
+      [76, 'treble', 0, undefined],
+    ]);
+  });
+
+  it('reads the pair the same way when the score names its parts otherwise', () => {
+    const take = musicXmlToTake(
+      '<?xml version="1.0" encoding="UTF-8"?><score-partwise version="3.1"><part-list>' +
+        '<part-group type="start" number="2"><group-symbol>brace</group-symbol></part-group>' +
+        '<score-part id="RH"><part-name>RH</part-name></score-part>' +
+        '<score-part id="LH"><part-name>LH</part-name></score-part>' +
+        '<part-group type="stop" number="2"/></part-list>' +
+        `<part id="RH">${RIGHT_HAND}</part><part id="LH">${LEFT_HAND}</part></score-partwise>`,
+    );
+    expect(take.notes.map((n) => n.staff)).toEqual(['bass', 'treble', 'bass', 'treble']);
+  });
+
+  it('leaves two parts the part-list does not brace without staff hints', () => {
+    // Schubert's Serenade in the classics pack is written like this.
+    const take = musicXmlToTake(
+      scoreWithPartList(scorePart('P1') + scorePart('P2'), [RIGHT_HAND, LEFT_HAND]),
+    );
+    for (const n of take.notes) expect(n).not.toHaveProperty('staff');
+    // Unchanged: the lower part's F clef is still recorded against the
+    // treble staff it would otherwise be read on.
+    expect(byOnset(take)).toEqual([
+      [48, undefined, 0, 'bass'],
+      [59, undefined, 0, undefined],
+      [64, undefined, 0, 'bass'],
+      [76, undefined, 0, undefined],
+    ]);
+  });
+
+  it('leaves two parts under a bracket, not a brace, without staff hints', () => {
+    const take = musicXmlToTake(
+      scoreWithPartList(group('bracket', scorePart('P1') + scorePart('P2')), [
+        RIGHT_HAND,
+        LEFT_HAND,
+      ]),
+    );
+    for (const n of take.notes) expect(n).not.toHaveProperty('staff');
+  });
+
+  it('leaves a single braced part without staff hints', () => {
+    const take = musicXmlToTake(scoreWithPartList(group('brace', scorePart('P1')), [RIGHT_HAND]));
+    for (const n of take.notes) expect(n).not.toHaveProperty('staff');
+  });
+
+  it('leaves a brace around three parts without staff hints', () => {
+    const third = measure(1, `<attributes><divisions>1</divisions></attributes>${note('C', 2, 4)}`);
+    const take = musicXmlToTake(
+      scoreWithPartList(group('brace', scorePart('P1') + scorePart('P2') + scorePart('P3')), [
+        RIGHT_HAND,
+        LEFT_HAND,
+        third,
+      ]),
+    );
+    for (const n of take.notes) expect(n).not.toHaveProperty('staff');
+  });
+
+  it('leaves the pair alone when either part already has two staves', () => {
+    const grand = measure(
+      1,
+      '<attributes><divisions>1</divisions><staves>2</staves></attributes>' +
+        note('C', 3, 4, '<staff>2</staff>'),
+    );
+    const take = musicXmlToTake(
+      scoreWithPartList(group('brace', scorePart('P1') + scorePart('P2')), [RIGHT_HAND, grand]),
+    );
+    // The first part says nothing about hands; the second's own staves stand.
+    expect(take.notes.map((n) => [n.midi, n.staff])).toEqual([
+      [48, 'bass'],
+      [59, undefined],
+      [76, undefined],
+    ]);
+  });
+});
+
 describe('ties', () => {
   const tieStart = '<tie type="start"/>';
   const tieStop = '<tie type="stop"/>';
