@@ -1,34 +1,3 @@
-/* Folder switch: one segment per folder, filling the page width. Learn's level
-   switch and Settings' section switch are its twins — keep the three in step. */
-.library-folders {
-  display: flex;
-  flex-shrink: 0;
-  gap: 2px;
-  margin-bottom: 12px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  background: var(--surface-1);
-}
-
-.library-folders__option {
-  flex: 1;
-  min-height: 40px;
-  padding: 0 12px;
-  border-radius: calc(var(--radius-m) - 2px);
-  color: var(--text-dim);
-  font-size: 14px;
-  font-weight: 600;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-}
-
-.library-folders__option.is-selected {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
 /* Filter field: icon and clear button sit inside the input's own padding. */
 .library-filter {
   position: relative;
@@ -162,11 +131,6 @@
 
   .library-item.is-active:hover {
     border-color: var(--accent-strong);
-  }
-
-  .library-folders__option:not(.is-selected):hover {
-    background: var(--surface-2);
-    color: var(--text);
   }
 }
 

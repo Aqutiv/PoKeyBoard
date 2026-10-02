@@ -1,42 +1,3 @@
-/* Level switch: one segment per level, filling the page width. Mirrors the
-   library folder switch so the two browsing surfaces feel like one app; Settings'
-   section switch is a third twin — keep the three in step. */
-.learn-levels {
-  display: flex;
-  flex-shrink: 0;
-  gap: 2px;
-  margin-bottom: 12px;
-  padding: 2px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-m);
-  background: var(--surface-1);
-}
-
-/* Three segments at 320px leave ~92px each, and "Intermediate" needs ~88px at
-   14px — so the type steps down on narrow screens, and ellipsis backs it up
-   for whichever locale still overruns. */
-.learn-levels__option {
-  flex: 1;
-  min-width: 0;
-  min-height: 40px;
-  transition:
-    background 120ms ease,
-    color 120ms ease;
-  padding: 0 6px;
-  border-radius: calc(var(--radius-m) - 2px);
-  color: var(--text-dim);
-  font-size: clamp(11px, 3vw, 14px);
-  font-weight: 600;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.learn-levels__option.is-selected {
-  background: var(--accent);
-  color: var(--accent-contrast);
-}
-
 .learn-scroll {
   flex: 1;
   min-height: 0;
@@ -100,11 +61,6 @@
 
   .learn-item.is-completed:hover {
     border-color: var(--accent-strong);
-  }
-
-  .learn-levels__option:not(.is-selected):hover {
-    background: var(--surface-2);
-    color: var(--text);
   }
 
   /* Already at --surface-2 at rest, so it takes the step above — the same

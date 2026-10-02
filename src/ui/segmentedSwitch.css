@@ -1,0 +1,50 @@
+/* Segmented switch: one segment per choice, filling the page width (the
+   library's folders, Learn's levels, Settings' sections). */
+.segmented-switch {
+  display: flex;
+  flex-shrink: 0;
+  gap: 2px;
+  margin-bottom: 12px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  background: var(--surface-1);
+}
+
+.segmented-switch__option {
+  flex: 1;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: calc(var(--radius-m) - 2px);
+  color: var(--text-dim);
+  font-size: 14px;
+  font-weight: 600;
+  transition:
+    background 120ms ease,
+    color 120ms ease;
+}
+
+/* Too many segments, or labels too long, for 14px at 320px: the type steps
+   down on narrow screens, and ellipsis backs it up for whichever locale still
+   overruns. */
+.segmented-switch--shrink .segmented-switch__option {
+  min-width: 0;
+  padding: 0 6px;
+  font-size: clamp(11px, 3vw, 14px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.segmented-switch__option.is-selected {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+/* Mouse only: on touch, :hover would stick to the last-tapped segment. */
+@media (hover: hover) and (pointer: fine) {
+  .segmented-switch__option:not(.is-selected):hover {
+    background: var(--surface-2);
+    color: var(--text);
+  }
+}
