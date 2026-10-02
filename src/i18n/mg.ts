@@ -501,7 +501,7 @@ export const mg: Messages = {
     playback: 'Famerenana',
     touch: 'Fikasihana',
     controllers: 'Fitaovana',
-    keys: 'Kitendry',
+    keys: 'Kitendry sy naoty milatsaka',
     installUpdates: 'Fametrahana sy fanavaozana',
     language: 'Fiteny',
     appearance: 'Endrika sy fiteny',

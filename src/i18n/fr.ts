@@ -497,7 +497,7 @@ export const fr: Messages = {
     playback: 'Lecture',
     touch: 'Toucher',
     controllers: 'Contrôleurs',
-    keys: 'Touches',
+    keys: 'Touches et notes qui tombent',
     installUpdates: 'Installation et mises à jour',
     language: 'Langue',
     appearance: 'Apparence et langue',

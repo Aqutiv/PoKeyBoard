@@ -496,7 +496,7 @@ export const es: Messages = {
     playback: 'Reproducción',
     touch: 'Tacto',
     controllers: 'Controladores',
-    keys: 'Teclas',
+    keys: 'Teclas y notas que caen',
     installUpdates: 'Instalación y actualizaciones',
     language: 'Idioma',
     appearance: 'Apariencia e idioma',
