@@ -118,6 +118,11 @@ export class TransportController {
   /** Where the gate falls on the run's unwrapped timeline; see `TransportClock`. */
   private trainingGateVirtualMs = 0;
   private trainingWaiting = false;
+  /**
+   * Where the pass a training hold stopped in began, kept while it waits: the
+   * hold is a pause, but the pass it paused is still the one at the keys.
+   */
+  private trainingPassStartMs = 0;
   private readonly trainingSatisfied = new Set<number>();
   private trainingInputUnsub: (() => void) | null = null;
   /** Wrong keys pressed at a wait point, midi → when the flash expires. */
@@ -783,6 +788,8 @@ export class TransportController {
   private beginTrainingWait(): void {
     const gate = this.trainingGate;
     if (!gate) return;
+    // Taken while still playing, before the pause below parks the playhead.
+    this.trainingPassStartMs = this.getPassStartMs();
     this.trainingWaiting = true;
     this.trainingSatisfied.clear();
     this.trainingWrong.clear();
@@ -861,12 +868,14 @@ export class TransportController {
   /**
    * Where the pass now playing began: where the run started, the first time
    * through, and the loop's top once it has come round; where the recording
-   * started, for its backing; otherwise, where Play would start. Playback
-   * strikes the notes that start from there on, so a note held across it does
-   * not sound: nor, on a loop's later passes, one held into the loop.
+   * started, for its backing; at a training hold, where the pass it holds
+   * began; otherwise, where Play would start. Playback strikes the notes that
+   * start from there on, so a note held across it does not sound: nor, on a
+   * loop's later passes, one held into the loop.
    */
   getPassStartMs(): number {
     if (this.state === 'recording' || this.state === 'countIn') return this.recordStartMs;
+    if (this.trainingWaiting) return this.trainingPassStartMs;
     if (this.state !== 'playing') return playFromMs(this.getLoop(), this.pausedPlayheadMs);
     const loop = this.playLoop;
     if (loop && this.loopPassesBefore + loopPassAt(loop, this.clock.currentVirtualMs()) > 0) {

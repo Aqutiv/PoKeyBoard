@@ -359,6 +359,26 @@ describe('playback speed and looping', () => {
     }
   });
 
+  it('keeps the pass it is in while a training hold waits, there or round a loop', () => {
+    // The right hand's long note sounds on through the left hand's hold at 500.
+    const notes = [note('a', 64, 200, 600), { ...note('b', 48, 500), staff: 'bass' as const }];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+    useSettingsStore.getState().setPlaybackMode('training-left');
+    transportController.setLoop({ startMs: 100, endMs: 1000 });
+    transportController.seek(0);
+    transportController.play();
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let i = 0; i < 200 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+      expect(transportController.isWaitingForTraining()).toBe(true);
+      expect(transportController.getPlayheadMs()).toBe(500);
+      // The run's start the first time through, the loop's top once round: not
+      // the hold, which would leave the note it struck at 200 unstruck.
+      expect(transportController.getPassStartMs()).toBe(pass === 0 ? 0 : 100);
+      press(48);
+      expect(transportController.isWaitingForTraining()).toBe(false);
+    }
+  });
+
   it('asks only for the loop’s own notes where a chord runs over its end', () => {
     // The loop's first note, and a chord at 1980 whose other note, at 2020, is
     // past the loop's end and never plays.

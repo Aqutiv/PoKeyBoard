@@ -3,7 +3,7 @@
 ## Automated
 
 ```bash
-npm run test          # 2523 Vitest unit tests (jsdom + fake-indexeddb)
+npm run test          # 2524 Vitest unit tests (jsdom + fake-indexeddb)
 npm run test:e2e      # 227 Playwright tests against the production preview build
 npm run test:e2e:fast # the same, without the is-dist-stale build check
 npm run lint && npm run typecheck && npm run format:check

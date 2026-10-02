@@ -9,7 +9,7 @@ import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
 import { scoreSpellings, spellingName } from '@/features/notation/scoreSpelling';
 import { wheelZoomSteps, ZOOM_STEP } from '@/features/notation/scoreZoom';
 import { scrubController } from '@/features/notation/scrubController';
-import { playableLoop } from '@/features/transport/practiceLoop';
+import { playableLoop, playFromMs } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
 import { useMessages } from '@/i18n/i18nContext';
@@ -114,7 +114,8 @@ function pinchedSeconds(from: WaterfallSeconds, scale: number): WaterfallSeconds
  * does not play — a note held from before where its pass began — falls as an
  * outline. A scrub goes round the loop as the drag carries it, outlining what
  * it has not crossed, and a transport at rest shows what pressing play would
- * play: from past a loop's end, the loop from its top.
+ * play: from past a loop's end, the loop from its top. A training hold stands
+ * where it is parked, in the pass it holds.
  */
 function timelineNow(loopAtRest: PlaybackLoop | null, fallMs: number): WaterfallTimeline {
   const state = transportController.getState();
@@ -130,7 +131,7 @@ function timelineNow(loopAtRest: PlaybackLoop | null, fallMs: number): Waterfall
   if (state === 'scrubbing') {
     return { nowMs, spanMs, loop: loopAtRest, passStartMs: scrubController.getPassStartMs() };
   }
-  return { nowMs: passStartMs, spanMs, loop: loopAtRest, passStartMs };
+  return { nowMs: playFromMs(loopAtRest, nowMs), spanMs, loop: loopAtRest, passStartMs };
 }
 
 /**
@@ -475,8 +476,8 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     if (current !== 'idle' && current !== 'paused' && current !== 'scrubbing') return;
     if (scrubController.isActive) scrubController.end();
     const parkedMs = transportController.getPlayheadMs();
-    const standMs = transportController.getPassStartMs();
-    if (standMs !== transportController.getPlayheadMs()) transportController.seek(standMs);
+    const standMs = playFromMs(loopRef.current, parkedMs);
+    if (standMs !== parkedMs) transportController.seek(standMs);
     if (!scrubController.begin(loopRef.current)) return;
     event.currentTarget.setPointerCapture(event.pointerId);
     dragRef.current = {

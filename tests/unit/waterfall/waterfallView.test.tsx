@@ -608,10 +608,11 @@ describe('WaterfallView', () => {
 
     describe('at a Training hold', () => {
       beforeEach(() => {
-        // Parked on E4, which the hold waits for.
+        // Parked on E4, which the hold waits for, in a pass that began at 0.
         vi.spyOn(transportController, 'isWaitingForTraining').mockReturnValue(true);
         vi.spyOn(transportController, 'getTrainingTargets').mockReturnValue(new Set([64]));
-        vi.spyOn(transportController, 'getPassStartMs').mockReturnValue(1000);
+        vi.spyOn(transportController, 'getPlayheadMs').mockReturnValue(1000);
+        vi.spyOn(transportController, 'getPassStartMs').mockReturnValue(0);
       });
 
       it('lights the note waited for, swelling and ebbing on the frame clock', () => {
@@ -620,6 +621,10 @@ describe('WaterfallView', () => {
         expect(frameSubscriberCount()).toBe(1);
         frame();
         const { scene, paint } = lastPainted();
+        // It stands where it is parked, E4 at the keys, not where the pass began.
+        expect(scene.bars.map((bar) => [bar.note.midi, bar.bottom, bar.silent])).toEqual([
+          [64, 300, false],
+        ]);
         expect(scene.bars.filter((bar) => bar.awaited).map((bar) => bar.note.midi)).toEqual([64]);
         expect(paint.glow).toBeGreaterThanOrEqual(0.1);
         expect(paint.glow).toBeLessThanOrEqual(1);
