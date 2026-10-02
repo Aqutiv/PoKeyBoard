@@ -174,6 +174,11 @@ export interface NoteSpelling {
   alter: number;
 }
 
+/** The fingers, numbered from the thumb in both hands: 1 the thumb, 5 the little finger. */
+export const FINGERS = [1, 2, 3, 4, 5] as const;
+
+export type Finger = (typeof FINGERS)[number];
+
 export interface NoteEvent {
   id: string;
   midi: number;
@@ -209,6 +214,12 @@ export interface NoteEvent {
    * takes, which are spelled from their key and context instead.
    */
   spelling?: NoteSpelling;
+  /**
+   * The finger the source score prints for this note. Absent where it prints
+   * none, and for recorded takes; the falling notes work those out instead
+   * (`fingering.ts`). A hint like the spelling: it never changes a sound.
+   */
+  finger?: Finger;
   /**
    * Played but not written: the source kept this note off the page
    * (`print-object="no"`, or a note with no head). That is how MuseScore writes

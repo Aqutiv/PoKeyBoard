@@ -591,6 +591,9 @@ export interface Messages {
     midiCalibrateLoudest: (p: { softest: number }) => string;
     midiCalibrateRejected: string;
     noteLabels: string;
+    /** The switch for finger numbers on the falling notes, and where they come from. */
+    fingerNumbers: string;
+    fingerNumbersHint: string;
     /** The switch that shades lit keys and falling notes by velocity, and what it does. */
     velocityShading: string;
     velocityShadingHint: string;

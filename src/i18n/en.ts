@@ -559,6 +559,9 @@ export const en: Messages = {
     midiCalibrateRejected:
       'Your loudest note has to be clearly louder than your softest. Try again.',
     noteLabels: 'Note names on keys and falling notes',
+    fingerNumbers: 'Finger numbers on falling notes',
+    fingerNumbersHint:
+      'Each falling note shows a finger to play it with, numbered from the thumb in both hands: thumb 1, little finger 5. Where the score prints a finger, that is the one shown; the rest are worked out to suit the hand.',
     velocityShading: 'Velocity shading on keys and falling notes',
     velocityShadingHint:
       'Lit keys and falling notes show how hard each note is played, pale when soft and deep when loud, as you play and in playback. Off, every note lights the same however hard it is played.',

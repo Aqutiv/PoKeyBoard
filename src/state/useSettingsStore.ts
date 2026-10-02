@@ -54,6 +54,11 @@ export interface SettingsState {
   midiVelocityRange: MidiVelocityRange | null;
   showNoteLabels: boolean;
   /**
+   * Each falling note carries the finger that plays it: the score's own, or
+   * one worked out; see fingering.ts.
+   */
+  showFingerNumbers: boolean;
+  /**
    * Lit keys are shaded by how hard their note is played, live and in
    * playback, rather than all alike; see keyShading.ts.
    */
@@ -105,6 +110,7 @@ export interface SettingsState {
   setMidiVelocityCurve(curve: MidiVelocityCurve): void;
   setMidiVelocityRange(range: MidiVelocityRange | null): void;
   setShowNoteLabels(show: boolean): void;
+  setShowFingerNumbers(show: boolean): void;
   setVelocityShading(enabled: boolean): void;
   setKeyboardFollowsPlayback(follow: boolean): void;
   setPlayView(view: PlayView): void;
@@ -142,6 +148,7 @@ export const SETTINGS_DEFAULTS = {
   midiVelocityCurve: 'normal' as MidiVelocityCurve,
   midiVelocityRange: null as MidiVelocityRange | null,
   showNoteLabels: true,
+  showFingerNumbers: false,
   velocityShading: true,
   keyboardFollowsPlayback: true,
   playView: DEFAULT_PLAY_VIEW,
@@ -190,6 +197,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setMidiVelocityCurve: (midiVelocityCurve) => set({ midiVelocityCurve }),
   setMidiVelocityRange: (midiVelocityRange) => set({ midiVelocityRange }),
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
+  setShowFingerNumbers: (showFingerNumbers) => set({ showFingerNumbers }),
   setVelocityShading: (velocityShading) => set({ velocityShading }),
   setKeyboardFollowsPlayback: (keyboardFollowsPlayback) => set({ keyboardFollowsPlayback }),
   setPlayView: (playView) => set({ playView }),

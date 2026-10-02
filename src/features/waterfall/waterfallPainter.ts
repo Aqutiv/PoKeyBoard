@@ -1,3 +1,4 @@
+import type { Finger } from '@/domain/takeTypes';
 import type { WaterfallBar, WaterfallMarker, WaterfallScene } from './waterfallLayout';
 import { barColour, type WaterfallPalette } from './waterfallPalette';
 
@@ -36,6 +37,8 @@ export interface WaterfallPaint {
   readonly followsVelocity: boolean;
   /** Each note's name by its id, written on its bar where it fits; absent, none is. */
   readonly names?: ReadonlyMap<string, string>;
+  /** Each note's finger by its id, numbered at its bar's foot where it fits; absent, none is. */
+  readonly fingers?: ReadonlyMap<string, Finger>;
   /** How brightly the notes a Training hold waits for glow, 0 to 1; absent, none do. */
   readonly glow?: number;
 }
@@ -53,6 +56,10 @@ const NAME_MIN_PX = 9;
 const NAME_MAX_PX = 13;
 /** …and needs this much room about it, across and up. */
 const NAME_ROOM_PX = 4;
+/** A finger number is set a size up from the name, in bold, to be read first… */
+const FINGER_UP_PX = 1;
+/** …and a name over one is set this faint beside it. */
+const NAME_OVER_FINGER_ALPHA = 0.72;
 /** The app's own sans, as the keys' labels are set in. */
 const NAME_FONT = "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 /** How far up from the keys the light rises under a note being waited for. */
@@ -138,20 +145,42 @@ function drawHollow(ctx: WaterfallSurface, bar: WaterfallBar, paint: WaterfallPa
 }
 
 /**
- * A note's name at its bar's foot, in ink for the key's colour, where it fits:
- * a size in proportion to the bar's width, between `NAME_MIN_PX` and
- * `NAME_MAX_PX`, with room about it. Only a bar played on this pass carries
- * one; an outline is drawn on the stage, not in a colour to write on.
+ * A note's finger and name at its bar's foot, in ink for the key's colour,
+ * each where it fits: a size in proportion to the bar's width, between
+ * `NAME_MIN_PX` and `NAME_MAX_PX` (the finger a size up), with room about it.
+ * The finger takes the foot, the end that reaches the key first, and the name
+ * stands over it, fainter, where the bar has room for both. Only a bar played
+ * on this pass carries either; an outline is drawn on the stage, not in a
+ * colour to write on.
  */
-function drawName(ctx: WaterfallSurface, bar: WaterfallBar, name: string, paint: WaterfallPaint) {
+function drawLabels(
+  ctx: WaterfallSurface,
+  bar: WaterfallBar,
+  finger: Finger | undefined,
+  name: string | undefined,
+  paint: WaterfallPaint,
+): void {
   const size = Math.max(NAME_MIN_PX, Math.min(NAME_MAX_PX, Math.round(bar.width * 0.42)));
-  if (bar.bottom - bar.top < size + NAME_ROOM_PX) return;
-  ctx.font = `600 ${size}px ${NAME_FONT}`;
-  if (ctx.measureText(name).width > bar.width - NAME_ROOM_PX) return;
-  ctx.fillStyle = bar.black ? paint.palette.inkOnBlack : paint.palette.inkOnWhite;
+  const ink = bar.black ? paint.palette.inkOnBlack : paint.palette.inkOnWhite;
+  const x = bar.x + bar.width / 2;
+  let foot = bar.bottom;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'alphabetic';
-  ctx.fillText(name, bar.x + bar.width / 2, bar.bottom - NAME_ROOM_PX);
+  if (finger !== undefined) {
+    const fingerSize = size + FINGER_UP_PX;
+    const number = String(finger);
+    if (foot - bar.top < fingerSize + NAME_ROOM_PX) return;
+    ctx.font = `700 ${fingerSize}px ${NAME_FONT}`;
+    if (ctx.measureText(number).width > bar.width - NAME_ROOM_PX) return;
+    ctx.fillStyle = ink;
+    ctx.fillText(number, x, foot - NAME_ROOM_PX);
+    foot -= fingerSize + NAME_ROOM_PX;
+  }
+  if (name === undefined || foot - bar.top < size + NAME_ROOM_PX) return;
+  ctx.font = `600 ${size}px ${NAME_FONT}`;
+  if (ctx.measureText(name).width > bar.width - NAME_ROOM_PX) return;
+  ctx.fillStyle = finger === undefined ? ink : withAlpha(ink, NAME_OVER_FINGER_ALPHA);
+  ctx.fillText(name, x, foot - NAME_ROOM_PX);
 }
 
 /**
@@ -212,13 +241,13 @@ function drawMarker(ctx: WaterfallSurface, marker: WaterfallMarker, paint: Water
  * Paint `scene` in CSS pixels; the caller has already scaled the context for
  * the screen. From the bottom up: the stage, the octave guides, the bar
  * lines, the lines where a loop starts again, the white keys' bars, the black
- * keys' bars, which stand over them, the notes' names, and last the marks of
- * notes off the key bed.
+ * keys' bars, which stand over them, the notes' fingers and names, and last
+ * the marks of notes off the key bed.
  * Within each key colour, the hollow bars of notes not played go under the
  * played ones, so a strike drawn over an outline shows whole, and the glow on
  * the notes a Training hold waits for goes over both: in its own colour's
  * layer, so a black key's note still stands over a white key's glowing beside
- * it, and under every name, which stays readable over it.
+ * it, and under every finger and name, which stay readable over it.
  */
 export function paintWaterfall(
   ctx: WaterfallSurface,
@@ -249,7 +278,7 @@ export function paintWaterfall(
     ctx.restore();
   }
 
-  const { names, glow = 0 } = paint;
+  const { names, fingers, glow = 0 } = paint;
   for (const black of [false, true]) {
     for (const bar of scene.bars)
       if (bar.black === black && bar.silent) drawHollow(ctx, bar, paint);
@@ -259,10 +288,12 @@ export function paintWaterfall(
         if (bar.black === black && bar.awaited) drawGlow(ctx, bar, paint, glow);
     }
   }
-  if (names) {
+  if (names || fingers) {
     for (const bar of scene.bars) {
-      const name = bar.silent ? undefined : names.get(bar.note.id);
-      if (name) drawName(ctx, bar, name, paint);
+      if (bar.silent) continue;
+      const finger = fingers?.get(bar.note.id);
+      const name = names?.get(bar.note.id) || undefined;
+      if (finger !== undefined || name !== undefined) drawLabels(ctx, bar, finger, name, paint);
     }
   }
   for (const marker of scene.markers) drawMarker(ctx, marker, paint);

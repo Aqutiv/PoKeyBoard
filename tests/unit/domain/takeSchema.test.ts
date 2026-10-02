@@ -79,6 +79,25 @@ describe('parseTakeJson', () => {
     expect(take.notes[1]).not.toHaveProperty('spelling');
   });
 
+  it('keeps the finger a score prints', () => {
+    const raw = specExampleTake();
+    const notes = raw.notes as Record<string, unknown>[];
+    notes[0]!.finger = 1;
+    notes[1]!.finger = 5;
+    const { take, repairs } = parseTakeJson(raw);
+    expect(repairs).toEqual([]);
+    expect(take.notes.map((note) => note.finger)).toEqual([1, 5]);
+  });
+
+  it('drops a finger no hand has, without failing the take', () => {
+    for (const finger of [0, 6, 2.5, '3', null]) {
+      const raw = specExampleTake();
+      (raw.notes as Record<string, unknown>[])[0]!.finger = finger;
+      const { take } = parseTakeJson(raw);
+      expect(take.notes[0], String(finger)).not.toHaveProperty('finger');
+    }
+  });
+
   it('keeps a hidden note hidden, and reads false as printed', () => {
     const raw = specExampleTake();
     const notes = raw.notes as Record<string, unknown>[];

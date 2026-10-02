@@ -17,6 +17,7 @@ interface Op {
   dash: number[];
   /** The halo cast, when one is. */
   shadow: string;
+  font: string;
 }
 
 /** A 2D context stand-in that records what is drawn, in what colour. */
@@ -44,6 +45,7 @@ function recorder(): { surface: WaterfallSurface; ops: Op[] } {
         stroke: state.strokeStyle,
         dash: state.dash,
         shadow: state.shadowBlur > 0 ? state.shadowColor : '',
+        font: state.font,
       });
     };
   const surface = {
@@ -273,6 +275,47 @@ describe('paintWaterfall', () => {
     ]);
     // Without names, none.
     expect(paint(sceneOf(notes)).some((op) => op.op === 'fillText')).toBe(false);
+  });
+
+  it('numbers a played note at its foot, a size up from a name, in ink for its key', () => {
+    const notes = [
+      note(60, 500),
+      note(61, 500),
+      note(64, 600, { velocity: 0 }),
+      note(67, 700, { durationMs: 20 }),
+    ];
+    const fingers = new Map(notes.map((n, i) => [n.id, ([1, 2, 3, 5] as const)[i] as 1]));
+    const written = paintWith(sceneOf(notes), { fingers }).filter((op) => op.op === 'fillText');
+    // 1 on C, 2 on C♯, where a name would stand, in bold a size up. Not 3 on E,
+    // written but not played, nor 5 on G, too short a bar for a number.
+    expect(written.map((op) => [op.args, op.fill, op.font.split(' ').slice(0, 2)])).toEqual([
+      [['1', 750, 246], PALETTE.inkOnWhite, ['700', '14px']],
+      [['2', 795, 246], PALETTE.inkOnBlack, ['700', '14px']],
+    ]);
+  });
+
+  it('writes the name above the number, fainter, where the bar has room for both', () => {
+    // C's bar is 40 px tall: room for both. D's is 20: room for the number
+    // alone. E has a name and no number, which stands at the foot as ever.
+    const notes = [note(60, 500), note(62, 1000, { durationMs: 200 }), note(64, 1500)];
+    const [c, d, e] = notes.map((n) => n.id) as [string, string, string];
+    const written = paintWith(sceneOf(notes), {
+      fingers: new Map([
+        [c, 1],
+        [d, 2],
+      ]),
+      names: new Map([
+        [c, 'C'],
+        [d, 'D'],
+        [e, 'E'],
+      ]),
+    }).filter((op) => op.op === 'fillText');
+    expect(written.map((op) => [op.args, op.fill])).toEqual([
+      [['1', 750, 246], PALETTE.inkOnWhite],
+      [['C', 750, 228], 'rgba(11, 9, 8, 0.72)'],
+      [['2', 850, 196], PALETTE.inkOnWhite],
+      [['E', 950, 146], PALETTE.inkOnWhite],
+    ]);
   });
 
   it('lights the notes a hold waits for, as brightly as asked, and no others', () => {
