@@ -297,6 +297,33 @@ describe('playback speed and looping', () => {
     expect(h.scheduled.map((event) => event.midi)).toEqual([62]);
   });
 
+  it('begins each pass where it strikes from: the run’s start, then the loop’s top', () => {
+    transportController.setLoop({ startMs: 1000, endMs: 2000 });
+    transportController.seek(400);
+    // At rest, where Play would start.
+    expect(transportController.getPassStartMs()).toBe(400);
+    transportController.play();
+    while (transportController.getPlayheadMs() < 1500) run(0.01);
+    expect(transportController.getPassStartMs()).toBe(400);
+    run(1);
+    expect(transportController.getPassStartMs()).toBe(1000);
+    // A change of speed starts the clock's unwrapped timeline again from the
+    // playhead; the run has still come round.
+    transportController.setSpeed(0.5);
+    expect(transportController.getPassStartMs()).toBe(1000);
+    transportController.pause();
+    const pausedAt = transportController.getPlayheadMs();
+    expect(transportController.getPassStartMs()).toBe(pausedAt);
+    transportController.play();
+    expect(transportController.getPassStartMs()).toBe(pausedAt);
+    transportController.pause();
+    // From past the loop's end, Play starts at its top.
+    transportController.seek(3000);
+    expect(transportController.getPassStartMs()).toBe(1000);
+    transportController.play();
+    expect(transportController.getPassStartMs()).toBe(1000);
+  });
+
   it('jumps to the loop when one is set mid-playback outside it, and plays on when cleared', () => {
     transportController.play();
     run(0.3);
@@ -328,6 +355,26 @@ describe('playback speed and looping', () => {
       for (const listener of [...h.inputs]) {
         listener({ type: 'on', midi: 48, velocity: 0.7, audioTime: h.now, sourceId: 'kbd' });
       }
+      expect(transportController.isWaitingForTraining()).toBe(false);
+    }
+  });
+
+  it('keeps the pass it is in while a training hold waits, there or round a loop', () => {
+    // The right hand's long note sounds on through the left hand's hold at 500.
+    const notes = [note('a', 64, 200, 600), { ...note('b', 48, 500), staff: 'bass' as const }];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+    useSettingsStore.getState().setPlaybackMode('training-left');
+    transportController.setLoop({ startMs: 100, endMs: 1000 });
+    transportController.seek(0);
+    transportController.play();
+    for (let pass = 0; pass < 2; pass += 1) {
+      for (let i = 0; i < 200 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+      expect(transportController.isWaitingForTraining()).toBe(true);
+      expect(transportController.getPlayheadMs()).toBe(500);
+      // The run's start the first time through, the loop's top once round: not
+      // the hold, which would leave the note it struck at 200 unstruck.
+      expect(transportController.getPassStartMs()).toBe(pass === 0 ? 0 : 100);
+      press(48);
       expect(transportController.isWaitingForTraining()).toBe(false);
     }
   });
@@ -393,6 +440,19 @@ describe('playback speed and looping', () => {
     const midis = h.scheduled.map((event) => event.midi);
     expect(midis.slice(0, 4)).toEqual([60, 61, 62, 63]);
     expect(h.scheduled[1]!.when - h.scheduled[0]!.when).toBeCloseTo(0.5, 6);
+  });
+
+  it('begins a recording’s backing where the recording starts, past a loop’s end too', async () => {
+    transportController.setLoop({ startMs: 0, endMs: 1000 });
+    useTakeStore.getState().setTempo({
+      ...useTakeStore.getState().take.tempo,
+      countInBars: 0,
+    });
+    transportController.seek(1500);
+    await transportController.record('overdub');
+    run(0.3);
+    expect(transportController.getState()).toBe('recording');
+    expect(transportController.getPassStartMs()).toBe(1500);
   });
 });
 

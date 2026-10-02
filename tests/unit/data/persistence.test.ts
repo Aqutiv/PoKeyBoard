@@ -169,6 +169,50 @@ describe('settingsRepository', () => {
     expect((await loadSettings()).velocityShading).toBe(false);
   });
 
+  it('keeps finger numbers off until they are switched on, beside the note names', async () => {
+    expect(SETTINGS_DEFAULTS.showFingerNumbers).toBe(false);
+    const keys = Object.keys(SETTINGS_DEFAULTS);
+    expect(keys.indexOf('showFingerNumbers')).toBe(keys.indexOf('showNoteLabels') + 1);
+
+    useSettingsStore.getState().setShowFingerNumbers(true);
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).showFingerNumbers).toBe(true);
+
+    // Anything else loads as nothing, so the default stands: no numbers.
+    await db.settings.put({ key: 'showFingerNumbers', value: 'yes' });
+    expect((await loadSettings()).showFingerNumbers).toBeUndefined();
+    await restoreSettingsFromBackup({ showFingerNumbers: true });
+    expect((await loadSettings()).showFingerNumbers).toBe(true);
+  });
+
+  it('remembers the Play page’s view, the score until the falling notes are chosen', async () => {
+    expect(SETTINGS_DEFAULTS.playView).toBe('score');
+
+    useSettingsStore.getState().setPlayView('waterfall');
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).playView).toBe('waterfall');
+
+    // A view the page does not have loads as nothing, so the score stands.
+    await db.settings.put({ key: 'playView', value: 'pianoRoll' });
+    expect((await loadSettings()).playView).toBeUndefined();
+    await restoreSettingsFromBackup({ playView: 'waterfall' });
+    expect((await loadSettings()).playView).toBe('waterfall');
+  });
+
+  it('remembers how fast the notes fall, three seconds until changed', async () => {
+    expect(SETTINGS_DEFAULTS.waterfallSeconds).toBe(3);
+
+    useSettingsStore.getState().setWaterfallSeconds(1.5);
+    await saveSettings(useSettingsStore.getState());
+    expect((await loadSettings()).waterfallSeconds).toBe(1.5);
+
+    // A time between the steps loads as nothing, so the default stands.
+    await db.settings.put({ key: 'waterfallSeconds', value: 7 });
+    expect((await loadSettings()).waterfallSeconds).toBeUndefined();
+    await restoreSettingsFromBackup({ waterfallSeconds: 8 });
+    expect((await loadSettings()).waterfallSeconds).toBe(8);
+  });
+
   it('restores only known keys from a backup blob', async () => {
     await restoreSettingsFromBackup({ fixedVelocity: 0.9, metronomeVolume: -1, evil: 'x' });
     const loaded = await loadSettings();

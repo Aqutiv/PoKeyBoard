@@ -16,6 +16,7 @@ import {
   DEFAULT_REVERB_MIX,
   DEFAULT_REVERB_ROOM,
   DEFAULT_SAMPLE_PACK_VERSION,
+  FINGERS,
   MAX_FIFTHS,
   MAX_NOTE_COUNT,
   MAX_NOTE_DURATION_MS,
@@ -85,6 +86,9 @@ export const noteEventSchema = z.object({
   clef: z.enum(['treble', 'bass']).optional(),
   tuplet: noteTupletSchema.optional(),
   spelling: noteSpellingSchema.optional(),
+  // The finger the score prints, as additive and as inaudible as the hints
+  // above: it only tells the player which finger to use.
+  finger: z.literal(FINGERS).optional(),
   // Whether the source kept the note off the page. Inaudible like the rest: a
   // hidden note sounds exactly as it would printed.
   hidden: z.boolean().optional(),
@@ -349,6 +353,10 @@ export function repairRawTake(input: RawTakeData): { data: RawTakeData; repairs:
       // some other pitch (or nothing) is dropped rather than failing the take.
       if (note.spelling !== undefined && !spellingNamesPitch(note.spelling, note.midi)) {
         delete note.spelling;
+      }
+      // So is a finger, and a hand has only five.
+      if (note.finger !== undefined && !(FINGERS as readonly unknown[]).includes(note.finger)) {
+        delete note.finger;
       }
       return note;
     });

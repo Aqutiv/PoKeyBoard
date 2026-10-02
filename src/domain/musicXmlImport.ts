@@ -18,6 +18,7 @@ import {
   MAX_TEMPO_CHANGES,
   MIN_TEMPO_BPM,
   MAX_TUPLET_NOTES,
+  type Finger,
   type NoteClef,
   type NoteEvent,
   type NoteSpelling,
@@ -80,6 +81,8 @@ interface QNote {
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
   spelling: NoteSpelling | undefined;
+  /** The finger the score prints; see `NoteEvent.finger`. */
+  finger: Finger | undefined;
   /** Kept off the page by the score; see `NoteEvent.hidden`. */
   hidden: boolean;
   /** Where the note's start was read, counted across the whole score. */
@@ -107,6 +110,8 @@ interface PendingTie {
   clef: NoteClef | undefined;
   tuplet: NoteTuplet | undefined;
   spelling: NoteSpelling | undefined;
+  /** The first link's finger: the one that strikes the key. */
+  finger: Finger | undefined;
   /** Whether every link so far was kept off the page. */
   hidden: boolean;
   seq: number;
@@ -184,6 +189,7 @@ function pendingToNote(pending: PendingTie): QNote {
     clef: pending.clef,
     tuplet: pending.tuplet,
     spelling: pending.spelling,
+    finger: pending.finger,
     hidden: pending.hidden,
     seq: pending.seq,
   };
@@ -293,6 +299,27 @@ function pianoPairStaves(root: Element, parts: readonly Element[]): Map<Element,
   staves.set(upper, 'treble');
   staves.set(lower, 'bass');
   return staves;
+}
+
+/**
+ * The finger a note's `<notations><technical><fingering>` prints: the first
+ * finger of the first one. A substitution — "3-1", or a second `<fingering>`
+ * marked as one — starts on that finger, the one that strikes the key. Absent
+ * when the note prints none, or nothing a hand has.
+ */
+function fingerOf(note: Element): Finger | undefined {
+  for (const child of note.children) {
+    if (child.tagName !== 'notations') continue;
+    for (const notation of child.children) {
+      if (notation.tagName !== 'technical') continue;
+      for (const mark of notation.children) {
+        if (mark.tagName !== 'fingering') continue;
+        const digit = /[1-5]/.exec(mark.textContent ?? '');
+        if (digit) return Number(digit[0]) as Finger;
+      }
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -662,6 +689,7 @@ function collectPart(
           // is kept like any other, and the notation leaves it out.
           const hidden =
             el.getAttribute('print-object') === 'no' || textByTag(el, 'notehead') === 'none';
+          const finger = fingerOf(el);
           const staffNumber = Math.round(numberByTag(el, 'staff') ?? 1);
           const staff = staffOf(el);
           const voice = voiceOf(el, staff);
@@ -686,7 +714,9 @@ function collectPart(
               pending.endQ = endQ;
               // One note, drawn from where it starts: hidden only if every
               // link was, or the printed note a hidden one is tied into would
-              // vanish with it.
+              // vanish with it. Its finger stays the first link's, the one
+              // that strikes; a finger printed on a held link is a change of
+              // finger on the key, not a strike.
               pending.hidden &&= hidden;
               if (hasStart)
                 pendingTies.set(key, pending); // middle of a chain
@@ -702,6 +732,7 @@ function collectPart(
                 clef,
                 tuplet,
                 spelling,
+                finger,
                 hidden,
                 seq: out.nextSeq++,
               });
@@ -717,6 +748,7 @@ function collectPart(
                 clef,
                 tuplet,
                 spelling,
+                finger,
                 hidden,
                 seq: out.nextSeq++,
               });
@@ -734,6 +766,7 @@ function collectPart(
               clef,
               tuplet,
               spelling,
+              finger,
               hidden,
               seq: out.nextSeq++,
             });
@@ -748,6 +781,7 @@ function collectPart(
               clef,
               tuplet,
               spelling,
+              finger,
               hidden,
               seq: out.nextSeq++,
             });
@@ -998,6 +1032,7 @@ export function musicXmlToTake(xmlText: string, fileName?: string): Take {
       ...(note.clef !== undefined ? { clef: note.clef } : {}),
       ...(note.tuplet !== undefined ? { tuplet: note.tuplet } : {}),
       ...(note.spelling !== undefined ? { spelling: note.spelling } : {}),
+      ...(note.finger !== undefined ? { finger: note.finger } : {}),
       ...(note.hidden ? { hidden: true } : {}),
     };
   });

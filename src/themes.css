@@ -9,6 +9,7 @@
 /*   - the pre-paint script + theme-color meta in index.html           */
 /*   - THEME_COLORS in src/app/theme.ts                                */
 /*   - SCORE_PALETTES in src/features/notation/scoreRenderer.ts        */
+/*   - WATERFALL_PALETTES in src/features/waterfall/waterfallPalette.ts */
 /* ------------------------------------------------------------------ */
 
 :root {

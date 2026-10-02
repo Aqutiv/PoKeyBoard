@@ -34,6 +34,7 @@ describe('i18n catalogs', () => {
     for (const lang of SUPPORTED_LANGUAGES) {
       const m = catalogs[lang];
       expect(m.score.label({ count: 3 })).toContain('3');
+      expect(m.play.fallingLabel({ count: 7 })).toContain('7');
       expect(m.about.version({ version: '9.9.9' })).toContain('9.9.9');
       expect(m.metronome.on({ bpm: 128 })).toContain('128');
     }

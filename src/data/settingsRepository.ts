@@ -14,7 +14,9 @@ import {
 } from '@/features/keyboard/velocityResponse';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
 import { LIBRARY_FOLDER_IDS } from '@/features/library/folders';
+import { PLAY_VIEWS } from '@/features/play/playView';
 import { SETTINGS_SECTION_IDS } from '@/features/settings/sections';
+import { WATERFALL_SECONDS } from '@/features/waterfall/fallSpeed';
 import { PLAYBACK_MODES, RECORD_MODES } from '@/features/transport/modes';
 import { SETTINGS_DEFAULTS, type SettingsState } from '@/state/useSettingsStore';
 import { db } from './db';
@@ -44,8 +46,11 @@ const SETTING_SCHEMAS = {
     .refine(({ min, max }) => max - min >= MIN_MIDI_RANGE_SPAN)
     .nullable(),
   showNoteLabels: z.boolean(),
+  showFingerNumbers: z.boolean(),
   velocityShading: z.boolean(),
   keyboardFollowsPlayback: z.boolean(),
+  playView: z.enum(PLAY_VIEWS),
+  waterfallSeconds: z.literal(WATERFALL_SECONDS),
   scrubAudition: z.boolean(),
   backgroundPlayback: z.boolean(),
   gamepadInput: z.boolean(),

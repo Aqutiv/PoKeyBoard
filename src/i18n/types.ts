@@ -165,6 +165,13 @@ export interface Messages {
     viewLabel: string;
     notationView: string;
     keyboardView: string;
+    /** The view of the take's notes falling onto the keys, as it is named in the switch. */
+    fallingView: string;
+    fallingLabel: (p: { count: number }) => string;
+    fallingEmpty: string;
+    fallSpeed: string;
+    fallSlower: string;
+    fallFaster: string;
     dismiss: string;
     loadingPiano: (p: { percent: number }) => string;
     retryLoadingPiano: string;
@@ -584,7 +591,10 @@ export interface Messages {
     midiCalibrateLoudest: (p: { softest: number }) => string;
     midiCalibrateRejected: string;
     noteLabels: string;
-    /** The switch that shades lit keys by velocity, and what it does. */
+    /** The switch for finger numbers on the falling notes, and where they come from. */
+    fingerNumbers: string;
+    fingerNumbersHint: string;
+    /** The switch that shades lit keys and falling notes by velocity, and what it does. */
     velocityShading: string;
     velocityShadingHint: string;
     followPlayback: string;

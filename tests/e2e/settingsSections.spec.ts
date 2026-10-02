@@ -18,10 +18,14 @@ test.describe('Settings sections', () => {
       'true',
     );
     await expect(page.getByRole('slider', { name: 'Piano volume' })).toBeVisible();
-    await expect(page.getByRole('checkbox', { name: 'Note labels on keys' })).toHaveCount(0);
+    await expect(
+      page.getByRole('checkbox', { name: 'Note names on keys and falling notes' }),
+    ).toHaveCount(0);
 
     await chooseSettingsSection(page, 'Display');
-    await expect(page.getByRole('checkbox', { name: 'Note labels on keys' })).toBeVisible();
+    await expect(
+      page.getByRole('checkbox', { name: 'Note names on keys and falling notes' }),
+    ).toBeVisible();
     await expect(page.getByRole('slider', { name: 'Piano volume' })).toHaveCount(0);
   });
 
@@ -40,7 +44,7 @@ test.describe('Settings sections', () => {
   test('stays on App when its Reset puts everything else back', async ({ page }) => {
     await gotoAppReady(page);
     await openSettings(page, 'Display');
-    await page.getByRole('checkbox', { name: 'Note labels on keys' }).uncheck();
+    await page.getByRole('checkbox', { name: 'Note names on keys and falling notes' }).uncheck();
 
     await chooseSettingsSection(page, 'App');
     page.once('dialog', (dialog) => void dialog.accept());
@@ -50,7 +54,9 @@ test.describe('Settings sections', () => {
     ).toHaveAttribute('aria-pressed', 'true');
 
     await chooseSettingsSection(page, 'Display');
-    await expect(page.getByRole('checkbox', { name: 'Note labels on keys' })).toBeChecked();
+    await expect(
+      page.getByRole('checkbox', { name: 'Note names on keys and falling notes' }),
+    ).toBeChecked();
   });
 
   test('moves a choice with the arrow keys, as radio buttons do', async ({ page }) => {

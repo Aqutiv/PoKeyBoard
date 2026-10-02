@@ -591,6 +591,117 @@ describe('spellings', () => {
   });
 });
 
+describe('printed fingers', () => {
+  const fingering = (...marks: string[]) =>
+    `<notations><technical>${marks.map((mark) => `<fingering>${mark}</fingering>`).join('')}` +
+    '</technical></notations>';
+
+  it('keeps the finger each note prints, and none where it prints none', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            note('C', 4, 1, fingering('1')) +
+            note('D', 4, 1) +
+            note('E', 4, 1, fingering('3')),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => n.finger)).toEqual([1, undefined, 3]);
+    // Absent, not undefined: a score that prints none imports as it always did.
+    expect(take.notes[1]).not.toHaveProperty('finger');
+  });
+
+  it('starts a change of finger on the finger that strikes', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            note('C', 4, 1, fingering('3-1')) +
+            note('D', 4, 1, fingering('4', '<x/>')) +
+            note(
+              'E',
+              4,
+              1,
+              '<notations><technical><fingering>2</fingering>' +
+                '<fingering substitution="yes">1</fingering></technical></notations>',
+            ),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => n.finger)).toEqual([3, 4, 2]);
+  });
+
+  it('fingers each note of a chord on its own', () => {
+    const chord = '<chord/>';
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            note('C', 4, 1, fingering('1')) +
+            `<note>${chord}<pitch><step>E</step><octave>4</octave></pitch><duration>1</duration>` +
+            `${fingering('3')}</note>` +
+            `<note>${chord}<pitch><step>G</step><octave>4</octave></pitch><duration>1</duration>` +
+            `${fingering('5')}</note>`,
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => [n.midi, n.finger])).toEqual([
+      [60, 1],
+      [64, 3],
+      [67, 5],
+    ]);
+  });
+
+  it('keeps the finger a tie chain started with, not one printed on a held link', () => {
+    const tied = (tie: string, mark?: string) =>
+      note('C', 4, 4, `<tie type="${tie}"/>${mark === undefined ? '' : fingering(mark)}`);
+    const changed = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + tied('start', '2')) + measure(2, tied('stop', '4'))),
+    );
+    expect(changed.notes).toHaveLength(1);
+    expect(changed.notes[0]!.finger).toBe(2);
+    const late = musicXmlToTake(
+      scoreWith(measure(1, DIV1 + tied('start')) + measure(2, tied('stop', '4'))),
+    );
+    expect(late.notes[0]).not.toHaveProperty('finger');
+  });
+
+  it('drops a grace note’s finger with the grace note', () => {
+    const grace =
+      '<note><grace/><pitch><step>D</step><octave>4</octave></pitch>' +
+      `<type>eighth</type>${fingering('2')}</note>`;
+    const take = musicXmlToTake(scoreWith(measure(1, DIV1 + grace + note('C', 4, 1))));
+    expect(take.notes).toHaveLength(1);
+    expect(take.notes[0]).not.toHaveProperty('finger');
+  });
+
+  it('reads nothing a hand does not have', () => {
+    const take = musicXmlToTake(
+      scoreWith(
+        measure(
+          1,
+          DIV1 +
+            note('C', 4, 1, fingering('0')) +
+            note('D', 4, 1, fingering('p')) +
+            note('E', 4, 1, fingering('')),
+        ),
+      ),
+    );
+    expect(take.notes.map((n) => n.finger)).toEqual([undefined, undefined, undefined]);
+  });
+
+  it('survives a round trip through the take schema', () => {
+    const take = musicXmlToTake(scoreWith(measure(1, DIV1 + note('C', 4, 1, fingering('5')))));
+    const { take: parsed, repairs } = parseTakeJson(JSON.parse(JSON.stringify(take)));
+    expect(repairs).toEqual([]);
+    expect(parsed.notes[0]!.finger).toBe(5);
+  });
+});
+
 describe('tempo and dynamics', () => {
   it('integrates a mid-piece tempo change into note onsets', () => {
     const take = musicXmlToTake(

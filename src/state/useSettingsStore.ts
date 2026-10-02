@@ -17,7 +17,9 @@ import type {
 } from '@/features/keyboard/velocityResponse';
 import { DEFAULT_LEARN_LEVEL, type LearnLevelId } from '@/features/learn/levels';
 import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library/folders';
+import { DEFAULT_PLAY_VIEW, type PlayView } from '@/features/play/playView';
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '@/features/settings/sections';
+import { DEFAULT_WATERFALL_SECONDS, type WaterfallSeconds } from '@/features/waterfall/fallSpeed';
 import type { PlaybackMode, RecordMode } from '@/features/transport/modes';
 import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
@@ -52,12 +54,21 @@ export interface SettingsState {
   midiVelocityRange: MidiVelocityRange | null;
   showNoteLabels: boolean;
   /**
+   * Each falling note carries the finger that plays it: the score's own, or
+   * one worked out; see fingering.ts.
+   */
+  showFingerNumbers: boolean;
+  /**
    * Lit keys are shaded by how hard their note is played, live and in
    * playback, rather than all alike; see keyShading.ts.
    */
   velocityShading: boolean;
   /** Slide the Play keyboard to where playback is playing. */
   keyboardFollowsPlayback: boolean;
+  /** What the Play page shows above the keys: the score, or the falling notes. */
+  playView: PlayView;
+  /** How many seconds of music the falling notes show: how long a note takes to fall. */
+  waterfallSeconds: WaterfallSeconds;
   scrubAudition: boolean;
   /** Keep recorded-take playback running while the page is hidden. */
   backgroundPlayback: boolean;
@@ -99,8 +110,11 @@ export interface SettingsState {
   setMidiVelocityCurve(curve: MidiVelocityCurve): void;
   setMidiVelocityRange(range: MidiVelocityRange | null): void;
   setShowNoteLabels(show: boolean): void;
+  setShowFingerNumbers(show: boolean): void;
   setVelocityShading(enabled: boolean): void;
   setKeyboardFollowsPlayback(follow: boolean): void;
+  setPlayView(view: PlayView): void;
+  setWaterfallSeconds(seconds: WaterfallSeconds): void;
   setScrubAudition(enabled: boolean): void;
   setBackgroundPlayback(enabled: boolean): void;
   setGamepadInput(enabled: boolean): void;
@@ -134,8 +148,11 @@ export const SETTINGS_DEFAULTS = {
   midiVelocityCurve: 'normal' as MidiVelocityCurve,
   midiVelocityRange: null as MidiVelocityRange | null,
   showNoteLabels: true,
+  showFingerNumbers: false,
   velocityShading: true,
   keyboardFollowsPlayback: true,
+  playView: DEFAULT_PLAY_VIEW,
+  waterfallSeconds: DEFAULT_WATERFALL_SECONDS,
   scrubAudition: true,
   backgroundPlayback: false,
   gamepadInput: true,
@@ -180,8 +197,11 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setMidiVelocityCurve: (midiVelocityCurve) => set({ midiVelocityCurve }),
   setMidiVelocityRange: (midiVelocityRange) => set({ midiVelocityRange }),
   setShowNoteLabels: (showNoteLabels) => set({ showNoteLabels }),
+  setShowFingerNumbers: (showFingerNumbers) => set({ showFingerNumbers }),
   setVelocityShading: (velocityShading) => set({ velocityShading }),
   setKeyboardFollowsPlayback: (keyboardFollowsPlayback) => set({ keyboardFollowsPlayback }),
+  setPlayView: (playView) => set({ playView }),
+  setWaterfallSeconds: (waterfallSeconds) => set({ waterfallSeconds }),
   setScrubAudition: (scrubAudition) => set({ scrubAudition }),
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),
