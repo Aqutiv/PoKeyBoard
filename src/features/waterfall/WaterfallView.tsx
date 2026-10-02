@@ -81,6 +81,23 @@ interface Drag {
   readonly playhead0: number;
 }
 
+/** Two fingers pinching the notes: which, how far apart they came down, and the fall then. */
+interface Pinch {
+  readonly fingers: readonly [number, number];
+  readonly span0: number;
+  readonly from: WaterfallSeconds;
+}
+
+/**
+ * The fall a pinch has reached: a step of the − and + for each `ZOOM_STEP`
+ * the fingers have spread (quicker) or closed (slower) since it began, as
+ * the score's zoom takes a pinch.
+ */
+function pinchedSeconds(from: WaterfallSeconds, scale: number): WaterfallSeconds {
+  if (!(scale > 0) || !Number.isFinite(scale)) return from;
+  return waterfallSecondsAfter(from, Math.round(Math.log(scale) / Math.log(ZOOM_STEP)));
+}
+
 /**
  * Where the view stands now, and how fast the take falls through it. A note
  * takes `fallMs` (the fall speed) to fall at any playback speed, so the view
@@ -114,8 +131,9 @@ function timelineNow(loopAtRest: PlaybackLoop | null, fallMs: number): Waterfall
  * The take's notes falling onto the keys below, each bar standing over its
  * key and reaching it as the key lights. It sits straight on the key bed
  * (index.css joins the two) and is told the bed's range, so the two line up
- * key for key as the bed moves. − and + (or Ctrl/⌘ + wheel) set how fast the
- * notes fall, and a drag up or down scrubs, the notes following the finger.
+ * key for key as the bed moves. − and + (or Ctrl/⌘ + wheel, or a pinch on a
+ * trackpad or a touch screen) set how fast the notes fall, and a drag up or
+ * down scrubs, the notes following the finger.
  */
 export function WaterfallView({ range }: { range: KeyRange | null }) {
   const m = useMessages();
@@ -177,8 +195,9 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   const dragRef = useRef<Drag | null>(null);
   /** Wheel travel not yet a whole step of the fall speed: a pinch sends it in slivers. */
   const wheelStepsRef = useRef(0);
-  /** The fingers on the notes, by pointer: a touch screen's, not a trackpad's. */
-  const fingersRef = useRef(new Set<number>());
+  /** The fingers on the notes, by pointer, and where each is: a touch screen's, not a trackpad's. */
+  const fingersRef = useRef(new Map<number, { x: number; y: number }>());
+  const pinchRef = useRef<Pinch | null>(null);
 
   useEffect(() => {
     notesRef.current = notes;
@@ -340,8 +359,8 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   // Safari sends a trackpad pinch as gestures of its own, which set the fall
   // speed as the wheel does: a step for each ZOOM_STEP the fingers spread or
   // close, as the score's zoom takes them. It sends them for fingers on a
-  // touch screen too, alongside their pointers; there they are only stopped,
-  // or the page would zoom instead.
+  // touch screen too, alongside their pointers, which the pinch below
+  // follows; there they are only stopped, or the page would zoom instead.
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -353,10 +372,9 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     const onGestureChange = (event: Event) => {
       event.preventDefault();
       const { scale } = event as SafariGestureEvent;
-      if (from === null || !(scale > 0)) return;
-      const steps = Math.round(Math.log(scale) / Math.log(ZOOM_STEP));
+      if (from === null) return;
       const settings = useSettingsStore.getState();
-      const next = waterfallSecondsAfter(from, steps);
+      const next = pinchedSeconds(from, scale);
       if (next !== settings.waterfallSeconds) settings.setWaterfallSeconds(next);
     };
     const onGestureEnd = (event: Event) => {
@@ -384,6 +402,45 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   );
 
   /**
+   * Two fingers on the notes pinch them, at rest or not. A drag the first
+   * began is undone, unheard, so it never counts as a seek; then the fall
+   * speed follows the fingers' spread, as the score's zoom does.
+   */
+  const beginPinch = () => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    if (drag) scrubController.cancel(drag.playhead0);
+    const [a, b] = [...fingersRef.current];
+    if (!a || !b) return;
+    pinchRef.current = {
+      fingers: [a[0], b[0]],
+      span0: Math.max(1, Math.hypot(b[1].x - a[1].x, b[1].y - a[1].y)),
+      from: useSettingsStore.getState().waterfallSeconds,
+    };
+  };
+
+  const movePinch = (pinch: Pinch) => {
+    const a = fingersRef.current.get(pinch.fingers[0]);
+    const b = fingersRef.current.get(pinch.fingers[1]);
+    if (!a || !b) return;
+    const settings = useSettingsStore.getState();
+    const next = pinchedSeconds(pinch.from, Math.hypot(b.x - a.x, b.y - a.y) / pinch.span0);
+    if (next !== settings.waterfallSeconds) settings.setWaterfallSeconds(next);
+  };
+
+  /**
+   * A finger leaving the notes. True where it belonged to a pinch, which ends
+   * with either of its fingers; one still down then rests until it lifts too.
+   */
+  const liftFinger = (pointerId: number): boolean => {
+    if (!fingersRef.current.delete(pointerId)) return false;
+    const pinch = pinchRef.current;
+    if (!pinch) return false;
+    if (pinch.fingers.includes(pointerId)) pinchRef.current = null;
+    return true;
+  };
+
+  /**
    * A drag scrubs, at rest. It starts from where the view stands — Play's own
    * start, which is a loop's top for a playhead parked past its end — and goes
    * round the loop as the view draws it, so the notes never jump under the
@@ -392,10 +449,19 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
    */
   const onPointerDown = (event: ReactPointerEvent<HTMLCanvasElement>) => {
     if (event.pointerType === 'touch') {
+      const fingers = fingersRef.current;
       // A new touch's first finger: any left over, whose lifting never reached
-      // the notes, are gone.
-      if (event.isPrimary) fingersRef.current.clear();
-      fingersRef.current.add(event.pointerId);
+      // the notes, are gone, and the pinch they made with it.
+      if (event.isPrimary) {
+        fingers.clear();
+        pinchRef.current = null;
+      }
+      fingers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+      if (fingers.size === 2 && !pinchRef.current) {
+        beginPinch();
+        return;
+      }
+      if (fingers.size > 1) return;
     }
     if (!event.isPrimary || event.button !== 0) return;
     const current = transportController.getState();
@@ -413,6 +479,16 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   };
 
   const onPointerMove = (event: ReactPointerEvent<HTMLCanvasElement>) => {
+    const finger = fingersRef.current.get(event.pointerId);
+    if (finger) {
+      finger.x = event.clientX;
+      finger.y = event.clientY;
+      const pinch = pinchRef.current;
+      if (pinch) {
+        if (pinch.fingers.includes(event.pointerId)) movePinch(pinch);
+        return;
+      }
+    }
     const drag = dragRef.current;
     const { height } = sizeRef.current;
     if (!drag || drag.pointerId !== event.pointerId || height <= 0) return;
@@ -422,7 +498,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   };
 
   const onPointerEnd = (event: ReactPointerEvent<HTMLCanvasElement>) => {
-    fingersRef.current.delete(event.pointerId);
+    if (liftFinger(event.pointerId)) return;
     const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
     dragRef.current = null;

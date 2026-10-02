@@ -414,6 +414,64 @@ describe('WaterfallView', () => {
       fireEvent.pointerUp(canvas, { pointerId: 7, pointerType: 'touch' });
     });
 
+    const finger = (canvas: HTMLElement, pointerId: number, clientY: number) =>
+      fireEvent.pointerDown(canvas, {
+        pointerId,
+        pointerType: 'touch',
+        isPrimary: pointerId === 1,
+        clientX: 100,
+        clientY,
+      });
+    const slide = (canvas: HTMLElement, pointerId: number, clientY: number) =>
+      fireEvent.pointerMove(canvas, { pointerId, pointerType: 'touch', clientX: 100, clientY });
+    const lift = (canvas: HTMLElement, pointerId: number) =>
+      fireEvent.pointerUp(canvas, { pointerId, pointerType: 'touch' });
+
+    it('turns a drag into a pinch when a second finger lands, stepping the fall speed', () => {
+      const update = vi.spyOn(scrubController, 'update');
+      show();
+      const canvas = screen.getByRole('img');
+      const seconds = () => useSettingsStore.getState().waterfallSeconds;
+      finger(canvas, 1, 100);
+      slide(canvas, 1, 160);
+      expect(transportController.getPlayheadMs()).toBe(600);
+      // A second finger, 100 px below the first: the drag is undone, unheard.
+      finger(canvas, 2, 260);
+      expect(transportController.getState()).toBe('idle');
+      expect(transportController.getPlayheadMs()).toBe(0);
+      update.mockClear();
+      // Spread to 1.6 times: two steps of 1.25 in, two quicker falls…
+      slide(canvas, 2, 320);
+      expect(seconds()).toBe(2);
+      // …and closed to half, from where the pinch began: three steps out.
+      slide(canvas, 2, 210);
+      expect(seconds()).toBe(6);
+      // Either finger moves the pinch: the first up to 100 px apart again.
+      slide(canvas, 1, 110);
+      expect(seconds()).toBe(3);
+      // Neither scrubs while they pinch, nor the one left after.
+      lift(canvas, 2);
+      slide(canvas, 1, 200);
+      expect(update).not.toHaveBeenCalled();
+      expect(seconds()).toBe(3);
+      lift(canvas, 1);
+      expect(transportController.getState()).toBe('idle');
+      expect(transportController.getPlayheadMs()).toBe(0);
+    });
+
+    it('pinches during playback too, where there is no drag to undo', () => {
+      show();
+      const canvas = screen.getByRole('img');
+      vi.spyOn(transportController, 'getState').mockReturnValue('playing');
+      finger(canvas, 1, 100);
+      finger(canvas, 2, 200);
+      slide(canvas, 2, 300);
+      // Spread to twice: three steps in, from three seconds to one and a half.
+      expect(useSettingsStore.getState().waterfallSeconds).toBe(1.5);
+      lift(canvas, 1);
+      lift(canvas, 2);
+    });
+
     it('answers only the main button of the main pointer, and never a running take', () => {
       const begin = vi.spyOn(scrubController, 'begin');
       show();

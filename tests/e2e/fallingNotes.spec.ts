@@ -311,6 +311,39 @@ test.describe('falling notes on a phone', () => {
   });
 });
 
+test.describe('falling notes on a touch screen', () => {
+  test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+
+  test('fall faster for two fingers spread apart, and the page does not zoom', async ({ page }) => {
+    await gotoAppReady(page);
+    await showFallingNotes(page);
+    const box = await page.locator('.waterfall__canvas').boundingBox();
+    if (!box) throw new Error('no falling notes');
+    // Two real fingers, through Chromium's own touch input: down 60 px apart
+    // in the middle of the notes, then spread to 200 px.
+    const cdp = await page.context().newCDPSession(page);
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    const touch = (type: string, half: number) =>
+      cdp.send('Input.dispatchTouchEvent', {
+        type,
+        touchPoints:
+          type === 'touchEnd'
+            ? []
+            : [
+                { x, y: y - half, id: 1 },
+                { x, y: y + half, id: 2 },
+              ],
+      });
+    await touch('touchStart', 30);
+    for (const half of [50, 70, 90, 100]) await touch('touchMove', half);
+    await touch('touchEnd', 0);
+    // Spread to 3.3 times: five steps in, from three seconds to the quickest.
+    await expect.poll(() => persistedSetting(page, 'waterfallSeconds')).toBe(1);
+    expect(await page.evaluate(() => window.visualViewport?.scale ?? 1)).toBe(1);
+  });
+});
+
 test.describe('falling notes in short landscape', () => {
   test.use({ viewport: { width: 844, height: 390 } });
 
