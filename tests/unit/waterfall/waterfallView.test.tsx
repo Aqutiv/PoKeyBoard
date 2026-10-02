@@ -459,6 +459,23 @@ describe('WaterfallView', () => {
       expect(transportController.getPlayheadMs()).toBe(0);
     });
 
+    it('puts a playhead parked past a loop’s end back where it was when a drag turns into a pinch', () => {
+      act(() => useTakeStore.getState().setPlaybackLoop({ startMs: 1000, endMs: 2000 }));
+      act(() => transportController.seek(2500));
+      show();
+      const canvas = screen.getByRole('img');
+      // The drag starts from the loop's top, as the view shows it…
+      finger(canvas, 1, 100);
+      expect(transportController.getPlayheadMs()).toBe(1000);
+      slide(canvas, 1, 130);
+      // …but a pinch only changes the fall: the playhead is left where it was parked.
+      finger(canvas, 2, 230);
+      expect(transportController.getState()).toBe('idle');
+      expect(transportController.getPlayheadMs()).toBe(2500);
+      lift(canvas, 2);
+      lift(canvas, 1);
+    });
+
     it('pinches during playback too, where there is no drag to undo', () => {
       show();
       const canvas = screen.getByRole('img');

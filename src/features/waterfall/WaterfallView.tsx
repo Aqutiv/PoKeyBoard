@@ -79,6 +79,12 @@ interface Drag {
   readonly pointerId: number;
   readonly startY: number;
   readonly playhead0: number;
+  /**
+   * Where the playhead was parked before the drag stood it where the view
+   * does — past a loop's end, say, rather than the loop's top. A pinch that
+   * undoes the drag puts it back here: changing the fall moves nothing.
+   */
+  readonly parkedMs: number;
 }
 
 /** Two fingers pinching the notes: which, how far apart they came down, and the fall then. */
@@ -403,13 +409,14 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
 
   /**
    * Two fingers on the notes pinch them, at rest or not. A drag the first
-   * began is undone, unheard, so it never counts as a seek; then the fall
+   * began is undone, unheard, back to where the playhead was parked, so it
+   * never counts as a seek; then the fall
    * speed follows the fingers' spread, as the score's zoom does.
    */
   const beginPinch = () => {
     const drag = dragRef.current;
     dragRef.current = null;
-    if (drag) scrubController.cancel(drag.playhead0);
+    if (drag) scrubController.cancel(drag.parkedMs);
     const [a, b] = [...fingersRef.current];
     if (!a || !b) return;
     pinchRef.current = {
@@ -467,6 +474,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     const current = transportController.getState();
     if (current !== 'idle' && current !== 'paused' && current !== 'scrubbing') return;
     if (scrubController.isActive) scrubController.end();
+    const parkedMs = transportController.getPlayheadMs();
     const standMs = transportController.getPassStartMs();
     if (standMs !== transportController.getPlayheadMs()) transportController.seek(standMs);
     if (!scrubController.begin(loopRef.current)) return;
@@ -475,6 +483,7 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
       pointerId: event.pointerId,
       startY: event.clientY,
       playhead0: transportController.getPlayheadMs(),
+      parkedMs,
     };
   };
 
