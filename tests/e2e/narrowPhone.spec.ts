@@ -58,13 +58,28 @@ test.describe('narrow portrait phone', () => {
     expect(header?.height).toBeLessThanOrEqual(MAX_HEADER_PX);
   });
 
+  test('keeps the two Library folder labels at full size', async ({ page }) => {
+    // Two segments have room here, so the folders skip the type step-down
+    // that Learn's levels and Settings' sections take.
+    await gotoAppReady(page);
+    await page.goto('/#/library');
+    const folders = page.getByRole('group', { name: 'Library folder' });
+    await expect(folders).toBeVisible();
+    expect(await clippedControls(page, folders)).toEqual([]);
+    const sizes = await folders
+      .getByRole('button')
+      .evaluateAll((options) => options.map((option) => getComputedStyle(option).fontSize));
+    expect(sizes).toEqual(['14px', '14px']);
+  });
+
   test('keeps the three Learn level labels inside their segments', async ({ page }) => {
     // Three segments share ~92px each here, and "Intermediate" needs ~88px at
     // the full 14px — hence the type step-down, with ellipsis behind it.
     await gotoAppReady(page);
     await page.goto('/#/learn');
-    await expect(page.getByRole('group', { name: 'Learn level' })).toBeVisible();
-    expect(await clippedControls(page, '.learn-levels')).toEqual([]);
+    const levels = page.getByRole('group', { name: 'Learn level' });
+    await expect(levels).toBeVisible();
+    expect(await clippedControls(page, levels)).toEqual([]);
   });
 
   test('keeps the four Settings section labels inside their segments', async ({ page }) => {
@@ -73,9 +88,9 @@ test.describe('narrow portrait phone', () => {
     await gotoAppReady(page);
     await openSettings(page);
     await expect(settingsSections(page)).toBeVisible();
-    expect(await clippedControls(page, '.settings-sections')).toEqual([]);
-    const truncated = await page
-      .locator('.settings-sections__option')
+    expect(await clippedControls(page, settingsSections(page))).toEqual([]);
+    const truncated = await settingsSections(page)
+      .getByRole('button')
       .evaluateAll((options) =>
         options
           .filter((option) => option.scrollWidth > option.clientWidth + 0.5)

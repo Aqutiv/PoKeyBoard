@@ -74,6 +74,8 @@ src/
                 install, cacheNames
   state/        zustand stores: take, settings, export-ui
   app/          hash router, providers (service wiring), lifecycle, hooks
+  ui/           shared controls: MenuButton, TooltipButton, SegmentedSwitch
+                (the library's folders, Learn's levels, Settings' sections)
 ```
 
 ## Audio clock ownership
