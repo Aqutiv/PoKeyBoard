@@ -690,6 +690,25 @@ describe('midiToTake: pedal', () => {
     expect(sounded!.startMs + sounded!.durationMs).toBe(500);
   });
 
+  it('leaves a note whole when the pedal, broken, is let up within the millisecond', () => {
+    // At 9600 to the quarter a tick is 0.05 ms: CC120 breaks the held pedal at
+    // 1000 ms and a release a tick later lets it up, so nothing presses it
+    // again at 1000 ms and the note let go there keeps its length.
+    const ms = 9600 / 500;
+    const at = 1000 * ms;
+    const take = midiToTake(
+      smf(0, 9600, [
+        [pedal(0, 0, true), ...played(0, 60, 0, at), [at, 0xb0, 120, 0], pedal(0, at + 1, false)],
+      ]),
+      'x.mid',
+    );
+    expect(take.pedalEvents).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 1000, down: false },
+    ]);
+    expect(take.notes.map((n) => n.durationMs)).toEqual([1000]);
+  });
+
   it('leaves a note whole when an All Sound Off on its tick finds no pedal', () => {
     const take = midiToTake(
       smf(0, 480, [[...played(0, 60, 0, 480), [480, 0xb0, 120, 0]]]),

@@ -652,7 +652,8 @@ interface PedalChange {
  * lands on the very millisecond a note let go on that tick ends, and a note
  * let go as the pedal goes down is held by it; those ticks are handed back, so
  * such notes can let go a millisecond sooner, while the pedal from before
- * still holds them, and stop with the break.
+ * still holds them, and stop with the break — where the settled pedal does
+ * still go down on that millisecond.
  *
  * Then a whole millisecond at a time, which is all a take keeps, and so all it
  * can order — two changes a tick apart at 960 to the quarter can share one,
@@ -845,7 +846,14 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
 
   const staff = staffOf(notes);
   const keyOf = fileKey(smf);
-  const { pedals, heldAgainAfterBreak } = collectPedal(smf, msAtTick);
+  const { pedals: settledPedals, heldAgainAfterBreak } = collectPedal(smf, msAtTick);
+  const pedals = withinPedalLimit(settledPedals);
+  // The milliseconds the pedal goes down on, as the take keeps it: a break's
+  // tick moves a note only where the pedal is still pressed again there once
+  // its millisecond is settled — a release a tick later may let it up instead.
+  const pressedAt = new Set(pedals.filter((pedal) => pedal.down).map((pedal) => pedal.atMs));
+  const letGoSooner = (tick: number): boolean =>
+    heldAgainAfterBreak.has(tick) && pressedAt.has(Math.round(msAtTick(tick)));
   const onsets = [...new Set(notes.map((note) => note.startTick))].map(
     (tick) => tick / smf.ticksPerQuarter,
   );
@@ -857,13 +865,13 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
         startMs: msAtTick(note.startTick),
         // Let go on a tick where All Sound Off broke the pedal and it went
         // down again: a millisecond sooner, so the press cannot hold it on.
-        endMs: msAtTick(note.endTick) - (heldAgainAfterBreak.has(note.endTick) ? 1 : 0),
+        endMs: msAtTick(note.endTick) - (letGoSooner(note.endTick) ? 1 : 0),
         velocity: note.velocity,
         seq: note.seq,
         staff: staff(note),
       })),
       nextSeq: notes.length,
-      pedals: withinPedalLimit(pedals),
+      pedals,
       tempoMap: createTakeTempoMap({ bpm: base, timeSignature: meter, changes }),
       timeSignature: meter,
       keySignature: keyOf?.fifths ?? null,
