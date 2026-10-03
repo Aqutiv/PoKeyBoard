@@ -102,3 +102,37 @@ Imports whose `id` already exists locally become a **copy with a fresh id** unle
 ## Backup files
 
 `PoKeyBoard Backup - YYYY-MM-DD.json`: `{ kind: "pokeyboard-backup", schemaVersion, createdAt, takes: Take[], settings: {…} }`. Restore validates each take through the same pipeline (bad entries are skipped and counted) and merges with fresh ids on collision. Backups never include the piano sample cache or rendered MP3s.
+
+## Share links
+
+**Share → Link…** puts a take in a link of its own: `https://<the app>/#/s/1.<data>`. Everything after `#` is the fragment, which a browser never sends in a request: opening the link fetches only the app, and the take is read by the browser that opens it. A Library track gets `#/lib/<trackId>` instead (the id URL-escaped), which only names it — a library take is never edited or stored, so its catalog entry is all there is to send.
+
+The `1` is the link format, apart from `schemaVersion`. `<data>` is base64url (`A–Z a–z 0–9 - _`, no padding) of the raw DEFLATE (fflate `deflateSync`, level 9) of these bytes, in this order (`src/domain/takeLink.ts`):
+
+| Part          | Encoding                                                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| header length | varint, at most 65,536                                                                                                                                  |
+| header        | UTF-8 JSON                                                                                                                                              |
+| note count    | varint, at most 50,000                                                                                                                                  |
+| starts        | varint per note: milliseconds since the previous note's start (the first, since 0)                                                                      |
+| durations     | varint per note, in milliseconds                                                                                                                        |
+| keys          | byte per note: MIDI 0–127                                                                                                                               |
+| velocities    | byte per note: `round(velocity × 255)`, at least 1 when the velocity is above 0                                                                         |
+| flags         | varint per note — bit 0 staff, 1 bass staff, 2 voice, 3 clef, 4 bass clef, 5 tuplet, 6 spelling, 7 finger, 8 hidden                                     |
+| voices        | byte for each note with the voice flag                                                                                                                  |
+| tuplets       | for the notes with the tuplet flag: every `actual` (byte), then every `normal` (byte), every `log2(unit)` (byte), every `group + 1` (varint; 0 is none) |
+| spellings     | byte for each note with the spelling flag: `step × 5 + alter + 2`, the steps C … B counted 0 … 6                                                        |
+| fingers       | byte for each note with the finger flag                                                                                                                 |
+| pedal count   | varint, at most 50,000                                                                                                                                  |
+| pedals        | varint per event: `(milliseconds since the previous event) × 2`, plus 1 when it presses                                                                 |
+
+A varint is seven bits a byte, low bits first, with the top bit set on every byte but the last. Notes go in the order a take keeps them, `(startMs, midi, id)`, a column at a time, so like sits beside like for deflate to find: Chopin's First Ballade (5,162 notes) makes a link of 16,977 characters, and a 5,000-note recording one of 28,000 to 35,000 — the more irregular the playing, the longer.
+
+- **The header** is the take as JSON without `notes`, `pedalEvents`, `createdAt`, `updatedAt` and `durationMs`, and with nothing of `display` but `quantization`. Every object's keys are put in order, so one take always makes one link. Unknown top-level keys travel in it.
+- **Left out:** the timestamps (the take arrives as new), `durationMs` (worked out again from the notes), and the view and practice state — zoom, playhead, speed and loop — which start at their defaults. A note field the table does not name is left out too.
+- **Velocity** travels in steps of 1/255: within 1/510 of what was played, with a note played at all never rounded to silence, and a written-only note (velocity 0) staying silent.
+- **Times** are whole milliseconds, as every take keeps them. The encoder rounds a stray fraction rather than write something else.
+
+**Opening one trusts nothing.** Data past 4,000,000 characters is refused unread. It is inflated 2 KB at a time and refused once it passes 8 MB, so a deflate bomb stops there. Every read is bounds-checked: a varint ends within five bytes and below 2³¹, a count is checked against its cap before anything is made for it, and a header past 64 KB, a flag bit no hint uses, or a byte left over after the pedals is an error. Notes get fresh ids — one new id for the take, then each note's place, zero-padded — so they sort back into exactly the order they were written in and the import repairs nothing. What comes out then goes through the import pipeline above and into the same preview dialog: nothing is imported without it. A link of a later format, or holding a take of a later `schemaVersion`, is reported as made by a newer PoKeyBoard; anything else, as damaged.
+
+The take keeps the sender's `id`, so opening the same link a second time offers to replace the copy the first made, with a new copy the default — as importing the same file twice does.
