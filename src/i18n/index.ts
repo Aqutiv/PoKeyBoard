@@ -63,12 +63,36 @@ export function loadCatalog(language: SupportedLanguage): Promise<Messages> {
       })
       .catch((error: unknown) => {
         console.error(`Could not load the ${language} catalog:`, error);
+        retryLater(language);
         return en;
       })
       .finally(() => loading.delete(language));
     loading.set(language, pending);
   }
   return pending;
+}
+
+/** How long after a failed fetch a catalog is asked for again, if the network has not come back first. */
+const CATALOG_RETRY_MS = 30_000;
+const retrying = new Set<SupportedLanguage>();
+
+/**
+ * Ask for a catalog that failed to arrive again — when the connection comes
+ * back, or in a while regardless — so a passing network error does not leave
+ * the app in another language for the rest of the session. Its arrival is
+ * announced like any other, and the page switches to it if it is still wanted.
+ */
+function retryLater(language: SupportedLanguage): void {
+  if (retrying.has(language) || typeof window === 'undefined') return;
+  retrying.add(language);
+  const retry = () => {
+    window.removeEventListener('online', retry);
+    clearTimeout(timer);
+    retrying.delete(language);
+    void loadCatalog(language);
+  };
+  window.addEventListener('online', retry);
+  const timer = setTimeout(retry, CATALOG_RETRY_MS);
 }
 
 /** BCP-47 tags for `document.documentElement.lang` and Intl-based formatting. */
