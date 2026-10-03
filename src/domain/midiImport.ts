@@ -650,9 +650,10 @@ interface PedalChange {
  * hands up, then down, on one tick, in two tracks) is kept, and one hand
  * changing pedal while the other holds it changes nothing.
  *
- * Where an All Sound Off lifts the pedal and it goes down again, the press
- * lands on the very millisecond a note let go on that tick ends, and a note
- * let go as the pedal goes down is held by it; those ticks are handed back, so
+ * Where the pedal is down after an All Sound Off's tick — pressed again after
+ * the break, or pressed afresh on it — the press lands on the very millisecond
+ * a note let go on that tick ends, and a note let go as the pedal goes down is
+ * held by it; those ticks are handed back, so
  * such notes can let go a millisecond sooner, while the pedal from before
  * still holds them, and stop with the break — where the settled pedal does
  * still go down on that millisecond.
@@ -780,7 +781,9 @@ function collectPedal(
     const atMs = Math.round(msAtTick(tick));
     if (wasDown && dipped) byTick.push({ atMs, down: false });
     if (isDown && (!wasDown || dipped)) byTick.push({ atMs, down: true });
-    if (wasDown && dipped && isDown) {
+    // An All Sound Off's tick the pedal ends down on — pressed again after
+    // the break, or pressed afresh on it — holds what is let go on it.
+    if (isDown) {
       for (const ofTrack of byTrack.values()) {
         if (ofTrack.some((change) => change.to === 'break')) heldAgainAfterBreak.add(tick);
       }

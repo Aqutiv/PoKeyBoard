@@ -748,6 +748,22 @@ describe('midiToTake: pedal', () => {
     expect(sounded!.startMs + sounded!.durationMs).toBe(500);
   });
 
+  it('keeps a pedal pressed on an All Sound Off’s tick off the notes it silences', () => {
+    // The pedal is up; on one tick CC120 silences a held note and the pedal
+    // goes down. The note must stop there, not be held by the fresh press.
+    const take = midiToTake(
+      smf(0, 480, [
+        [[0, 0x90, 60, 100], [480, 0xb0, 120, 0], pedal(0, 480, true), [960, 0x80, 60, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.pedalEvents).toEqual([{ atMs: 500, down: true }]);
+    // Let go a millisecond before the press, with no pedal before it to carry
+    // it to the controller: it stops there, not 8 s later.
+    const [sounded] = applySustainToNotes(take.notes, take.pedalEvents);
+    expect(sounded!.startMs + sounded!.durationMs).toBe(499);
+  });
+
   it('breaks a held pedal for an instant at an All Sound Off (CC120)', () => {
     // The pedal goes down and stays down; CC120 silences what it was holding,
     // and the pedal holds again from there.
