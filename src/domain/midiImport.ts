@@ -854,22 +854,38 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
   const pressedAt = new Set(pedals.filter((pedal) => pedal.down).map((pedal) => pedal.atMs));
   const letGoSooner = (tick: number): boolean =>
     heldAgainAfterBreak.has(tick) && pressedAt.has(Math.round(msAtTick(tick)));
-  const onsets = [...new Set(notes.map((note) => note.startTick))].map(
-    (tick) => tick / smf.ticksPerQuarter,
-  );
+
+  const imported: ImportedNote[] = [];
+  const onsetTicks = new Set<number>();
+  for (const note of notes) {
+    const startMs = msAtTick(note.startTick);
+    let endMs = msAtTick(note.endTick);
+    if (letGoSooner(note.endTick)) {
+      // Let go on a tick where All Sound Off broke the pedal and it went down
+      // again: a millisecond sooner, so the press cannot hold it on. A note
+      // struck within that millisecond never sounded — the controller
+      // silenced it as it began — and has no millisecond left to be let go
+      // in: kept as the shortest note a take holds, it would end after the
+      // press and ring on, so it is left out.
+      endMs -= 1;
+      if (Math.round(endMs) <= Math.round(startMs)) continue;
+    }
+    imported.push({
+      midi: note.midi,
+      startMs,
+      endMs,
+      velocity: note.velocity,
+      seq: note.seq,
+      staff: staff(note),
+    });
+    onsetTicks.add(note.startTick);
+  }
+  if (imported.length === 0) throw fail('The file contains no playable notes.');
+  const onsets = [...onsetTicks].map((tick) => tick / smf.ticksPerQuarter);
 
   return buildImportedTake(
     {
-      notes: notes.map((note): ImportedNote => ({
-        midi: note.midi,
-        startMs: msAtTick(note.startTick),
-        // Let go on a tick where All Sound Off broke the pedal and it went
-        // down again: a millisecond sooner, so the press cannot hold it on.
-        endMs: msAtTick(note.endTick) - (letGoSooner(note.endTick) ? 1 : 0),
-        velocity: note.velocity,
-        seq: note.seq,
-        staff: staff(note),
-      })),
+      notes: imported,
       nextSeq: notes.length,
       pedals,
       tempoMap: createTakeTempoMap({ bpm: base, timeSignature: meter, changes }),
