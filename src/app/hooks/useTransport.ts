@@ -14,6 +14,11 @@ export function useTrainingWaiting(): boolean {
   return useSyncExternalStore(subscribe, () => transportController.isWaitingForTraining());
 }
 
+/** A Keep-time run is counting the player in, the playhead held at its start. */
+export function useCountingIn(): boolean {
+  return useSyncExternalStore(subscribe, () => transportController.isCountingIn());
+}
+
 export function useMetronomeOn(): boolean {
   return useSyncExternalStore(subscribe, () => transportController.isMetronomeOn());
 }

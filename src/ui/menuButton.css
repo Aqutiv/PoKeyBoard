@@ -17,8 +17,11 @@
   box-shadow: var(--shadow-2);
   z-index: 30;
   /* A long list (the playback speeds) scrolls rather than running off a short
-     screen; the panel opens from near the top of the page, so this fits. */
-  max-height: min(420px, 70vh);
+     screen; the panel opens from near the top of the page, so this fits. Tall
+     enough, a phone 640px high and up, for the transport's Modes menu to show
+     whole with a practice style in it: a choice scrolled out of sight is one
+     the player never sees. */
+  max-height: min(460px, 70vh);
   overflow-y: auto;
   overscroll-behavior: contain;
 }

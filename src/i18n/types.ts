@@ -139,6 +139,9 @@ export interface Messages {
     practiceRight: string;
     practiceBoth: string;
     practiceHint: string;
+    waitForMe: string;
+    keepTime: string;
+    keepTimeHint: string;
     returnToPractice: string;
     recording: string;
     clickVolume: string;
@@ -237,6 +240,7 @@ export interface Messages {
     trainingLeft: string;
     trainingRight: string;
     trainingBoth: string;
+    practiceStyle: string;
     waitingForYou: string;
     countIn: string;
     recording: string;

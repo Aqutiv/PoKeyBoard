@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent, TempoSettings } from '@/domain/takeTypes';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
@@ -166,5 +166,27 @@ describe('MetronomeControls tempo editing', () => {
     typeBpm('132');
     expect(useTakeStore.getState().take.tempo).toMatchObject({ bpm: 132 });
     expect(useTakeStore.getState().take.tempo.changes).toBeUndefined();
+  });
+});
+
+describe('MetronomeControls beat dots', () => {
+  afterEach(() => {
+    cleanup();
+    vi.restoreAllMocks();
+  });
+
+  it('light while a Keep-time run counts in, the metronome off', () => {
+    vi.spyOn(transportController, 'isCountingIn').mockReturnValue(true);
+    vi.spyOn(transportController.metronome, 'beatInBarAt').mockReturnValue(2);
+    vi.spyOn(transportController.metronome, 'nextBeatAfter').mockReturnValue(null);
+    renderControls();
+
+    const dots = [...document.querySelectorAll('.metronome__dot')];
+    expect(dots.map((dot) => dot.classList.contains('is-active'))).toEqual([
+      false,
+      false,
+      true,
+      false,
+    ]);
   });
 });

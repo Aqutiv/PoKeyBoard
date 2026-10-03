@@ -20,7 +20,7 @@ import { DEFAULT_LIBRARY_FOLDER, type LibraryFolderId } from '@/features/library
 import { DEFAULT_PLAY_VIEW, type PlayView } from '@/features/play/playView';
 import { DEFAULT_SETTINGS_SECTION, type SettingsSectionId } from '@/features/settings/sections';
 import { DEFAULT_WATERFALL_SECONDS, type WaterfallSeconds } from '@/features/waterfall/fallSpeed';
-import type { PlaybackMode, RecordMode } from '@/features/transport/modes';
+import type { PlaybackMode, PracticeStyle, RecordMode } from '@/features/transport/modes';
 import type { PaperSize } from '@/features/notation/sheetLayout';
 import { DEFAULT_LANGUAGE, type SupportedLanguage } from '@/i18n/types';
 
@@ -94,8 +94,13 @@ export interface SettingsState {
   settingsSection: SettingsSectionId;
   /** What a recording pass does to what is already there. */
   recordMode: RecordMode;
-  /** Straight-through playback, or training on one hand (or both). */
+  /** Straight-through playback, or practising one hand (or both) in either style. */
   playbackMode: PlaybackMode;
+  /**
+   * The practice style last chosen, which a hand picked from Listen starts
+   * in. Only the mode menu reads it: the transport goes by `playbackMode`.
+   */
+  practiceStyle: PracticeStyle;
 
   setLanguage(language: SupportedLanguage): void;
   setTheme(theme: ThemePreference): void;
@@ -131,6 +136,7 @@ export interface SettingsState {
   setSettingsSection(section: SettingsSectionId): void;
   setRecordMode(mode: RecordMode): void;
   setPlaybackMode(mode: PlaybackMode): void;
+  setPracticeStyle(style: PracticeStyle): void;
   resetSettings(): void;
 }
 
@@ -169,6 +175,7 @@ export const SETTINGS_DEFAULTS = {
   settingsSection: DEFAULT_SETTINGS_SECTION,
   recordMode: 'overdub' as RecordMode,
   playbackMode: 'simple' as PlaybackMode,
+  practiceStyle: 'wait' as PracticeStyle,
 };
 
 /**
@@ -218,6 +225,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setSettingsSection: (settingsSection) => set({ settingsSection }),
   setRecordMode: (recordMode) => set({ recordMode }),
   setPlaybackMode: (playbackMode) => set({ playbackMode }),
+  setPracticeStyle: (practiceStyle) => set({ practiceStyle }),
   resetSettings: () => {
     void audioEngine.setInstrument(SETTINGS_DEFAULTS.pianoInstrument);
     // Everything but where the player is: Reset is pressed from a Settings
