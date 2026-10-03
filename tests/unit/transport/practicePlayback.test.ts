@@ -109,6 +109,37 @@ function playThroughHolds(count: number): Array<{ atMs: number; midis: number[] 
   return holds;
 }
 
+/** Run on round the loop, past its end, until the playhead reaches `takeMs`. */
+function runRoundTo(takeMs: number): void {
+  let last = transportController.getPlayheadMs();
+  let round = false;
+  for (let step = 0; step < 500; step += 1) {
+    const at = transportController.getPlayheadMs();
+    // Folding back to the loop's top is a far longer step back than the lead
+    // a resumed run starts with.
+    if (at < last - 100) round = true;
+    last = at;
+    if (round && at >= takeMs) return;
+    run(0.01);
+  }
+}
+
+/**
+ * A loop round the first second, holding for the left hand's 48 at 250, with
+ * the right hand's 64 at the top and 65 just before the hold.
+ */
+function playLeftHandLoop(): void {
+  const notes = [
+    note('a', 64, 0),
+    note('b', 65, 200),
+    { ...note('c', 48, 250), staff: 'bass' as const },
+  ];
+  useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+  useSettingsStore.getState().setPlaybackMode('training-left');
+  transportController.setLoop({ startMs: 0, endMs: 1000 });
+  transportController.play();
+}
+
 describe('playback speed and looping', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -357,6 +388,84 @@ describe('playback speed and looping', () => {
       }
       expect(transportController.isWaitingForTraining()).toBe(false);
     }
+  });
+
+  it('leaves a note played early on a later pass to the player, and asks again the pass after', () => {
+    playLeftHandLoop();
+    expect(playThroughHolds(1)).toEqual([{ atMs: 250, midis: [48] }]);
+    runRoundTo(150);
+    h.scheduled = [];
+    // A tenth of a second early on the second pass: no hold this time round.
+    press(48);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    // The next pass asks for it again. The take never sounded it in between,
+    // only the right hand at the next pass's top.
+    expect(transportController.getPlayheadMs()).toBe(250);
+    expect(transportController.getTrainingTargets()).toEqual(new Set([48]));
+    expect(h.scheduled.map((event) => event.midi)).toEqual([64, 65]);
+  });
+
+  it('never echoes a note played early on a later pass when a change of speed walks back over it', () => {
+    playLeftHandLoop();
+    expect(playThroughHolds(1)).toEqual([{ atMs: 250, midis: [48] }]);
+    // The right hand's 65 at 200 is queued and still to come.
+    runRoundTo(150);
+    h.scheduled = [];
+    press(48);
+    transportController.setSpeed(0.5);
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    expect(transportController.getPlayheadMs()).toBe(250);
+    // Walked again at the new speed: the 65, then the next pass's top and its
+    // 65, but never the 48 the player played.
+    expect(h.scheduled.map((event) => event.midi)).toEqual([65, 64, 65]);
+  });
+
+  it('asks for the loop’s top next after its last note is played early', () => {
+    const notes = [note('top', 60, 1000), note('last', 64, 1980)];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 3000 }));
+    useSettingsStore.getState().setPlaybackMode('training-right');
+    transportController.setLoop({ startMs: 1000, endMs: 2000 });
+    transportController.play();
+    expect(playThroughHolds(1)).toEqual([{ atMs: 1000, midis: [60] }]);
+    while (transportController.getPlayheadMs() < 1900) run(0.01);
+    press(64);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    // Round at the top, asked for rather than skipped: the next hold looks no
+    // further past the note just played than the loop's end.
+    expect(transportController.getPlayheadMs()).toBe(1000);
+    expect(transportController.getTrainingTargets()).toEqual(new Set([60]));
+    expect(h.scheduled).toEqual([]);
+  });
+
+  it('brings the other hand in with the key that clears a hold', () => {
+    const notes = [note('right', 64, 250), { ...note('left', 48, 250), staff: 'bass' as const }];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+    useSettingsStore.getState().setPlaybackMode('training-left');
+    transportController.play();
+    for (let i = 0; i < 300 && !transportController.isWaitingForTraining(); i += 1) run(0.01);
+    expect(h.scheduled).toEqual([]);
+    press(48);
+    // 20 ms after the key, where a fresh start leads in by 60: with the
+    // player's note, not audibly after it.
+    expect(h.scheduled.map((event) => event.midi)).toEqual([64]);
+    expect(h.scheduled[0]!.when).toBeCloseTo(h.now + 0.02, 6);
+  });
+
+  it('sounds the other hand at once when the key comes after its note but before the hold', () => {
+    const notes = [note('right', 64, 250), { ...note('left', 48, 250), staff: 'bass' as const }];
+    useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 1000 }));
+    useSettingsStore.getState().setPlaybackMode('training-left');
+    transportController.play();
+    while (transportController.getPlayheadMs() < 230) run(0.01);
+    // Due a moment ago, but no tick has run since to stop for it.
+    h.now += 0.03;
+    press(48);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    // Held back behind the hold until now, and out straight away rather than
+    // on the next tick.
+    expect(h.scheduled.map((event) => event.midi)).toEqual([64]);
   });
 
   it('keeps the pass it is in while a training hold waits, there or round a loop', () => {

@@ -108,12 +108,29 @@ scheduler: the lookahead horizon is capped just under the gate, so nothing past
 it is scheduled early, and the tick that crosses it pauses at the gate's own
 millisecond rather than wherever the 25 ms tick landed. Waiting is an ordinary
 `paused` plus a flag, not a new transport state — nothing that switches on
-`TransportState` has to learn about training. While it holds, the controller
-subscribes to the same input stream recording uses; presses accumulate (a mouse
-is one pointer and cannot hold a chord), extra keys flash and are ignored rather
-than blocking, and the notes the user just sounded are skipped by id when
-playback resumes, or the take would echo them a beat later. Pressing Play at a
-hold lets that note through, so the feature can never wedge the transport.
+`TransportState` has to learn about training. The hold pauses with `ringOut`, as
+a take's natural end does. The keys the player holds keep sounding and stay lit.
+The take's notes already struck end where they were written to: nothing past the
+gate was queued, so every key-up is already scheduled. Stop still silences
+everything.
+
+From the moment a gate is armed, not only once it holds, the controller listens
+to the same input stream recording uses. A key the gate asks for counts from
+`EARLY_PRESS_MS` (150 ms of real time, whatever the speed) before its note is
+due, because people play a hair ahead. That also catches a press between the
+note falling due and the tick that would stop for it. A press counts toward the
+one gate armed, so nothing played earlier is banked for later. If every key is
+in before the hold, playback never stops. The take leaves those notes to the
+player, and the next gate is armed past the chord, though no further than a
+loop's end, so the next pass's top is still asked for.
+
+At a hold, presses accumulate, including keys played on the way in (a mouse is
+one pointer and cannot hold a chord). Extra keys flash and are ignored rather
+than blocking. The notes the user just sounded are skipped by id in the pass
+they fall in, or the take would echo them a beat later; a loop asks for them
+again every time round. A resumed run leads in by 20 ms rather than a fresh
+start's 60, so the other hand comes in with the player's note. Pressing Play at
+a hold lets that note through, so the feature can never wedge the transport.
 
 Only plain playback gates. An overdub pass sounds its backing through the same
 scheduler and must never stop to ask for a note.

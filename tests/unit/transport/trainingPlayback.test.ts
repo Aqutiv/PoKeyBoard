@@ -362,6 +362,100 @@ describe('training playback', () => {
     runTo(400);
     expect(transportController.isWaitingForTraining()).toBe(false);
     expect(h.scheduled).toEqual([48, 64, 67]);
+    // Nothing is asked for, so nothing listens for it.
+    expect(h.inputs.size).toBe(0);
+  });
+
+  it('counts keys played a moment before their note, and plays on without stopping', () => {
+    transportController.play();
+    runTo(200);
+    // A tenth of a second early, inside the window: the hold has its answer.
+    press(64);
+    press(67);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    h.scheduled = [];
+
+    runTo(700);
+    // Never held, and the third is left to the player who just played it.
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    expect(transportController.getPlayheadMs()).toBeGreaterThanOrEqual(700);
+    expect(h.scheduled).toEqual([50]);
+  });
+
+  it('asks again for keys played too long before their note', () => {
+    transportController.play();
+    runTo(100);
+    // Two tenths of a second early is outside the window.
+    press(64);
+    press(67);
+    runTo(350);
+    expect(transportController.isWaitingForTraining()).toBe(true);
+    expect(transportController.getPlayheadMs()).toBe(300);
+    // Nothing was banked: both keys are wanted again.
+    press(64);
+    expect(transportController.isWaitingForTraining()).toBe(true);
+    press(67);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+  });
+
+  it('carries a chord’s early keys into its hold', () => {
+    transportController.play();
+    runTo(200);
+    press(64);
+    runTo(350);
+    expect(transportController.isWaitingForTraining()).toBe(true);
+    expect(transportController.getTrainingTargets()).toEqual(new Set([64, 67]));
+    // Only the key not yet played is still wanted.
+    press(67);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    expect(transportController.getState()).toBe('playing');
+  });
+
+  it('counts keys played after their note is due but before the hold catches up', () => {
+    transportController.play();
+    runTo(280);
+    // The note was due a moment ago, but no tick has run since to stop for it.
+    h.now += 0.025;
+    press(64);
+    press(67);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    expect(transportController.getState()).toBe('playing');
+    h.scheduled = [];
+
+    runTo(700);
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    expect(h.scheduled).toEqual([50]);
+  });
+
+  it('lets what sounds ring at a hold, and silences it on stop', () => {
+    vi.mocked(audioEngine.allNotesOff).mockClear();
+    transportController.play();
+    runTo(350);
+    expect(transportController.isWaitingForTraining()).toBe(true);
+    // The hold waits for the player rather than cutting off the keys they hold.
+    expect(audioEngine.allNotesOff).not.toHaveBeenCalled();
+    transportController.stop();
+    expect(audioEngine.allNotesOff).toHaveBeenCalledOnce();
+  });
+
+  it('listens through a training run with one listener, and stops once nothing is left', () => {
+    useSettingsStore.getState().setPlaybackMode('training-both');
+    transportController.play();
+    const [listener] = h.inputs;
+    expect(h.inputs.size).toBe(1);
+    for (const keys of [[48], [64, 67]]) {
+      runTo(900);
+      expect(transportController.getTrainingTargets()).toEqual(new Set(keys));
+      for (const midi of keys) press(midi);
+      expect(transportController.getState()).toBe('playing');
+      // On to the next hold with the very same listener: a new one taken on
+      // inside a press would be handed that press too.
+      expect([...h.inputs]).toEqual([listener]);
+    }
+    runTo(900);
+    press(50);
+    // Nothing is left to ask for.
+    expect(h.inputs.size).toBe(0);
   });
 
   it('lets the last notes ring out when the take plays to its end', () => {
