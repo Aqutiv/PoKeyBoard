@@ -11,8 +11,8 @@ const ImportInbox = lazy(() =>
 /**
  * The import inbox, mounted once in the shell beside the export dialogs, so a
  * preview opened anywhere shows over whichever route is up. Only the stores are
- * read here: the dialogs, and takesService with all it pulls in, load when
- * there is something to show.
+ * read here: the dialogs, and takesService behind them, load when there is
+ * something to show.
  *
  * Living outside the routed view, a preview outlives a route change — the
  * browser's Back button now, and the hash change a shared link will arrive by —

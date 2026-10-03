@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 // Types only: the shell reads this store, so a value import from takesService
-// would pull it — and Dexie and fflate behind it — into the entry chunk.
+// would pull that module into the entry chunk.
 import type { ImportPreview } from '@/features/takes/takesService';
 import type { ErrorMessageKey } from '@/i18n/types';
 
