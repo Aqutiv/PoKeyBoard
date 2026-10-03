@@ -26,6 +26,7 @@ import {
   drawScoreBase,
   drawScoreOverlay,
   gutterWidthFor,
+  MAX_CANVAS_DPR,
   SCORE_LEAD_IN,
   SCORE_PALETTES,
   type ScoreGeometry,
@@ -227,7 +228,7 @@ export function MusicScore() {
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
     const apply = (width: number, height: number) => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_DPR);
       sizeRef.current = { width, height, dpr };
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));

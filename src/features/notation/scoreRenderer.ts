@@ -85,6 +85,13 @@ const KEY_ACCIDENTAL_PX = GAP * 1.05;
 /** The line joining a system's staves at its left edge. */
 const SYSTEM_LINE_X = 4.5;
 
+/**
+ * The most backing-store pixels per CSS pixel the score canvases are drawn at.
+ * A 3× phone draws 2.25 times the pixels of 2× for a difference few eyes can
+ * find at a score's size, and canvas pixels are what a slow GPU pays for.
+ */
+export const MAX_CANVAS_DPR = 2;
+
 export function gutterWidthFor(fifths: number): number {
   const count = Math.abs(normalizeFifths(fifths));
   return count === 0 ? GUTTER : GUTTER + count * KEY_ACCIDENTAL_PX + GAP * 0.6;

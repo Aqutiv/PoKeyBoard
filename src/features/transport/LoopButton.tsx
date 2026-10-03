@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import { useMessages } from '@/i18n/i18nContext';
 import { useTakeStore } from '@/state/useTakeStore';
 import { TooltipButton } from '@/ui/TooltipButton';
@@ -14,9 +14,13 @@ import { transportController } from './transportController';
 export function LoopButton({ disabled }: { disabled: boolean }) {
   const m = useMessages();
   const takeId = useTakeStore((s) => s.take.id);
-  // The loop as playback will play it, so the button never shows one it won't.
-  const take = useTakeStore((s) => s.take);
-  const loop = useMemo(() => playableLoop(take), [take]);
+  // The loop as playback will play it, so the button never shows one it won't;
+  // read as two numbers, so the button renders when the loop changes, not with
+  // every note a recording adds.
+  const loopStartMs = useTakeStore((s) => playableLoop(s.take)?.startMs ?? null);
+  const loopEndMs = useTakeStore((s) => playableLoop(s.take)?.endMs ?? null);
+  const loop =
+    loopStartMs === null || loopEndMs === null ? null : { startMs: loopStartMs, endMs: loopEndMs };
   const [marked, setMarked] = useState<{ takeId: string; startMs: number } | null>(null);
   // A mark belongs to the take it was made on, and is spent once there is a loop.
   const startMs = marked && marked.takeId === takeId && !loop ? marked.startMs : null;

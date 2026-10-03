@@ -318,6 +318,13 @@ describe('paintWaterfall', () => {
     ]);
   });
 
+  /** A fill in the hold's light: one of the rings of a halo. */
+  const isHalo = (op: Op) => {
+    const n = Number.parseInt(PALETTE.restart.slice(1), 16);
+    const light = `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, `;
+    return op.op === 'fill' && typeof op.fill === 'string' && op.fill.startsWith(light);
+  };
+
   it('lights the notes a hold waits for, as brightly as asked, and no others', () => {
     const scene = layoutWaterfall(
       [note(60, 0), note(64, 0)],
@@ -331,14 +338,15 @@ describe('paintWaterfall', () => {
     expect(lit.filter((op) => op.op === 'gradient').map((op) => op.args)).toEqual([
       [0, 300, 0, 210],
     ]);
-    // …the note haloed…
-    expect(lit.some((op) => op.op === 'fill' && op.shadow !== '')).toBe(true);
+    // …the note haloed, in rings of light rather than a costly shadow blur…
+    expect(lit.filter(isHalo).length).toBeGreaterThan(1);
+    expect(lit.some((op) => op.shadow !== '')).toBe(false);
     // …and a cap of the light on C4's foot alone, where it meets the key.
     const caps = lit.filter((op) => op.op === 'fillRect' && op.args[3] === 3);
     expect(caps.map((op) => op.args.slice(0, 2))).toEqual([[702, 297]]);
     // Its name is written over the glow, not lost under it.
     const named = paintWith(scene, { glow: 0.8, names: new Map([[scene.bars[0]!.note.id, 'C']]) });
-    const halo = named.findIndex((op) => op.op === 'fill' && op.shadow !== '');
+    const halo = named.findLastIndex(isHalo);
     expect(named.findIndex((op) => op.op === 'fillText')).toBeGreaterThan(halo);
   });
 
@@ -352,7 +360,7 @@ describe('paintWaterfall', () => {
       { awaited: new Set([60]) },
     );
     const ops = paintWith(scene, { glow: 0.8 });
-    const halo = ops.findIndex((op) => op.op === 'fill' && op.shadow !== '');
+    const halo = ops.findLastIndex(isHalo);
     const blackFill = barColour(PALETTE, 'right', true, 0.7, true);
     const black = ops.findLastIndex((op) => op.op === 'fill' && op.fill === blackFill);
     expect(halo).toBeGreaterThan(-1);
