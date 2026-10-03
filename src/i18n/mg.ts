@@ -119,6 +119,27 @@ export const mg: Messages = {
     loopEnd: ({ from }) => `Averimbereno manomboka amin’ny ${from}: mariho ny fiafarany`,
     loopClear: ({ from, to }) => `Atsaharo ny famerimberenana ${from}–${to}`,
   },
+  practice: {
+    resultsLabel: 'Vokatry ny fanazaran-tena',
+    dismiss: 'Esory ny vokatra',
+    rightFirstTime: ({ good, total }) => `${good} amin’ny ${total} marina avy hatrany`,
+    accuracy: ({ percent }) => `(${percent}%)`,
+    wrongKeys: ({ count }) => `kitendry ${count} diso`,
+    wrongKeysShort: ({ count }) => `diso ${count}`,
+    letThrough: ({ count }) => `naoty ${count} navela handalo`,
+    slowHolds: ({ count }) => `fiandrasana ${count} mihoatra ny 2 s`,
+    inFlow: ({ count }) => `naoty ${count} tsy nijanonana`,
+    atSpeed: ({ percent }) => `amin’ny hafainganana ${percent}%`,
+    sectionsLabel: 'Mizana',
+    passesLabel: 'Fihodinana',
+    sectionCell: ({ from, to, good, total }) =>
+      `Mizana ${from === to ? from : `${from}–${to}`}: ${good} amin’ny ${total} marina avy hatrany.`,
+    loopSection: ({ bars }) =>
+      bars === 1 ? 'Averimbereno ity mizana ity.' : 'Averimbereno ireo mizana ireo.',
+    passCell: ({ pass, good, total }) =>
+      `Fihodinana ${pass}: ${good} amin’ny ${total} marina avy hatrany`,
+    summaryWait: ({ facts }) => `Vokatry ny fanazaran-tena: ${facts}.`,
+  },
   metronome: {
     groupLabel: 'Metronoma',
     on: ({ bpm }) => `Metronoma velona, ${bpm} dobo isaky ny minitra`,

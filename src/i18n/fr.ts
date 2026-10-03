@@ -118,6 +118,27 @@ export const fr: Messages = {
     loopEnd: ({ from }) => `Boucle depuis ${from} : marquez sa fin`,
     loopClear: ({ from, to }) => `Arrêter la boucle ${from}–${to}`,
   },
+  practice: {
+    resultsLabel: 'Résultats de l’entraînement',
+    dismiss: 'Ignorer les résultats',
+    rightFirstTime: ({ good, total }) =>
+      `${good} sur ${total} ${good > 1 ? 'justes' : 'juste'} du premier coup`,
+    accuracy: ({ percent }) => `(${percent} %)`,
+    wrongKeys: ({ count }) => `${count} ${count > 1 ? 'fausses touches' : 'fausse touche'}`,
+    wrongKeysShort: ({ count }) => `${count} ${count > 1 ? 'fautes' : 'faute'}`,
+    letThrough: ({ count }) => `${count} ${count > 1 ? 'laissées' : 'laissée'} passer`,
+    slowHolds: ({ count }) => `${count} ${count > 1 ? 'attentes' : 'attente'} de plus de 2 s`,
+    inFlow: ({ count }) => `${count} sans arrêt`,
+    atSpeed: ({ percent }) => `à ${percent} % de la vitesse`,
+    sectionsLabel: 'Mesures',
+    passesLabel: 'Tours',
+    sectionCell: ({ from, to, good, total }) =>
+      `${from === to ? `Mesure ${from}` : `Mesures ${from}–${to}`} : ${good} sur ${total} ${good > 1 ? 'justes' : 'juste'} du premier coup.`,
+    loopSection: ({ bars }) => (bars === 1 ? 'Boucler cette mesure.' : 'Boucler ces mesures.'),
+    passCell: ({ pass, good, total }) =>
+      `Tour ${pass} : ${good} sur ${total} ${good > 1 ? 'justes' : 'juste'} du premier coup`,
+    summaryWait: ({ facts }) => `Résultats de l’entraînement : ${facts}.`,
+  },
   metronome: {
     groupLabel: 'Métronome',
     on: ({ bpm }) => `Métronome activé, ${bpm} battements par minute`,

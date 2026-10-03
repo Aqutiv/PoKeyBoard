@@ -250,6 +250,36 @@ export interface Messages {
     loopEnd: (p: { from: string }) => string;
     loopClear: (p: { from: string; to: string }) => string;
   };
+  /** The card a practice run leaves under the transport, saying how it went. */
+  practice: {
+    resultsLabel: string;
+    dismiss: string;
+    /** The headline: the steps (a note or a chord) right first time, of all asked for. */
+    rightFirstTime: (p: { good: number; total: number }) => string;
+    /** The headline as a share, beside it where there is room. */
+    accuracy: (p: { percent: number }) => string;
+    wrongKeys: (p: { count: number }) => string;
+    /** `wrongKeys` on a phone's line. */
+    wrongKeysShort: (p: { count: number }) => string;
+    /** Holds Play let through rather than the player. */
+    letThrough: (p: { count: number }) => string;
+    /** Holds the player took more than two seconds over. */
+    slowHolds: (p: { count: number }) => string;
+    /** Steps played before the music reached them, so it never stopped. */
+    inFlow: (p: { count: number }) => string;
+    /** The slowest speed the run went at, when below the take's own. */
+    atSpeed: (p: { percent: number }) => string;
+    /** Names the row of four-bar sections, and the row of passes round a loop. */
+    sectionsLabel: string;
+    passesLabel: string;
+    /** A section's cell, `from` and `to` its first and last bar (the same for one bar). */
+    sectionCell: (p: { from: number; to: number; good: number; total: number }) => string;
+    /** What tapping a section does, after `sectionCell`. */
+    loopSection: (p: { bars: number }) => string;
+    passCell: (p: { pass: number; good: number; total: number }) => string;
+    /** What a screen reader hears when a result arrives: `facts` comes listed with commas. */
+    summaryWait: (p: { facts: string }) => string;
+  };
   metronome: {
     groupLabel: string;
     on: (p: { bpm: number }) => string;
