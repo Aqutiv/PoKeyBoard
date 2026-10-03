@@ -4,6 +4,8 @@ import { createEmptyTake } from '@/domain/noteEvents';
 import { PracticeResults } from '@/features/practice/PracticeResults';
 import { I18nContext } from '@/i18n/i18nContext';
 import { en } from '@/i18n/en';
+import { fr } from '@/i18n/fr';
+import type { Messages, SupportedLanguage } from '@/i18n/types';
 import { usePracticeStore } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { waitReport, waitResult } from './practiceFixtures';
@@ -30,15 +32,15 @@ function onScreen(kind: Screen): void {
   }));
 }
 
-function renderCard(): void {
+function renderCard(language: SupportedLanguage = 'en', m: Messages = en): void {
   render(
-    <I18nContext.Provider value={{ language: 'en', locale: 'en-US', m: en }}>
+    <I18nContext.Provider value={{ language, locale: language, m }}>
       <PracticeResults />
     </I18nContext.Provider>,
   );
 }
 
-const card = () => screen.queryByRole('group', { name: 'Practice results' });
+const card = () => screen.queryByRole('group');
 const facts = () => card()?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim();
 const show = (result = waitResult()) => act(() => usePracticeStore.getState().show(result));
 
@@ -65,6 +67,7 @@ describe('the practice results card', () => {
   it('says how the run went on one line, on a desktop', () => {
     renderCard();
     show(SLOWED);
+    expect(card()).toHaveAccessibleName('Practice results');
     expect(facts()).toBe(
       '8 of 10 right first time (80%) · 2 wrong keys · 1 let through · 2 waits over 2 s · ' +
         '6 without stopping · at 60% speed',
@@ -106,6 +109,13 @@ describe('the practice results card', () => {
     show(SLOWED);
     expect(facts()).toBe('8 of 10 right first time · 2 wrong · 1 let through');
     expect(within(card()!).getByRole('list', { name: 'Bars' })).toBeInTheDocument();
+  });
+
+  it('shortens what a phone’s line would not hold, in the words of its language', () => {
+    onScreen('phone');
+    renderCard('fr', fr);
+    show(SLOWED);
+    expect(facts()).toBe('8 sur 10 justes du premier coup · 2 fautes · 1 sautée');
   });
 
   it('fits one line in short landscape, with no cells', () => {

@@ -124,6 +124,7 @@ export const es: Messages = {
     wrongKeys: ({ count }) => `${count} ${count === 1 ? 'tecla incorrecta' : 'teclas incorrectas'}`,
     wrongKeysShort: ({ count }) => `${count} ${count === 1 ? 'fallo' : 'fallos'}`,
     letThrough: ({ count }) => `${count} ${count === 1 ? 'dejada' : 'dejadas'} pasar`,
+    letThroughShort: ({ count }) => `${count} ${count === 1 ? 'dejada' : 'dejadas'} pasar`,
     slowHolds: ({ count }) => `${count} ${count === 1 ? 'espera' : 'esperas'} de más de 2 s`,
     inFlow: ({ count }) => `${count} sin parar`,
     atSpeed: ({ percent }) => `al ${percent} % de velocidad`,

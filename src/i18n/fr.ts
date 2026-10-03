@@ -127,6 +127,7 @@ export const fr: Messages = {
     wrongKeys: ({ count }) => `${count} ${count > 1 ? 'fausses touches' : 'fausse touche'}`,
     wrongKeysShort: ({ count }) => `${count} ${count > 1 ? 'fautes' : 'faute'}`,
     letThrough: ({ count }) => `${count} ${count > 1 ? 'laissées' : 'laissée'} passer`,
+    letThroughShort: ({ count }) => `${count} ${count > 1 ? 'sautées' : 'sautée'}`,
     slowHolds: ({ count }) => `${count} ${count > 1 ? 'attentes' : 'attente'} de plus de 2 s`,
     inFlow: ({ count }) => `${count} sans arrêt`,
     atSpeed: ({ percent }) => `à ${percent} % de la vitesse`,

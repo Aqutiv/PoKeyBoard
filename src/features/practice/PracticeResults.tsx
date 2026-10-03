@@ -35,7 +35,7 @@ function shortFacts(m: Messages, wait: WaitReport): Fact[] {
   const { wrongKeys, letThrough } = wait;
   const facts: Fact[] = [];
   if (wrongKeys > 0) facts.push(['wrong', m.practice.wrongKeysShort({ count: wrongKeys })]);
-  if (letThrough > 0) facts.push(['let', m.practice.letThrough({ count: letThrough })]);
+  if (letThrough > 0) facts.push(['let', m.practice.letThroughShort({ count: letThrough })]);
   return facts;
 }
 
@@ -43,13 +43,16 @@ const headline = (m: Messages, wait: WaitReport) =>
   m.practice.rightFirstTime({ good: wait.rightFirstTime, total: wait.steps });
 
 /**
- * The share right first time, rounded down: 199 of 200 is not 100%. From the
- * counts rather than the ratio, which a whole percentage can sit a hair under.
+ * The share of `total` that went right, rounded down: 199 of 200 is not 100%.
+ * From the counts rather than a ratio, which a whole percentage can sit a hair
+ * under.
  */
+function percentRight(good: number, total: number): number {
+  return total > 0 ? Math.floor((good * 100) / total) : 0;
+}
+
 const accuracy = (m: Messages, wait: WaitReport) =>
-  m.practice.accuracy({
-    percent: wait.steps > 0 ? Math.floor((wait.rightFirstTime * 100) / wait.steps) : 0,
-  });
+  m.practice.accuracy({ percent: percentRight(wait.rightFirstTime, wait.steps) });
 
 /** The one sentence a screen reader hears for a result: all of it, whatever the screen. */
 function summaryOf(m: Messages, result: PracticeResult): string {

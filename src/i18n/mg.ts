@@ -127,6 +127,7 @@ export const mg: Messages = {
     wrongKeys: ({ count }) => `kitendry ${count} diso`,
     wrongKeysShort: ({ count }) => `diso ${count}`,
     letThrough: ({ count }) => `naoty ${count} navela handalo`,
+    letThroughShort: ({ count }) => `navela ${count}`,
     slowHolds: ({ count }) => `fiandrasana ${count} mihoatra ny 2 s`,
     inFlow: ({ count }) => `naoty ${count} tsy nijanonana`,
     atSpeed: ({ percent }) => `amin’ny hafainganana ${percent}%`,

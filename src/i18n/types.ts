@@ -263,6 +263,8 @@ export interface Messages {
     wrongKeysShort: (p: { count: number }) => string;
     /** Holds Play let through rather than the player. */
     letThrough: (p: { count: number }) => string;
+    /** `letThrough` on a phone's line. */
+    letThroughShort: (p: { count: number }) => string;
     /** Holds the player took more than two seconds over. */
     slowHolds: (p: { count: number }) => string;
     /** Steps played before the music reached them, so it never stopped. */

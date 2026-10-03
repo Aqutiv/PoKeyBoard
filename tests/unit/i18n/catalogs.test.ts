@@ -50,6 +50,7 @@ describe('i18n catalogs', () => {
         expect(m.practice.wrongKeys({ count }), lang).toContain(String(count));
         expect(m.practice.wrongKeysShort({ count }), lang).toContain(String(count));
         expect(m.practice.letThrough({ count }), lang).toContain(String(count));
+        expect(m.practice.letThroughShort({ count }), lang).toContain(String(count));
         expect(m.practice.slowHolds({ count }), lang).toContain(String(count));
         expect(m.practice.inFlow({ count }), lang).toContain(String(count));
       }

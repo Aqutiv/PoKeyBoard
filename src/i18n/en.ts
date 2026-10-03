@@ -126,6 +126,7 @@ export const en: Messages = {
     wrongKeys: ({ count }) => `${count} wrong key${count === 1 ? '' : 's'}`,
     wrongKeysShort: ({ count }) => `${count} wrong`,
     letThrough: ({ count }) => `${count} let through`,
+    letThroughShort: ({ count }) => `${count} let through`,
     slowHolds: ({ count }) => `${count} wait${count === 1 ? '' : 's'} over 2 s`,
     inFlow: ({ count }) => `${count} without stopping`,
     atSpeed: ({ percent }) => `at ${percent}% speed`,
