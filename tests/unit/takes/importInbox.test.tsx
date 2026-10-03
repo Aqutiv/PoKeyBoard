@@ -1,5 +1,5 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ImportDialogs } from '@/app/ImportDialogs';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { Take } from '@/domain/takeTypes';
@@ -64,13 +64,22 @@ function setTransport(state: TransportState) {
 
 const previewDialog = () => screen.queryByRole('dialog', { name: en.importDialog.title });
 
-/** Show and close one preview, so the lazy part has loaded: "nothing shows" then means held. */
-async function loadInbox() {
-  openPreview(previewOf('Warm-up'));
-  await screen.findByRole('dialog', { name: en.importDialog.title });
-  act(() => useImportUiStore.getState().closePreview());
-  expect(previewDialog()).toBeNull();
+function resetStores() {
+  useImportUiStore.setState({ preview: null, failure: null });
+  useExportUiStore.setState({ requestedTakeId: null, sheetRequestedTakeId: null });
 }
+
+// Resolve the lazy inbox once, up front. Every test then mounts it at once,
+// inside act(), so its effects (focus, the Escape listener) have run when the
+// test looks, however busy the machine, and "nothing shows" means held, not
+// still loading.
+beforeAll(async () => {
+  renderInbox();
+  openPreview(previewOf('Warm-up'));
+  await screen.findByRole('dialog', { name: en.importDialog.title }, { timeout: 5_000 });
+  cleanup();
+  resetStores();
+});
 
 beforeEach(() => {
   mock.state = 'idle';
@@ -79,8 +88,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  useImportUiStore.setState({ preview: null, failure: null });
-  useExportUiStore.setState({ requestedTakeId: null, sheetRequestedTakeId: null });
+  resetStores();
   mock.commitImport.mockReset();
   mock.navigate.mockReset();
 });
@@ -141,8 +149,6 @@ describe('the import inbox', () => {
     'holds a preview while the transport is %s, then shows it',
     async (busy) => {
       renderInbox();
-      await loadInbox();
-
       setTransport(busy);
       openPreview(previewOf('Waiting'));
       expect(previewDialog()).toBeNull();
@@ -158,8 +164,6 @@ describe('the import inbox', () => {
 
   it('holds a preview while an export dialog is open, then shows it', async () => {
     renderInbox();
-    await loadInbox();
-
     act(() => useExportUiStore.getState().openSheetExport('take-1'));
     openPreview(previewOf('Waiting'));
     expect(previewDialog()).toBeNull();
@@ -182,7 +186,9 @@ describe('the import inbox', () => {
     const alert = await screen.findByRole('alertdialog', { name: en.importDialog.title });
     expect(alert).toHaveAccessibleDescription(en.errors.storageFailed);
     const close = screen.getByRole('button', { name: en.importDialog.close });
-    expect(close).toHaveFocus();
+    // The failure lands from the commit's promise, outside act(), so its focus
+    // effect can follow the dialog by a tick.
+    await waitFor(() => expect(close).toHaveFocus());
     expect(mock.navigate).not.toHaveBeenCalled();
 
     fireEvent.click(close);
