@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
-import { CHORD_WINDOW_MS, nextTrainingGate } from '@/domain/trainingGate';
+import { askedNotes, asksFor, CHORD_WINDOW_MS, nextTrainingGate } from '@/domain/trainingGate';
 
 function note(
   id: string,
@@ -104,5 +104,43 @@ describe('nextTrainingGate', () => {
     const recorded = sortNotes([note('a', 55, 100), note('b', 72, 200)]);
     expect(nextTrainingGate(recorded, 0, 'right')?.midis).toEqual(new Set([72]));
     expect(nextTrainingGate(recorded, 0, 'left')?.midis).toEqual(new Set([55]));
+  });
+});
+
+describe('asksFor', () => {
+  it('asks for a written note in the hand chosen, and in either for both', () => {
+    const left = note('l', 48, 0, 'bass');
+    expect(asksFor(left, 'left')).toBe(true);
+    expect(asksFor(left, 'right')).toBe(false);
+    expect(asksFor(left, 'both')).toBe(true);
+    expect(asksFor({ ...left, hidden: true }, 'both')).toBe(false);
+  });
+});
+
+describe('askedNotes', () => {
+  it('lists every note a run asks the hand for, in order', () => {
+    expect(askedNotes(TAKE, 'right')).toEqual([
+      { id: 'r1', midi: 64, startMs: 500 },
+      { id: 'r2', midi: 67, startMs: 500 + CHORD_WINDOW_MS },
+      { id: 'r3', midi: 72, startMs: 500 + CHORD_WINDOW_MS + 1 },
+    ]);
+    expect(askedNotes(TAKE, 'left').map((asked) => asked.id)).toEqual(['l1', 'l2']);
+    expect(askedNotes(TAKE, 'both').map((asked) => asked.id)).toEqual([
+      'l1',
+      'r1',
+      'r2',
+      'r3',
+      'l2',
+    ]);
+    expect(askedNotes([], 'both')).toEqual([]);
+  });
+
+  it('leaves out a note played but not written, and keeps one written but not played', () => {
+    const take = sortNotes([
+      { ...note('silent', 64, 0, 'treble'), velocity: 0 },
+      { ...note('trill', 66, 100, 'treble'), hidden: true },
+      note('next', 65, 200, 'treble'),
+    ]);
+    expect(askedNotes(take, 'right').map((asked) => asked.id)).toEqual(['silent', 'next']);
   });
 });

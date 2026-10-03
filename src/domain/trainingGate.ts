@@ -34,14 +34,32 @@ export interface TrainingGate {
   noteIds: ReadonlySet<string>;
 }
 
+/** A note a training run asks the player for; see `askedNotes`. */
+export interface AskedNote {
+  id: string;
+  midi: number;
+  startMs: number;
+}
+
 /**
  * Whether a hold waits for this note: one of the chosen hand's, and written. A
  * hidden note (`isHiddenNote`) is not on the page, so nothing there tells the
  * player to play it — the trill beside a written trill note, say. Playback
  * plays it for them instead.
  */
-function asksFor(note: NoteEvent, hand: TrainingHand): boolean {
+export function asksFor(note: NoteEvent, hand: TrainingHand): boolean {
   return !isHiddenNote(note) && (hand === 'both' || noteHand(note) === hand);
+}
+
+/**
+ * Every note a run training `hand` asks the player for, in the order given:
+ * the notes its holds stop for. A note written but not played is among them,
+ * since a hold still asks for its key; a hidden one is not.
+ */
+export function askedNotes(notes: readonly NoteEvent[], hand: TrainingHand): AskedNote[] {
+  return notes
+    .filter((note) => asksFor(note, hand))
+    .map(({ id, midi, startMs }) => ({ id, midi, startMs }));
 }
 
 /**
