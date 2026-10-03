@@ -507,6 +507,47 @@ describe('midiToTake: pedal', () => {
       { atMs: 750, down: false },
     ]);
   });
+
+  /** The pedal events of a one-note file whose pedal does what `changes` say. */
+  function pedalOf(changes: readonly Ev[]) {
+    return midiToTake(smf(0, 480, [[...changes, ...played(0, 60, 0, 1920)]]), 'x.mid').pedalEvents;
+  }
+
+  it('reads a channel’s changes at one tick in the order the file gives them', () => {
+    // Held, then a redundant press and a release on the same tick: the
+    // release is the last word, so the pedal ends up.
+    expect(pedalOf([pedal(0, 0, true), pedal(0, 480, true), pedal(0, 480, false)])).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 500, down: false },
+    ]);
+  });
+
+  it('keeps a change of pedal: up and down again at one tick', () => {
+    expect(pedalOf([pedal(0, 0, true), pedal(0, 480, false), pedal(0, 480, true)])).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 500, down: false },
+      { atMs: 500, down: true },
+    ]);
+  });
+
+  it('hears nothing while one channel holds the pedal and another changes it', () => {
+    expect(
+      pedalOf([pedal(0, 0, true), pedal(1, 0, true), pedal(1, 480, false), pedal(1, 480, true)]),
+    ).toEqual([{ atMs: 0, down: true }]);
+  });
+
+  it('hears a change of pedal when one channel lets go as another presses', () => {
+    for (const order of [
+      [pedal(0, 480, false), pedal(1, 480, true)],
+      [pedal(1, 480, true), pedal(0, 480, false)],
+    ]) {
+      expect(pedalOf([pedal(0, 0, true), ...order])).toEqual([
+        { atMs: 0, down: true },
+        { atMs: 500, down: false },
+        { atMs: 500, down: true },
+      ]);
+    }
+  });
 });
 
 describe('midiToTake: tempo', () => {

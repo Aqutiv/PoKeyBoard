@@ -495,15 +495,30 @@ function staffOf(notes: readonly TickNote[]): (note: TickNote) => NoteStaff | un
     note.track === upper.track && note.channel === upper.channel ? 'treble' : 'bass';
 }
 
+/** One channel's sustain controller, as the file sends it. */
+interface PedalChange {
+  tick: number;
+  channel: number;
+  down: boolean;
+}
+
 /**
  * The sustain pedal, as one pedal. It is down while any channel holds it: the
  * app's own export writes the pedal into both hands' tracks, and a file from
- * elsewhere may pedal on several channels. Where one channel lets go and
- * another presses on the same tick, the letting go comes first — the order
- * the export writes a change of pedal in.
+ * elsewhere may pedal on several channels.
+ *
+ * Changes on one tick are settled together rather than one by one, since the
+ * order of two tracks' events at one tick means nothing. Each channel's own
+ * changes are taken in the order the file gives them, so its last is where it
+ * ends up; and it was up at some moment of the tick if it was up already, or
+ * let go along the way. The pedal lifts at the tick if every channel was up at
+ * some moment of it, and is down after it if any channel ends down. So the
+ * change of pedal the export writes (both hands up, then down, on one tick)
+ * is kept; a channel's redundant press and release ends up; and one hand
+ * changing pedal while the other holds it changes nothing.
  */
 function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
-  const changes: { tick: number; channel: number; down: boolean }[] = [];
+  const changes: PedalChange[] = [];
   for (const track of smf.tracks) {
     for (const event of track.events) {
       if (
@@ -520,15 +535,44 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
       }
     }
   }
-  changes.sort((a, b) => a.tick - b.tick || Number(a.down) - Number(b.down));
+  // Stable, and by tick alone, so each channel's changes keep the file's order.
+  changes.sort((a, b) => a.tick - b.tick);
+
+  /** The channels holding the pedal down; any other is up, seen or not. */
   const held = new Set<number>();
   const pedals: { atMs: number; down: boolean }[] = [];
-  for (const change of changes) {
+  for (let first = 0; first < changes.length;) {
+    const { tick } = changes[first] as PedalChange;
+    let next = first;
+    // Each channel that changes at this tick: where it ends up, and whether it
+    // was up at some moment of the tick.
+    const settled = new Map<number, { down: boolean; dipped: boolean }>();
+    for (; next < changes.length && (changes[next] as PedalChange).tick === tick; next += 1) {
+      const { channel, down } = changes[next] as PedalChange;
+      const state = settled.get(channel) ?? {
+        down: held.has(channel),
+        dipped: !held.has(channel),
+      };
+      state.down = down;
+      if (!down) state.dipped = true;
+      settled.set(channel, state);
+    }
+
     const wasDown = held.size > 0;
-    if (change.down) held.add(change.channel);
-    else held.delete(change.channel);
+    // A channel with nothing at this tick holds throughout if it was down.
+    let dipped = true;
+    for (const channel of held) if (!settled.has(channel)) dipped = false;
+    for (const state of settled.values()) if (!state.dipped) dipped = false;
+    for (const [channel, state] of settled) {
+      if (state.down) held.add(channel);
+      else held.delete(channel);
+    }
     const isDown = held.size > 0;
-    if (isDown !== wasDown) pedals.push({ atMs: msAtTick(change.tick), down: isDown });
+
+    const atMs = msAtTick(tick);
+    if (wasDown && dipped) pedals.push({ atMs, down: false });
+    if (isDown && (!wasDown || dipped)) pedals.push({ atMs, down: true });
+    first = next;
   }
   return pedals;
 }
