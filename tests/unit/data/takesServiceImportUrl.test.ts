@@ -196,6 +196,43 @@ describe('MIDI files', () => {
     await expect(previewImportScoreFile(huge)).rejects.toBeInstanceOf(MidiImportError);
   });
 
+  it('keeps a MIDI Content-Type in mind when the body turns out damaged', async () => {
+    const { previewImportUrl, MidiImportError } = await loadService();
+    const failureOf = async (url: string, type: string) => {
+      fetchMock.mockResolvedValue(
+        textResponse('not a MIDI file', { headers: { 'content-type': type } }),
+      );
+      const error: unknown = await previewImportUrl(url).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(MidiImportError);
+      return (error as InstanceType<typeof MidiImportError>).messageKey;
+    };
+    // No file name at all: the link ends in a slash.
+    expect(await failureOf('https://x.test/', 'audio/midi')).toBe('notValidMidi');
+    // A name that says nothing either way.
+    expect(await failureOf('https://x.test/download', 'audio/midi')).toBe('notValidMidi');
+    expect(await failureOf('https://x.test/download', 'audio/x-midi; charset=binary')).toBe(
+      'notValidMidi',
+    );
+    expect(await failureOf('https://x.test/get/7', 'audio/mid')).toBe('notValidMidi');
+  });
+
+  it('keeps a .mid name in mind whatever the host says the type is', async () => {
+    const { previewImportUrl, MidiImportError } = await loadService();
+    fetchMock.mockResolvedValue(
+      textResponse('not a MIDI file', { headers: { 'content-type': 'application/xml' } }),
+    );
+    await expect(previewImportUrl('https://x.test/song.midi')).rejects.toBeInstanceOf(
+      MidiImportError,
+    );
+  });
+
+  it('reports an oversized extensionless MIDI file as a MIDI problem', async () => {
+    const { previewImportFile, MidiImportError } = await loadService();
+    const huge = new File([midiBytes()], 'song');
+    Object.defineProperty(huge, 'size', { value: 60 * 1024 * 1024 });
+    await expect(previewImportFile(huge)).rejects.toBeInstanceOf(MidiImportError);
+  });
+
   it('still reports a damaged MusicXML file as a MusicXML problem', async () => {
     const { previewImportScoreBytes, ScoreImportError } = await loadService();
     await expect(
