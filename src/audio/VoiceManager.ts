@@ -18,6 +18,8 @@ export const MAX_VOICES = 48;
 export { ATTACK_S, RELEASE_TC, RELEASE_STOP_AFTER_S, RESTRIKE_TC } from './sampleVoice';
 const STEAL_FADE_TC = 0.012;
 const ALL_OFF_FADE_TC = 0.02;
+/** How long after `allNotesOff` every voice it faded has stopped, in seconds. */
+export const ALL_NOTES_OFF_S = 0.25;
 
 interface Voice extends SampleVoice {
   id: number;
@@ -34,6 +36,7 @@ interface Voice extends SampleVoice {
  * the UI subscribes to the active-note set it exposes.
  */
 export class VoiceManager {
+  private lastEndedAt = Number.NEGATIVE_INFINITY;
   private readonly voices = new Set<Voice>();
   private readonly sustainSources = new Set<NoteSourceId>();
   private readonly activeListeners = new Set<(midis: ReadonlySet<number>) => void>();
@@ -97,6 +100,7 @@ export class VoiceManager {
     if (struckAgainAt !== undefined) dampSampleVoice(voice, struckAgainAt);
     this.voices.add(voice);
     voice.source.onended = () => {
+      this.lastEndedAt = this.context.currentTime;
       this.voices.delete(voice);
       disconnectSampleVoice(voice);
       // A key still held when its sound ends — its recording run out, or
@@ -233,7 +237,7 @@ export class VoiceManager {
       // Kept on the voice, so a key struck again as it fades leaves it fading
       // rather than lifting it back to the level it had before the stop.
       fadeSampleVoice(voice, now, ALL_OFF_FADE_TC);
-      this.safeStop(voice, now + 0.25);
+      this.safeStop(voice, now + ALL_NOTES_OFF_S);
     }
     if (changed) this.emitActive();
   }
@@ -255,6 +259,14 @@ export class VoiceManager {
 
   get voiceCount(): number {
     return this.voices.size;
+  }
+
+  /**
+   * When, on the audio clock, the last voice to end ended; -Infinity before any
+   * has. With `voiceCount`, it says how long the piano has been silent.
+   */
+  get lastVoiceEndedAt(): number {
+    return this.lastEndedAt;
   }
 
   dispose(): void {

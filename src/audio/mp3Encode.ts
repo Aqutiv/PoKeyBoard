@@ -1,4 +1,8 @@
-import { createMp3Encoder } from 'wasm-media-encoders';
+import { createEncoder } from 'wasm-media-encoders';
+// The LAME build as a file of its own rather than the package's inlined base64
+// copy: the worker and the main-thread fallback then share one cached .wasm,
+// instead of each chunk carrying its own third-larger text copy to parse.
+import mp3WasmUrl from 'wasm-media-encoders/wasm/mp3?url';
 import type { ExportBitrateKbps } from './exportFormats';
 
 /** Samples per progress tick (~2s at 48kHz); also the main-thread yield step. */
@@ -21,7 +25,7 @@ export async function encodePcmToMp3(
   signal?: AbortSignal,
 ): Promise<Uint8Array<ArrayBuffer>> {
   signal?.throwIfAborted();
-  const encoder = await createMp3Encoder();
+  const encoder = await createEncoder('audio/mpeg', mp3WasmUrl);
   signal?.throwIfAborted();
   encoder.configure({ sampleRate, channels: 2, bitrate: bitrateKbps });
 
