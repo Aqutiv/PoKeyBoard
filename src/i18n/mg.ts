@@ -175,7 +175,6 @@ export const mg: Messages = {
     notesCleared: 'Voafafa ny naoty.',
     deleted: 'Voafafa.',
     backupDownloaded: 'Voatariny ny tahiry.',
-    takeImported: 'Voampiditra ny rakitra.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Tahiry voaverina: rakitra ${imported}` +
       (skipped > 0 ? `, ${skipped} nolavina` : '') +

@@ -297,7 +297,6 @@ export interface Messages {
     notesCleared: string;
     deleted: string;
     backupDownloaded: string;
-    takeImported: string;
     backupRestored: (p: { imported: number; skipped: number; settingsRestored: boolean }) => string;
   };
   library: {

@@ -173,7 +173,6 @@ export const es: Messages = {
     notesCleared: 'Notas borradas.',
     deleted: 'Eliminada.',
     backupDownloaded: 'Respaldo descargado.',
-    takeImported: 'Toma importada.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Respaldo restaurado: ${imported} toma(s)` +
       (skipped > 0 ? `, ${skipped} omitida(s)` : '') +

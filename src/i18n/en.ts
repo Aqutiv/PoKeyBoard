@@ -174,7 +174,6 @@ export const en: Messages = {
     notesCleared: 'Notes cleared.',
     deleted: 'Deleted.',
     backupDownloaded: 'Backup downloaded.',
-    takeImported: 'Take imported.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Backup restored: ${imported} take(s)` +
       (skipped > 0 ? `, ${skipped} skipped` : '') +

@@ -174,7 +174,6 @@ export const fr: Messages = {
     notesCleared: 'Notes effacées.',
     deleted: 'Supprimée.',
     backupDownloaded: 'Sauvegarde téléchargée.',
-    takeImported: 'Prise importée.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Sauvegarde restaurée : ${imported} prise(s)` +
       (skipped > 0 ? `, ${skipped} ignorée(s)` : '') +
