@@ -84,6 +84,8 @@ describe('autosave while recording', () => {
     await flushing;
     expect(writes.count).toBe(1);
     expect(useTakeStore.getState().dirty).toBe(true);
+    // Nor does it claim the newest note is saved.
+    expect(persistenceService.getStatus().status).toBe('idle');
 
     // Stopped, a save writes it straight away.
     vi.mocked(transportController.getState).mockReturnValue('idle');
@@ -92,5 +94,6 @@ describe('autosave while recording', () => {
     writes.pending.shift()?.();
     await final;
     expect(useTakeStore.getState().dirty).toBe(false);
+    expect(persistenceService.getStatus().status).toBe('saved');
   });
 });
