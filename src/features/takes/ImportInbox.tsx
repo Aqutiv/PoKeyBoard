@@ -17,6 +17,7 @@ import './importDialog.css';
 export function ImportInbox() {
   const { navigate } = useRouter();
   const preview = useImportUiStore((state) => state.preview);
+  const previewSeq = useImportUiStore((state) => state.previewSeq);
   const failure = useImportUiStore((state) => state.failure);
   const closePreview = useImportUiStore((state) => state.closePreview);
 
@@ -38,7 +39,17 @@ export function ImportInbox() {
   // a preview waiting behind it is still a question, and keeps.
   if (failure !== null) return <ImportFailedAlert messageKey={failure} />;
   if (preview === null) return null;
-  return <ImportTakeDialog preview={preview} onCancel={closePreview} onConfirm={confirm} />;
+  // Keyed by the preview's number, so one that replaces another while it is
+  // open starts again at Copy with Import focused: a choice to replace belongs
+  // to the take it was made for, and is never handed on to the next.
+  return (
+    <ImportTakeDialog
+      key={previewSeq}
+      preview={preview}
+      onCancel={closePreview}
+      onConfirm={confirm}
+    />
+  );
 }
 
 /**

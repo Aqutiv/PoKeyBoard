@@ -38,6 +38,18 @@ describe('the import inbox store', () => {
     expect(useImportUiStore.getState().preview).toBe(second);
   });
 
+  it('numbers every preview it opens, so a newer one is told from the one it replaces', () => {
+    const start = useImportUiStore.getState().previewSeq;
+    useImportUiStore.getState().openPreview(previewOf('First'));
+    useImportUiStore.getState().openPreview(previewOf('Second'));
+    expect(useImportUiStore.getState().previewSeq).toBe(start + 2);
+
+    // The count only goes up: closing a preview does not hand its number out again.
+    useImportUiStore.getState().closePreview();
+    useImportUiStore.getState().openPreview(previewOf('Third'));
+    expect(useImportUiStore.getState().previewSeq).toBe(start + 3);
+  });
+
   it('holds a failure until it is dismissed', () => {
     useImportUiStore.getState().fail('storageFailed');
     expect(useImportUiStore.getState().failure).toBe('storageFailed');

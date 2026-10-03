@@ -143,6 +143,22 @@ describe('the import inbox', () => {
     expect(screen.queryByRole('alertdialog')).toBeNull();
   });
 
+  it('starts a preview that replaces an open one afresh, at Copy with Import focused', async () => {
+    renderInbox();
+    openPreview(previewOf('First clash', true));
+    const replace = await screen.findByRole('radio', { name: en.importDialog.replaceExisting });
+    fireEvent.click(replace);
+    replace.focus();
+    expect(replace).toBeChecked();
+
+    // A newer pick lands while the first is still open.
+    openPreview(previewOf('Second clash', true));
+    expect(previewDialog()).toHaveTextContent('Second clash');
+    // Replacing has to be chosen for the take it would replace, never inherited.
+    expect(screen.getByRole('radio', { name: en.importDialog.importAsCopy })).toBeChecked();
+    expect(screen.getByRole('button', { name: en.importDialog.import })).toHaveFocus();
+  });
+
   // A recording only meets a preview that finished loading after the user left
   // Takes for Play; an export, whenever one was started first.
   it.each(['renderingSheet', 'renderingAudio', 'encodingAudio', 'countIn', 'recording'] as const)(

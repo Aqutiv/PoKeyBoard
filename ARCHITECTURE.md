@@ -358,7 +358,9 @@ mounted once beside the export dialogs, shows it over whichever route is up; it
 reads only the stores, and loads `ImportInbox` (and `takesService` behind it)
 when there is something to show. Confirming commits the take (`commitImport`)
 and opens it on Play; a commit that fails says why in an alert dialog, since the
-inbox belongs to no one page. Living outside the routed view, a preview outlives
+inbox belongs to no one page. A newer preview replaces one still open and starts
+again at Copy, keyed by the store's `previewSeq`, so a choice to replace never
+carries over to another take. Living outside the routed view, a preview outlives
 a route change, and its modal backdrop keeps the nav out of reach meanwhile. The
 dialogs carry their own styles (`importDialog.css`), so they look the same on
 every route.

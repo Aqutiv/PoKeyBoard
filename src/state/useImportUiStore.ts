@@ -11,6 +11,11 @@ interface ImportUiState {
    * any route and outlives the route it was opened on.
    */
   preview: ImportPreview | null;
+  /**
+   * How many previews have been opened, so the inbox can tell a newer preview
+   * from the one it replaced and start its dialog afresh, at Copy.
+   */
+  previewSeq: number;
   /** Why the last confirmed import could not be stored, until dismissed. */
   failure: ErrorMessageKey | null;
   /** A newer preview replaces one still waiting: the latest pick wins. */
@@ -24,8 +29,9 @@ interface ImportUiState {
 // the reverse) leaves the other where it is, and the inbox shows them in turn.
 export const useImportUiStore = create<ImportUiState>()((set) => ({
   preview: null,
+  previewSeq: 0,
   failure: null,
-  openPreview: (preview) => set({ preview }),
+  openPreview: (preview) => set((state) => ({ preview, previewSeq: state.previewSeq + 1 })),
   closePreview: () => set({ preview: null }),
   fail: (failure) => set({ failure }),
   dismissFailure: () => set({ failure: null }),
