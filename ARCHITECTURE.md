@@ -52,8 +52,9 @@ src/
     transport/  transportMachine (pure), transportClock, transportController,
                 sustainPedal, modes, TransportControls, ModeMenu
     metronome/  MetronomeControls
-    takes/      takesService, TakesPage, ImportTakeDialog, ImportUrlDialog,
-                remoteImportMessage
+    takes/      takesService, TakesPage, ImportInbox (the import preview and
+                its failure alert, over any route), ImportTakeDialog,
+                ImportUrlDialog, remoteImportMessage
     export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService,
                 sheetPdfWriter (vector PDF via pdfSurface/vectorSurface and
                 pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
@@ -72,8 +73,9 @@ src/
                 SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
-  state/        zustand stores: take, settings, export-ui
-  app/          hash router, providers (service wiring), lifecycle, hooks
+  state/        zustand stores: take, settings, export-ui, import-ui
+  app/          hash router, providers (service wiring), lifecycle, hooks,
+                ImportDialogs (the shell's import inbox)
   ui/           shared controls: MenuButton, TooltipButton, SegmentedSwitch
                 (the library's folders, Learn's levels, Settings' sections)
 ```
@@ -346,6 +348,27 @@ to every user (`i18n/index.ts` imports all four eagerly) and length-lock every
 paragraph across locales (the parity test walks arrays by index). The level
 toggle is an ordinary setting; chapter progress is a metadata row, Zod-parsed on
 read and therefore device-local rather than part of the settings backup.
+
+## Importing
+
+Every import ends in one inbox. Whatever reads the file — the Takes page's
+pickers, a dropped file or link, the link dialog — turns it into an
+`ImportPreview` and hands it to `useImportUiStore`. The shell's `ImportDialogs`,
+mounted once beside the export dialogs, shows it over whichever route is up; it
+reads only the stores, and loads `ImportInbox` (and `takesService` behind it)
+when there is something to show. Confirming commits the take (`commitImport`)
+and opens it on Play; a commit that fails says why in an alert dialog, since the
+inbox belongs to no one page. Living outside the routed view, a preview outlives
+a route change, and its modal backdrop keeps the nav out of reach meanwhile. The
+dialogs carry their own styles (`importDialog.css`), so they look the same on
+every route.
+
+The inbox waits its turn. While an export is under way (`isExportState`) or an
+export dialog is open, or a recording is counting in or running, a preview stays
+in the store and shows once that clears: two modals never stack, an import never
+swaps the active take out from under an export, and no dialog lands in the
+middle of a performance. Leaving a route already stops a recording, so only a
+file or link that finished loading after the user left Takes can meet one.
 
 ## Persistence and cache invalidation
 
