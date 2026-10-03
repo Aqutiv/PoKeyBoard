@@ -221,7 +221,7 @@ export class TransportController {
   // Practice runs
   private readonly practiceListeners = new Set<(event: PracticeEvent) => void>();
   /**
-   * The practice run under way, if any: from when playback under a training
+   * The practice run under way, if any: from when playback under a practice
    * mode begins until something ends it. Its holds, and the resumes from them,
    * are all part of it; see `beginPracticeRun`.
    */
