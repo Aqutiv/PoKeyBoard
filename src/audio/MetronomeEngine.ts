@@ -324,6 +324,13 @@ export function scheduleClick(
   env.connect(destination);
   osc.start(when);
   osc.stop(when + CLICK_LENGTH_S);
+  // Unplugged once it has sounded (or been called off), as the piano's voices
+  // are: an hour of clicking would otherwise leave thousands of silent nodes
+  // hanging off the click bus until the garbage collector finds them.
+  osc.onended = () => {
+    osc.disconnect();
+    env.disconnect();
+  };
   return osc;
 }
 
