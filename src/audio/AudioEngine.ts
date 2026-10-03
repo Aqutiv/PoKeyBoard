@@ -98,6 +98,12 @@ export class AudioEngine {
   private readonly inputListeners = new Set<(event: InputNoteEvent) => void>();
   private readonly schedulerTickListeners = new Set<() => void>();
   private schedulerTicker: AudioWorkletNode | null = null;
+  /** Whether the ticker is wired up and pulsing; see `updateSchedulerTicker`. */
+  private schedulerTickerOn = false;
+  /** A sleep waiting for the last sound to die away; see `sleepAfter`. */
+  private sleepTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether the context is suspended because `sleepAfter` put it to sleep. */
+  private asleep = false;
   private currentActiveNotes: ReadonlySet<number> = new Set();
   private currentActiveVelocities: ReadonlyMap<number, number> = new Map();
   /**
@@ -482,6 +488,9 @@ export class AudioEngine {
   async unlockFromUserGesture(): Promise<void> {
     this.initialize();
     if (!this.context) return;
+    // Something is about to sound: no sleep may cut it off.
+    this.cancelSleep();
+    this.asleep = false;
     // Keep Web Audio audible with the iPhone silent switch engaged.
     ensurePlaybackSession();
     if (this.context.state !== 'running') {
@@ -641,6 +650,10 @@ export class AudioEngine {
     if (this.context.state !== 'running') {
       // noteOn always originates from a gesture; resume opportunistically.
       void this.unlockFromUserGesture();
+    } else {
+      // A note played while a sleep waits (a MIDI keyboard, say, with the page
+      // hidden) keeps the piano awake.
+      this.cancelSleep();
     }
     const sample = this.bank.getSample(midi, velocity, { tone: this.toneFollowsTouch });
     if (!sample) return false;
@@ -668,7 +681,30 @@ export class AudioEngine {
   /** Timing pulses which continue while ordinary page timers are throttled. */
   subscribeSchedulerTick(listener: () => void): () => void {
     this.schedulerTickListeners.add(listener);
-    return () => this.schedulerTickListeners.delete(listener);
+    this.updateSchedulerTicker();
+    return () => {
+      this.schedulerTickListeners.delete(listener);
+      this.updateSchedulerTicker();
+    };
+  }
+
+  /**
+   * Pulse only while something listens. The worklet would otherwise wake the
+   * page 40 times a second for as long as the app is open — idle, or hidden —
+   * which keeps an old machine's CPU from ever resting. Unplugged, it is not
+   * rendered at all; told to stop, it stays quiet wherever a browser renders
+   * it anyway.
+   */
+  private updateSchedulerTicker(): void {
+    const ticker = this.schedulerTicker;
+    const context = this.context;
+    if (!ticker || !context) return;
+    const wanted = this.schedulerTickListeners.size > 0;
+    if (wanted === this.schedulerTickerOn) return;
+    this.schedulerTickerOn = wanted;
+    ticker.port.postMessage(wanted);
+    if (wanted) ticker.connect(context.destination);
+    else ticker.disconnect();
   }
 
   private async initializeSchedulerTicker(context: AudioContext): Promise<void> {
@@ -683,9 +719,11 @@ export class AudioEngine {
         for (const listener of this.schedulerTickListeners) listener();
       };
       // The processor emits silence, but connecting it keeps it participating
-      // in the render graph (and therefore ticking) in the background.
-      ticker.connect(context.destination);
+      // in the render graph (and therefore ticking) in the background. It is
+      // connected only while a listener wants pulses.
       this.schedulerTicker = ticker;
+      this.schedulerTickerOn = false;
+      this.updateSchedulerTicker();
     } catch (error) {
       // The normal setInterval scheduler remains available as a fallback.
       console.warn('Background playback scheduler unavailable:', error);
@@ -772,14 +810,73 @@ export class AudioEngine {
     await this.unlockFromUserGesture();
   }
 
+  /**
+   * Put the audio device to sleep once whatever still sounds has died away:
+   * `afterSeconds` from now, if `stillWanted()` agrees then. A suspended
+   * context costs nothing — no render thread, no convolver, no output — and
+   * waiting out the tail means nothing is frozen mid-fade, to be heard again
+   * on waking. Only silence is skipped, so the sound itself is untouched.
+   */
+  sleepAfter(afterSeconds: number, stillWanted: () => boolean): void {
+    this.cancelSleep();
+    const context = this.context;
+    if (!context || context.state !== 'running') return;
+    this.sleepTimer = setTimeout(() => {
+      this.sleepTimer = null;
+      if (this.context !== context || context.state !== 'running' || !stillWanted()) return;
+      this.asleep = true;
+      context.suspend().catch(() => {
+        this.asleep = false;
+      });
+    }, afterSeconds * 1000);
+  }
+
+  /**
+   * Call off a pending sleep, and wake a context `sleepAfter` put to sleep.
+   * Silent — every note was let go before it slept — so it may run as the page
+   * comes back, ahead of the first key, which then sounds on time. Where a
+   * browser wants a fresh gesture to resume, the next press does it.
+   */
+  wake(): void {
+    this.cancelSleep();
+    if (!this.asleep) return;
+    this.asleep = false;
+    const context = this.context;
+    if (!context || context.state === 'closed') return;
+    const unlockOnNextGesture = () => {
+      const unlock = () => {
+        window.removeEventListener('pointerdown', unlock, true);
+        window.removeEventListener('keydown', unlock, true);
+        void this.unlockFromUserGesture();
+      };
+      window.addEventListener('pointerdown', unlock, true);
+      window.addEventListener('keydown', unlock, true);
+    };
+    context
+      .resume()
+      .then(() => {
+        if (this.context === context && context.state !== 'running') unlockOnNextGesture();
+      })
+      .catch(unlockOnNextGesture);
+  }
+
+  private cancelSleep(): void {
+    if (this.sleepTimer === null) return;
+    clearTimeout(this.sleepTimer);
+    this.sleepTimer = null;
+  }
+
   dispose(): void {
     // A switch still decoding has no context left to take over in.
     this.switchGeneration += 1;
     this.pendingSwitch = null;
     this.stopWatchingSwitchProgress();
     this.setSwitchState({ pending: null, failed: null, progress: 0 });
+    this.cancelSleep();
+    this.asleep = false;
     this.schedulerTicker?.disconnect();
     this.schedulerTicker = null;
+    this.schedulerTickerOn = false;
     this.voices?.dispose();
     this.graph?.dispose();
     void this.context?.close();

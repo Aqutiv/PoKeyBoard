@@ -18,6 +18,8 @@ export const MAX_VOICES = 48;
 export { ATTACK_S, RELEASE_TC, RELEASE_STOP_AFTER_S, RESTRIKE_TC } from './sampleVoice';
 const STEAL_FADE_TC = 0.012;
 const ALL_OFF_FADE_TC = 0.02;
+/** How long after `allNotesOff` every voice it faded has stopped, in seconds. */
+export const ALL_NOTES_OFF_S = 0.25;
 
 interface Voice extends SampleVoice {
   id: number;
@@ -233,7 +235,7 @@ export class VoiceManager {
       // Kept on the voice, so a key struck again as it fades leaves it fading
       // rather than lifting it back to the level it had before the stop.
       fadeSampleVoice(voice, now, ALL_OFF_FADE_TC);
-      this.safeStop(voice, now + 0.25);
+      this.safeStop(voice, now + ALL_NOTES_OFF_S);
     }
     if (changed) this.emitActive();
   }
