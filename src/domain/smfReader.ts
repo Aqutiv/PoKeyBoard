@@ -114,6 +114,11 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
   const events: SmfEvent[] = [];
   let tick = 0;
   // The last channel message's status, which later messages may leave out.
+  // Each track starts without one: a data byte there has nothing to borrow.
+  // The standard says a meta event or a system exclusive ends it too, but some
+  // writers carry on using it after one. Keeping it through them reads those
+  // files instead of refusing them, and costs a file that follows the standard
+  // nothing: a status byte always comes next there.
   let runningStatus: number | null = null;
   while (at < end) {
     tick += variableLength();
@@ -123,9 +128,6 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
       const metaType = dataByte();
       const length = variableLength();
       if (length > end - at) throw cutOff();
-      // Meta events and system exclusive end running status: a data byte
-      // after one has no status to borrow.
-      runningStatus = null;
       if (metaType === META_END_OF_TRACK) return { events, endTick: tick };
       events.push({ type: 'meta', tick, metaType, data: bytes.slice(at, at + length) });
       at += length;
@@ -136,7 +138,6 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
       const length = variableLength();
       if (length > end - at) throw cutOff();
       at += length;
-      runningStatus = null;
       continue;
     }
     if (status >= 0xf0) {

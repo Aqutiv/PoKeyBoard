@@ -257,26 +257,47 @@ describe('readSmf: events', () => {
     ]);
   });
 
-  it('lets a meta event or a system exclusive cancel running status', () => {
-    expectFailure(
-      file(
-        header(0, 1, 480),
-        chunk('MTrk', [0x00, 0x90, 60, 100, 0x00, 0xff, 0x01, 0x01, 0x41, 0x00, 62, 100]),
-      ),
-      'invalid',
-    );
-    expectFailure(
-      file(
-        header(0, 1, 480),
-        chunk('MTrk', [0x00, 0x90, 60, 100, 0x00, 0xf0, 0x01, 0xf7, 0x00, 62, 100]),
-      ),
-      'invalid',
-    );
+  it('keeps running status across a meta event or a system exclusive', () => {
+    // The standard says these end running status, but some writers carry on
+    // using it after one; a file that follows the standard always has a status
+    // byte there, so keeping the last channel status costs it nothing.
+    const body = [
+      [0x00, 0x90, 60, 100],
+      [0x00, 0xff, 0x01, 0x01, 0x41], // a text event
+      [0x00, 62, 100], // a note-on, by running status
+      [0x00, 0xf0, 0x01, 0xf7], // a system exclusive
+      [0x60, 60, 0], // a note-on at velocity 0, by running status
+      END_OF_TRACK,
+    ].flat();
+    const smf = readSmf(file(header(0, 1, 480), chunk('MTrk', body)));
+    expect(smf.tracks[0]!.events).toEqual([
+      { type: 'channel', tick: 0, command: 0x90, channel: 0, data1: 60, data2: 100 },
+      { type: 'meta', tick: 0, metaType: 0x01, data: Uint8Array.from([0x41]) },
+      { type: 'channel', tick: 0, command: 0x90, channel: 0, data1: 62, data2: 100 },
+      { type: 'channel', tick: 96, command: 0x90, channel: 0, data1: 60, data2: 0 },
+    ]);
   });
 
   it('refuses a data byte with no status before it', () => {
     expectFailure(
       file(header(0, 1, 480), chunk('MTrk', [0x00, 60, 100, ...END_OF_TRACK])),
+      'invalid',
+    );
+    // A meta event is no channel status to borrow.
+    expectFailure(
+      file(
+        header(0, 1, 480),
+        chunk('MTrk', [0x00, 0xff, 0x01, 0x01, 0x41, 0x00, 60, 100, ...END_OF_TRACK]),
+      ),
+      'invalid',
+    );
+    // Nor is the last track's: each track starts with none.
+    expectFailure(
+      file(
+        header(1, 2, 480),
+        chunk('MTrk', [0x00, 0x90, 60, 100, ...END_OF_TRACK]),
+        chunk('MTrk', [0x00, 62, 100, ...END_OF_TRACK]),
+      ),
       'invalid',
     );
   });
