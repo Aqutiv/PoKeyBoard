@@ -22,8 +22,8 @@ import {
   duplicateTake,
   openTake,
   previewImportFile,
+  previewImportLink,
   previewImportScoreFile,
-  previewImportUrl,
   renameTake,
   restoreBackupFile,
   takeJsonFile,
@@ -183,7 +183,9 @@ export function TakesPage() {
     async (rawUrl: string) => {
       setMessage(m.importUrlDialog.loading); // a drop has no dialog to show progress in
       try {
-        openPreview(await previewImportUrl(rawUrl));
+        // Null for a Library link: the address bar has it, and Play opens.
+        const preview = await previewImportLink(rawUrl);
+        if (preview) openPreview(preview);
         setMessage(null);
       } catch (error) {
         setMessage(remoteImportMessage(m, error));
@@ -510,7 +512,7 @@ export function TakesPage() {
           onCancel={() => setUrlDialogOpen(false)}
           onLoaded={(preview) => {
             setUrlDialogOpen(false);
-            openPreview(preview);
+            if (preview) openPreview(preview);
           }}
           onUseFilePicker={() => {
             setUrlDialogOpen(false);

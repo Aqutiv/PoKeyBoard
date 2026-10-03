@@ -19,6 +19,8 @@ import { createEmptyTake } from '@/domain/noteEvents';
 import { hasMidiHeader } from '@/domain/smfReader';
 import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
 import { CURRENT_SCHEMA_VERSION, reverbRoomOf, type Take } from '@/domain/takeTypes';
+import { decodeTakeLink } from '@/domain/takeLink';
+import { hashLinkInText, libraryLinkHash } from '@/app/hashLinks';
 import { transportController } from '@/features/transport/transportController';
 import { scrubController } from '@/features/notation/scrubController';
 import { pinLanguage } from '@/i18n/languagePreference';
@@ -217,11 +219,15 @@ export async function snapshotTake(id: string): Promise<Take | null> {
   return getTake(id);
 }
 
-export async function takeJsonFile(id: string): Promise<File | null> {
-  const take = await snapshotTake(id);
-  if (!take) return null;
+/** A take as the JSON file a Takes row exports and shares. */
+export function takeToJsonFile(take: Take): File {
   const json = JSON.stringify(take, null, 2);
   return new File([json], takeJsonFileName(take.title), { type: 'application/json' });
+}
+
+export async function takeJsonFile(id: string): Promise<File | null> {
+  const take = await snapshotTake(id);
+  return take ? takeToJsonFile(take) : null;
 }
 
 // ------------------------------------------------------------- import --
@@ -508,6 +514,41 @@ export async function previewImportUrl(
     clearTimeout(timer);
     signal?.removeEventListener('abort', forwardAbort);
   }
+}
+
+// ------------------------------------------------- import from a share link --
+
+/**
+ * Preview the take a share link carries (`#/s/<version>.<data>`), decoded right
+ * here: nothing is fetched. It keeps the sender's take id, so opening the same
+ * link again offers to replace the copy the first one made — as importing the
+ * same file twice does — with a new copy still the default.
+ */
+export async function previewTakeLink(version: number, data: string): Promise<ImportPreview> {
+  const parsed = decodeTakeLink(version, data);
+  const collision = await takeExists(parsed.take.id);
+  return { parsed, collision, fileName: takeJsonFileName(parsed.take.title) };
+}
+
+/**
+ * Preview whatever a pasted or dropped link leads to. A share link of ours is
+ * read here, on any host, since nothing is fetched: a take link becomes its
+ * preview however long it is — past the 2,048 characters a link to download is
+ * held to — and a library link goes to the address bar, where the shell's link
+ * intake opens it as if it had been followed; that resolves to null. Any other
+ * link is downloaded by `previewImportUrl`.
+ */
+export async function previewImportLink(
+  raw: string,
+  signal?: AbortSignal,
+): Promise<ImportPreview | null> {
+  const link = hashLinkInText(raw);
+  if (link === null) return previewImportUrl(raw, signal);
+  if (link.kind === 'library') {
+    window.location.hash = libraryLinkHash(link.trackId);
+    return null;
+  }
+  return previewTakeLink(link.version, link.data);
 }
 
 /**

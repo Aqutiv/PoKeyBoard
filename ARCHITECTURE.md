@@ -23,6 +23,7 @@ src/
   workers/      audioEncoder.worker (mastering + LAME wasm or the FLAC encoder, transferred PCM)
   domain/       takeTypes, takeSchema (Zod, migrate→repair→validate→normalize),
                 takeMigrations, noteEvents, takeHash (export cache key),
+                takeLink (a whole take in a share link, and back),
                 tempoMap (piecewise beats↔ms; shared by import, library, score),
                 hands (which hand plays a note), fingering (pure: which finger
                 plays each note, the score's own or worked out), midiExport
@@ -59,7 +60,8 @@ src/
     takes/      takesService, TakesPage, ImportInbox (the import preview and
                 its failure alert, over any route), ImportTakeDialog,
                 ImportUrlDialog, remoteImportMessage
-    export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService,
+    export/     ShareMenu, AudioExportDialog, SheetExportDialog, ShareLinkDialog,
+                sheetPdfService,
                 sheetPdfWriter (vector PDF via pdfSurface/vectorSurface and
                 pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
     settings/   SettingsPage (a switch over its Sound, Playing, Display and
@@ -79,7 +81,8 @@ src/
                 install, cacheNames
   state/        zustand stores: take, settings, export-ui, import-ui
   app/          hash router, providers (service wiring), lifecycle, hooks,
-                ImportDialogs (the shell's import inbox)
+                ImportDialogs (the shell's import inbox), hashLinks and
+                hooks/useHashLinkIntake (share links in the address bar)
   ui/           shared controls: MenuButton, TooltipButton, SegmentedSwitch
                 (the library's folders, Learn's levels, Settings' sections)
 ```
@@ -375,6 +378,45 @@ in the store and shows once that clears: two modals never stack, an import never
 swaps the active take out from under an export, and no dialog lands in the
 middle of a performance. Leaving a route already stops a recording, so only a
 file or link that finished loading after the user left Takes can meet one.
+
+### Share links
+
+A share link is an address the inbox reads (TAKE_FORMAT.md, Share links):
+`#/s/1.<data>` carries a take, `#/lib/<trackId>` names a Library track. Neither
+is a route — `parseHash` opens both on Play — so `app/hashLinks.ts` parses them,
+and `useHashLinkIntake`, which `ImportDialogs` runs, takes them in. It reads the
+address when the shell mounts, which is after `persistenceService.init()` has
+restored the last take, since `RouterProvider` mounts only then; and again on
+every `hashchange`. It swaps the address for `#/play` with `replaceState` before
+anything else, so a reload, Back or StrictMode's second mount never meets the
+link again, and parks the link in the import store's `pendingLink`. The link is
+claimed — once — when nothing is busy, by the same condition the inbox holds its
+dialogs on. A take link loads takesService and its decoder (`domain/takeLink`)
+only then and becomes a preview, never an import by itself. A library link is
+checked against the catalog and opened with `openLibraryTrack`; a Classics score
+that cannot be fetched says why, and the Library is left showing it, as a Learn
+hand-off does. An export or recording that starts while a track is on its way
+aborts the open, and the link waits its turn again.
+
+A link pasted into the Takes link dialog, or dropped on Takes, goes through
+`previewImportLink`: a link of ours, on any host, is read where it is — past the
+2,048 characters a download is held to — while any other goes on to
+`previewImportUrl`, untouched. A library link is handed to the address bar, for
+the intake to open as if it had been followed.
+
+**Share → Link…** opens `ShareLinkDialog` among the export dialogs (one at a
+time, and the inbox waits for it as for the others). It reads the take with
+`snapshotTake`, so playback carries on under it, and makes the link and the JSON
+file as it opens, so Copy, Share… and Send as a file each act inside their own
+click.
+
+Of the link code, only `hashLinks` and the intake are in the entry chunk (with
+the strings, as all strings are). The codec, takesService and fflate load when
+there is a link to read or make — which is why the
+MusicXML reader loads with the first Classics score (`scoreLoader`): the
+catalog is in the entry, and a module lives in one chunk, so a static import
+there would have hoisted every part of fflate a lazy chunk uses, the link's
+deflate included, into the entry.
 
 ## Persistence and cache invalidation
 

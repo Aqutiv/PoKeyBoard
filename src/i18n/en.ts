@@ -62,6 +62,24 @@ export const en: Messages = {
     audio: 'Audio (MP3, FLAC)',
     sheet: 'Sheet music (PDF)',
     midi: 'MIDI (.mid)',
+    link: 'Link…',
+    linkTitle: 'Share as a link',
+    linkPreparing: 'Preparing the link…',
+    linkField: 'Link to share',
+    linkCopy: 'Copy',
+    linkCopied: 'Link copied.',
+    linkCopyManual: 'The link is selected: press Ctrl+C (⌘C on a Mac) to copy it.',
+    linkShare: 'Share…',
+    linkSendFile: 'Send as a file instead',
+    linkPrivacy:
+      'The music travels inside the link — nothing is uploaded. Anyone with the link can open it.',
+    linkLibrary:
+      'This piece is in the PoKeyBoard Library, so the link only names it. Anyone with the link can open it.',
+    linkLong: ({ characters }) =>
+      `This link is long (${characters} characters), and some apps cut long links. If it arrives broken, send the take as a file instead.`,
+    linkTooLong: 'This take is too long to fit in a link. Send it as a file instead.',
+    linkFailed: 'The take could not be loaded, so there is no link to share.',
+    linkClose: 'Close',
     rightHandTrack: 'Right hand',
     leftHandTrack: 'Left hand',
   },
@@ -734,6 +752,14 @@ export const en: Messages = {
       'The link could not be downloaded. Many sites block downloads from other apps — save the file to your device and import it with the file picker instead.',
     importUrlTimedOut: 'The download took too long and was stopped.',
     importUrlFailed: 'The link could not be downloaded.',
+    shareLinkInvalid:
+      'This link is damaged or incomplete, so the take in it could not be opened. Ask for the link again, or for the take as a file.',
+    shareLinkNewer:
+      'This link was made by a newer version of PoKeyBoard. Update the app, then open the link again.',
+    libraryLinkUnknown:
+      'This link names a piece the Library does not have. It may come from a newer version of PoKeyBoard.',
+    libraryLinkOffline:
+      'This piece is downloaded the first time it is opened, and it could not be downloaded now. It is waiting in the Library: open it there once you are back online.',
   },
   repairs: {
     takeId: 'Assigned a new take id.',

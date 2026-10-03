@@ -120,6 +120,37 @@ export class RemoteImportCancelled extends Error {
   }
 }
 
+/**
+ * Why a share link would not open. `newer` is a link this version cannot read
+ * because a newer PoKeyBoard made it — a later link format, or a take of a
+ * later schema — which updating the app fixes. Anything else about it is
+ * `invalid`: cut short, garbled, or not a take at all.
+ */
+export type ShareLinkFailure = 'invalid' | 'newer';
+
+const SHARE_LINK_MESSAGES: Record<ShareLinkFailure, [ErrorMessageKey, string]> = {
+  invalid: [
+    'shareLinkInvalid',
+    'This link is damaged or incomplete, so the take in it could not be opened. Ask for the link again, or for the take as a file.',
+  ],
+  newer: [
+    'shareLinkNewer',
+    'This link was made by a newer version of PoKeyBoard. Update the app, then open the link again.',
+  ],
+};
+
+export class ShareLinkError extends AppError {
+  readonly kind: ShareLinkFailure;
+  readonly issues: string[];
+
+  constructor(kind: ShareLinkFailure, issues: string[] = []) {
+    const [messageKey, userMessage] = SHARE_LINK_MESSAGES[kind];
+    super(`Share link refused (${kind}): ${issues.join('; ')}`, userMessage, messageKey);
+    this.kind = kind;
+    this.issues = issues;
+  }
+}
+
 export class StorageError extends AppError {
   constructor(message: string, options?: { cause?: unknown }) {
     super(

@@ -106,3 +106,53 @@
   font-size: 12px;
   color: var(--text-faint);
 }
+
+/* The share link dialog: the link, what to do with it, and what it carries.
+   The field is sized like the Takes page's link field, which this chunk does
+   not load. */
+.share-link__field {
+  display: block;
+  width: 100%;
+  min-height: var(--touch-target);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  padding: 0 10px;
+  font: inherit;
+  font-size: 14px;
+  text-overflow: ellipsis;
+}
+
+.share-link__field:focus-visible {
+  border-color: var(--accent);
+}
+
+.share-link__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+/* How long the link is: worth knowing, not an error. */
+.share-link__note {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.share-link__status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.share-link__status:empty {
+  margin: 0;
+}
+
+/* The file is the way out, set at the start of the row, Close at its end. */
+.share-link__file {
+  margin-right: auto;
+}

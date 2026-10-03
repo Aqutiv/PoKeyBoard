@@ -100,6 +100,8 @@ Every export leaves at the same loudness — −16 LUFS, the level music apps pl
 
 **Share → MIDI (.mid)** hands over the notes themselves, for a notation editor, a DAW or another piano app: tempo changes, meter and key, each hand on a track of its own, and the pedal.
 
+**Share → Link…** puts the whole take in a link — compressed into the part after `#`, which a browser never sends to a server, so nothing is uploaded; anyone with the link can open it. Opening one shows the same preview as an imported file, and nothing is saved until you choose _Import_. A Library piece gets a short link that just names it. Most takes fit in a few thousand characters; past 32,000 the dialog warns that some apps cut long links, and the very longest go as a file instead. See [TAKE_FORMAT.md](TAKE_FORMAT.md#share-links).
+
 ## Browser support
 
 Core app: current Safari (iPhone/iPad), Chrome (Android/Windows/macOS/Linux), Edge (Windows). Optional APIs (install prompt, file sharing, persistent storage, wake lock, File System Access) are feature-detected — Settings → App → **Device details** shows what this browser provides. Desktop Firefox works as a normal website (share falls back to download).

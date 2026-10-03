@@ -12,7 +12,7 @@ function previewOf(title: string): ImportPreview {
 }
 
 beforeEach(() => {
-  useImportUiStore.setState({ preview: null, failure: null });
+  useImportUiStore.setState({ preview: null, failure: null, pendingLink: null });
 });
 
 describe('the import inbox store', () => {
@@ -69,6 +69,32 @@ describe('the import inbox store', () => {
 
     useImportUiStore.getState().fail('generic');
     useImportUiStore.getState().closePreview();
+    expect(useImportUiStore.getState().failure).toBe('generic');
+  });
+});
+
+describe('a share link waiting in the store', () => {
+  it('is held until it is claimed, and claimed once', () => {
+    const link = { kind: 'take', version: 1, data: 'AbC' } as const;
+    useImportUiStore.getState().receiveLink(link);
+    expect(useImportUiStore.getState().pendingLink).toBe(link);
+
+    expect(useImportUiStore.getState().claimLink()).toBe(link);
+    expect(useImportUiStore.getState().pendingLink).toBeNull();
+    // A second claim, such as StrictMode's second effect, finds nothing.
+    expect(useImportUiStore.getState().claimLink()).toBeNull();
+  });
+
+  it('gives way to a newer link, and leaves the preview and the failure alone', () => {
+    const preview = previewOf('Waiting');
+    useImportUiStore.getState().openPreview(preview);
+    useImportUiStore.getState().fail('generic');
+    useImportUiStore.getState().receiveLink({ kind: 'library', trackId: 'fur-elise' });
+    const newer = { kind: 'library', trackId: 'good-night' } as const;
+    useImportUiStore.getState().receiveLink(newer);
+
+    expect(useImportUiStore.getState().pendingLink).toBe(newer);
+    expect(useImportUiStore.getState().preview).toBe(preview);
     expect(useImportUiStore.getState().failure).toBe('generic');
   });
 });

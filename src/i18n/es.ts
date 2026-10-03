@@ -60,6 +60,24 @@ export const es: Messages = {
     audio: 'Audio (MP3, FLAC)',
     sheet: 'Partitura (PDF)',
     midi: 'MIDI (.mid)',
+    link: 'Enlace…',
+    linkTitle: 'Compartir como enlace',
+    linkPreparing: 'Preparando el enlace…',
+    linkField: 'Enlace para compartir',
+    linkCopy: 'Copiar',
+    linkCopied: 'Enlace copiado.',
+    linkCopyManual: 'El enlace está seleccionado: pulsa Ctrl+C (⌘C en un Mac) para copiarlo.',
+    linkShare: 'Compartir…',
+    linkSendFile: 'Enviar como archivo',
+    linkPrivacy:
+      'La música viaja dentro del enlace: no se sube nada. Cualquiera que tenga el enlace puede abrirla.',
+    linkLibrary:
+      'Esta pieza está en la Biblioteca de PoKeyBoard, así que el enlace solo la nombra. Cualquiera que tenga el enlace puede abrirla.',
+    linkLong: ({ characters }) =>
+      `Este enlace es largo (${characters} caracteres) y algunas aplicaciones cortan los enlaces largos. Si llega roto, envía la toma como archivo.`,
+    linkTooLong: 'Esta toma es demasiado larga para caber en un enlace. Envíala como archivo.',
+    linkFailed: 'No se pudo cargar la toma, así que no hay enlace que compartir.',
+    linkClose: 'Cerrar',
     rightHandTrack: 'Mano derecha',
     leftHandTrack: 'Mano izquierda',
   },
@@ -740,6 +758,14 @@ export const es: Messages = {
       'No se pudo descargar el enlace. Muchos sitios bloquean las descargas desde otras aplicaciones: guarda el archivo en tu dispositivo e impórtalo con el selector de archivos.',
     importUrlTimedOut: 'La descarga tardó demasiado y se detuvo.',
     importUrlFailed: 'No se pudo descargar el enlace.',
+    shareLinkInvalid:
+      'Este enlace está dañado o incompleto, así que no se pudo abrir la toma que contiene. Pide el enlace de nuevo, o la toma como archivo.',
+    shareLinkNewer:
+      'Este enlace se creó con una versión más reciente de PoKeyBoard. Actualiza la aplicación y vuelve a abrir el enlace.',
+    libraryLinkUnknown:
+      'Este enlace nombra una pieza que la Biblioteca no tiene. Puede venir de una versión más reciente de PoKeyBoard.',
+    libraryLinkOffline:
+      'Esta pieza se descarga la primera vez que se abre, y ahora no se pudo descargar. Te espera en la Biblioteca: ábrela allí cuando vuelvas a tener conexión.',
   },
   repairs: {
     takeId: 'Se asignó un nuevo id de toma.',

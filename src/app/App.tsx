@@ -47,6 +47,11 @@ const SheetExportDialog = lazy(() =>
     default: module.SheetExportDialog,
   })),
 );
+const ShareLinkDialog = lazy(() =>
+  import('@/features/export/ShareLinkDialog').then((module) => ({
+    default: module.ShareLinkDialog,
+  })),
+);
 const LearnPage = lazy(PAGES.learn);
 const LibraryPage = lazy(PAGES.library);
 const PlayPage = lazy(PAGES.play);
@@ -80,10 +85,12 @@ function CurrentView() {
 function ExportDialogs() {
   const audioRequested = useExportUiStore((state) => state.requestedTakeId !== null);
   const sheetRequested = useExportUiStore((state) => state.sheetRequestedTakeId !== null);
+  const linkRequested = useExportUiStore((state) => state.linkRequestedTakeId !== null);
   return (
     <Suspense fallback={null}>
       {audioRequested ? <AudioExportDialog /> : null}
       {sheetRequested ? <SheetExportDialog /> : null}
+      {linkRequested ? <ShareLinkDialog /> : null}
     </Suspense>
   );
 }

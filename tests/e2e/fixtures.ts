@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { test as base } from '@playwright/test';
+import { test as base, type Page } from '@playwright/test';
 import type { SamplePackFileEntry, SamplePackManifest } from '../../src/audio/audioTypes';
 import { PIANO_INSTRUMENTS } from '../../src/audio/instruments';
 
@@ -89,6 +89,18 @@ const STUB_MANIFESTS = PACK_DIRS.map((dir) => [dir, buildStubManifest(dir)] as c
 const DEFAULT_SAMPLE_PACK = process.env.POKEYBOARD_E2E_REAL_PACK === '1' ? 'real' : 'stub';
 
 /**
+ * Give a page the sample pack the `page` fixture gives its own — for a spec
+ * that opens a second page, in a fresh browser context, say. Pass the test's
+ * `samplePack` so the opt-outs above still hold.
+ */
+export async function routeSamplePack(page: Page, samplePack: 'stub' | 'real'): Promise<void> {
+  if (samplePack !== 'stub') return;
+  for (const [dir, stub] of STUB_MANIFESTS) {
+    await page.route(`**/${dir}/manifest.json`, (route) => route.fulfill({ json: stub }));
+  }
+}
+
+/**
  * `samplePack: 'real'` opts a spec back onto the full core pack. Tests that are
  * *about* sample loading or audio fidelity use it; everything else takes the
  * stub, which is invisible to their assertions.
@@ -100,11 +112,7 @@ export const test = base.extend<{ samplePack: 'stub' | 'real' }>({
   // eslint-plugin-react-hooks as a React Hook called outside a component.
   // `runTest` is the same thing without the false positive.
   page: async ({ page, samplePack }, runTest) => {
-    if (samplePack === 'stub') {
-      for (const [dir, stub] of STUB_MANIFESTS) {
-        await page.route(`**/${dir}/manifest.json`, (route) => route.fulfill({ json: stub }));
-      }
-    }
+    await routeSamplePack(page, samplePack);
     await runTest(page);
   },
 });
