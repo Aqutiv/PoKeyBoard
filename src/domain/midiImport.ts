@@ -392,7 +392,8 @@ function fileKey(smf: SmfFile): { fifths: number; mode: 'major' | 'minor' } | nu
  * and may use channel 1 of each for different parts, so a note-off, an All
  * Notes Off or a pedal on one device's channel 1 is nothing to another's. A
  * track takes the device it last named; one that names none, as almost every
- * file, is the file's own device, so such files read exactly as by channel.
+ * file, is the file's own device — the one MIDI Port 0 names too — so such
+ * files read exactly as by channel.
  */
 interface ChannelAddressing {
   /**
@@ -420,7 +421,9 @@ function channelAddressing(smf: SmfFile): ChannelAddressing {
         const text = decodeName(event.data);
         name = text.length > 0 ? `name:${text}` : null;
       } else if (event.metaType === META_PORT && event.data.length >= 1) {
-        name = `port:${event.data[0] as number}`;
+        // Port 0 is the first port: where a track that names none goes too.
+        const port = event.data[0] as number;
+        name = port === 0 ? null : `port:${port}`;
       } else {
         return;
       }

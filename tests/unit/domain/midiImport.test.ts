@@ -618,6 +618,22 @@ describe('midiToTake: devices', () => {
     expect(take.pedalEvents).toEqual([{ atMs: 0, down: true }]);
   });
 
+  it('takes port 0 for the device a track that names none goes to', () => {
+    // One track names no port, the other port 0 (FF 21 00): the same port, so
+    // the second's All Notes Off ends the first's note.
+    const take = midiToTake(
+      smf(1, 480, [
+        played(0, 60, 0, 960),
+        [
+          [0, 0xff, 0x21, 0x01, 0x00],
+          [480, 0xb0, 123, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
+  });
+
   it('reads tracks that name no device as one device, as before', () => {
     const take = midiToTake(smf(1, 480, [played(0, 60, 0, 960), [[480, 0xb0, 123, 0]]]), 'x.mid');
     expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
