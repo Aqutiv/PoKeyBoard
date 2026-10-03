@@ -3,6 +3,8 @@ import type { NoteEvent } from '@/domain/takeTypes';
 
 /** How often, at most, the score is laid out again while a recording grows. */
 export const RECORDING_RELAYOUT_MS = 250;
+/** The longest one update is taken to cost, however long it seemed to. */
+const MAX_COST_MS = 2_000;
 
 /**
  * `value`, but while `coalesce` holds, updated at most once every `intervalMs`
@@ -23,20 +25,39 @@ export function useCoalesced<T>(
   intervalMs = RECORDING_RELAYOUT_MS,
 ): T {
   const [shown, setShown] = useState(value);
-  /** When the last update was asked for, and when it was on screen. */
-  const timing = useRef({ askedAt: Number.NEGATIVE_INFINITY, shownAt: Number.NEGATIVE_INFINITY });
+  /**
+   * When the last coalesced update was asked for (null once it is on screen),
+   * when it was on screen, and so what showing one costs. An update passed
+   * straight through (a take opened or cleared) leaves no interval to wait out:
+   * the next coalesced one shows at once.
+   */
+  const timing = useRef({
+    askedAt: null as number | null,
+    shownAt: Number.NEGATIVE_INFINITY,
+    cost: 0,
+  });
   // Not coalescing: keep up at once, during this very render.
   if (!coalesce && shown !== value) setShown(value);
 
-  // Committed: the work of showing it is done.
+  // Committed: the work of showing it is done. Only an update this hook asked
+  // for is timed; one passed straight through says nothing about how long a
+  // coalesced one takes.
   useEffect(() => {
-    timing.current.shownAt = performance.now();
+    const now = performance.now();
+    const { askedAt } = timing.current;
+    timing.current.askedAt = null;
+    if (askedAt === null) {
+      timing.current.shownAt = Number.NEGATIVE_INFINITY;
+      timing.current.cost = 0;
+    } else {
+      timing.current.shownAt = now;
+      timing.current.cost = Math.min(MAX_COST_MS, now - askedAt);
+    }
   }, [shown]);
 
   useEffect(() => {
     if (!coalesce || Object.is(shown, value)) return;
-    const { askedAt, shownAt } = timing.current;
-    const cost = Math.max(0, shownAt - askedAt);
+    const { shownAt, cost } = timing.current;
     const wait = Math.max(0, shownAt + Math.max(intervalMs, cost) - performance.now());
     const timer = setTimeout(() => {
       timing.current.askedAt = performance.now();

@@ -43,6 +43,22 @@ describe('useCoalesced', () => {
     expect(result.current).toBe(5);
   });
 
+  it('does not count the time a take sat open as the cost of a layout', () => {
+    let clock = 0;
+    vi.spyOn(performance, 'now').mockImplementation(() => clock);
+    const { result, rerender } = hook(1, true);
+    rerender({ value: 2, on: true });
+    act(() => vi.advanceTimersByTime(0));
+    expect(result.current).toBe(2);
+    // Ten minutes on, a take opened while not recording…
+    clock = 600_000;
+    rerender({ value: 3, on: false });
+    // …and recording again: the next note is laid out within the interval.
+    rerender({ value: 4, on: true });
+    act(() => vi.advanceTimersByTime(250));
+    expect(result.current).toBe(4);
+  });
+
   it('catches up at once when coalescing stops', () => {
     const { result, rerender } = hook(1, true);
     act(() => vi.advanceTimersByTime(0));
