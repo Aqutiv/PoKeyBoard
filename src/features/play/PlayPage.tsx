@@ -16,6 +16,7 @@ import { ShareMenu } from '@/features/export/ShareMenu';
 import { PianoKeyboard } from '@/features/keyboard/PianoKeyboard';
 import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
+import { PracticeResults } from '@/features/practice/PracticeResults';
 import { TransportControls } from '@/features/transport/TransportControls';
 import { isBusyState } from '@/features/transport/transportMachine';
 import type { KeyRange } from '@/features/waterfall/WaterfallView';
@@ -132,6 +133,7 @@ export function PlayPage() {
           </p>
         ) : null}
         <TransportControls key="transport" />
+        <PracticeResults key="practice" />
         <div key="score" className="play-layout__score">
           {progress.phase === 'loading-core' || progress.phase === 'loading-manifest' ? (
             <p className="page__hint" role="status">

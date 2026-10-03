@@ -43,6 +43,25 @@ export async function gotoAppReady(page: Page): Promise<void> {
   await expect(page.getByRole('button', { name: 'C4 key' })).toBeVisible();
 }
 
+/**
+ * Open `take` (a take's JSON, as TAKE_FORMAT.md writes it) the way a user
+ * imports a file: picked on Takes, then confirmed in the import preview,
+ * which lands on Play with it open.
+ */
+export async function importTake(page: Page, take: { title: string }): Promise<void> {
+  await nav(page).getByRole('button', { name: 'Takes' }).click();
+  await page.getByLabel('Import take JSON file').setInputFiles({
+    name: `PoKeyBoard - ${take.title}.pokeyboard.json`,
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(take)),
+  });
+  await page
+    .getByRole('dialog', { name: 'Import take' })
+    .getByRole('button', { name: 'Import', exact: true })
+    .click();
+  await expect(page.getByRole('heading', { name: take.title })).toBeVisible();
+}
+
 /** Set the count-in selector (recording tests want zero). */
 export async function setCountIn(page: Page, value: '0' | '1' | '2'): Promise<void> {
   const select = page.getByLabel('Count-in length');
