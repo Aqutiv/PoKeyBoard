@@ -119,6 +119,24 @@ describe('a run round a loop', () => {
     );
   });
 
+  it('starts a pass at a straddling chord that is all the loop asks for', () => {
+    // The same chord, but the only step in the loop 1000–2000: asked at 990 on
+    // the way in, then at 1010, later than any step before it. A hold's next
+    // step is always more than a chord on, so one this close is the next pass.
+    const cells = resultCells([missed(990), good(1010), good(1010)], {
+      tempo: STEADY,
+      takeDurationMs: 4000,
+      looping: true,
+    });
+    expect(cells.map((cell) => cell.kind === 'pass' && [cell.pass, cell.good, cell.total])).toEqual(
+      [
+        [1, 0, 1],
+        [2, 1, 1],
+        [3, 1, 1],
+      ],
+    );
+  });
+
   it('keeps the latest passes, numbered as they were played', () => {
     const outcomes = Array.from({ length: 11 }, (_, index) =>
       index === 3 ? missed(500) : good(500),

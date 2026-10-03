@@ -1,4 +1,5 @@
 import { createTakeTempoMap, type MeasureSpan, type TempoMapInput } from '@/domain/tempoMap';
+import { CHORD_WINDOW_MS } from '@/domain/trainingGate';
 
 /**
  * How a run went, told part by part: a run through the take in sections of
@@ -6,7 +7,8 @@ import { createTakeTempoMap, type MeasureSpan, type TempoMapInput } from '@/doma
  * card colours by how much of it went right.
  *
  * Pure, and indifferent to what was asked for: a "wait for me" run hands in
- * its steps, and a run kept in time can hand in its notes.
+ * its steps, and a run kept in time can hand in its notes, with its passes
+ * round a loop told apart already (`passCells`).
  */
 
 /** One thing a run asked for, where in the take, and whether it went right. */
@@ -75,9 +77,12 @@ export function resultCells(outcomes: readonly Outcome[], context: CellContext):
 
 /**
  * Passes told apart by where they start again: the music has gone back to the
- * loop's top whenever an outcome is not after the one before it. That holds
- * for one outcome to a moment, as a hold's steps are — even a single step
- * round a loop starts a pass of its own each time. Outcomes that share a
+ * loop's top whenever an outcome is no more than a chord after the one before
+ * it. That holds for one outcome to a moment, as a run's steps are: the next
+ * step a hold looks for is always more than a chord on (`CHORD_WINDOW_MS`).
+ * So even a single step round a loop starts a pass of its own each time,
+ * though a chord straddling the loop's top is asked for just before the top
+ * on the way in and just after it every time round. Outcomes that share a
  * moment, a chord's notes kept in time, need their passes from the caller
  * (`passCells`).
  */
@@ -85,7 +90,7 @@ function splitPasses(outcomes: readonly Outcome[]): Outcome[][] {
   const passes: Outcome[][] = [];
   let previous: Outcome | null = null;
   for (const outcome of outcomes) {
-    if (previous === null || outcome.atMs <= previous.atMs) passes.push([]);
+    if (previous === null || outcome.atMs <= previous.atMs + CHORD_WINDOW_MS) passes.push([]);
     (passes[passes.length - 1] as Outcome[]).push(outcome);
     previous = outcome;
   }
