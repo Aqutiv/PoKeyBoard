@@ -2,9 +2,9 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { reverbRoomOf, type Take } from '@/domain/takeTypes';
-import { resolveLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
-import { applySystemLanguageIfUnpinned } from '@/i18n/languagePreference';
+import { loadCatalog } from '@/i18n';
+import { applySystemLanguageIfUnpinned, isLanguageExplicit } from '@/i18n/languagePreference';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { QuotaExceededStorageError, toErrorMessageKey } from '@/utils/errors';
@@ -60,9 +60,19 @@ class PersistenceService {
 
   private async initialize(): Promise<void> {
     let restoredTake = false;
+    // Three independent IndexedDB reads, started together rather than one after
+    // another: on a slow machine each is a round trip the first screen waits on.
+    // Each is awaited (and its failure handled) where it was before.
+    const settingsRead = loadSettings();
+    const languageExplicitRead = isLanguageExplicit();
+    const lastIdRead = getMetadata<string>(META_LAST_OPEN_TAKE);
+    // Kept from rejecting unawaited; the await below still sees the error.
+    languageExplicitRead.catch(() => undefined);
+    lastIdRead.catch(() => undefined);
+    let catalogRead: Promise<unknown> = Promise.resolve();
 
     try {
-      const stored = await loadSettings();
+      const stored = await settingsRead;
       useSettingsStore.setState(stored);
       const settings = useSettingsStore.getState();
       audioEngine.setMasterVolume(settings.masterVolume);
@@ -73,7 +83,10 @@ class PersistenceService {
       // Default to the OS language unless the user has pinned one. Runs before
       // the autosave subscription below so an unpinned language isn't written
       // back — it stays re-derived from the OS on each launch.
-      await applySystemLanguageIfUnpinned();
+      await applySystemLanguageIfUnpinned(languageExplicitRead);
+      // The saved language's catalog, fetched while the take restores, so the
+      // app opens in it rather than flashing through English.
+      catalogRead = loadCatalog(useSettingsStore.getState().language);
     } catch (error) {
       console.error('Settings restore failed:', error);
     } finally {
@@ -82,7 +95,7 @@ class PersistenceService {
     }
 
     try {
-      const lastId = await getMetadata<string>(META_LAST_OPEN_TAKE);
+      const lastId = await lastIdRead;
       if (lastId) {
         // Library takes have no stored row — rebuild pristine from the
         // catalog (in-session tweaks to them are ephemeral). A vendored score
@@ -128,6 +141,9 @@ class PersistenceService {
       useTakeStore.getState().setTake(take);
       transportController.restorePlayhead(0);
     }
+
+    // Never rejects: a catalog that cannot be fetched falls back to English.
+    await catalogRead;
 
     useTakeStore.subscribe((state, previous) => {
       if (state.take !== previous.take && state.dirty) this.scheduleSave();
@@ -218,6 +234,9 @@ class PersistenceService {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), SCORE_RESTORE_TIMEOUT_MS);
     try {
+      // Fetched only when the last take was a library one: the catalog carries
+      // every authored track and the score importer, which no other launch needs.
+      const { resolveLibraryTake } = await import('@/features/library/catalog');
       return await resolveLibraryTake(takeId, controller.signal);
     } finally {
       clearTimeout(timer);

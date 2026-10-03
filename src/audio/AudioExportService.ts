@@ -8,7 +8,7 @@ import { ExportError } from '@/utils/errors';
 import { takeAudioFileName } from '@/utils/filenames';
 import type { EncodeRequest, EncoderResponse } from '@/workers/audioEncoder.worker';
 import { audioEngine } from './AudioEngine';
-import { finishExportOnMainThread, type ExportPcm } from './exportEncode';
+import type { ExportPcm } from './exportEncode';
 import {
   FORMAT_EXTENSION,
   FORMAT_MIME_TYPE,
@@ -317,6 +317,9 @@ class AudioExportService {
       console.error('[export] Encoder worker failed, falling back to main thread:', workerError);
       try {
         // Worker transfers detach the PCM buffers; re-extract from the render.
+        // Fetched only now: the worker carries its own copy of the encoders,
+        // and the MP3 one is a ~180 KB inlined wasm that need not ship twice.
+        const { finishExportOnMainThread } = await import('./exportEncode');
         const parts = await finishExportOnMainThread(
           extractPcm(rendered, loudness),
           encoding,

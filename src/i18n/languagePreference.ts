@@ -18,10 +18,13 @@ export function isLanguageExplicit(): Promise<boolean | undefined> {
  * Adopt the OS-preferred language into the store unless the user has pinned
  * one. Called during startup, before autosave is wired, so the detected
  * language is applied for display without being persisted (an unpinned
- * language is re-derived from the OS on the next launch).
+ * language is re-derived from the OS on the next launch). `explicit` is the
+ * pinned flag, when the caller has already started reading it.
  */
-export async function applySystemLanguageIfUnpinned(): Promise<void> {
-  if (await isLanguageExplicit()) return;
+export async function applySystemLanguageIfUnpinned(
+  explicit: Promise<boolean | undefined> = isLanguageExplicit(),
+): Promise<void> {
+  if (await explicit) return;
   const detected = detectPreferredLanguage();
   if (detected) useSettingsStore.getState().setLanguage(detected);
 }

@@ -77,6 +77,7 @@ vi.mock('@/features/transport/transportController', () => ({
 }));
 vi.mock('@/i18n/languagePreference', () => ({
   applySystemLanguageIfUnpinned: vi.fn(async () => undefined),
+  isLanguageExplicit: vi.fn(async () => false),
 }));
 
 afterEach(() => {

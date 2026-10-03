@@ -94,10 +94,14 @@ export default defineConfig({
           },
         ],
       },
+      // The icons are precached by the glob below already; the plugin's own
+      // manifest-icon entries would list each a second time.
+      includeManifestIcons: false,
       injectManifest: {
         // Precache the shell only; the piano sample pack is runtime-cached
-        // (Cache First) and explicitly downloadable for offline use.
-        globPatterns: ['**/*.{js,css,html,png,svg,woff2}'],
+        // (Cache First) and explicitly downloadable for offline use. The MP3
+        // encoder's .wasm comes too, so exports keep working offline.
+        globPatterns: ['**/*.{js,css,html,png,svg,woff2,wasm}'],
         globIgnores: ['**/piano/**'],
       },
       devOptions: { enabled: false },

@@ -73,12 +73,12 @@ describe('audio export cancellation', () => {
       duration: length / 48_000,
       copyFromChannel: (destination: Float32Array) => destination.set(tone),
     };
-    const createMp3Encoder = vi.fn(async () => ({
+    const createEncoder = vi.fn(async () => ({
       configure: vi.fn(),
       encode: vi.fn(() => new Uint8Array(0)),
       finalize: vi.fn(() => new Uint8Array(0)),
     }));
-    vi.doMock('wasm-media-encoders', () => ({ createMp3Encoder }));
+    vi.doMock('wasm-media-encoders', () => ({ createEncoder }));
     // There is no Worker here, so the export falls back to the main thread, and
     // says so.
     vi.spyOn(console, 'error').mockImplementation(() => undefined);
@@ -98,7 +98,7 @@ describe('audio export cancellation', () => {
     });
 
     await expect(pending).rejects.toBeInstanceOf(ExportCancelledError);
-    expect(createMp3Encoder).not.toHaveBeenCalled();
+    expect(createEncoder).not.toHaveBeenCalled();
   });
 
   it('hears a render out while its export lasts, and never after', async () => {
@@ -158,7 +158,7 @@ describe('audio export progress', () => {
   /** An encoder that says nothing until it hands over a plausibly sized file. */
   function stubEncoder() {
     vi.doMock('wasm-media-encoders', () => ({
-      createMp3Encoder: async () => ({
+      createEncoder: async () => ({
         configure: vi.fn(),
         encode: vi.fn(() => new Uint8Array(0)),
         finalize: vi.fn(() => new Uint8Array(20_000)),
@@ -246,7 +246,7 @@ describe('audio export formats', () => {
       })),
     }));
     vi.doMock('wasm-media-encoders', () => ({
-      createMp3Encoder: async () => ({
+      createEncoder: async () => ({
         configure: vi.fn(),
         encode: vi.fn(() => new Uint8Array(0)),
         finalize: vi.fn(() => new Uint8Array(20_000)),

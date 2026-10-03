@@ -1,7 +1,8 @@
 import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AboutPage } from '@/features/about/AboutPage';
-import { catalogs, SUPPORTED_LANGUAGES } from '@/i18n';
+import { SUPPORTED_LANGUAGES } from '@/i18n';
+import { catalogs } from '../i18n/allCatalogs';
 import { I18nContext } from '@/i18n/i18nContext';
 import { en } from '@/i18n/en';
 
