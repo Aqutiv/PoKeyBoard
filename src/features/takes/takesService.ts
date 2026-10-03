@@ -214,11 +214,15 @@ export async function snapshotTake(id: string): Promise<Take | null> {
   return getTake(id);
 }
 
-export async function takeJsonFile(id: string): Promise<File | null> {
-  const take = await snapshotTake(id);
-  if (!take) return null;
+/** A take as the JSON file a Takes row exports and shares. */
+export function takeToJsonFile(take: Take): File {
   const json = JSON.stringify(take, null, 2);
   return new File([json], takeJsonFileName(take.title), { type: 'application/json' });
+}
+
+export async function takeJsonFile(id: string): Promise<File | null> {
+  const take = await snapshotTake(id);
+  return take ? takeToJsonFile(take) : null;
 }
 
 // ------------------------------------------------------------- import --

@@ -93,7 +93,11 @@ const previewDialog = () => screen.queryByRole('dialog', { name: en.importDialog
 
 function resetStores() {
   useImportUiStore.setState({ preview: null, failure: null, pendingLink: null });
-  useExportUiStore.setState({ requestedTakeId: null, sheetRequestedTakeId: null });
+  useExportUiStore.setState({
+    requestedTakeId: null,
+    sheetRequestedTakeId: null,
+    linkRequestedTakeId: null,
+  });
 }
 
 // Resolve the lazy inbox up front, so a test waiting on a dialog waits on the
@@ -200,6 +204,16 @@ describe('a take link', () => {
     expect(mock.previewTakeLink).not.toHaveBeenCalled();
 
     act(() => useExportUiStore.getState().closeSheetExport());
+    expect(await screen.findByRole('dialog', { name: en.importDialog.title })).toBeVisible();
+  });
+
+  it('waits while the link dialog is open, then opens', async () => {
+    renderShell();
+    act(() => useExportUiStore.getState().openLinkShare('take-1'));
+    follow('#/s/1.AbC');
+    expect(mock.previewTakeLink).not.toHaveBeenCalled();
+
+    act(() => useExportUiStore.getState().closeLinkShare());
     expect(await screen.findByRole('dialog', { name: en.importDialog.title })).toBeVisible();
   });
 });

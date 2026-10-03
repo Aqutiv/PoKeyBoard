@@ -21,13 +21,16 @@ interface PreparedMidi {
 
 /**
  * One "Share" button opening a menu with Audio (MP3, FLAC) / Sheet music
- * (PDF) / MIDI. The first two open a dialog of options; MIDI has none to ask,
- * so it is written as the menu opens and handed over the moment it is chosen.
+ * (PDF) / MIDI / Link. Audio and sheet music open a dialog of options; MIDI
+ * has none to ask, so it is written as the menu opens and handed over the
+ * moment it is chosen. Link opens a dialog too — its Copy, Share… and file
+ * buttons each need a click of their own.
  */
 export function ShareMenu({ takeId, disabled, triggerClassName, align = 'right' }: ShareMenuProps) {
   const m = useMessages();
   const openExport = useExportUiStore((s) => s.openExport);
   const openSheetExport = useExportUiStore((s) => s.openSheetExport);
+  const openLinkShare = useExportUiStore((s) => s.openLinkShare);
   const midi = useRef<PreparedMidi | null>(null);
   const trackNames = { right: m.share.rightHandTrack, left: m.share.leftHandTrack };
 
@@ -67,6 +70,7 @@ export function ShareMenu({ takeId, disabled, triggerClassName, align = 'right' 
         { label: m.share.audio, onSelect: () => openExport(takeId) },
         { label: m.share.sheet, onSelect: () => openSheetExport(takeId) },
         { label: m.share.midi, onSelect: shareMidi },
+        { label: m.share.link, onSelect: () => openLinkShare(takeId) },
       ]}
     />
   );

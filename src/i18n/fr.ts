@@ -61,6 +61,25 @@ export const fr: Messages = {
     audio: 'Audio (MP3, FLAC)',
     sheet: 'Partition (PDF)',
     midi: 'MIDI (.mid)',
+    link: 'Lien…',
+    linkTitle: 'Partager sous forme de lien',
+    linkPreparing: 'Préparation du lien…',
+    linkField: 'Lien à partager',
+    linkCopy: 'Copier',
+    linkCopied: 'Lien copié.',
+    linkCopyManual: 'Le lien est sélectionné : appuyez sur Ctrl+C (⌘C sur Mac) pour le copier.',
+    linkShare: 'Partager…',
+    linkSendFile: 'Envoyer plutôt un fichier',
+    linkPrivacy:
+      'La musique voyage dans le lien : rien n’est mis en ligne. Toute personne qui a le lien peut l’ouvrir.',
+    linkLibrary:
+      'Ce morceau fait partie de la Bibliothèque de PoKeyBoard : le lien se contente de le nommer. Toute personne qui a le lien peut l’ouvrir.',
+    linkLong: ({ characters }) =>
+      `Ce lien est long (${characters} caractères) et certaines applications coupent les liens longs. S’il arrive abîmé, envoyez plutôt la prise sous forme de fichier.`,
+    linkTooLong:
+      'Cette prise est trop longue pour tenir dans un lien. Envoyez-la sous forme de fichier.',
+    linkFailed: 'La prise n’a pas pu être chargée : il n’y a pas de lien à partager.',
+    linkClose: 'Fermer',
     rightHandTrack: 'Main droite',
     leftHandTrack: 'Main gauche',
   },

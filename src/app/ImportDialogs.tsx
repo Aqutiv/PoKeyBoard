@@ -31,7 +31,10 @@ const ImportInbox = lazy(() =>
 export function ImportDialogs() {
   const pending = useImportUiStore((state) => state.preview !== null || state.failure !== null);
   const exportDialogOpen = useExportUiStore(
-    (state) => state.requestedTakeId !== null || state.sheetRequestedTakeId !== null,
+    (state) =>
+      state.requestedTakeId !== null ||
+      state.sheetRequestedTakeId !== null ||
+      state.linkRequestedTakeId !== null,
   );
   const transport = useTransportState();
   const busy =

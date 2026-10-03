@@ -62,6 +62,25 @@ export const mg: Messages = {
     audio: 'Feo (MP3, FLAC)',
     sheet: 'Partitiora (PDF)',
     midi: 'MIDI (.mid)',
+    link: 'Rohy…',
+    linkTitle: 'Zarao ho rohy',
+    linkPreparing: 'Manomana ny rohy…',
+    linkField: 'Rohy hozaraina',
+    linkCopy: 'Adikao',
+    linkCopied: 'Voadika ny rohy.',
+    linkCopyManual: 'Voafantina ny rohy: tsindrio ny Ctrl+C (⌘C amin’ny Mac) hanaovana dika azy.',
+    linkShare: 'Zarao…',
+    linkSendFile: 'Alefaso ho rakitra JSON kosa',
+    linkPrivacy:
+      'Ao anatin’ny rohy ihany no mandeha ny mozika — tsy misy alefa amin’ny aterineto. Afaka manokatra azy izay rehetra manana ny rohy.',
+    linkLibrary:
+      'Ao amin’ny Hira PoKeyBoard ity hira ity, ka ny anarany ihany no ao amin’ny rohy. Afaka manokatra azy izay rehetra manana ny rohy.',
+    linkLong: ({ characters }) =>
+      `Lava ity rohy ity (litera ${characters}), ary misy fampiharana manapaka ny rohy lava. Raha tonga simba izy, alefaso ho rakitra JSON kosa.`,
+    linkTooLong:
+      'Lava loatra ity rakitra ity ka tsy omby anaty rohy. Alefaso ho rakitra JSON kosa.',
+    linkFailed: 'Tsy azo nalaina ilay rakitra, ka tsy misy rohy hozaraina.',
+    linkClose: 'Akatona',
     rightHandTrack: 'Tanana havanana',
     leftHandTrack: 'Tanana havia',
   },

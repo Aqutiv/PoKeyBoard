@@ -188,6 +188,27 @@ export interface Messages {
     audio: string;
     sheet: string;
     midi: string;
+    /** The menu item that opens the link dialog. */
+    link: string;
+    linkTitle: string;
+    linkPreparing: string;
+    /** The link field's accessible name. */
+    linkField: string;
+    linkCopy: string;
+    linkCopied: string;
+    /** When the clipboard refuses: the link is selected for the keyboard instead. */
+    linkCopyManual: string;
+    linkShare: string;
+    linkSendFile: string;
+    /** Under a take's link: what travels, and who can open it. */
+    linkPrivacy: string;
+    /** Under a Library track's link, which names the piece rather than carrying it. */
+    linkLibrary: string;
+    /** `characters` comes formatted for the locale. */
+    linkLong: (p: { characters: string }) => string;
+    linkTooLong: string;
+    linkFailed: string;
+    linkClose: string;
     /** Names of a MIDI file's two tracks, which a sequencer shows. */
     rightHandTrack: string;
     leftHandTrack: string;
