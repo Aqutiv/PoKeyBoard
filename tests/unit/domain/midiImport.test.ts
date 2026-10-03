@@ -387,11 +387,9 @@ describe('midiToTake: notes', () => {
       ]),
       'x.mid',
     );
-    // A note All Sound Off silences lets go a millisecond before it, so a
-    // pedal pressed again after the break cannot hold it on.
     expect(take.notes.map((n) => [n.midi, n.startMs, n.durationMs])).toEqual([
-      [60, 0, 499],
-      [64, 0, 499],
+      [60, 0, 500],
+      [64, 0, 500],
       [60, 1000, 500],
     ]);
   });
@@ -678,6 +676,26 @@ describe('midiToTake: pedal', () => {
     );
     const [sounded] = applySustainToNotes(take.notes, take.pedalEvents);
     expect(sounded!.startMs + sounded!.durationMs).toBe(500);
+  });
+
+  it('stops a note let go on the tick of an All Sound Off under the pedal', () => {
+    // Let go by its note-off just before the controller, on the same tick: the
+    // pedal held it, so the controller silences it, and the press after the
+    // break must not hold it on.
+    const take = midiToTake(
+      smf(0, 480, [[pedal(0, 0, true), ...played(0, 60, 0, 480), [480, 0xb0, 120, 0]]]),
+      'x.mid',
+    );
+    const [sounded] = applySustainToNotes(take.notes, take.pedalEvents);
+    expect(sounded!.startMs + sounded!.durationMs).toBe(500);
+  });
+
+  it('leaves a note whole when an All Sound Off on its tick finds no pedal', () => {
+    const take = midiToTake(
+      smf(0, 480, [[...played(0, 60, 0, 480), [480, 0xb0, 120, 0]]]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
   });
 
   it('breaks a held pedal for an instant at an All Sound Off (CC120)', () => {

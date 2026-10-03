@@ -639,14 +639,20 @@ interface PedalChange {
  * channel's pedal up, as MIDI says it does; an All Sound Off silences what the
  * pedal holds too, so it breaks the pedal for an instant without moving it.
  *
- * Changes are settled in two steps. First a tick at a time, since the order
- * of two tracks' events at one tick means nothing: each channel's changes in
- * the order the file gives them, so its last is where it ends up, and it was
- * up at some instant of the tick if it was up already or let go along the way.
- * The pedal lifts at the tick if every channel was up at some instant of it,
- * and is down after it if any channel ends down. So the change of pedal the
- * export writes (both hands up, then down, on one tick) is kept, and one hand
+ * Changes are settled in two steps. First a tick at a time: each track's in
+ * the order the file gives them, while how two tracks' events at one tick fall
+ * against each other is not known. The pedal lifts at the tick if its channels
+ * can all have been up at one instant — none holding untouched, and each track
+ * with an instant when every channel it changes is up — and is down after it
+ * if any channel ends down. So the change of pedal the export writes (both
+ * hands up, then down, on one tick, in two tracks) is kept, and one hand
  * changing pedal while the other holds it changes nothing.
+ *
+ * Where an All Sound Off lifts the pedal and it goes down again, the press
+ * lands on the very millisecond a note let go on that tick ends, and a note
+ * let go as the pedal goes down is held by it; those ticks are handed back, so
+ * such notes can let go a millisecond sooner, while the pedal from before
+ * still holds them, and stop with the break.
  *
  * Then a whole millisecond at a time, which is all a take keeps, and so all it
  * can order — two changes a tick apart at 960 to the quarter can share one,
@@ -657,7 +663,10 @@ interface PedalChange {
  * and two hands changing pedal on ticks of their own, one holding while the
  * other changes, never lift it.
  */
-function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
+function collectPedal(
+  smf: SmfFile,
+  msAtTick: (tick: number) => number,
+): { pedals: { atMs: number; down: boolean }[]; heldAgainAfterBreak: Set<number> } {
   const changes: PedalChange[] = [];
   smf.tracks.forEach((source, track) => {
     for (const event of source.events) {
@@ -680,6 +689,7 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
   const held = new Set<number>();
   // The pedal tick by tick: its changes, each at its tick's whole millisecond.
   const byTick: { atMs: number; down: boolean }[] = [];
+  const heldAgainAfterBreak = new Set<number>();
   for (let first = 0; first < changes.length;) {
     const { tick } = changes[first] as PedalChange;
     let next = first;
@@ -738,6 +748,11 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
     const atMs = Math.round(msAtTick(tick));
     if (wasDown && dipped) byTick.push({ atMs, down: false });
     if (isDown && (!wasDown || dipped)) byTick.push({ atMs, down: true });
+    if (wasDown && dipped && isDown) {
+      for (const ofTrack of byTrack.values()) {
+        if (ofTrack.some((change) => change.to === 'break')) heldAgainAfterBreak.add(tick);
+      }
+    }
     first = next;
   }
 
@@ -757,38 +772,7 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
     if (down && (!wasDown || lifted)) pedals.push({ atMs, down: true });
     first = next;
   }
-  return pedals;
-}
-
-/**
- * Per channel, the ticks an All Sound Off falls on. It breaks a held pedal for
- * an instant (see `collectPedal`), but the press after the break lands on the
- * very millisecond a note it silences lets go, and a note let go as the pedal
- * goes down is held by it — so such a note is let go a millisecond sooner,
- * while the pedal from before the break still holds it, and it stops with the
- * break.
- */
-function soundOffTicks(smf: SmfFile): Map<number, Set<number>> {
-  const ticks = new Map<number, Set<number>>();
-  for (const track of smf.tracks) {
-    for (const event of track.events) {
-      if (
-        event.type !== 'channel' ||
-        event.command !== 0xb0 ||
-        event.data1 !== ALL_SOUND_OFF_CONTROLLER ||
-        event.channel === DRUM_CHANNEL
-      ) {
-        continue;
-      }
-      let ofChannel = ticks.get(event.channel);
-      if (!ofChannel) {
-        ofChannel = new Set();
-        ticks.set(event.channel, ofChannel);
-      }
-      ofChannel.add(event.tick);
-    }
-  }
-  return ticks;
+  return { pedals, heldAgainAfterBreak };
 }
 
 /**
@@ -861,7 +845,7 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
 
   const staff = staffOf(notes);
   const keyOf = fileKey(smf);
-  const soundOff = soundOffTicks(smf);
+  const { pedals, heldAgainAfterBreak } = collectPedal(smf, msAtTick);
   const onsets = [...new Set(notes.map((note) => note.startTick))].map(
     (tick) => tick / smf.ticksPerQuarter,
   );
@@ -871,14 +855,15 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
       notes: notes.map((note): ImportedNote => ({
         midi: note.midi,
         startMs: msAtTick(note.startTick),
-        endMs:
-          msAtTick(note.endTick) - (soundOff.get(note.channel)?.has(note.endTick) === true ? 1 : 0),
+        // Let go on a tick where All Sound Off broke the pedal and it went
+        // down again: a millisecond sooner, so the press cannot hold it on.
+        endMs: msAtTick(note.endTick) - (heldAgainAfterBreak.has(note.endTick) ? 1 : 0),
         velocity: note.velocity,
         seq: note.seq,
         staff: staff(note),
       })),
       nextSeq: notes.length,
-      pedals: withinPedalLimit(collectPedal(smf, msAtTick)),
+      pedals: withinPedalLimit(pedals),
       tempoMap: createTakeTempoMap({ bpm: base, timeSignature: meter, changes }),
       timeSignature: meter,
       keySignature: keyOf?.fifths ?? null,
