@@ -28,13 +28,14 @@ import {
   CHORD_WINDOW_MS,
   EARLY_PRESS_MS,
   nextTrainingGate,
+  playAlongMutedIds,
   type TrainingGate,
 } from '@/domain/trainingGate';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { newId } from '@/utils/ids';
 import { beatDurationMs, clamp } from '@/utils/timing';
-import { trainingHandFor, type RecordMode } from './modes';
+import { practiceHandFor, practiceStyleOf, trainingHandFor, type RecordMode } from './modes';
 import type { PracticeEvent, PracticeRun, RunEndReason, RunEvent } from './practiceEvents';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
 import { playableLoop, playFromMs } from './practiceLoop';
@@ -68,6 +69,7 @@ export function clampPlaybackSpeed(speed: number): number {
 }
 
 const EMPTY_MIDIS: ReadonlySet<number> = new Set();
+const EMPTY_IDS: ReadonlySet<string> = new Set();
 
 interface OpenNote {
   id: string;
@@ -164,6 +166,12 @@ export class TransportController {
   private practiceRun: PracticeRun | null = null;
   /** How many practice runs have started, which numbers the next. */
   private practiceRunCount = 0;
+  /**
+   * The notes playback leaves to the player while a run keeps time: its hand's,
+   * and their hidden copies (`playAlongMutedIds`). None once the run ends, so
+   * playback that carries on without it plays the take whole.
+   */
+  private playAlongMuted: ReadonlySet<string> = EMPTY_IDS;
 
   /** Callbacks fired when a recording pass has been finalized (autosave). */
   readonly onRecordingFinalized = new Set<() => void>();
@@ -748,6 +756,8 @@ export class TransportController {
         if (this.trainingSkips.get(this.schedulePass)?.has(note.id)) continue;
         // Written, not played: nothing to hear, though a hold still asks for it.
         if (isSilentNote(note)) continue;
+        // The player's to play, in a run that keeps time.
+        if (this.playAlongMuted.has(note.id)) continue;
         // A loop lets every key go at its end, as hands leave the keys to
         // start the passage again, rather than ringing on over its top.
         const durationMs = loop
@@ -1014,37 +1024,67 @@ export class TransportController {
   // --------------------------------------------------- practice runs --
 
   /**
-   * Start a practice run, when the playback mode trains a hand and there is
+   * Start a practice run, when the playback mode practises a hand and there is
    * take left to play: from `fromMs`, which the run's clock reaches at
-   * `anchorAudioTime`, asking for that hand's notes among `notes` (the take's,
-   * as playback strikes them).
+   * `anchorAudioTime` after a count-in of `countInMs`, asking for that hand's
+   * notes among `notes` (the take's, as playback strikes them).
+   *
+   * A run that keeps time leaves those notes to the player, and so may leave
+   * playback nothing to sound — the hand of a piece written for one hand, or
+   * both hands. Then nothing would keep the beat for the player but the
+   * metronome, so it comes on, as its switch shows, for them to turn off.
    */
   private beginPracticeRun(
     notes: readonly NoteEvent[],
     fromMs: number,
     anchorAudioTime: number,
+    countInMs = 0,
   ): void {
-    const hand = trainingHandFor(useSettingsStore.getState().playbackMode);
-    if (hand === null || fromMs >= this.playDurationMs) return;
+    const mode = useSettingsStore.getState().playbackMode;
+    const hand = practiceHandFor(mode);
+    const style = practiceStyleOf(mode);
+    if (hand === null || style === null || fromMs >= this.playDurationMs) return;
     const take = useTakeStore.getState().take;
     this.practiceRunCount += 1;
     this.practiceRun = {
       runId: this.practiceRunCount,
       takeId: take.id,
-      style: 'wait',
+      style,
       hand,
       fromMs,
       loop: this.playLoop,
       speed: this.clock.rate,
       anchorAudioTime,
-      countInMs: 0,
+      countInMs,
       durationMs: this.playDurationMs,
       tempo: take.tempo,
       asked: askedNotes(notes, hand),
       noteCount: take.notes.length,
       takeDurationMs: take.durationMs,
     };
+    if (style === 'playAlong') this.playAlongMuted = playAlongMutedIds(notes, hand);
     this.tellPractice({ type: 'run-start', run: this.practiceRun });
+    if (style === 'playAlong' && !this.metronomeOn && !this.soundsAnything(notes, fromMs)) {
+      this.setMetronomeOn(true);
+    }
+  }
+
+  /**
+   * Whether playback has anything to sound from `fromMs`: a note played, and
+   * not left to the player. Round a loop, the passes after the first play the
+   * whole of it.
+   */
+  private soundsAnything(notes: readonly NoteEvent[], fromMs: number): boolean {
+    const loop = this.playLoop;
+    const startMs = loop ? loop.startMs : fromMs;
+    const endMs = loop ? loop.endMs : Number.POSITIVE_INFINITY;
+    return notes.some(
+      (note) =>
+        note.startMs >= startMs &&
+        note.startMs < endMs &&
+        !isSilentNote(note) &&
+        !this.playAlongMuted.has(note.id),
+    );
   }
 
   /**
@@ -1056,7 +1096,13 @@ export class TransportController {
     const run = this.practiceRun;
     if (!run) return;
     this.practiceRun = null;
-    this.tellPractice({ type: 'run-end', reason, audioTime: null }, run);
+    // Whatever plays on now plays the take whole: a run ended by a change of
+    // page leaves plain playback behind it, as one that waits leaves its holds.
+    this.playAlongMuted = EMPTY_IDS;
+    // A run that keeps time ends at a moment in its music. One that waits may
+    // end at a hold, where its music stands still, so it names none.
+    const audioTime = run.style === 'playAlong' ? audioEngine.currentTime : null;
+    this.tellPractice({ type: 'run-end', reason, audioTime }, run);
   }
 
   /** Tell the practice listeners what happened in `run`, the one under way unless named. */
