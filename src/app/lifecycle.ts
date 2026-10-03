@@ -28,6 +28,18 @@ class LifecycleService {
     if (this.initialized) return;
     this.initialized = true;
 
+    // Nothing left to play with the page away: once the last sound and the
+    // room's tail have died, the audio device sleeps until the page is back. A
+    // practice click left running keeps it awake, as it always has.
+    const sleepWhenQuiet = () =>
+      audioEngine.sleepAfter(
+        ALL_NOTES_OFF_S + roomTailSeconds(audioEngine.getReverbRoom()),
+        () =>
+          document.visibilityState === 'hidden' &&
+          !isBusyState(transportController.getState()) &&
+          !transportController.isMetronomeOn(),
+      );
+
     const onHidden = () => {
       const state = transportController.getState();
       const wasRecording = state === 'recording' || state === 'countIn';
@@ -39,16 +51,7 @@ class LifecycleService {
       if (wasRecording) {
         this.setMessage('recordingInterrupted');
       }
-      // Nothing left to play: once the last release and the room's tail have
-      // died away, the audio device sleeps until the page is back. A practice
-      // click left running keeps it awake, as it always has.
-      audioEngine.sleepAfter(
-        ALL_NOTES_OFF_S + roomTailSeconds(audioEngine.getReverbRoom()),
-        () =>
-          document.visibilityState === 'hidden' &&
-          !isBusyState(transportController.getState()) &&
-          !transportController.isMetronomeOn(),
-      );
+      sleepWhenQuiet();
       // Autosave flushes via its own visibilitychange listener.
     };
 
@@ -65,6 +68,9 @@ class LifecycleService {
       const busy = isBusyState(transportController.getState());
       if (busy) this.acquireWakeLock();
       else this.releaseWakeLock();
+      // Background playback that comes to its end with the page still away
+      // leaves nothing to play either; its last notes ring out first.
+      if (!busy && document.visibilityState === 'hidden') sleepWhenQuiet();
     });
   }
 

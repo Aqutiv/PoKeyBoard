@@ -186,6 +186,35 @@ describe('sleeping while the page is away', () => {
   });
 });
 
+describe('sleeping only once everything has rung out', () => {
+  it('waits a whole quiet stretch after the last voice', async () => {
+    const { engine, context } = await readyEngine();
+    const voices = (engine as unknown as { voices: { voiceCount: number } }).voices;
+    const count = vi.spyOn(voices, 'voiceCount', 'get');
+    count.mockReturnValue(2);
+    vi.useFakeTimers();
+    engine.sleepAfter(1, () => true);
+    vi.advanceTimersByTime(1000); // still sounding: look again later
+    count.mockReturnValue(0);
+    vi.advanceTimersByTime(1000); // just ended: its tail gets a stretch
+    expect(context.suspend).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(context.suspend).toHaveBeenCalledOnce();
+  });
+
+  it('unlocks again at the next press after waking', async () => {
+    const { engine } = await readyEngine();
+    vi.useFakeTimers();
+    engine.sleepAfter(1, () => true);
+    vi.advanceTimersByTime(1000);
+    engine.wake();
+    const unlock = vi.spyOn(engine, 'unlockFromUserGesture');
+    window.dispatchEvent(new Event('pointerdown'));
+    window.dispatchEvent(new Event('keydown'));
+    expect(unlock).toHaveBeenCalledOnce();
+  });
+});
+
 describe('the iPhone silent-switch session', () => {
   const nav = (userAgent: string, platform: string, maxTouchPoints: number) => ({
     userAgent,

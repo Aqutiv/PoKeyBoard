@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   allNotesOff: vi.fn(),
   sleepAfter: vi.fn(),
   wake: vi.fn(),
+  stateListeners: [] as Array<() => void>,
   handleInterruption: vi.fn(),
   scrubEnd: vi.fn(),
 }));
@@ -28,7 +29,10 @@ vi.mock('@/features/transport/transportController', () => ({
     getState: () => mocks.state,
     isMetronomeOn: () => mocks.metronomeOn,
     handleInterruption: mocks.handleInterruption,
-    subscribeState: () => () => undefined,
+    subscribeState: (listener: () => void) => {
+      mocks.stateListeners.push(listener);
+      return () => undefined;
+    },
   },
 }));
 
@@ -137,6 +141,17 @@ describe('the audio device at rest', () => {
     document.dispatchEvent(new Event('visibilitychange'));
 
     expect(mocks.wake).toHaveBeenCalledOnce();
+    expect(mocks.sleepAfter).not.toHaveBeenCalled();
+  });
+
+  it('sleeps when background playback comes to its end with the page away', () => {
+    mocks.state = 'idle';
+    for (const listener of mocks.stateListeners) listener();
+    expect(mocks.sleepAfter).toHaveBeenCalledOnce();
+
+    mocks.sleepAfter.mockClear();
+    setVisibility('visible');
+    for (const listener of mocks.stateListeners) listener();
     expect(mocks.sleepAfter).not.toHaveBeenCalled();
   });
 });

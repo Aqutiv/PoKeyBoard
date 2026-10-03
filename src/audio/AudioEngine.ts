@@ -11,7 +11,7 @@ import type {
   SampleLoadProgress,
   ScheduledNoteEvent,
 } from './audioTypes';
-import { ensurePlaybackSession } from './iosAudioSession';
+import { ensurePlaybackSession, releasePlaybackSession } from './iosAudioSession';
 import {
   DEFAULT_PIANO_INSTRUMENT_ID,
   pianoInstrument,
@@ -104,6 +104,8 @@ export class AudioEngine {
   private sleepTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether the context is suspended because `sleepAfter` put it to sleep. */
   private asleep = false;
+  /** The next-press unlock `wake` armed, until a press uses it. */
+  private pendingGestureUnlock: (() => void) | null = null;
   private currentActiveNotes: ReadonlySet<number> = new Set();
   private currentActiveVelocities: ReadonlyMap<number, number> = new Map();
   /**
@@ -811,31 +813,47 @@ export class AudioEngine {
   }
 
   /**
-   * Put the audio device to sleep once whatever still sounds has died away:
-   * `afterSeconds` from now, if `stillWanted()` agrees then. A suspended
-   * context costs nothing — no render thread, no convolver, no output — and
-   * waiting out the tail means nothing is frozen mid-fade, to be heard again
-   * on waking. Only silence is skipped, so the sound itself is untouched.
+   * Put the audio device to sleep once whatever still sounds has died away,
+   * if `stillWanted()` agrees then. `tailSeconds` is how long the last sound
+   * takes to die (a release and the room's reverb): the device sleeps only
+   * after a whole such stretch in which no voice sounded, so a note still
+   * ringing — a take's last chord, say, playing out in the background — is
+   * heard to its end, tail and all. A suspended context costs nothing: no
+   * render thread, no convolver, no output; and nothing is frozen mid-fade, to
+   * be heard again on waking. Only silence is skipped.
    */
-  sleepAfter(afterSeconds: number, stillWanted: () => boolean): void {
+  sleepAfter(tailSeconds: number, stillWanted: () => boolean): void {
     this.cancelSleep();
     const context = this.context;
     if (!context || context.state !== 'running') return;
-    this.sleepTimer = setTimeout(() => {
+    let heardVoices = false;
+    const check = () => {
       this.sleepTimer = null;
       if (this.context !== context || context.state !== 'running' || !stillWanted()) return;
+      // A voice now, or one since the last look: give its tail a whole stretch.
+      const sounding = (this.voices?.voiceCount ?? 0) > 0;
+      if (sounding || heardVoices) {
+        heardVoices = sounding;
+        this.sleepTimer = setTimeout(check, tailSeconds * 1000);
+        return;
+      }
       this.asleep = true;
+      // The iPhone's silent media session would keep the device busy too.
+      releasePlaybackSession();
       context.suspend().catch(() => {
         this.asleep = false;
       });
-    }, afterSeconds * 1000);
+    };
+    this.sleepTimer = setTimeout(check, tailSeconds * 1000);
   }
 
   /**
    * Call off a pending sleep, and wake a context `sleepAfter` put to sleep.
-   * Silent — every note was let go before it slept — so it may run as the page
-   * comes back, ahead of the first key, which then sounds on time. Where a
-   * browser wants a fresh gesture to resume, the next press does it.
+   * Silent — nothing sounded when it slept — so it may run as the page comes
+   * back, ahead of the first key, which then sounds on time. The next press
+   * unlocks the audio as well: a browser that wants a gesture to resume gets
+   * one, and the iPhone's silent-switch session, stopped for the sleep, can
+   * only start again from one.
    */
   wake(): void {
     this.cancelSleep();
@@ -843,21 +861,21 @@ export class AudioEngine {
     this.asleep = false;
     const context = this.context;
     if (!context || context.state === 'closed') return;
-    const unlockOnNextGesture = () => {
-      const unlock = () => {
-        window.removeEventListener('pointerdown', unlock, true);
-        window.removeEventListener('keydown', unlock, true);
-        void this.unlockFromUserGesture();
-      };
-      window.addEventListener('pointerdown', unlock, true);
-      window.addEventListener('keydown', unlock, true);
+    void context.resume().catch(() => undefined);
+    this.unlockOnNextGesture();
+  }
+
+  private unlockOnNextGesture(): void {
+    if (this.pendingGestureUnlock) return;
+    const unlock = () => {
+      window.removeEventListener('pointerdown', unlock, true);
+      window.removeEventListener('keydown', unlock, true);
+      this.pendingGestureUnlock = null;
+      void this.unlockFromUserGesture();
     };
-    context
-      .resume()
-      .then(() => {
-        if (this.context === context && context.state !== 'running') unlockOnNextGesture();
-      })
-      .catch(unlockOnNextGesture);
+    this.pendingGestureUnlock = unlock;
+    window.addEventListener('pointerdown', unlock, true);
+    window.addEventListener('keydown', unlock, true);
   }
 
   private cancelSleep(): void {
@@ -874,6 +892,11 @@ export class AudioEngine {
     this.setSwitchState({ pending: null, failed: null, progress: 0 });
     this.cancelSleep();
     this.asleep = false;
+    if (this.pendingGestureUnlock) {
+      window.removeEventListener('pointerdown', this.pendingGestureUnlock, true);
+      window.removeEventListener('keydown', this.pendingGestureUnlock, true);
+      this.pendingGestureUnlock = null;
+    }
     this.schedulerTicker?.disconnect();
     this.schedulerTicker = null;
     this.schedulerTickerOn = false;
