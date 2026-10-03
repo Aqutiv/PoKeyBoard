@@ -566,6 +566,23 @@ describe('midiToTake: pedal', () => {
     ]);
   });
 
+  it('breaks a held pedal for an instant at an All Sound Off (CC120)', () => {
+    // The pedal goes down and stays down; CC120 silences what it was holding,
+    // and the pedal holds again from there.
+    const held = midiToTake(
+      smf(0, 480, [[pedal(0, 0, true), ...played(0, 60, 0, 240), [480, 0xb0, 120, 0]]]),
+      'x.mid',
+    );
+    expect(held.pedalEvents).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 500, down: false },
+      { atMs: 500, down: true },
+    ]);
+    // With the pedal up, there is nothing to break.
+    const up = midiToTake(smf(0, 480, [[...played(0, 60, 0, 240), [480, 0xb0, 120, 0]]]), 'x.mid');
+    expect(up.pedalEvents).toEqual([]);
+  });
+
   it('lets the pedal up at a Reset All Controllers (CC121)', () => {
     const take = midiToTake(
       smf(0, 480, [[pedal(0, 0, true), [480, 0xb0, 121, 0], ...played(0, 60, 0, 960)]]),

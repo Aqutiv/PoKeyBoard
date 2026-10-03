@@ -582,14 +582,19 @@ function staffOf(notes: readonly TickNote[]): (note: TickNote) => NoteStaff | un
 interface PedalChange {
   tick: number;
   channel: number;
-  down: boolean;
+  /**
+   * Where the channel's pedal goes — or, for an All Sound Off, a break: up for
+   * an instant, so what it held stops sounding, then as it was.
+   */
+  to: 'down' | 'up' | 'break';
 }
 
 /**
  * The sustain pedal, as one pedal. It is down while any channel holds it: the
  * app's own export writes the pedal into both hands' tracks, and a file from
  * elsewhere may pedal on several channels. A Reset All Controllers lets its
- * channel's pedal up, as MIDI says it does.
+ * channel's pedal up, as MIDI says it does; an All Sound Off silences what the
+ * pedal holds too, so it breaks the pedal for an instant without moving it.
  *
  * Changes on one tick are settled together rather than one by one, since the
  * order of two tracks' events at one tick means nothing. Each channel's own
@@ -608,14 +613,13 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
       if (event.type !== 'channel' || event.command !== 0xb0 || event.channel === DRUM_CHANNEL) {
         continue;
       }
+      const { tick, channel } = event;
       if (event.data1 === SUSTAIN_CONTROLLER) {
-        changes.push({
-          tick: event.tick,
-          channel: event.channel,
-          down: event.data2 >= PEDAL_DOWN_FROM,
-        });
+        changes.push({ tick, channel, to: event.data2 >= PEDAL_DOWN_FROM ? 'down' : 'up' });
       } else if (event.data1 === RESET_ALL_CONTROLLERS) {
-        changes.push({ tick: event.tick, channel: event.channel, down: false });
+        changes.push({ tick, channel, to: 'up' });
+      } else if (event.data1 === ALL_SOUND_OFF_CONTROLLER) {
+        changes.push({ tick, channel, to: 'break' });
       }
     }
   }
@@ -632,13 +636,13 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
     // was up at some moment of the tick.
     const settled = new Map<number, { down: boolean; dipped: boolean }>();
     for (; next < changes.length && (changes[next] as PedalChange).tick === tick; next += 1) {
-      const { channel, down } = changes[next] as PedalChange;
+      const { channel, to } = changes[next] as PedalChange;
       const state = settled.get(channel) ?? {
         down: held.has(channel),
         dipped: !held.has(channel),
       };
-      state.down = down;
-      if (!down) state.dipped = true;
+      if (to !== 'break') state.down = to === 'down';
+      if (to !== 'down') state.dipped = true;
       settled.set(channel, state);
     }
 
