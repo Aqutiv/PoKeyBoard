@@ -414,8 +414,9 @@ const DEFAULT_DEVICE = '';
 /** How a device meta event names a device, or null for any other event. */
 function deviceNameOf(event: SmfMetaEvent): { kind: 'name' | 'port'; name: string } | null {
   if (event.metaType === META_DEVICE_NAME) {
+    // A name with nothing in it names no device: as if it were not there.
     const text = decodeName(event.data);
-    return { kind: 'name', name: text.length > 0 ? `name:${text}` : DEFAULT_DEVICE };
+    return text.length > 0 ? { kind: 'name', name: `name:${text}` } : null;
   }
   if (event.metaType === META_PORT && event.data.length >= 1) {
     // Port 0 is the first port: where a track that names none goes too.

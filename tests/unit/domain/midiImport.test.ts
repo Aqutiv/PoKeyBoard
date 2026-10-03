@@ -676,6 +676,24 @@ describe('midiToTake: devices', () => {
     expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1500);
   });
 
+  it('ignores an empty device name', () => {
+    // Port 1, then a Device Name with nothing in it: still port 1, not the
+    // default device, so an unnamed track's note-off is not this note's.
+    const take = midiToTake(
+      smf(1, 480, [
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          [0, 0xff, 0x09, 0x00],
+          [0, 0x90, 60, 100],
+          ...played(0, 64, 960, 1440),
+        ],
+        [[480, 0x80, 60, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1500);
+  });
+
   it('reads tracks that name no device as one device, as before', () => {
     const take = midiToTake(smf(1, 480, [played(0, 60, 0, 960), [[480, 0xb0, 123, 0]]]), 'x.mid');
     expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
