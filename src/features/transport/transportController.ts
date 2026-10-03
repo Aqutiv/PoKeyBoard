@@ -972,6 +972,17 @@ export class TransportController {
   }
 
   /**
+   * Flash `midi` as a wrong key, as a hold flashes one, while the music plays
+   * on. A run that keeps time has no hold to notice a key it never asked for:
+   * the practice session that judges its notes calls this, from the press.
+   */
+  flashWrongKey(midi: number): void {
+    this.trainingWrong.set(midi, Date.now() + WRONG_FLASH_MS);
+    this.armWrongExpiry();
+    for (const listener of this.stateListeners) listener();
+  }
+
+  /**
    * Re-read the playback mode. Called when the user changes it, so a switch
    * mid-flight takes effect at once: from one hand that waits to another, or
    * to none, without stopping; to or from Keep time, by pausing. Modelled on
