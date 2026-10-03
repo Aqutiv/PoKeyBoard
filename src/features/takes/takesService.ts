@@ -253,17 +253,24 @@ function scoreImportFailure(midi: boolean, issues: string[]): AppError {
 
 /**
  * Preview score bytes already in memory — MXL, MusicXML or MIDI — as a freshly
- * converted take. MIDI is known by its `MThd` header, whatever the file is
- * called, by a `.mid` name, or by `declaredMidi` — what a caller already knows,
- * such as a link's MIDI Content-Type — so a damaged MIDI file is reported as
- * one, not as a score MusicXML could not read.
+ * converted take.
+ *
+ * What the bytes say comes first: an `MThd` header is MIDI whatever the file
+ * is called, and an MXL zip or MusicXML's opening `<` is a score even under a
+ * `.mid` name or picked from the MIDI menu. Only bytes that say neither — a
+ * damaged file — leave it to the other signs: a `.mid` name, or
+ * `declaredMidi`, what the caller already knows (a link's MIDI Content-Type,
+ * the MIDI menu item). Any of them is enough for the damage to be reported as
+ * a MIDI file's, not as a score MusicXML could not read.
  */
 export async function previewImportScoreBytes(
   bytes: Uint8Array,
   fileName: string,
   declaredMidi = false,
 ): Promise<ImportPreview> {
-  const midi = declaredMidi || hasMidiHeader(bytes) || isMidiFileName(fileName);
+  const sniffed = kindFromBytes(bytes);
+  const midi =
+    sniffed === 'midi' || (sniffed !== 'score' && (declaredMidi || isMidiFileName(fileName)));
   let parsed: ParsedTake;
   try {
     rejectOversizedBytes(

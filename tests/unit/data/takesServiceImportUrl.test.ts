@@ -241,6 +241,35 @@ describe('MIDI files', () => {
   });
 });
 
+describe('previewImportScoreFile: picked as MIDI', () => {
+  it('reports a damaged pick from the MIDI menu as a MIDI file, whatever its name', async () => {
+    const { previewImportScoreFile, MidiImportError } = await loadService();
+    for (const name of ['song', 'song.kar']) {
+      const error: unknown = await previewImportScoreFile(
+        new File(['not a MIDI file'], name),
+        true,
+      ).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(MidiImportError);
+      expect((error as InstanceType<typeof MidiImportError>).messageKey).toBe('notValidMidi');
+    }
+  });
+
+  it('lets the bytes have the last word: an MXL picked as MIDI still imports', async () => {
+    const { previewImportScoreFile } = await loadService();
+    const mxl = zipSync({ 'score.xml': strToU8(SCORE_XML) });
+    const preview = await previewImportScoreFile(new File([mxl], 'song.mxl'), true);
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('imports MusicXML or MXL saved under a .mid name as the score it is', async () => {
+    const { previewImportScoreFile, previewImportScoreBytes } = await loadService();
+    const xml = await previewImportScoreFile(new File([SCORE_XML], 'song.mid'));
+    expect(xml.parsed.take.notes).toHaveLength(2);
+    const mxl = zipSync({ 'score.xml': strToU8(SCORE_XML) });
+    expect((await previewImportScoreBytes(mxl, 'song.midi')).parsed.take.notes).toHaveLength(2);
+  });
+});
+
 describe('previewImportFile: a file with no telling name', () => {
   it('previews an extensionless MIDI file as a score, by its header', async () => {
     const { previewImportFile } = await loadService();

@@ -134,10 +134,26 @@ export function TakesPage() {
       // This picker carries no accept filter (iOS greys out .mxl), and the
       // blocked-link fallback sends take JSON here too, so honour an explicit
       // .json. Anything else stays a score, which keeps the MusicXML wording
-      // for a wrong pick made from the "Music score" menu item. The MIDI
-      // picker shares this: a MIDI file is known by its header or its name,
-      // whichever picker it came through.
+      // for a wrong pick made from the "Music score" menu item.
       void (/\.json$/i.test(file.name) ? previewImportFile(file) : previewImportScoreFile(file))
+        .then(openPreview)
+        .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
+    },
+    [m, openPreview],
+  );
+
+  const onMidiImportChosen = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      // Picked from "MIDI file (.mid)", so a file whose bytes say nothing — a
+      // damaged .kar, or one saved with no extension — is reported as the MIDI
+      // file it was picked as. The bytes still have the last word: a score
+      // picked here imports as one. An explicit .json is a take, as above.
+      void (
+        /\.json$/i.test(file.name) ? previewImportFile(file) : previewImportScoreFile(file, true)
+      )
         .then(openPreview)
         .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
     },
@@ -477,7 +493,7 @@ export function TakesPage() {
         ref={midiInputRef}
         type="file"
         className="visually-hidden"
-        onChange={onScoreImportChosen}
+        onChange={onMidiImportChosen}
         aria-label={m.takes.importMidiFileLabel}
       />
       <input

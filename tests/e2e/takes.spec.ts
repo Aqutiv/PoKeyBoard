@@ -315,6 +315,20 @@ test.describe('takes library', () => {
     await expect(dialog).toBeVisible();
   });
 
+  test('a damaged file picked as MIDI is reported as MIDI, whatever its name', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    // Neither its name nor its bytes say MIDI; choosing "MIDI file (.mid)" does.
+    await page.getByLabel('Import MIDI file').setInputFiles({
+      name: 'song',
+      mimeType: 'application/octet-stream',
+      buffer: Buffer.from('not a MIDI file'),
+    });
+    await expect(
+      page.getByRole('status').filter({ hasText: 'could not be read as a MIDI file' }),
+    ).toBeVisible();
+  });
+
   test('imports a MIDI file dropped with no file extension', async ({ page }) => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Takes' }).click();
