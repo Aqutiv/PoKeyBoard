@@ -393,7 +393,9 @@ function fileKey(smf: SmfFile): { fifths: number; mode: 'major' | 'minor' } | nu
  * Notes Off or a pedal on one device's channel 1 is nothing to another's. A
  * track takes the device it last named; one that names none, as almost every
  * file, is the file's own device — the one MIDI Port 0 names too — so such
- * files read exactly as by channel.
+ * files read exactly as by channel. Names a track gives side by side, with no
+ * message between them — a port and a Device Name, say — are one device's,
+ * so another track naming it either way shares its channels.
  */
 interface ChannelAddressing {
   /**
@@ -405,8 +407,63 @@ interface ChannelAddressing {
   span: number;
 }
 
+/** The device a track that names none goes to, and MIDI Port 0 names. */
+const DEFAULT_DEVICE = '';
+
+/** The name a device meta event gives, or null for any other event. */
+function deviceNameOf(event: SmfMetaEvent): string | null {
+  if (event.metaType === META_DEVICE_NAME) {
+    const text = decodeName(event.data);
+    return text.length > 0 ? `name:${text}` : DEFAULT_DEVICE;
+  }
+  if (event.metaType === META_PORT && event.data.length >= 1) {
+    // Port 0 is the first port: where a track that names none goes too.
+    const port = event.data[0] as number;
+    return port === 0 ? DEFAULT_DEVICE : `port:${port}`;
+  }
+  return null;
+}
+
 function channelAddressing(smf: SmfFile): ChannelAddressing {
-  const devices = new Map<string, number>();
+  // First, which names are one device's: those a track gives side by side.
+  const parent = new Map<string, string>();
+  const find = (name: string): string => {
+    let root = name;
+    for (let up = parent.get(root); up !== undefined && up !== root; up = parent.get(root)) {
+      root = up;
+    }
+    // Every name on the way now points at the root, so the next look is short.
+    for (let at = name; at !== root;) {
+      const up = parent.get(at) as string;
+      parent.set(at, root);
+      at = up;
+    }
+    return root;
+  };
+  const join = (a: string, b: string): void => {
+    const rootA = find(a);
+    const rootB = find(b);
+    if (rootA === rootB) return;
+    // The default device stays a root: a name joined to it is the default.
+    if (rootA === DEFAULT_DEVICE) parent.set(rootB, rootA);
+    else parent.set(rootA, rootB);
+  };
+  for (const track of smf.tracks) {
+    let together: string | null = null;
+    for (const event of track.events) {
+      if (event.type === 'channel') {
+        together = null;
+        continue;
+      }
+      const name = deviceNameOf(event);
+      if (name === null) continue;
+      if (together !== null) join(together, name);
+      together = name;
+    }
+  }
+
+  // Then each channel message's address, numbering the devices as they come.
+  const numbers = new Map<string, number>([[DEFAULT_DEVICE, 0]]);
   const addresses = smf.tracks.map((track) => {
     const ofTrack = new Array<number>(track.events.length);
     let device = 0;
@@ -416,31 +473,19 @@ function channelAddressing(smf: SmfFile): ChannelAddressing {
         return;
       }
       ofTrack[index] = -1;
-      let name: string | null;
-      if (event.metaType === META_DEVICE_NAME) {
-        const text = decodeName(event.data);
-        name = text.length > 0 ? `name:${text}` : null;
-      } else if (event.metaType === META_PORT && event.data.length >= 1) {
-        // Port 0 is the first port: where a track that names none goes too.
-        const port = event.data[0] as number;
-        name = port === 0 ? null : `port:${port}`;
-      } else {
-        return;
+      const name = deviceNameOf(event);
+      if (name === null) return;
+      const root = find(name);
+      let number = numbers.get(root);
+      if (number === undefined) {
+        number = numbers.size;
+        numbers.set(root, number);
       }
-      if (name === null) {
-        device = 0;
-        return;
-      }
-      let found = devices.get(name);
-      if (found === undefined) {
-        found = devices.size + 1;
-        devices.set(name, found);
-      }
-      device = found;
+      device = number;
     });
     return ofTrack;
   });
-  return { addresses, span: (devices.size + 1) * 16 };
+  return { addresses, span: numbers.size * 16 };
 }
 
 /** A note-on waiting for the note-off that ends it. */
