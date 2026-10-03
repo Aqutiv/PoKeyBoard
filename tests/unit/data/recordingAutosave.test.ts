@@ -96,4 +96,38 @@ describe('autosave while recording', () => {
     expect(useTakeStore.getState().dirty).toBe(false);
     expect(persistenceService.getStatus().status).toBe('saved');
   });
+
+  it('still saves a note whose timer ran out during a write longer than ten seconds', async () => {
+    vi.useFakeTimers();
+    vi.spyOn(transportController, 'getState').mockReturnValue('recording');
+    writes.count = 0;
+    writes.pending = [];
+    const note = (id: string, startMs: number) => ({
+      id,
+      midi: 60,
+      startMs,
+      durationMs: 100,
+      velocity: 0.7,
+    });
+    useTakeStore.getState().setTake(createEmptyTake());
+    useTakeStore.getState().appendRecordedNotes([note('a', 0)], [], ['a']);
+
+    const flushing = persistenceService.flushSave();
+    await vi.waitFor(() => expect(writes.count).toBe(1));
+    // A note let go mid-write arms its save (as the store subscription does)…
+    useTakeStore.getState().appendRecordedNotes([note('b', 200)], [], ['a', 'b']);
+    persistenceService.scheduleSave();
+    // …which comes due while that slow write is still under way, and joins it.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(writes.count).toBe(1);
+    writes.pending.shift()?.();
+    await flushing;
+    expect(useTakeStore.getState().dirty).toBe(true);
+
+    // Another save is still coming for it, without another note to ask.
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(writes.count).toBe(2);
+    writes.pending.shift()?.();
+    await vi.waitFor(() => expect(useTakeStore.getState().dirty).toBe(false));
+  });
 });

@@ -353,6 +353,9 @@ class PersistenceService {
       // recording stops, rather than written again straight away — on slow
       // storage, back to back for as long as the playing lasts.
       if (unsaved && transportController.getState() !== 'recording') continue;
+      // Their save may have come and gone already — a timer that fired while a
+      // long write ran only joined it — so make sure one is still coming.
+      if (unsaved) this.scheduleSave();
       // Until their own save, the badge claims neither saving nor saved.
       this.setStatus(unsaved ? 'idle' : 'saved', null);
       return;
