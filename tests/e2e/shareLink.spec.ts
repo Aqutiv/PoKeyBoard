@@ -24,21 +24,42 @@ const TAKE = {
   display: { quantization: '1/16', zoom: 1, playheadMs: 0 },
 };
 
+/** A 600-note performance, whose link runs well past the 2,048 characters of a download link. */
+function longTake() {
+  let seed = 7;
+  const random = () => {
+    seed = (seed * 1_103_515_245 + 12_345) % 2_147_483_648;
+    return seed / 2_147_483_648;
+  };
+  let at = 0;
+  const notes = Array.from({ length: 600 }, (_, index) => {
+    at += Math.floor(random() * 300);
+    return {
+      id: `p${index}`,
+      midi: 40 + Math.floor(random() * 48),
+      startMs: at,
+      durationMs: 80 + Math.floor(random() * 900),
+      velocity: random(),
+    };
+  });
+  return { ...TAKE, id: 'e2e-share-0000-0000-000000000002', title: 'Long evening', notes };
+}
+
 const hashOf = (page: Page) => page.evaluate(() => window.location.hash);
 
-/** Import TAKE from a file on Takes; the inbox opens it on Play. */
-async function importTake(page: Page): Promise<void> {
+/** Import a take from a file on Takes; the inbox opens it on Play. */
+async function importTake(page: Page, take: { title: string } = TAKE): Promise<void> {
   await nav(page).getByRole('button', { name: 'Takes' }).click();
   await page.getByLabel('Import take JSON file').setInputFiles({
-    name: 'PoKeyBoard - Shared scale.pokeyboard.json',
+    name: `PoKeyBoard - ${take.title}.pokeyboard.json`,
     mimeType: 'application/json',
-    buffer: Buffer.from(JSON.stringify(TAKE)),
+    buffer: Buffer.from(JSON.stringify(take)),
   });
   await page
     .getByRole('dialog', { name: 'Import take' })
     .getByRole('button', { name: 'Import', exact: true })
     .click();
-  await expect(page.locator('.play-header__title')).toHaveText('Shared scale');
+  await expect(page.locator('.play-header__title')).toHaveText(take.title);
 }
 
 /** Share → Link… on Play, and the link the dialog shows. */
@@ -103,9 +124,11 @@ test.describe('share links', () => {
     page,
   }) => {
     await gotoAppReady(page);
-    await importTake(page);
+    await importTake(page, longTake());
     const { dialog, link } = await openLinkDialog(page);
     await dialog.getByRole('button', { name: 'Close' }).click();
+    // Longer than the field held before share links, and than a download may be.
+    expect(link.length).toBeGreaterThan(2_048);
 
     // A download of the link would be a fetch of the page it points at.
     const linkedPage = link.slice(0, link.indexOf('#'));
@@ -127,7 +150,8 @@ test.describe('share links', () => {
     await urlDialog.getByRole('button', { name: 'Import', exact: true }).click();
 
     const preview = page.getByRole('dialog', { name: 'Import take' });
-    await expect(preview).toContainText('Shared scale');
+    await expect(preview).toContainText('Long evening');
+    await expect(preview.locator('dt:text-is("Notes") + dd')).toHaveText('600');
     await expect(urlDialog).toHaveCount(0);
     // The same take is already here: a new copy unless Replace is chosen.
     await expect(preview.getByRole('radio', { name: 'Import as a new copy' })).toBeChecked();
