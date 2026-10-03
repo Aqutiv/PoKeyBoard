@@ -576,6 +576,130 @@ describe('midiToTake: hands', () => {
   });
 });
 
+/** A track's Device Name meta event: the device its later messages go to. */
+function device(name: string): Ev {
+  const bytes = [...name].map((c) => c.charCodeAt(0));
+  return [0, 0xff, 0x09, bytes.length, ...bytes];
+}
+
+describe('midiToTake: devices', () => {
+  it('keeps one device’s All Notes Off off another device’s channel', () => {
+    const take = midiToTake(
+      smf(1, 480, [
+        [device('Piano A'), ...played(0, 60, 0, 960)],
+        [device('Piano B'), [480, 0xb0, 123, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => n.durationMs)).toEqual([1000]);
+  });
+
+  it('pairs a note-off only with a strike on its own device', () => {
+    // Device A strikes C4 and never lets it go; device B's channel 1 lets a
+    // C4 go: not A's, which runs on to its track's end.
+    const take = midiToTake(
+      smf(1, 480, [
+        [device('Piano A'), [0, 0x90, 60, 100], ...played(0, 64, 960, 1440)],
+        [device('Piano B'), [480, 0x80, 60, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1500);
+  });
+
+  it('keeps one device’s pedal held while another device lets its own up', () => {
+    const take = midiToTake(
+      smf(1, 480, [
+        [device('Piano A'), pedal(0, 0, true), ...played(0, 60, 0, 960)],
+        [[0, 0xff, 0x21, 0x01, 0x01], pedal(0, 0, true), pedal(0, 480, false)],
+      ]),
+      'x.mid',
+    );
+    expect(take.pedalEvents).toEqual([{ atMs: 0, down: true }]);
+  });
+
+  it('takes port 0 for the device a track that names none goes to', () => {
+    // One track names no port, the other port 0 (FF 21 00): the same port, so
+    // the second's All Notes Off ends the first's note.
+    const take = midiToTake(
+      smf(1, 480, [
+        played(0, 60, 0, 960),
+        [
+          [0, 0xff, 0x21, 0x01, 0x00],
+          [480, 0xb0, 123, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
+  });
+
+  it('takes a port and a name declared together as one device', () => {
+    // One track names its device both ways; another by its port alone. Its
+    // note-off is the first track's note's.
+    const take = midiToTake(
+      smf(1, 480, [
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          device('Piano'),
+          [0, 0x90, 60, 100],
+          ...played(0, 64, 960, 1440),
+        ],
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          [480, 0x80, 60, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(500);
+  });
+
+  it('never takes two ports a track names in turn for one device', () => {
+    // The first track picks port 1, then port 2, then strikes on port 2. The
+    // second track's port 1 note-off is not port 2's.
+    const take = midiToTake(
+      smf(1, 480, [
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          [0, 0xff, 0x21, 0x01, 0x02],
+          [0, 0x90, 60, 100],
+          ...played(0, 64, 960, 1440),
+        ],
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          [480, 0x80, 60, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1500);
+  });
+
+  it('ignores an empty device name', () => {
+    // Port 1, then a Device Name with nothing in it: still port 1, not the
+    // default device, so an unnamed track's note-off is not this note's.
+    const take = midiToTake(
+      smf(1, 480, [
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          [0, 0xff, 0x09, 0x00],
+          [0, 0x90, 60, 100],
+          ...played(0, 64, 960, 1440),
+        ],
+        [[480, 0x80, 60, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1500);
+  });
+
+  it('reads tracks that name no device as one device, as before', () => {
+    const take = midiToTake(smf(1, 480, [played(0, 60, 0, 960), [[480, 0xb0, 123, 0]]]), 'x.mid');
+    expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
+  });
+});
+
 describe('midiToTake: pedal', () => {
   it('reads 64 and above as down', () => {
     const take = midiToTake(
