@@ -655,6 +655,27 @@ describe('midiToTake: devices', () => {
     expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(500);
   });
 
+  it('never takes two ports a track names in turn for one device', () => {
+    // The first track picks port 1, then port 2, then strikes on port 2. The
+    // second track's port 1 note-off is not port 2's.
+    const take = midiToTake(
+      smf(1, 480, [
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          [0, 0xff, 0x21, 0x01, 0x02],
+          [0, 0x90, 60, 100],
+          ...played(0, 64, 960, 1440),
+        ],
+        [
+          [0, 0xff, 0x21, 0x01, 0x01],
+          [480, 0x80, 60, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1500);
+  });
+
   it('reads tracks that name no device as one device, as before', () => {
     const take = midiToTake(smf(1, 480, [played(0, 60, 0, 960), [[480, 0xb0, 123, 0]]]), 'x.mid');
     expect(take.notes.map((n) => n.durationMs)).toEqual([500]);

@@ -393,9 +393,10 @@ function fileKey(smf: SmfFile): { fifths: number; mode: 'major' | 'minor' } | nu
  * Notes Off or a pedal on one device's channel 1 is nothing to another's. A
  * track takes the device it last named; one that names none, as almost every
  * file, is the file's own device — the one MIDI Port 0 names too — so such
- * files read exactly as by channel. Names a track gives side by side, with no
- * message between them — a port and a Device Name, say — are one device's,
- * so another track naming it either way shares its channels.
+ * files read exactly as by channel. A port and a Device Name a track gives
+ * side by side, with no message between them, are one device's, so another
+ * track naming it either way shares its channels; two of a kind in turn are
+ * the track changing its mind, not two names for one device.
  */
 interface ChannelAddressing {
   /**
@@ -410,16 +411,16 @@ interface ChannelAddressing {
 /** The device a track that names none goes to, and MIDI Port 0 names. */
 const DEFAULT_DEVICE = '';
 
-/** The name a device meta event gives, or null for any other event. */
-function deviceNameOf(event: SmfMetaEvent): string | null {
+/** How a device meta event names a device, or null for any other event. */
+function deviceNameOf(event: SmfMetaEvent): { kind: 'name' | 'port'; name: string } | null {
   if (event.metaType === META_DEVICE_NAME) {
     const text = decodeName(event.data);
-    return text.length > 0 ? `name:${text}` : DEFAULT_DEVICE;
+    return { kind: 'name', name: text.length > 0 ? `name:${text}` : DEFAULT_DEVICE };
   }
   if (event.metaType === META_PORT && event.data.length >= 1) {
     // Port 0 is the first port: where a track that names none goes too.
     const port = event.data[0] as number;
-    return port === 0 ? DEFAULT_DEVICE : `port:${port}`;
+    return { kind: 'port', name: port === 0 ? DEFAULT_DEVICE : `port:${port}` };
   }
   return null;
 }
@@ -449,16 +450,26 @@ function channelAddressing(smf: SmfFile): ChannelAddressing {
     else parent.set(rootA, rootB);
   };
   for (const track of smf.tracks) {
-    let together: string | null = null;
+    // The port and the name given since the track's last message, if any.
+    let port: string | null = null;
+    let named: string | null = null;
     for (const event of track.events) {
       if (event.type === 'channel') {
-        together = null;
+        port = null;
+        named = null;
         continue;
       }
-      const name = deviceNameOf(event);
-      if (name === null) continue;
-      if (together !== null) join(together, name);
-      together = name;
+      const given = deviceNameOf(event);
+      if (given === null) continue;
+      if (given.kind === 'port') {
+        // A second port is a change of port: the name went with the first.
+        if (port !== null) named = null;
+        port = given.name;
+      } else {
+        if (named !== null) port = null;
+        named = given.name;
+      }
+      if (port !== null && named !== null) join(port, named);
     }
   }
 
@@ -473,9 +484,9 @@ function channelAddressing(smf: SmfFile): ChannelAddressing {
         return;
       }
       ofTrack[index] = -1;
-      const name = deviceNameOf(event);
-      if (name === null) return;
-      const root = find(name);
+      const given = deviceNameOf(event);
+      if (given === null) return;
+      const root = find(given.name);
       let number = numbers.get(root);
       if (number === undefined) {
         number = numbers.size;
