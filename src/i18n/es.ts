@@ -735,6 +735,14 @@ export const es: Messages = {
       'No se pudo descargar el enlace. Muchos sitios bloquean las descargas desde otras aplicaciones: guarda el archivo en tu dispositivo e impórtalo con el selector de archivos.',
     importUrlTimedOut: 'La descarga tardó demasiado y se detuvo.',
     importUrlFailed: 'No se pudo descargar el enlace.',
+    shareLinkInvalid:
+      'Este enlace está dañado o incompleto, así que no se pudo abrir la toma que contiene. Pide el enlace de nuevo, o la toma como archivo.',
+    shareLinkNewer:
+      'Este enlace se creó con una versión más reciente de PoKeyBoard. Actualiza la aplicación y vuelve a abrir el enlace.',
+    libraryLinkUnknown:
+      'Este enlace nombra una pieza que la Biblioteca no tiene. Puede venir de una versión más reciente de PoKeyBoard.',
+    libraryLinkOffline:
+      'Esta pieza se descarga la primera vez que se abre, y ahora no se pudo descargar. Te espera en la Biblioteca: ábrela allí cuando vuelvas a tener conexión.',
   },
   repairs: {
     takeId: 'Se asignó un nuevo id de toma.',

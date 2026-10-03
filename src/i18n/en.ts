@@ -729,6 +729,14 @@ export const en: Messages = {
       'The link could not be downloaded. Many sites block downloads from other apps — save the file to your device and import it with the file picker instead.',
     importUrlTimedOut: 'The download took too long and was stopped.',
     importUrlFailed: 'The link could not be downloaded.',
+    shareLinkInvalid:
+      'This link is damaged or incomplete, so the take in it could not be opened. Ask for the link again, or for the take as a file.',
+    shareLinkNewer:
+      'This link was made by a newer version of PoKeyBoard. Update the app, then open the link again.',
+    libraryLinkUnknown:
+      'This link names a piece the Library does not have. It may come from a newer version of PoKeyBoard.',
+    libraryLinkOffline:
+      'This piece is downloaded the first time it is opened, and it could not be downloaded now. It is waiting in the Library: open it there once you are back online.',
   },
   repairs: {
     takeId: 'Assigned a new take id.',

@@ -743,6 +743,14 @@ export const mg: Messages = {
       'Tsy voasintona ilay rohy. Tranonkala maro no manakana ny fisintonana avy amin’ny fampiharana hafa — tehirizo ao amin’ny fitaovanao ny rakitra dia ampidiro amin’ny mpisafidy rakitra.',
     importUrlTimedOut: 'Naharitra ela loatra ny fisintonana ka najanona.',
     importUrlFailed: 'Tsy voasintona ilay rohy.',
+    shareLinkInvalid:
+      'Simba na tsy feno ity rohy ity, ka tsy nisokatra ny rakitra ao anatiny. Angataho indray ilay rohy, na angataho ho rakitra ilay izy.',
+    shareLinkNewer:
+      'Dikan’ny PoKeyBoard vaovao kokoa no nanao ity rohy ity. Havaozy ny fampiharana, dia sokafy indray ilay rohy.',
+    libraryLinkUnknown:
+      'Tsy ao amin’ny Hira ilay hira lazain’ity rohy ity. Mety avy amin’ny dikan’ny PoKeyBoard vaovao kokoa izy.',
+    libraryLinkOffline:
+      'Sintonina ity hira ity amin’ny voalohany anokafana azy, ary tsy azo nosintonina izy izao. Miandry anao ao amin’ny Hira izy: sokafy ao rehefa an-tserasera indray ianao.',
   },
   repairs: {
     takeId: 'Nomena id rakitra vaovao.',

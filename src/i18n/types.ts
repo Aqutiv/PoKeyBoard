@@ -33,7 +33,11 @@ export type ErrorMessageKey =
   | 'importUrlOffline'
   | 'importUrlBlocked'
   | 'importUrlTimedOut'
-  | 'importUrlFailed';
+  | 'importUrlFailed'
+  | 'shareLinkInvalid'
+  | 'shareLinkNewer'
+  | 'libraryLinkUnknown'
+  | 'libraryLinkOffline';
 
 /** A structured repair record produced by take import, translated for display. */
 export type RepairCode =
