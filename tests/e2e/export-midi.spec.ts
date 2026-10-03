@@ -40,6 +40,16 @@ test.describe('MIDI export', () => {
       [0, 60],
       [0, 64],
     ]);
+
+    // And the file comes back in: the same two notes, as a take of its own.
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    await page.getByLabel('Import MIDI file').setInputFiles({
+      name: download.suggestedFilename(),
+      mimeType: 'audio/midi',
+      buffer: bytes,
+    });
+    const preview = page.getByRole('dialog', { name: 'Import take' });
+    await expect(preview.locator('dt', { hasText: 'Notes' }).locator('+ dd')).toHaveText('2');
   });
 
   test('exports a take from its Takes row as well', async ({ page }) => {

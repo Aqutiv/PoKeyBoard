@@ -49,6 +49,34 @@ export class ScoreImportError extends AppError {
 }
 
 /**
+ * Why a MIDI file was refused. `invalid` is a file that is damaged or is not
+ * MIDI at all; `unsupported` is a sound one in a form this app does not read —
+ * type 2 (independent patterns), or timed in SMPTE frames rather than beats —
+ * which the program that wrote it can save again as type 0 or 1.
+ */
+export type MidiImportFailure = 'invalid' | 'unsupported';
+
+const MIDI_IMPORT_MESSAGES: Record<MidiImportFailure, [ErrorMessageKey, string]> = {
+  invalid: ['notValidMidi', 'This file could not be read as a MIDI file.'],
+  unsupported: [
+    'midiUnsupported',
+    'This MIDI file is written in a form PoKeyBoard cannot open (type 2, or timed in SMPTE frames). Save it again as type 0 or 1 and import that.',
+  ],
+};
+
+export class MidiImportError extends AppError {
+  readonly issues: string[];
+  readonly kind: MidiImportFailure;
+
+  constructor(issues: string[], kind: MidiImportFailure = 'invalid') {
+    const [messageKey, userMessage] = MIDI_IMPORT_MESSAGES[kind];
+    super(`MIDI import failed (${kind}): ${issues.join('; ')}`, userMessage, messageKey);
+    this.issues = issues;
+    this.kind = kind;
+  }
+}
+
+/**
  * Why a download from a pasted link failed. CORS, DNS, TLS and mixed-content
  * rejections are all an opaque `TypeError` in the browser and cannot be told
  * apart from script, so they share the single honest `blocked` kind.

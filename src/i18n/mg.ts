@@ -164,6 +164,7 @@ export const mg: Messages = {
     importMenuLabel: 'Safidy fampidirana',
     importJson: 'Rakitra (JSON)',
     importMxl: 'Partitiora (MXL)',
+    importMidi: 'Rakitra MIDI (.mid)',
     importUrl: 'Avy amin’ny rohy (URL)',
     loading: 'Am-pakàna…',
     empty:
@@ -185,6 +186,7 @@ export const mg: Messages = {
     restoreBackup: 'Avereno ny tahiry',
     importFileLabel: 'Ampidiro rakitra JSON',
     importMxlFileLabel: 'Ampidiro rakitra MusicXML',
+    importMidiFileLabel: 'Ampidiro rakitra MIDI',
     restoreFileLabel: 'Avereno ny rakitra tahiry',
     removeNotesConfirm: ({ title }) => `Fafana ny naoty rehetra ao amin’ny “${title}”?`,
     deleteConfirm: ({ title }) => `Fafana ny “${title}”? Tsy azo averina ity.`,
@@ -429,7 +431,7 @@ export const mg: Messages = {
     title: 'Ampidiro avy amin’ny rohy',
     urlLabel: 'Rohin’ny rakitra',
     placeholder: 'https://ohatra.com/partitiora.mxl',
-    hint: 'Apetaho eto ny rohy mivantana mankany amin’ny rakitra .mxl, .musicxml, .xml na .json PoKeyBoard. Tsy maintsy mamela fisintonana avy amin’ny fampiharana hafa ilay tranonkala mitahiry azy — betsaka no tsy manaiky izany.',
+    hint: 'Apetaho eto ny rohy mivantana mankany amin’ny rakitra .mxl, .musicxml, .xml, .mid na .json PoKeyBoard. Tsy maintsy mamela fisintonana avy amin’ny fampiharana hafa ilay tranonkala mitahiry azy — betsaka no tsy manaiky izany.',
     loading: 'Misintona…',
     httpError: ({ status }) =>
       `Namaly tsy fetezana (${status}) ilay tranonkala. Hamarino ny rohy dia andramo indray.`,
@@ -690,7 +692,7 @@ export const mg: Messages = {
       },
       {
         title: 'Avoahy sy zarao',
-        body: 'Ataovy MP3 na FLAC ny rakitra, avoahy ho partition PDF, na omeo mivantana ny JSON. Azo ampidirina koa ny partition — ampidiro ny MusicXML na rakitra PoKeyBoard avy amin’ny rakitra na rohy mivantana.',
+        body: 'Ataovy MP3 na FLAC ny rakitra, avoahy ho partition PDF, na omeo mivantana ny JSON. Azo ampidirina koa ny partition — ampidiro ny MusicXML, ny MIDI na rakitra PoKeyBoard avy amin’ny rakitra na rohy mivantana.',
       },
     ],
     privacyTitle: 'Aiza no misy ny mozikanao',
@@ -743,6 +745,9 @@ export const mg: Messages = {
     generic: 'Nisy tsy nety.',
     notValidTake: 'Tsy rakitra PoKeyBoard manan-kery ity rakitra ity.',
     notValidScore: 'Tsy azo novakina ho partitiora MusicXML ity rakitra ity.',
+    notValidMidi: 'Tsy azo novakina ho rakitra MIDI ity rakitra ity.',
+    midiUnsupported:
+      'Voasoratra amin’ny endrika tsy hain’i PoKeyBoard sokafana ity rakitra MIDI ity (karazana 2, na mandrefy fotoana amin’ny sary SMPTE). Tehirizo indray ho karazana 0 na 1 izy, dia io no ampidiro.',
     storageFailed:
       'Tsy nahomby ny fitehirizana amin’ity navigatera ity. Mety tsy voatahiry ny fanovana farany nataonao.',
     storageFull: 'Feno ny fitehirizana. Manalà toerana na avoahy ho tahiry ny rakitrao.',

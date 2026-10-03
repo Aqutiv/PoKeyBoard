@@ -163,6 +163,7 @@ export const en: Messages = {
     importMenuLabel: 'Import options',
     importJson: 'Take file (JSON)',
     importMxl: 'Music score (MXL)',
+    importMidi: 'MIDI file (.mid)',
     importUrl: 'From a link (URL)',
     loading: 'Loading…',
     empty: 'No takes yet. Record something on the Play screen, or import a take JSON file.',
@@ -183,6 +184,7 @@ export const en: Messages = {
     restoreBackup: 'Restore backup',
     importFileLabel: 'Import take JSON file',
     importMxlFileLabel: 'Import MusicXML file',
+    importMidiFileLabel: 'Import MIDI file',
     restoreFileLabel: 'Restore backup file',
     removeNotesConfirm: ({ title }) => `Remove all notes from “${title}”?`,
     deleteConfirm: ({ title }) => `Delete “${title}”? This cannot be undone.`,
@@ -426,7 +428,7 @@ export const en: Messages = {
     title: 'Import from a link',
     urlLabel: 'File link',
     placeholder: 'https://example.com/score.mxl',
-    hint: 'Paste a direct link to an .mxl, .musicxml, .xml, or PoKeyBoard .json file. The site hosting it must allow downloads from other apps — many do not.',
+    hint: 'Paste a direct link to an .mxl, .musicxml, .xml, .mid, or PoKeyBoard .json file. The site hosting it must allow downloads from other apps — many do not.',
     loading: 'Downloading…',
     httpError: ({ status }) =>
       `The site answered with an error (${status}). Check the link and try again.`,
@@ -679,7 +681,7 @@ export const en: Messages = {
       },
       {
         title: 'Export and share',
-        body: 'Render a take to MP3 or FLAC, engrave it as sheet music in PDF, or hand off the raw JSON. Scores come in too — import MusicXML or a PoKeyBoard take from a file or a direct link.',
+        body: 'Render a take to MP3 or FLAC, engrave it as sheet music in PDF, or hand off the raw JSON. Scores come in too — import MusicXML, MIDI, or a PoKeyBoard take from a file or a direct link.',
       },
     ],
     privacyTitle: 'Where your music lives',
@@ -731,6 +733,9 @@ export const en: Messages = {
     generic: 'Something went wrong.',
     notValidTake: 'This file is not a valid PoKeyBoard take.',
     notValidScore: 'This file could not be read as a MusicXML score.',
+    notValidMidi: 'This file could not be read as a MIDI file.',
+    midiUnsupported:
+      'This MIDI file is written in a form PoKeyBoard cannot open (type 2, or timed in SMPTE frames). Save it again as type 0 or 1 and import that.',
     storageFailed: 'Saving to this browser failed. Your latest change may not be stored.',
     storageFull: 'Storage is full. Free up space or export your takes as backup.',
     audioUnavailable: 'Audio could not be started in this browser.',

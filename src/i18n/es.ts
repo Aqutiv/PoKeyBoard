@@ -161,6 +161,7 @@ export const es: Messages = {
     importMenuLabel: 'Opciones de importación',
     importJson: 'Archivo de toma (JSON)',
     importMxl: 'Partitura (MXL)',
+    importMidi: 'Archivo MIDI (.mid)',
     importUrl: 'Desde un enlace (URL)',
     loading: 'Cargando…',
     empty:
@@ -182,6 +183,7 @@ export const es: Messages = {
     restoreBackup: 'Restaurar respaldo',
     importFileLabel: 'Importar archivo JSON de toma',
     importMxlFileLabel: 'Importar archivo MusicXML',
+    importMidiFileLabel: 'Importar archivo MIDI',
     restoreFileLabel: 'Restaurar archivo de respaldo',
     removeNotesConfirm: ({ title }) => `¿Eliminar todas las notas de “${title}”?`,
     deleteConfirm: ({ title }) => `¿Eliminar “${title}”? Esto no se puede deshacer.`,
@@ -421,7 +423,7 @@ export const es: Messages = {
     title: 'Importar desde un enlace',
     urlLabel: 'Enlace al archivo',
     placeholder: 'https://ejemplo.com/partitura.mxl',
-    hint: 'Pega un enlace directo a un archivo .mxl, .musicxml, .xml o .json de PoKeyBoard. El sitio que lo aloja debe permitir descargas desde otras aplicaciones, y muchos no lo hacen.',
+    hint: 'Pega un enlace directo a un archivo .mxl, .musicxml, .xml, .mid o .json de PoKeyBoard. El sitio que lo aloja debe permitir descargas desde otras aplicaciones, y muchos no lo hacen.',
     loading: 'Descargando…',
     httpError: ({ status }) =>
       `El sitio respondió con un error (${status}). Revisa el enlace e inténtalo de nuevo.`,
@@ -682,7 +684,7 @@ export const es: Messages = {
       },
       {
         title: 'Exporta y comparte',
-        body: 'Renderiza una toma a MP3 o FLAC, grábala como partitura en PDF o entrega el JSON en bruto. Las partituras también entran: importa MusicXML o una toma de PoKeyBoard desde un archivo o un enlace directo.',
+        body: 'Renderiza una toma a MP3 o FLAC, grábala como partitura en PDF o entrega el JSON en bruto. Las partituras también entran: importa MusicXML, MIDI o una toma de PoKeyBoard desde un archivo o un enlace directo.',
       },
     ],
     privacyTitle: 'Dónde vive tu música',
@@ -734,6 +736,9 @@ export const es: Messages = {
     generic: 'Algo salió mal.',
     notValidTake: 'Este archivo no es una toma válida de PoKeyBoard.',
     notValidScore: 'No se pudo leer este archivo como una partitura MusicXML.',
+    notValidMidi: 'No se pudo leer este archivo como un archivo MIDI.',
+    midiUnsupported:
+      'Este archivo MIDI está escrito de una forma que PoKeyBoard no puede abrir (tipo 2, o con tiempos en fotogramas SMPTE). Vuelve a guardarlo como tipo 0 o 1 e importa ese.',
     storageFailed:
       'Falló el guardado en este navegador. Tu último cambio puede no haberse guardado.',
     storageFull: 'El almacenamiento está lleno. Libera espacio o exporta tus tomas como respaldo.',
