@@ -8,7 +8,10 @@ import { en } from '@/i18n/en';
 import { I18nContext } from '@/i18n/i18nContext';
 import { useTakeStore } from '@/state/useTakeStore';
 
-/** The loop shaded by each frame the score drew, one entry per drawn frame. */
+/**
+ * The loop shaded by each frame the score drew, one entry per drawn frame — the
+ * whole score, or (standing still) its base layer, which ghosts are drawn over.
+ */
 const h = vi.hoisted(() => ({ drawnLoops: [] as unknown[] }));
 
 vi.mock('@/features/notation/scoreRenderer', async (importOriginal) => ({
@@ -16,6 +19,10 @@ vi.mock('@/features/notation/scoreRenderer', async (importOriginal) => ({
   drawScore: (_ctx: unknown, _view: unknown, input: { loop?: unknown }) => {
     h.drawnLoops.push(input.loop ?? null);
   },
+  drawScoreBase: (_ctx: unknown, _view: unknown, input: { loop?: unknown }) => {
+    h.drawnLoops.push(input.loop ?? null);
+  },
+  drawScoreOverlay: () => {},
 }));
 
 /** Animation frames wait here until a test runs them. */
@@ -47,6 +54,8 @@ describe('MusicScore', () => {
     vi.spyOn(Element.prototype, 'clientHeight', 'get').mockReturnValue(400);
     vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({
       setTransform: () => {},
+      clearRect: () => {},
+      drawImage: () => {},
     } as unknown as CanvasRenderingContext2D);
     const notes: NoteEvent[] = [{ id: 'a', midi: 60, startMs: 0, durationMs: 400, velocity: 0.7 }];
     useTakeStore.getState().setTake(createEmptyTake({ notes, durationMs: 4000 }));

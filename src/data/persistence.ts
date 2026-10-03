@@ -29,6 +29,12 @@ export interface SaveStatusSnapshot {
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
+/**
+ * How often, at most, a recording in progress is saved. A save writes the whole
+ * take, and the debounce alone would write it at every pause in the playing —
+ * on a slow machine, a hitch each time. Stopping saves it at once regardless.
+ */
+const RECORDING_AUTOSAVE_MS = 10_000;
 const SETTINGS_DEBOUNCE_MS = 500;
 /**
  * How long startup will wait for a vendored score to download before giving up
@@ -267,6 +273,15 @@ class PersistenceService {
   }
 
   scheduleSave(): void {
+    if (transportController.getState() === 'recording') {
+      // One save already coming covers this change too.
+      if (this.saveTimer !== null) return;
+      this.saveTimer = setTimeout(() => {
+        this.saveTimer = null;
+        void this.flushSave();
+      }, RECORDING_AUTOSAVE_MS);
+      return;
+    }
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
@@ -332,8 +347,17 @@ class PersistenceService {
       }
 
       const current = useTakeStore.getState();
-      if (current.dirty && !isLibraryTakeId(current.take.id)) continue;
-      this.setStatus('saved', null);
+      const unsaved = current.dirty && !isLibraryTakeId(current.take.id);
+      // Notes recorded while that write was under way are left for the save
+      // already scheduled for them (`RECORDING_AUTOSAVE_MS`), or the one when
+      // recording stops, rather than written again straight away — on slow
+      // storage, back to back for as long as the playing lasts.
+      if (unsaved && transportController.getState() !== 'recording') continue;
+      // Their save may have come and gone already — a timer that fired while a
+      // long write ran only joined it — so make sure one is still coming.
+      if (unsaved) this.scheduleSave();
+      // Until their own save, the badge claims neither saving nor saved.
+      this.setStatus(unsaved ? 'idle' : 'saved', null);
       return;
     }
   }

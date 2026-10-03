@@ -23,6 +23,36 @@ export function sortNotes(notes: readonly NoteEvent[]): NoteEvent[] {
 }
 
 /**
+ * `sortNotes([...existing, ...added])`, without sorting the whole take again
+ * when `existing` is in order already — as a recording's take is, between the
+ * notes it adds one at a time: each is put in its place by binary search.
+ * `compareNoteEvents` is a total order (ids break ties), so the result is the
+ * same either way.
+ */
+export function mergeNotes(
+  existing: readonly NoteEvent[],
+  added: readonly NoteEvent[],
+): NoteEvent[] {
+  for (let i = 1; i < existing.length; i += 1) {
+    if (compareNoteEvents(existing[i - 1]!, existing[i]!) > 0) {
+      return sortNotes([...existing, ...added]);
+    }
+  }
+  const merged = existing.slice();
+  for (const note of sortNotes(added)) {
+    let low = 0;
+    let high = merged.length;
+    while (low < high) {
+      const mid = (low + high) >> 1;
+      if (compareNoteEvents(merged[mid]!, note) <= 0) low = mid + 1;
+      else high = mid;
+    }
+    merged.splice(low, 0, note);
+  }
+  return merged;
+}
+
+/**
  * The order the piano strikes notes in: `compareNoteEvents`, except that of two
  * copies of one key at one moment the quieter comes first. A key struck again
  * gives way to the new strike (`VoiceManager.restrike`, `scheduleTakeVoices`),
