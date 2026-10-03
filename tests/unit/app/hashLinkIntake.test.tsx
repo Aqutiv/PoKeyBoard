@@ -279,6 +279,51 @@ describe('a library link', () => {
   });
 });
 
+describe('a newer link', () => {
+  it('calls off a library track still opening, and opens only the newer', async () => {
+    // The classic is still being fetched when another link is followed.
+    let finishFirst: (opened: boolean) => void = () => {};
+    let firstSignal: AbortSignal | undefined;
+    mock.openLibraryTrack.mockImplementationOnce((_trackId, signal) => {
+      firstSignal = signal;
+      return new Promise<boolean>((resolve) => {
+        finishFirst = resolve;
+      });
+    });
+    openAppOn(`#/lib/${CLASSIC}`);
+    await waitFor(() => expect(mock.openLibraryTrack).toHaveBeenCalledOnce());
+
+    follow('#/lib/a-beautiful-day');
+    await waitFor(() => expect(mock.navigate).toHaveBeenCalledExactlyOnceWith('play'));
+    expect(firstSignal?.aborted).toBe(true);
+
+    // The first finishes last: it must not open its track over the newer one,
+    // nor wait to be tried again.
+    await act(async () => finishFirst(true));
+    expect(mock.navigate).toHaveBeenCalledOnce();
+    expect(useImportUiStore.getState().pendingLink).toBeNull();
+  });
+
+  it('shows the newer take link’s preview though the older one decodes last', async () => {
+    let finishFirst: (preview: ImportPreview) => void = () => {};
+    mock.previewTakeLink.mockImplementationOnce(
+      () =>
+        new Promise<ImportPreview>((resolve) => {
+          finishFirst = resolve;
+        }),
+    );
+    mock.previewTakeLink.mockResolvedValueOnce(previewOf('Second take'));
+    openAppOn('#/s/1.first');
+    await waitFor(() => expect(mock.previewTakeLink).toHaveBeenCalledOnce());
+
+    follow('#/s/1.second');
+    await screen.findByText('Second take');
+    await act(async () => finishFirst(previewOf('First take')));
+    expect(screen.getByText('Second take')).toBeInTheDocument();
+    expect(screen.queryByText('First take')).toBeNull();
+  });
+});
+
 describe('any other address', () => {
   it('is left to the router', () => {
     window.history.pushState(null, '', '/#/takes');

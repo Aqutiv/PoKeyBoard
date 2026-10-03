@@ -7,16 +7,28 @@ import { useImportUiStore } from '@/state/useImportUiStore';
 import { toErrorMessageKey } from '@/utils/errors';
 
 /**
+ * Why an open was called off when a newer link came in: unlike one that gave
+ * way to an export or a recording, it is not tried again.
+ */
+const SUPERSEDED = 'superseded';
+
+/**
  * A take link becomes a preview in the import inbox — never an import by
  * itself. The decoder loads with takesService, only now that there is a link.
+ * `isLatest` says whether it is still the newest link: an older one that
+ * decodes last must not show over the newer.
  */
-async function openTakeLink(link: Extract<HashLink, { kind: 'take' }>): Promise<void> {
+async function openTakeLink(
+  link: Extract<HashLink, { kind: 'take' }>,
+  isLatest: () => boolean,
+): Promise<void> {
   const store = useImportUiStore.getState();
   try {
     const { previewTakeLink } = await import('@/features/takes/takesService');
-    store.openPreview(await previewTakeLink(link.version, link.data));
+    const preview = await previewTakeLink(link.version, link.data);
+    if (isLatest()) store.openPreview(preview);
   } catch (error) {
-    store.fail(toErrorMessageKey(error));
+    if (isLatest()) store.fail(toErrorMessageKey(error));
   }
 }
 
@@ -28,7 +40,8 @@ async function openTakeLink(link: Extract<HashLink, { kind: 'take' }>): Promise<
  *
  * `signal` aborts when an export or a recording starts while the track is on
  * its way. The open then gives way (it never swaps the take out from under
- * either), and the link waits its turn again.
+ * either), and the link waits its turn again. It aborts too when a newer link
+ * comes in (`SUPERSEDED`): the open gives way to that one for good.
  */
 async function openLibraryLink(
   trackId: string,
@@ -48,8 +61,9 @@ async function openLibraryLink(
     if (!signal.aborted) console.error('Opening a library link failed:', error);
   }
   if (signal.aborted) {
-    // Unless a newer link has come in meanwhile: that one wins.
-    if (useImportUiStore.getState().pendingLink === null) {
+    // Given way to an export or a recording: tried again once that is over,
+    // unless a newer link is waiting. Called off for a newer link: dropped.
+    if (signal.reason !== SUPERSEDED && useImportUiStore.getState().pendingLink === null) {
       store.receiveLink({ kind: 'library', trackId });
     }
     return;
@@ -84,6 +98,8 @@ export function useHashLinkIntake(busy: boolean): void {
   const { navigate } = useRouter();
   const pendingLink = useImportUiStore((state) => state.pendingLink);
   const opening = useRef<AbortController | null>(null);
+  // Counts the links opened, so an open can tell whether it is still the newest.
+  const latest = useRef(0);
 
   useEffect(() => {
     const takeIn = () => {
@@ -107,8 +123,13 @@ export function useHashLinkIntake(busy: boolean): void {
     // run twice over the same render opens the link once.
     const link = useImportUiStore.getState().claimLink();
     if (link === null) return;
+    // The latest link wins: one still opening gives way to this one.
+    opening.current?.abort(SUPERSEDED);
+    opening.current = null;
+    latest.current += 1;
+    const generation = latest.current;
     if (link.kind === 'take') {
-      void openTakeLink(link);
+      void openTakeLink(link, () => latest.current === generation);
       return;
     }
     const controller = new AbortController();
