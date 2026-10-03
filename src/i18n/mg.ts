@@ -11,6 +11,7 @@ export const mg: Messages = {
     practiceHint: 'Miandry ny naoty lalaovinao ny famerenana.',
     waitForMe: 'Andraso aho',
     keepTime: 'Tazony ny fitempo',
+    keepTimeHint: 'Mitazona ny fitempo ny famerenana: tendreo miaraka aminy ny anjaranao.',
     returnToPractice: 'Hiverina amin’ny fanazaran-tena',
     recording: 'Fandraisam-peo',
     clickVolume: 'Hamafin’ny kitika',

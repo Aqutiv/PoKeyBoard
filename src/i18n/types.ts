@@ -141,6 +141,7 @@ export interface Messages {
     practiceHint: string;
     waitForMe: string;
     keepTime: string;
+    keepTimeHint: string;
     returnToPractice: string;
     recording: string;
     clickVolume: string;

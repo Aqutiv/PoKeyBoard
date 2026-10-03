@@ -14,6 +14,7 @@ import { useTakeStore } from '@/state/useTakeStore';
 import { formatDurationMs } from '@/utils/timing';
 import { LoopButton } from './LoopButton';
 import { ModeMenu } from './ModeMenu';
+import { practiceStyleOf } from './modes';
 import { SpeedMenu } from './SpeedMenu';
 import { canTransition } from './transportMachine';
 import { transportController } from './transportController';
@@ -82,7 +83,8 @@ function SeekSlider({
 export function TransportControls() {
   const m = useMessages();
   const desktop = useMediaQuery('(min-width: 900px) and (min-height: 501px)');
-  const playbackMode = useSettingsStore((s) => s.playbackMode);
+  // The style alone, so a change of hand does not render the controls.
+  const practiceStyle = useSettingsStore((s) => practiceStyleOf(s.playbackMode));
   const state = useTransportState();
   // Play carries on through a change of piano; a recording waits for the new one.
   const pianoPlayable = usePianoPlayable();
@@ -211,8 +213,10 @@ export function TransportControls() {
         <SpeedMenu disabled={recording || !hasNotes} />
         <LoopButton disabled={recording || !hasNotes} />
       </div>
-      {desktop && playbackMode !== 'simple' && !recording && !waitingForTraining ? (
-        <p className="transport__status">{m.workflow.practiceHint}</p>
+      {desktop && practiceStyle !== null && !recording && !waitingForTraining ? (
+        <p className="transport__status">
+          {practiceStyle === 'wait' ? m.workflow.practiceHint : m.workflow.keepTimeHint}
+        </p>
       ) : null}
       {waitingForTraining ? (
         <p className="transport__status transport__status--waiting" role="status">

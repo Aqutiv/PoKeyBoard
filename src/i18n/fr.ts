@@ -10,6 +10,7 @@ export const fr: Messages = {
     practiceHint: 'La lecture attend vos notes.',
     waitForMe: 'Attendre mes notes',
     keepTime: 'Garder le tempo',
+    keepTimeHint: 'La lecture garde le tempo : jouez votre partie en même temps.',
     returnToPractice: 'Retour à la pratique',
     recording: 'Enregistrement',
     clickVolume: 'Volume du clic',

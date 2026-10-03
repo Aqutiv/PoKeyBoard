@@ -12,6 +12,7 @@ export const en: Messages = {
     practiceHint: 'Playback waits for your notes.',
     waitForMe: 'Wait for me',
     keepTime: 'Keep time',
+    keepTimeHint: 'Playback keeps time: play your part along with it.',
     returnToPractice: 'Return to practice',
     recording: 'Recording',
     clickVolume: 'Click volume',
