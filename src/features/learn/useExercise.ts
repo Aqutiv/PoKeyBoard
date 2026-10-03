@@ -14,7 +14,6 @@ import type { ExerciseSpec } from './exerciseSpec';
 const HINT_AFTER_MS = 15_000;
 /** Nobody should be trapped on step one of a beginner course. */
 const SKIP_AFTER_MS = 30_000;
-const TICK_MS = 1000;
 
 const IDLE_PROGRESS: ExerciseProgress = { done: 0, total: 0, satisfied: false };
 
@@ -41,13 +40,22 @@ export function useExercise(
   beatsAt?: (audioTimeSeconds: number) => number | null,
 ): ExerciseSession {
   const [state, setState] = useState<ExerciseState>(initExercise);
-  const [idleTicks, setIdleTicks] = useState(0);
+  /**
+   * How far the player's patience has run since it was last renewed (`epoch`):
+   * 0, then 1 once a hint is due, 2 once a skip is. Two timers move it on, so a
+   * lesson renders when help is offered rather than every second until then.
+   */
+  const [patience, setPatience] = useState({ epoch: 0, stage: 0 });
+  const renewPatience = useCallback(
+    () => setPatience((previous) => ({ epoch: previous.epoch + 1, stage: 0 })),
+    [],
+  );
   const heldRef = useRef<Set<number>>(new Set());
 
   const reset = useCallback(() => {
     setState(initExercise());
-    setIdleTicks(0);
-  }, []);
+    renewPatience();
+  }, [renewPatience]);
 
   // Dropping state when a prop changes belongs in render, not an effect: an
   // effect would paint the new step once against the old step's progress.
@@ -65,7 +73,7 @@ export function useExercise(
     current = initExercise();
     setActiveSpec(spec);
     setState(current);
-    setIdleTicks(0);
+    renewPatience();
     setBestDone(0);
   }
 
@@ -134,23 +142,30 @@ export function useExercise(
   // nothing — never offered help to the person retrying it hardest.
   if (progress.done > bestDone) {
     setBestDone(progress.done);
-    setIdleTicks(0);
+    renewPatience();
   }
 
   const satisfied = progress.satisfied;
+  const { epoch } = patience;
   useEffect(() => {
     if (!spec || satisfied) return;
-    const id = window.setInterval(() => setIdleTicks((ticks) => ticks + 1), TICK_MS);
-    return () => window.clearInterval(id);
-  }, [spec, satisfied]);
-
-  const idleMs = idleTicks * TICK_MS;
+    const runOutTo = (stage: number) => () =>
+      setPatience((previous) =>
+        previous.epoch === epoch ? { epoch, stage: Math.max(previous.stage, stage) } : previous,
+      );
+    const hint = window.setTimeout(runOutTo(1), HINT_AFTER_MS);
+    const skip = window.setTimeout(runOutTo(2), SKIP_AFTER_MS);
+    return () => {
+      window.clearTimeout(hint);
+      window.clearTimeout(skip);
+    };
+  }, [spec, satisfied, epoch]);
 
   return {
     state: current,
     progress,
-    hintAvailable: !satisfied && idleMs >= HINT_AFTER_MS,
-    skipAvailable: !satisfied && idleMs >= SKIP_AFTER_MS,
+    hintAvailable: !satisfied && patience.stage >= 1,
+    skipAvailable: !satisfied && patience.stage >= 2,
     reset,
   };
 }
