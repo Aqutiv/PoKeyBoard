@@ -53,6 +53,19 @@ export interface SmfFile {
 /** A variable-length number holds at most 28 bits, in at most four bytes. */
 const MAX_VARIABLE_LENGTH_BYTES = 4;
 
+/**
+ * The most events a file may hold, across all its tracks and of every kind —
+ * meta events and system exclusives too, though the reader keeps one and skips
+ * the other.
+ *
+ * A file is read whole before its notes are counted, and running status lets
+ * an event take as little as two or three bytes, so a 50 MB file could
+ * otherwise become tens of millions of event objects — gigabytes — before the
+ * 50,000-note limit is ever asked. A million is about ten times what a
+ * 50,000-note piano file holds with its pedal and controllers.
+ */
+export const MAX_SMF_EVENTS = 1_000_000;
+
 const META = 0xff;
 const META_END_OF_TRACK = 0x2f;
 const SYSEX = 0xf0;
@@ -60,6 +73,20 @@ const SYSEX_ESCAPE = 0xf7;
 
 function invalid(issue: string): MidiImportError {
   return new MidiImportError([issue], 'invalid');
+}
+
+/** What is left of a file's events, counted down as its tracks are read. */
+interface EventBudget {
+  readonly max: number;
+  left: number;
+}
+
+/** Count one more event, refusing the file once it holds more than it may. */
+function spend(budget: EventBudget): void {
+  budget.left -= 1;
+  if (budget.left < 0) {
+    throw invalid(`The file holds more than ${budget.max.toLocaleString('en-US')} events.`);
+  }
 }
 
 function tagAt(bytes: Uint8Array, at: number): string {
@@ -86,7 +113,13 @@ function u16At(bytes: Uint8Array, at: number): number {
 }
 
 /** One track chunk's events, read from `start` up to (not including) `end`. */
-function readTrack(bytes: Uint8Array, start: number, end: number, index: number): SmfTrack {
+function readTrack(
+  bytes: Uint8Array,
+  start: number,
+  end: number,
+  index: number,
+  budget: EventBudget,
+): SmfTrack {
   const cutOff = (): MidiImportError =>
     invalid(`Track ${index + 1} ends in the middle of an event.`);
   let at = start;
@@ -112,6 +145,10 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
   };
 
   const events: SmfEvent[] = [];
+  // Every track counts its End of Track, whether it writes one or simply runs
+  // out, so a flood of empty tracks is counted like any other; each other
+  // event is counted as it is read, before anything is kept of it.
+  spend(budget);
   let tick = 0;
   // The last channel message's status, which later messages may leave out.
   // Each track starts without one: a data byte there has nothing to borrow.
@@ -129,6 +166,7 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
       const length = variableLength();
       if (length > end - at) throw cutOff();
       if (metaType === META_END_OF_TRACK) return { events, endTick: tick };
+      spend(budget);
       events.push({ type: 'meta', tick, metaType, data: bytes.slice(at, at + length) });
       at += length;
       continue;
@@ -137,6 +175,7 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
       // A message for one make of synthesiser; skipped whole by its length.
       const length = variableLength();
       if (length > end - at) throw cutOff();
+      spend(budget);
       at += length;
       continue;
     }
@@ -159,6 +198,7 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
     const command = status & 0xf0;
     // Program change and channel pressure carry one data byte; the rest two.
     const data2 = command === 0xc0 || command === 0xd0 ? 0 : dataByte();
+    spend(budget);
     events.push({ type: 'channel', tick, command, channel: status & 0x0f, data1, data2 });
   }
   // A track that simply runs out, with no End of Track, has still said all it
@@ -171,8 +211,11 @@ export function hasMidiHeader(bytes: Uint8Array): boolean {
   return bytes[0] === 0x4d && bytes[1] === 0x54 && bytes[2] === 0x68 && bytes[3] === 0x64;
 }
 
-/** Read a Standard MIDI File's bytes. Throws `MidiImportError`. */
-export function readSmf(bytes: Uint8Array): SmfFile {
+/**
+ * Read a Standard MIDI File's bytes. Throws `MidiImportError`. `maxEvents`
+ * is there so a test can reach the limit without a million events.
+ */
+export function readSmf(bytes: Uint8Array, maxEvents: number = MAX_SMF_EVENTS): SmfFile {
   if (bytes.length < 14 || !hasMidiHeader(bytes)) {
     throw invalid('The file does not start with a MIDI header.');
   }
@@ -202,6 +245,7 @@ export function readSmf(bytes: Uint8Array): SmfFile {
   // The header's track count is not trusted: the chunks themselves say how
   // many tracks there are, and anything that is not a track is skipped.
   const tracks: SmfTrack[] = [];
+  const budget: EventBudget = { max: maxEvents, left: maxEvents };
   let at = 8 + headerLength;
   while (at + 8 <= bytes.length) {
     const type = tagAt(bytes, at);
@@ -211,7 +255,8 @@ export function readSmf(bytes: Uint8Array): SmfFile {
     if (type === 'MTrk') {
       // Some programs write a last track's length wrong; its events still end
       // with the file, and are read up to there.
-      tracks.push(readTrack(bytes, start, Math.min(declaredEnd, bytes.length), tracks.length));
+      const trackEnd = Math.min(declaredEnd, bytes.length);
+      tracks.push(readTrack(bytes, start, trackEnd, tracks.length, budget));
     }
     at = declaredEnd;
   }

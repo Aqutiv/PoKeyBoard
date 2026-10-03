@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { readSmf, type SmfChannelEvent, type SmfMetaEvent } from '@/domain/smfReader';
+import {
+  MAX_SMF_EVENTS,
+  readSmf,
+  type SmfChannelEvent,
+  type SmfMetaEvent,
+} from '@/domain/smfReader';
 import { MidiImportError } from '@/utils/errors';
 
 /** A MIDI variable-length number, most significant group first. */
@@ -27,10 +32,14 @@ function file(...parts: number[][]): Uint8Array {
   return Uint8Array.from(parts.flat());
 }
 
-function expectFailure(bytes: Uint8Array, kind: 'invalid' | 'unsupported'): MidiImportError {
+function expectFailure(
+  bytes: Uint8Array,
+  kind: 'invalid' | 'unsupported',
+  maxEvents?: number,
+): MidiImportError {
   let caught: unknown;
   try {
-    readSmf(bytes);
+    readSmf(bytes, maxEvents);
   } catch (error) {
     caught = error;
   }
@@ -335,5 +344,58 @@ describe('readSmf: events', () => {
     );
     expect(channelEvents(smf.tracks[0]!.events)).toHaveLength(2);
     expect(smf.tracks[0]!.endTick).toBe(16);
+  });
+});
+
+describe('readSmf: limits', () => {
+  /** A track of `count` note events by running status, then its End of Track. */
+  function notes(count: number): number[] {
+    const body = [0x00, 0x90, 60, 100];
+    for (let i = 1; i < count; i += 1) body.push(0x00, 60, i % 2 === 0 ? 100 : 0);
+    return [...body, ...END_OF_TRACK];
+  }
+
+  it('holds a file to a million events', () => {
+    expect(MAX_SMF_EVENTS).toBe(1_000_000);
+  });
+
+  it('reads a file of as many events as it may hold, and refuses one more', () => {
+    // Three notes and the End of Track: four events.
+    const bytes = file(header(0, 1, 480), chunk('MTrk', notes(3)));
+    expect(channelEvents(readSmf(bytes, 4).tracks[0]!.events)).toHaveLength(3);
+    const error = expectFailure(bytes, 'invalid', 3);
+    expect(error.issues).toEqual(['The file holds more than 3 events.']);
+  });
+
+  it('counts across every track', () => {
+    const bytes = file(header(1, 2, 480), chunk('MTrk', notes(2)), chunk('MTrk', notes(2)));
+    expect(readSmf(bytes, 6).tracks).toHaveLength(2);
+    expectFailure(bytes, 'invalid', 5);
+  });
+
+  it('counts meta events and system exclusives too', () => {
+    const body = [
+      [0x00, 0xf0, 0x01, 0xf7],
+      [0x00, 0xf7, 0x01, 0x00],
+      [0x00, 0xff, 0x01, 0x01, 0x41],
+      END_OF_TRACK,
+    ].flat();
+    const bytes = file(header(0, 1, 480), chunk('MTrk', body));
+    expect(readSmf(bytes, 4).tracks[0]!.events).toHaveLength(1);
+    expectFailure(bytes, 'invalid', 3);
+  });
+
+  it('counts a track that is empty, so a flood of them is refused too', () => {
+    const empty = Array.from({ length: 5 }, () => chunk('MTrk', []));
+    const bytes = file(header(1, 5, 480), ...empty);
+    expect(readSmf(bytes, 5).tracks).toHaveLength(5);
+    expectFailure(bytes, 'invalid', 4);
+  });
+
+  it('names the limit as people write numbers', () => {
+    const bytes = file(header(0, 1, 480), chunk('MTrk', notes(1500)));
+    expect(expectFailure(bytes, 'invalid', 1500).issues).toEqual([
+      'The file holds more than 1,500 events.',
+    ]);
   });
 });
