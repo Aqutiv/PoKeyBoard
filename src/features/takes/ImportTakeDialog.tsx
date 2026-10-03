@@ -3,6 +3,7 @@ import { useMessages } from '@/i18n/i18nContext';
 import type { Messages, Repair } from '@/i18n/types';
 import { formatDurationMs } from '@/utils/timing';
 import type { ImportPreview } from './takesService';
+import './importDialog.css';
 
 /** Translate one structured repair record for display. */
 function repairText(m: Messages, repair: Repair): string {
@@ -39,7 +40,15 @@ export function ImportTakeDialog({ preview, onConfirm, onCancel }: ImportTakeDia
   }, [onCancel]);
 
   return (
-    <div className="modal-backdrop" onClick={onCancel}>
+    // The import inbox shows this over any route, outside the Takes page's drop
+    // zone. A file dropped on the backdrop is swallowed: a drop nobody takes
+    // makes the browser open the file in the app's place.
+    <div
+      className="modal-backdrop"
+      onClick={onCancel}
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => event.preventDefault()}
+    >
       <div
         className="modal"
         role="dialog"

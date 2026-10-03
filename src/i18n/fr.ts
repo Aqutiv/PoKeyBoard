@@ -176,7 +176,6 @@ export const fr: Messages = {
     notesCleared: 'Notes effacées.',
     deleted: 'Supprimée.',
     backupDownloaded: 'Sauvegarde téléchargée.',
-    takeImported: 'Prise importée.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Sauvegarde restaurée : ${imported} prise(s)` +
       (skipped > 0 ? `, ${skipped} ignorée(s)` : '') +
@@ -402,6 +401,7 @@ export const fr: Messages = {
     replaceExisting: 'Remplacer la prise existante',
     cancel: 'Annuler',
     import: 'Importer',
+    close: 'Fermer',
   },
   importUrlDialog: {
     title: 'Importer depuis un lien',

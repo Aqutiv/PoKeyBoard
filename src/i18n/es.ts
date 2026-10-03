@@ -175,7 +175,6 @@ export const es: Messages = {
     notesCleared: 'Notas borradas.',
     deleted: 'Eliminada.',
     backupDownloaded: 'Respaldo descargado.',
-    takeImported: 'Toma importada.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Respaldo restaurado: ${imported} toma(s)` +
       (skipped > 0 ? `, ${skipped} omitida(s)` : '') +
@@ -400,6 +399,7 @@ export const es: Messages = {
     replaceExisting: 'Reemplazar la toma existente',
     cancel: 'Cancelar',
     import: 'Importar',
+    close: 'Cerrar',
   },
   importUrlDialog: {
     title: 'Importar desde un enlace',

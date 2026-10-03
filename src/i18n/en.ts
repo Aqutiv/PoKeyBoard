@@ -176,7 +176,6 @@ export const en: Messages = {
     notesCleared: 'Notes cleared.',
     deleted: 'Deleted.',
     backupDownloaded: 'Backup downloaded.',
-    takeImported: 'Take imported.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Backup restored: ${imported} take(s)` +
       (skipped > 0 ? `, ${skipped} skipped` : '') +
@@ -405,6 +404,7 @@ export const en: Messages = {
     replaceExisting: 'Replace the existing take',
     cancel: 'Cancel',
     import: 'Import',
+    close: 'Close',
   },
   importUrlDialog: {
     title: 'Import from a link',

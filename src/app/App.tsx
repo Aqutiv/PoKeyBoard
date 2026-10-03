@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react';
 import { useMidiInput } from '@/features/keyboard/useMidiInput';
 import { useExportUiStore } from '@/state/useExportUiStore';
+import { ImportDialogs } from './ImportDialogs';
 import { NowPlaying } from './NowPlaying';
 import { AppNav } from './AppNav';
 import { AppProviders } from './providers';
@@ -86,6 +87,7 @@ function Shell() {
       </div>
       <AppNav />
       <ExportDialogs />
+      <ImportDialogs />
     </div>
   );
 }

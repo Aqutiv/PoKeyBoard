@@ -5,19 +5,18 @@ import { listTakeSummaries, type TakeSummary } from '@/data/takeRepository';
 import { isScoreFileName } from '@/domain/mxlContainer';
 import { ShareMenu } from '@/features/export/ShareMenu';
 import { useI18n, useMessages } from '@/i18n/i18nContext';
+import { useImportUiStore } from '@/state/useImportUiStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { MenuButton } from '@/ui/MenuButton';
 import { shareOrDownloadFile, downloadBlob } from '@/utils/download';
 import { toErrorMessageKey } from '@/utils/errors';
 import { urlFromDropText } from '@/utils/importUrl';
 import { formatDurationMs } from '@/utils/timing';
-import { ImportTakeDialog } from './ImportTakeDialog';
 import { ImportUrlDialog } from './ImportUrlDialog';
 import { remoteImportMessage } from './remoteImportMessage';
 import {
   backupAllFile,
   clearTakeNotes,
-  commitImport,
   createNewTake,
   deleteTake,
   duplicateTake,
@@ -28,7 +27,6 @@ import {
   renameTake,
   restoreBackupFile,
   takeJsonFile,
-  type ImportPreview,
 } from './takesService';
 import './takes.css';
 
@@ -55,7 +53,7 @@ export function TakesPage() {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [renameText, setRenameText] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [importPreview, setImportPreview] = useState<ImportPreview | null>(null);
+  const openPreview = useImportUiStore((s) => s.openPreview);
   const [urlDialogOpen, setUrlDialogOpen] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
@@ -107,7 +105,7 @@ export function TakesPage() {
   const startImport = useCallback(
     async (file: File) => {
       try {
-        setImportPreview(
+        openPreview(
           await (isScoreFileName(file.name)
             ? previewImportScoreFile(file)
             : previewImportFile(file)),
@@ -116,7 +114,7 @@ export function TakesPage() {
         setMessage(m.errors[toErrorMessageKey(error)]);
       }
     },
-    [m],
+    [m, openPreview],
   );
 
   const onImportChosen = useCallback(
@@ -140,10 +138,10 @@ export function TakesPage() {
       // picker shares this: a MIDI file is known by its header or its name,
       // whichever picker it came through.
       void (/\.json$/i.test(file.name) ? previewImportFile(file) : previewImportScoreFile(file))
-        .then(setImportPreview)
+        .then(openPreview)
         .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
     },
-    [m],
+    [m, openPreview],
   );
 
   const onRestoreChosen = useCallback(
@@ -169,13 +167,13 @@ export function TakesPage() {
     async (rawUrl: string) => {
       setMessage(m.importUrlDialog.loading); // a drop has no dialog to show progress in
       try {
-        setImportPreview(await previewImportUrl(rawUrl));
+        openPreview(await previewImportUrl(rawUrl));
         setMessage(null);
       } catch (error) {
         setMessage(remoteImportMessage(m, error));
       }
     },
-    [m],
+    [m, openPreview],
   );
 
   const onDrop = useCallback(
@@ -491,27 +489,12 @@ export function TakesPage() {
         aria-label={m.takes.restoreFileLabel}
       />
 
-      {importPreview ? (
-        <ImportTakeDialog
-          preview={importPreview}
-          onCancel={() => setImportPreview(null)}
-          onConfirm={(strategy) => {
-            const preview = importPreview;
-            setImportPreview(null);
-            void act(async () => {
-              await commitImport(preview, strategy);
-              navigate('play');
-            }, m.takes.takeImported);
-          }}
-        />
-      ) : null}
-
       {urlDialogOpen ? (
         <ImportUrlDialog
           onCancel={() => setUrlDialogOpen(false)}
           onLoaded={(preview) => {
             setUrlDialogOpen(false);
-            setImportPreview(preview);
+            openPreview(preview);
           }}
           onUseFilePicker={() => {
             setUrlDialogOpen(false);
