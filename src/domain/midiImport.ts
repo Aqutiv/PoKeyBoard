@@ -622,6 +622,8 @@ function staffOf(notes: readonly TickNote[]): (note: TickNote) => NoteStaff | un
 /** One channel's sustain controller, as the file sends it. */
 interface PedalChange {
   tick: number;
+  /** The track it was written in: within one track a tick's events are in order. */
+  track: number;
   channel: number;
   /**
    * Where the channel's pedal goes — or, for an All Sound Off, a break: up for
@@ -657,8 +659,8 @@ interface PedalChange {
  */
 function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
   const changes: PedalChange[] = [];
-  for (const track of smf.tracks) {
-    for (const event of track.events) {
+  smf.tracks.forEach((source, track) => {
+    for (const event of source.events) {
       if (event.type !== 'channel' || event.command !== 0xb0 || event.channel === DRUM_CHANNEL) {
         continue;
       }
@@ -668,11 +670,11 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
       else if (event.data1 === RESET_ALL_CONTROLLERS) to = 'up';
       else if (event.data1 === ALL_SOUND_OFF_CONTROLLER) to = 'break';
       else continue;
-      changes.push({ tick, channel, to });
+      changes.push({ tick, track, channel, to });
     }
-  }
-  // Stable, and by tick alone, so each channel's changes keep the file's order.
-  changes.sort((a, b) => a.tick - b.tick);
+  });
+  // Stable, so each track's changes keep the file's order within a tick.
+  changes.sort((a, b) => a.tick - b.tick || a.track - b.track);
 
   /** The channels holding the pedal down; any other is up, seen or not. */
   const held = new Set<number>();
@@ -681,28 +683,55 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
   for (let first = 0; first < changes.length;) {
     const { tick } = changes[first] as PedalChange;
     let next = first;
-    // Each channel that changes at this tick: where it ends up, and whether it
-    // was up at some instant of it.
-    const settled = new Map<number, { down: boolean; dipped: boolean }>();
+    // The tick's changes, track by track, each track's in the file's order.
+    const byTrack = new Map<number, PedalChange[]>();
     for (; next < changes.length && (changes[next] as PedalChange).tick === tick; next += 1) {
-      const { channel, to } = changes[next] as PedalChange;
-      const state = settled.get(channel) ?? {
-        down: held.has(channel),
-        dipped: !held.has(channel),
-      };
-      if (to !== 'break') state.down = to === 'down';
-      if (to !== 'down') state.dipped = true;
-      settled.set(channel, state);
+      const change = changes[next] as PedalChange;
+      const ofTrack = byTrack.get(change.track);
+      if (ofTrack) ofTrack.push(change);
+      else byTrack.set(change.track, [change]);
     }
 
     const wasDown = held.size > 0;
-    // A channel with nothing at this tick holds throughout if it was down.
+    // The pedal lifts if its channels can all have been up at one instant: no
+    // channel holds throughout untouched, and each track, played in its own
+    // order, has an instant when every channel it changes is up. How two
+    // tracks' events at one tick fall against each other is not known, so any
+    // such instants count as one.
     let dipped = true;
-    for (const channel of held) if (!settled.has(channel)) dipped = false;
-    for (const state of settled.values()) if (!state.dipped) dipped = false;
-    for (const [channel, state] of settled) {
-      if (state.down) held.add(channel);
-      else held.delete(channel);
+    for (const channel of held) {
+      let touched = false;
+      for (const ofTrack of byTrack.values()) {
+        if (ofTrack.some((change) => change.channel === channel)) touched = true;
+      }
+      if (!touched) dipped = false;
+    }
+    for (const ofTrack of byTrack.values()) {
+      if (!dipped) break;
+      const down = new Map<number, boolean>();
+      for (const change of ofTrack) down.set(change.channel, held.has(change.channel));
+      const allUp = (): boolean => [...down.values()].every((isDown) => !isDown);
+      let wasAllUp = allUp();
+      for (const change of ofTrack) {
+        if (change.to === 'break') {
+          // Up for an instant, then as it was.
+          const before = down.get(change.channel) as boolean;
+          down.set(change.channel, false);
+          if (allUp()) wasAllUp = true;
+          down.set(change.channel, before);
+        } else {
+          down.set(change.channel, change.to === 'down');
+          if (allUp()) wasAllUp = true;
+        }
+      }
+      if (!wasAllUp) dipped = false;
+    }
+    // Where each channel ends: the tick's changes in order, track by track.
+    for (const ofTrack of byTrack.values()) {
+      for (const change of ofTrack) {
+        if (change.to === 'down') held.add(change.channel);
+        else if (change.to === 'up') held.delete(change.channel);
+      }
     }
     const isDown = held.size > 0;
 
@@ -729,6 +758,37 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
     first = next;
   }
   return pedals;
+}
+
+/**
+ * Per channel, the ticks an All Sound Off falls on. It breaks a held pedal for
+ * an instant (see `collectPedal`), but the press after the break lands on the
+ * very millisecond a note it silences lets go, and a note let go as the pedal
+ * goes down is held by it — so such a note is let go a millisecond sooner,
+ * while the pedal from before the break still holds it, and it stops with the
+ * break.
+ */
+function soundOffTicks(smf: SmfFile): Map<number, Set<number>> {
+  const ticks = new Map<number, Set<number>>();
+  for (const track of smf.tracks) {
+    for (const event of track.events) {
+      if (
+        event.type !== 'channel' ||
+        event.command !== 0xb0 ||
+        event.data1 !== ALL_SOUND_OFF_CONTROLLER ||
+        event.channel === DRUM_CHANNEL
+      ) {
+        continue;
+      }
+      let ofChannel = ticks.get(event.channel);
+      if (!ofChannel) {
+        ofChannel = new Set();
+        ticks.set(event.channel, ofChannel);
+      }
+      ofChannel.add(event.tick);
+    }
+  }
+  return ticks;
 }
 
 /**
@@ -801,6 +861,7 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
 
   const staff = staffOf(notes);
   const keyOf = fileKey(smf);
+  const soundOff = soundOffTicks(smf);
   const onsets = [...new Set(notes.map((note) => note.startTick))].map(
     (tick) => tick / smf.ticksPerQuarter,
   );
@@ -810,7 +871,8 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
       notes: notes.map((note): ImportedNote => ({
         midi: note.midi,
         startMs: msAtTick(note.startTick),
-        endMs: msAtTick(note.endTick),
+        endMs:
+          msAtTick(note.endTick) - (soundOff.get(note.channel)?.has(note.endTick) === true ? 1 : 0),
         velocity: note.velocity,
         seq: note.seq,
         staff: staff(note),

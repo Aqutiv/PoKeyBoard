@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { noteHand } from '@/domain/hands';
 import { takeToMidi } from '@/domain/midiExport';
+import { applySustainToNotes } from '@/features/transport/sustainPedal';
 import { midiToTake } from '@/domain/midiImport';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJson } from '@/domain/takeSchema';
@@ -386,9 +387,11 @@ describe('midiToTake: notes', () => {
       ]),
       'x.mid',
     );
+    // A note All Sound Off silences lets go a millisecond before it, so a
+    // pedal pressed again after the break cannot hold it on.
     expect(take.notes.map((n) => [n.midi, n.startMs, n.durationMs])).toEqual([
-      [60, 0, 500],
-      [64, 0, 500],
+      [60, 0, 499],
+      [64, 0, 499],
       [60, 1000, 500],
     ]);
   });
@@ -664,6 +667,19 @@ describe('midiToTake: pedal', () => {
     ]);
   });
 
+  it('stops a note All Sound Off cuts while its key and the pedal are held', () => {
+    // C4 still held under the pedal at CC120: it must sound no further than
+    // the controller, not ring on under the pedal pressed again after it.
+    const take = midiToTake(
+      smf(0, 480, [
+        [pedal(0, 0, true), [0, 0x90, 60, 100], [480, 0xb0, 120, 0], [960, 0x80, 60, 0]],
+      ]),
+      'x.mid',
+    );
+    const [sounded] = applySustainToNotes(take.notes, take.pedalEvents);
+    expect(sounded!.startMs + sounded!.durationMs).toBe(500);
+  });
+
   it('breaks a held pedal for an instant at an All Sound Off (CC120)', () => {
     // The pedal goes down and stays down; CC120 silences what it was holding,
     // and the pedal holds again from there.
@@ -731,16 +747,44 @@ describe('midiToTake: pedal', () => {
   });
 
   it('hears a change of pedal when one channel lets go as another presses', () => {
-    for (const order of [
-      [pedal(0, 480, false), pedal(1, 480, true)],
-      [pedal(1, 480, true), pedal(0, 480, false)],
+    // In one track the file's order holds: a release, then a press, lifts it;
+    // a press, then a release, never does.
+    expect(pedalOf([pedal(0, 0, true), pedal(0, 480, false), pedal(1, 480, true)])).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 500, down: false },
+      { atMs: 500, down: true },
+    ]);
+    expect(pedalOf([pedal(0, 0, true), pedal(1, 480, true), pedal(0, 480, false)])).toEqual([
+      { atMs: 0, down: true },
+    ]);
+    // Across tracks the order of one tick's events means nothing: either way,
+    // a change of pedal.
+    for (const tracks of [
+      [[pedal(0, 0, true), pedal(0, 480, false)], [pedal(1, 480, true)]],
+      [[pedal(1, 480, true)], [pedal(0, 0, true), pedal(0, 480, false)]],
     ]) {
-      expect(pedalOf([pedal(0, 0, true), ...order])).toEqual([
+      const take = midiToTake(smf(1, 480, [...tracks, played(2, 60, 0, 1920)]), 'x.mid');
+      expect(take.pedalEvents).toEqual([
         { atMs: 0, down: true },
         { atMs: 500, down: false },
         { atMs: 500, down: true },
       ]);
     }
+  });
+
+  it('never lifts the pedal one track’s channels hold in turn on one tick', () => {
+    // A type 0 file: both channels held; on one tick channel 1 changes pedal,
+    // then channel 2 does. One of them is down at every point of the file.
+    expect(
+      pedalOf([
+        pedal(0, 0, true),
+        pedal(1, 0, true),
+        pedal(0, 480, false),
+        pedal(0, 480, true),
+        pedal(1, 480, false),
+        pedal(1, 480, true),
+      ]),
+    ).toEqual([{ atMs: 0, down: true }]);
   });
 });
 
