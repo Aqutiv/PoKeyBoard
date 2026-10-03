@@ -585,6 +585,29 @@ describe('midiToTake: pedal', () => {
     ]);
   });
 
+  it('settles pedal changes that round to one millisecond in the file’s order', () => {
+    // At 960 to the quarter and ♩=120 a tick is 0.52 ms: a press at tick 1 and
+    // a release at tick 2 both land on 1 ms. Down then up nets nothing, where
+    // sorted as one moment's up and down it would leave the pedal down.
+    const pressed = midiToTake(
+      smf(0, 960, [[pedal(0, 1, true), pedal(0, 2, false), ...played(0, 60, 0, 1920)]]),
+      'x.mid',
+    );
+    expect(pressed.pedalEvents).toEqual([]);
+    // And a change of pedal inside one millisecond is still a change.
+    const changed = midiToTake(
+      smf(0, 960, [
+        [pedal(0, 0, true), pedal(0, 1921, false), pedal(0, 1922, true), ...played(0, 60, 0, 3840)],
+      ]),
+      'x.mid',
+    );
+    expect(changed.pedalEvents).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 1001, down: false },
+      { atMs: 1001, down: true },
+    ]);
+  });
+
   it('breaks a held pedal for an instant at an All Sound Off (CC120)', () => {
     // The pedal goes down and stays down; CC120 silences what it was holding,
     // and the pedal holds again from there.
