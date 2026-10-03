@@ -1,5 +1,7 @@
 import type { PracticeEvent, PracticeRun } from '@/features/transport/practiceEvents';
-import type { PracticeState } from '@/state/usePracticeStore';
+import { transportController } from '@/features/transport/transportController';
+import { usePracticeStore, type PracticeState } from '@/state/usePracticeStore';
+import { useTakeStore } from '@/state/useTakeStore';
 import { reduceWaitRun } from './trainingReport';
 
 /**
@@ -79,3 +81,28 @@ export function createPracticeSession({
     },
   };
 }
+
+let started: PracticeSession | null = null;
+
+/**
+ * The app's practice session: the transport's runs, read into the results
+ * store, for the take open. Started once, with the other services, and kept
+ * for the life of the page; StrictMode runs the providers' effect twice, so a
+ * second start changes nothing.
+ *
+ * The transport tells its listeners from inside its own commands, so this one
+ * only takes note: it writes the store, and never calls the transport back.
+ */
+export const practiceSession = {
+  init(): void {
+    started ??= createPracticeSession({
+      subscribePractice: (listener) => transportController.subscribePractice(listener),
+      // A rename or an edit keeps the take; only another take puts a result away.
+      subscribeTakeId: (listener) =>
+        useTakeStore.subscribe((state, previous) => {
+          if (state.take.id !== previous.take.id) listener(state.take.id);
+        }),
+      store: usePracticeStore.getState(),
+    });
+  },
+};
