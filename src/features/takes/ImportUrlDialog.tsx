@@ -1,20 +1,34 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { MAX_TAKE_LINK_CHARS } from '@/domain/takeLink';
 import { useMessages } from '@/i18n/i18nContext';
 import { RemoteImportCancelled, RemoteImportError } from '@/utils/errors';
+import { MAX_IMPORT_URL_LENGTH } from '@/utils/importUrl';
 import { remoteImportMessage } from './remoteImportMessage';
-import { previewImportUrl, type ImportPreview } from './takesService';
+import { previewImportLink, type ImportPreview } from './takesService';
 
 type Phase =
   { kind: 'input' } | { kind: 'loading' } | { kind: 'error'; message: string; blocked: boolean };
 
+/**
+ * A browser cuts typed or pasted text at maxLength, so the field holds the
+ * longest share link a take can make — its data after an address as long as
+ * any link may be. A link to download is still held to 2,048 characters, by
+ * `parseImportUrl`.
+ */
+const MAX_FIELD_LENGTH = MAX_IMPORT_URL_LENGTH + MAX_TAKE_LINK_CHARS;
+
 interface ImportUrlDialogProps {
   onCancel: () => void;
-  onLoaded: (preview: ImportPreview) => void;
+  /** The preview, or null for a Library link, which the shell's link intake opens. */
+  onLoaded: (preview: ImportPreview | null) => void;
   /** Offered after a blocked download, which is the common cross-origin outcome. */
   onUseFilePicker: () => void;
 }
 
-/** Paste a link to a score or take file, download it, and hand back a preview. */
+/**
+ * Paste a link to a score or take file, download it, and hand back a preview —
+ * or paste a share link, which is read without downloading anything.
+ */
 export function ImportUrlDialog({ onCancel, onLoaded, onUseFilePicker }: ImportUrlDialogProps) {
   const m = useMessages();
   const [url, setUrl] = useState('');
@@ -44,7 +58,7 @@ export function ImportUrlDialog({ onCancel, onLoaded, onUseFilePicker }: ImportU
     abortRef.current = controller;
     setPhase({ kind: 'loading' });
     try {
-      const preview = await previewImportUrl(url, controller.signal);
+      const preview = await previewImportLink(url, controller.signal);
       if (!aliveRef.current) return;
       onLoaded(preview);
     } catch (error) {
@@ -80,7 +94,7 @@ export function ImportUrlDialog({ onCancel, onLoaded, onUseFilePicker }: ImportU
             spellCheck={false}
             autoCapitalize="off"
             autoCorrect="off"
-            maxLength={2048}
+            maxLength={MAX_FIELD_LENGTH}
             disabled={loading}
             value={url}
             aria-label={m.importUrlDialog.urlLabel}
