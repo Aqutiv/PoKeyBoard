@@ -183,6 +183,17 @@ function drawLabels(
   ctx.fillText(name, x, foot - NAME_ROOM_PX);
 }
 
+/** The glow's halo: rings this far out, in px, this opaque at full glow, outermost first. */
+const HALO_RINGS: ReadonlyArray<readonly [number, number]> = [
+  [11, 0.035],
+  [9, 0.045],
+  [7, 0.06],
+  [5, 0.08],
+  [3.5, 0.1],
+  [2, 0.13],
+  [1, 0.16],
+];
+
 /**
  * A note a Training hold is waiting for, lit as `glow` says: a column of light
  * rising from its key, the note haloed over it, and a cap of the light where
@@ -196,10 +207,22 @@ function drawGlow(ctx: WaterfallSurface, bar: WaterfallBar, paint: WaterfallPain
   rise.addColorStop(1, withAlpha(light, 0));
   ctx.fillStyle = rise;
   ctx.fillRect(bar.x - 6, heightPx - GLOW_RISE_PX, bar.width + 12, GLOW_RISE_PX);
-  ctx.save();
-  ctx.shadowColor = withAlpha(light, glow);
-  ctx.shadowBlur = 22;
+  // The halo, in rings of light laid one inside another, densest at the note:
+  // a canvas shadow blur looks much the same, and costs a slow machine a frame.
   const [top, bottom] = radii(bar);
+  for (const [spread, alpha] of HALO_RINGS) {
+    roundedRect(
+      ctx,
+      bar.x - spread,
+      bar.top - spread,
+      bar.width + 2 * spread,
+      bar.bottom - bar.top + 2 * spread,
+      top + spread,
+      bottom + spread,
+    );
+    ctx.fillStyle = withAlpha(light, alpha * glow);
+    ctx.fill();
+  }
   if (bar.silent) {
     drawHollow(ctx, bar, paint);
   } else {
@@ -207,7 +230,6 @@ function drawGlow(ctx: WaterfallSurface, bar: WaterfallBar, paint: WaterfallPain
     ctx.fillStyle = barColour(palette, bar.hand, bar.black, bar.note.velocity, followsVelocity);
     ctx.fill();
   }
-  ctx.restore();
   ctx.fillStyle = withAlpha(light, 0.6 + 0.4 * glow);
   ctx.fillRect(bar.x, bar.bottom - 3, bar.width, 3);
 }

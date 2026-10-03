@@ -262,6 +262,13 @@ export class MetronomeEngine {
     return grid.beatInBar(Math.floor(index));
   }
 
+  /** The audio time of the first click after `audioTime`; null when silent. */
+  nextBeatAfter(audioTime: number): number | null {
+    const grid = this.grid;
+    if (!this.running || !grid) return null;
+    return grid.audioTimeAt(Math.max(0, Math.floor(grid.indexAt(audioTime)) + 1));
+  }
+
   /** Top up from an external audio-render clock while page timers are throttled. */
   topUpSchedule(): void {
     this.scheduleWindow();

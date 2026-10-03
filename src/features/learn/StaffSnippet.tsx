@@ -6,6 +6,7 @@ import {
   computeScoreGeometry,
   drawScore,
   gutterWidthFor,
+  MAX_CANVAS_DPR,
   SCORE_LEAD_IN,
   SCORE_PALETTES,
   scoreEndMs,
@@ -294,10 +295,17 @@ function StaffSystemCanvas({
       const widthPx = canvas.clientWidth;
       if (widthPx === 0) return;
       const heightPx = geometry.minHeight;
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = Math.round(widthPx * dpr);
-      canvas.height = Math.round(heightPx * dpr);
-      canvas.style.height = `${heightPx}px`;
+      // Capped as the live score is: past 2× a phone's canvas is mostly cost.
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_DPR);
+      const width = Math.round(widthPx * dpr);
+      const height = Math.round(heightPx * dpr);
+      // Resized only when it has to be: setting a canvas's size throws its
+      // backing store away, and this redraws on every key the player presses.
+      if (canvas.width !== width || canvas.height !== height) {
+        canvas.width = width;
+        canvas.height = height;
+        canvas.style.height = `${heightPx}px`;
+      }
 
       const context = canvas.getContext('2d');
       if (!context) return;

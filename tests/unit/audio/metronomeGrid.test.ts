@@ -214,6 +214,18 @@ describe('MetronomeEngine', () => {
     engine.stop();
   });
 
+  it('says when the next click comes, for the beat dots to wait for', () => {
+    const { context } = stubContext(0);
+    const engine = new MetronomeEngine();
+    engine.attach(context as unknown as AudioContext);
+    expect(engine.nextBeatAfter(0)).toBeNull(); // silent
+    engine.start(constantClickGrid(0, 500, 4));
+    expect(engine.nextBeatAfter(0)).toBeCloseTo(0.5, 9);
+    expect(engine.nextBeatAfter(1.2)).toBeCloseTo(1.5, 9);
+    expect(engine.nextBeatAfter(1.5)).toBeCloseTo(2, 9);
+    engine.stop();
+  });
+
   it('lights the beat each click stands for, round a loop that is not whole bars', () => {
     const { context } = stubContext(0);
     const engine = new MetronomeEngine();

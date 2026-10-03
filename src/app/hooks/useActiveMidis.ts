@@ -1,25 +1,9 @@
-import { useCallback, useSyncExternalStore } from 'react';
-import { subscribeFrame } from '@/app/frameClock';
+import { useSyncExternalStore } from 'react';
 import { transportController } from '@/features/transport/transportController';
-import { useTrainingWaiting } from './useTransport';
 
-/**
- * Subscribe to the transport, and to every frame while `framed` — for a cue
- * that changes with time rather than on an event.
- */
-function useCueSubscribe(framed: boolean): (onStoreChange: () => void) => () => void {
-  return useCallback(
-    (onStoreChange: () => void) => {
-      const unsubscribe = transportController.subscribeState(onStoreChange);
-      const stopFrames = framed ? subscribeFrame(onStoreChange) : null;
-      return () => {
-        unsubscribe();
-        stopFrames?.();
-      };
-    },
-    [framed],
-  );
-}
+/** Training's cues change only as the transport says so. */
+const subscribeCues = (onStoreChange: () => void) =>
+  transportController.subscribeState(onStoreChange);
 
 const EMPTY_MIDIS: ReadonlySet<number> = new Set();
 let wrongCache: ReadonlySet<number> = EMPTY_MIDIS;
@@ -42,16 +26,14 @@ function wrongSnapshot(): ReadonlySet<number> {
  * unchanged, so the snapshot is stable for as long as the wait is.
  */
 export function useTrainingTargets(): ReadonlySet<number> {
-  return useSyncExternalStore(useCueSubscribe(false), () =>
-    transportController.getTrainingTargets(),
-  );
+  return useSyncExternalStore(subscribeCues, () => transportController.getTrainingTargets());
 }
 
 /**
- * Keys pressed at a wait point that were not the ones being asked for. Read on
- * the frame clock while a wait holds, because a flash expires on a timer
- * rather than on an event.
+ * Keys pressed at a wait point that were not the ones being asked for. The
+ * transport speaks up as a flash starts and again as it runs out, so nothing
+ * here has to watch the clock.
  */
 export function useTrainingWrongMidis(): ReadonlySet<number> {
-  return useSyncExternalStore(useCueSubscribe(useTrainingWaiting()), wrongSnapshot);
+  return useSyncExternalStore(subscribeCues, wrongSnapshot);
 }
