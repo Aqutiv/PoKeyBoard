@@ -423,7 +423,7 @@ describe('midiToTake: notes', () => {
     }
   });
 
-  it('leaves the notes of other channels and other tracks alone', () => {
+  it('leaves the notes of other channels alone', () => {
     const otherChannel = midiToTake(
       smf(0, 480, [
         [
@@ -435,7 +435,10 @@ describe('midiToTake: notes', () => {
       'x.mid',
     );
     expect(otherChannel.notes.map((n) => n.durationMs)).toEqual([1000]);
-    const otherTrack = midiToTake(
+  });
+
+  it('ends the channel’s notes in every track, as MIDI addresses channels', () => {
+    const take = midiToTake(
       smf(1, 480, [
         [
           [0, 0x90, 60, 100],
@@ -445,7 +448,23 @@ describe('midiToTake: notes', () => {
       ]),
       'x.mid',
     );
-    expect(otherTrack.notes.map((n) => n.durationMs)).toEqual([1000]);
+    expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
+  });
+
+  it('takes a tick’s silencing controllers before the notes struck on it', () => {
+    // Each hand's track opens with an All Notes Off on the shared channel, on
+    // the tick its first note is struck: a reset, not an end to the other's.
+    const take = midiToTake(
+      smf(1, 480, [
+        [[0, 0xb0, 123, 0], ...played(0, 72, 0, 480)],
+        [[0, 0xb0, 123, 0], ...played(0, 48, 0, 480)],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => [n.midi, n.durationMs])).toEqual([
+      [48, 500],
+      [72, 500],
+    ]);
   });
 
   it('ends a note that is never let go where its track ends', () => {
