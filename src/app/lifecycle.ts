@@ -1,4 +1,6 @@
 import { audioEngine } from '@/audio/AudioEngine';
+import { roomTailSeconds } from '@/audio/reverbImpulse';
+import { ALL_NOTES_OFF_S } from '@/audio/VoiceManager';
 import { scrubController } from '@/features/notation/scrubController';
 import { transportController } from '@/features/transport/transportController';
 import { isBusyState } from '@/features/transport/transportMachine';
@@ -26,6 +28,18 @@ class LifecycleService {
     if (this.initialized) return;
     this.initialized = true;
 
+    // Nothing left to play with the page away: once the last sound and the
+    // room's tail have died, the audio device sleeps until the page is back. A
+    // practice click left running keeps it awake, as it always has.
+    const sleepWhenQuiet = () =>
+      audioEngine.sleepAfter(
+        ALL_NOTES_OFF_S + roomTailSeconds(audioEngine.getReverbRoom()),
+        () =>
+          document.visibilityState === 'hidden' &&
+          !isBusyState(transportController.getState()) &&
+          !transportController.isMetronomeOn(),
+      );
+
     const onHidden = () => {
       const state = transportController.getState();
       const wasRecording = state === 'recording' || state === 'countIn';
@@ -37,12 +51,15 @@ class LifecycleService {
       if (wasRecording) {
         this.setMessage('recordingInterrupted');
       }
+      sleepWhenQuiet();
       // Autosave flushes via its own visibilitychange listener.
     };
 
     document.addEventListener('visibilitychange', () => {
       if (document.visibilityState === 'hidden') onHidden();
-      // On return: no automatic sound. Audio resumes with the next gesture.
+      // On return: no automatic sound — waking is silent, every note having
+      // been let go — and a key pressed straight away sounds on time.
+      else audioEngine.wake();
     });
     window.addEventListener('pagehide', onHidden);
 
@@ -51,6 +68,9 @@ class LifecycleService {
       const busy = isBusyState(transportController.getState());
       if (busy) this.acquireWakeLock();
       else this.releaseWakeLock();
+      // Background playback that comes to its end with the page still away
+      // leaves nothing to play either; its last notes ring out first.
+      if (!busy && document.visibilityState === 'hidden') sleepWhenQuiet();
     });
   }
 

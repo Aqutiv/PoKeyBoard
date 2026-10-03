@@ -2,8 +2,9 @@
  * iPhone ring/silent-switch workaround: while a looping (silent) media
  * element is playing, iOS treats the page as media playback and Web Audio
  * stays audible with the switch on silent. Activated from the audio unlock
- * gesture on touch devices only — desktops skip it so browser tabs don't
- * show a phantom speaker indicator.
+ * gesture on iPhones and iPads only: everywhere else it would be a second
+ * media pipeline running for nothing — and a phantom speaker indicator on a
+ * desktop tab.
  */
 
 let element: HTMLAudioElement | null = null;
@@ -36,10 +37,23 @@ function silentWavBlob(): Blob {
   return new Blob([buffer], { type: 'audio/wav' });
 }
 
+/**
+ * Whether this is iOS or iPadOS, where the silent switch mutes Web Audio. An
+ * iPad asks for the desktop site and reports itself as a Mac — the only Mac
+ * with a touch screen.
+ */
+export function isAppleMobile(
+  nav: Pick<Navigator, 'userAgent' | 'platform' | 'maxTouchPoints'> = navigator,
+): boolean {
+  return (
+    /iPad|iPhone|iPod/.test(nav.userAgent) ||
+    (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1)
+  );
+}
+
 /** Start (or keep) the silent playback session. Call from a user gesture. */
 export function ensurePlaybackSession(): void {
-  const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-  if (!isTouchDevice) return;
+  if (!isAppleMobile()) return;
   if (element) {
     if (element.paused) void element.play().catch(() => undefined);
     return;
