@@ -405,6 +405,7 @@ export const mg: Messages = {
     replaceExisting: 'Soloy ny rakitra efa misy',
     cancel: 'Aoka',
     import: 'Ampidiro',
+    close: 'Akatona',
   },
   importUrlDialog: {
     title: 'Ampidiro avy amin’ny rohy',

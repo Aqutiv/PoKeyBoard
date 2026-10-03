@@ -400,6 +400,7 @@ export const fr: Messages = {
     replaceExisting: 'Remplacer la prise existante',
     cancel: 'Annuler',
     import: 'Importer',
+    close: 'Fermer',
   },
   importUrlDialog: {
     title: 'Importer depuis un lien',

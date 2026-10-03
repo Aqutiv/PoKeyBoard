@@ -398,6 +398,7 @@ export const es: Messages = {
     replaceExisting: 'Reemplazar la toma existente',
     cancel: 'Cancelar',
     import: 'Importar',
+    close: 'Cerrar',
   },
   importUrlDialog: {
     title: 'Importar desde un enlace',

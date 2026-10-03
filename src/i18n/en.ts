@@ -403,6 +403,7 @@ export const en: Messages = {
     replaceExisting: 'Replace the existing take',
     cancel: 'Cancel',
     import: 'Import',
+    close: 'Close',
   },
   importUrlDialog: {
     title: 'Import from a link',

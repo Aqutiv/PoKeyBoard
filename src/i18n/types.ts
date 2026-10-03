@@ -438,6 +438,8 @@ export interface Messages {
     replaceExisting: string;
     cancel: string;
     import: string;
+    /** Closes the alert saying why a confirmed import could not be stored. */
+    close: string;
   };
   importUrlDialog: {
     title: string;
