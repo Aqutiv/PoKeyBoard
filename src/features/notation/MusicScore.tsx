@@ -6,7 +6,7 @@ import { useMessages } from '@/i18n/i18nContext';
 import { playableLoop } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import { writtenNotes } from '@/domain/noteEvents';
-import type { QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
+import type { NoteEvent, QuantizationSetting, TempoSettings } from '@/domain/takeTypes';
 import { useTakeStore } from '@/state/useTakeStore';
 import { midiToNoteName } from '@/utils/midi';
 import { detectFifths } from './keyDetection';
@@ -23,13 +23,17 @@ import {
 import {
   computeScoreGeometry,
   drawScore,
+  drawScoreBase,
+  drawScoreOverlay,
   gutterWidthFor,
+  MAX_CANVAS_DPR,
   SCORE_LEAD_IN,
   SCORE_PALETTES,
   type ScoreGeometry,
   type ScoreView,
 } from './scoreRenderer';
 import { scrubController } from './scrubController';
+import { notesMissingFrom, useCoalesced } from './useCoalesced';
 import type { TransportState } from '@/features/transport/transportMachine';
 import './notation.css';
 
@@ -97,8 +101,15 @@ export function MusicScore() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const state = useTransportState();
-  const notes = useTakeStore((s) => s.take.notes);
-  const pedalEvents = useTakeStore((s) => s.take.pedalEvents);
+  const takeNotes = useTakeStore((s) => s.take.notes);
+  const takePedals = useTakeStore((s) => s.take.pedalEvents);
+  // Laid out at most a few times a second while a recording grows (see
+  // `useCoalesced`); a note let go in between is drawn as it was while held,
+  // until the next layout engraves it.
+  const recording = state === 'recording';
+  const notes = useCoalesced(takeNotes, recording);
+  const pedalEvents = useCoalesced(takePedals, recording);
+  const unlaidNotes = useMemo(() => notesMissingFrom(takeNotes, notes), [takeNotes, notes]);
   const tempo = useTakeStore((s) => s.take.tempo);
   const zoom = useTakeStore((s) => s.take.display.zoom);
   // Only a loop playback will play gets shaded; see `playableLoop`.
@@ -161,10 +172,18 @@ export function MusicScore() {
   /** A Safari pinch under way: the zoom it began at and the moment it holds. */
   const gestureRef = useRef<{ zoom0: number; anchorMs: number } | null>(null);
   const ghostsRef = useRef<LiveGhost[]>([]);
+  const unlaidRef = useRef<readonly NoteEvent[]>(unlaidNotes);
   const scrollMsRef = useRef(0);
   /** Design pixels → screen pixels; written by the render loop. */
   const fitRef = useRef(1);
   const lastSignatureRef = useRef('');
+  /**
+   * The score as `drawScoreBase` last drew it while standing still, and what it
+   * showed then: ghost notes fading over a still score are drawn over a copy of
+   * it, rather than the whole score being drawn again every frame they fade.
+   */
+  const baseCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const lastBaseSignatureRef = useRef('');
   const durationRef = useRef(0);
   const dragRef = useRef<DragState | null>(null);
   const inertiaRef = useRef<InertiaState | null>(null);
@@ -187,6 +206,10 @@ export function MusicScore() {
     wakeRef.current();
   }, [state]);
   useEffect(() => {
+    unlaidRef.current = unlaidNotes;
+    wakeRef.current();
+  }, [unlaidNotes]);
+  useEffect(() => {
     tempoRef.current = tempo;
     wakeRef.current();
   }, [tempo]);
@@ -205,7 +228,7 @@ export function MusicScore() {
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
     const apply = (width: number, height: number) => {
-      const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+      const dpr = Math.min(window.devicePixelRatio || 1, MAX_CANVAS_DPR);
       sizeRef.current = { width, height, dpr };
       canvas.width = Math.max(1, Math.round(width * dpr));
       canvas.height = Math.max(1, Math.round(height * dpr));
@@ -248,6 +271,25 @@ export function MusicScore() {
     const wake = () => {
       if (raf === 0) raf = requestAnimationFrame(tick);
     };
+    /** The still score's offscreen copy, sized to `canvas`; null where none can be had. */
+    const stillBase = (canvas: HTMLCanvasElement): CanvasRenderingContext2D | null => {
+      const base = (baseCanvasRef.current ??= document.createElement('canvas'));
+      if (base.width !== canvas.width || base.height !== canvas.height) {
+        base.width = canvas.width;
+        base.height = canvas.height;
+        lastBaseSignatureRef.current = '';
+      }
+      return base.getContext('2d');
+    };
+    /** Moving, the copy would be out of date every frame: give its memory back. */
+    const releaseBase = () => {
+      const base = baseCanvasRef.current;
+      if (base && base.width > 0) {
+        base.width = 0;
+        base.height = 0;
+      }
+      lastBaseSignatureRef.current = '';
+    };
     /** Draw if anything changed; true while there is more to come. */
     const draw = (): boolean => {
       const canvas = canvasRef.current;
@@ -281,7 +323,9 @@ export function MusicScore() {
       const now = performance.now();
       ghostsRef.current = ghostsRef.current.filter((g) => now - g.bornAt < GHOST_LIFE_MS);
       const ghosts = ghostsRef.current;
-      const openNotes = transportController.getOpenRecordingNotes();
+      const held = transportController.getOpenRecordingNotes();
+      const unlaid = unlaidRef.current;
+      const openNotes = unlaid.length === 0 ? held : [...unlaid, ...held];
 
       const box = layoutBoxRef.current;
       // Everything below is in design pixels; `fit` is the only bridge to the
@@ -311,7 +355,7 @@ export function MusicScore() {
       }
 
       const theme = themeController.getResolved();
-      const signature = [
+      const baseSignature = [
         currentState,
         playheadMs.toFixed(1),
         scrollMsRef.current.toFixed(1),
@@ -320,19 +364,18 @@ export function MusicScore() {
         height,
         fit.toFixed(3),
         pxPerMs.toFixed(5),
-        ghosts.length,
         openNotes.length,
         theme,
         loopRef.current?.startMs,
         loopRef.current?.endMs,
       ].join('|');
+      const signature = `${baseSignature}|${ghosts.length}`;
       const animating = ghosts.length > 0 || openNotes.length > 0;
       const more =
         moving || currentState === 'scrubbing' || inertiaRef.current !== null || animating;
       if (signature === lastSignatureRef.current && !animating) return more;
       lastSignatureRef.current = signature;
 
-      ctx.setTransform(dpr * fit, 0, 0, dpr * fit, 0, 0);
       const view: ScoreView = {
         widthPx: viewWidth,
         heightPx: height / fit,
@@ -344,24 +387,41 @@ export function MusicScore() {
         dynamicsRow: box.geometry.dynamicsRow,
         gutterPx,
       };
-      drawScore(
-        ctx,
-        view,
-        {
-          layout: box.layout,
-          timeSignature: tempoRef.current.timeSignature,
-          keySignature: keyRef.current,
-          playheadMs,
-          recording: currentState === 'recording',
-          openNotes,
-          ghosts: ghosts.map((g) => ({
-            midi: g.midi,
-            life: 1 - (now - g.bornAt) / GHOST_LIFE_MS,
-          })),
-          loop: loopRef.current,
-        },
-        SCORE_PALETTES[theme],
-      );
+      const input = {
+        layout: box.layout,
+        timeSignature: tempoRef.current.timeSignature,
+        keySignature: keyRef.current,
+        playheadMs,
+        recording: currentState === 'recording',
+        openNotes,
+        ghosts: ghosts.map((g) => ({
+          midi: g.midi,
+          life: 1 - (now - g.bornAt) / GHOST_LIFE_MS,
+        })),
+        loop: loopRef.current,
+      };
+      const palette = SCORE_PALETTES[theme];
+      const still =
+        !more || (animating && !moving && currentState !== 'scrubbing' && !inertiaRef.current);
+      const base = still ? stillBase(canvas) : null;
+      if (base) {
+        // Standing still: the score itself is drawn once, and copied whole
+        // (pixel for pixel) under the ghosts each frame they fade.
+        if (lastBaseSignatureRef.current !== baseSignature) {
+          base.setTransform(dpr * fit, 0, 0, dpr * fit, 0, 0);
+          drawScoreBase(base, view, input, palette);
+          lastBaseSignatureRef.current = baseSignature;
+        }
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(base.canvas, 0, 0);
+        ctx.setTransform(dpr * fit, 0, 0, dpr * fit, 0, 0);
+        drawScoreOverlay(ctx, view, input, palette);
+        return more;
+      }
+      releaseBase();
+      ctx.setTransform(dpr * fit, 0, 0, dpr * fit, 0, 0);
+      drawScore(ctx, view, input, palette);
       return more;
     };
     wakeRef.current = wake;

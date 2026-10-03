@@ -299,6 +299,20 @@ describe('training playback', () => {
     expect(transportController.getTrainingWrongMidis().size).toBe(0);
   });
 
+  it("says when a wrong key's flash runs out, so nothing has to poll for it", () => {
+    transportController.play();
+    runTo(350);
+    const heard = vi.fn();
+    const unsubscribe = transportController.subscribeState(heard);
+    press(65);
+    expect(transportController.getTrainingWrongMidis()).toEqual(new Set([65]));
+    heard.mockClear();
+    vi.advanceTimersByTime(300);
+    expect(heard).toHaveBeenCalled();
+    expect(transportController.getTrainingWrongMidis().size).toBe(0);
+    unsubscribe();
+  });
+
   it('does not echo the notes the user just played, and gates the next one', () => {
     transportController.play();
     runTo(350);

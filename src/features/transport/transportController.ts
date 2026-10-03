@@ -144,6 +144,7 @@ export class TransportController {
   private trainingInputUnsub: (() => void) | null = null;
   /** Wrong keys pressed at a wait point, midi → when the flash expires. */
   private readonly trainingWrong = new Map<number, number>();
+  private wrongExpiryTimer: ReturnType<typeof setTimeout> | null = null;
   /**
    * Notes the user has just played live, so the take must not echo them. They
    * are keyed by the pass of the run they fall in (see `TransportClock`), since
@@ -866,6 +867,7 @@ export class TransportController {
       } else {
         // Wrong keys sound and are flagged, but never block the way forward.
         this.trainingWrong.set(event.midi, Date.now() + WRONG_FLASH_MS);
+        this.armWrongExpiry();
       }
       for (const listener of this.stateListeners) listener();
       if (this.trainingSatisfied.size >= gate.midis.size) this.resumeFromTrainingGate(gate);
@@ -879,6 +881,26 @@ export class TransportController {
     if (event.audioTime < dueAt - EARLY_PRESS_MS / 1000) return;
     this.trainingSatisfied.add(event.midi);
     if (this.trainingSatisfied.size >= gate.midis.size) this.passTrainingGate(gate);
+  }
+
+  /**
+   * Tell listeners when the next wrong-key flash runs out, so the keys can go
+   * back without anything polling for it every frame of a wait.
+   */
+  private armWrongExpiry(): void {
+    if (this.wrongExpiryTimer !== null) clearTimeout(this.wrongExpiryTimer);
+    this.wrongExpiryTimer = null;
+    if (this.trainingWrong.size === 0) return;
+    const next = Math.min(...this.trainingWrong.values());
+    this.wrongExpiryTimer = setTimeout(
+      () => {
+        this.wrongExpiryTimer = null;
+        for (const listener of this.stateListeners) listener();
+        // The listeners have read the flashes, dropping the ones run out.
+        this.armWrongExpiry();
+      },
+      Math.max(0, next - Date.now()) + 1,
+    );
   }
 
   private resumeFromTrainingGate(gate: TrainingGate): void {
@@ -914,6 +936,7 @@ export class TransportController {
     this.trainingWaiting = false;
     this.trainingSatisfied.clear();
     this.trainingWrong.clear();
+    this.armWrongExpiry();
   }
 
   private clearTrainingGate(): void {

@@ -297,6 +297,11 @@ button {
   background: var(--surface-0);
   color: var(--text-dim);
   font-size: 14px;
+}
+
+/* Only the copy in index.html fades in: React's, which replaces it, must not
+   blink back to transparent and fade in a second time. */
+.app-boot--static {
   animation: app-boot-in 400ms ease;
 }
 

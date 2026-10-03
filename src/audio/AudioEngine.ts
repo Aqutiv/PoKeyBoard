@@ -11,7 +11,7 @@ import type {
   SampleLoadProgress,
   ScheduledNoteEvent,
 } from './audioTypes';
-import { ensurePlaybackSession } from './iosAudioSession';
+import { ensurePlaybackSession, releasePlaybackSession } from './iosAudioSession';
 import {
   DEFAULT_PIANO_INSTRUMENT_ID,
   pianoInstrument,
@@ -98,6 +98,16 @@ export class AudioEngine {
   private readonly inputListeners = new Set<(event: InputNoteEvent) => void>();
   private readonly schedulerTickListeners = new Set<() => void>();
   private schedulerTicker: AudioWorkletNode | null = null;
+  /** Whether the ticker is wired up and pulsing; see `updateSchedulerTicker`. */
+  private schedulerTickerOn = false;
+  /** The sleep asked for while the page is away; see `sleepAfter`. */
+  private sleepRequest: { tailSeconds: number; stillWanted: () => boolean } | null = null;
+  /** The next look at whether that sleep can come yet. */
+  private sleepTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Whether the context is suspended because `sleepAfter` put it to sleep. */
+  private asleep = false;
+  /** The next-press unlock `wake` armed, until a press uses it. */
+  private pendingGestureUnlock: (() => void) | null = null;
   private currentActiveNotes: ReadonlySet<number> = new Set();
   private currentActiveVelocities: ReadonlyMap<number, number> = new Map();
   /**
@@ -482,6 +492,7 @@ export class AudioEngine {
   async unlockFromUserGesture(): Promise<void> {
     this.initialize();
     if (!this.context) return;
+    this.asleep = false;
     // Keep Web Audio audible with the iPhone silent switch engaged.
     ensurePlaybackSession();
     if (this.context.state !== 'running') {
@@ -491,6 +502,9 @@ export class AudioEngine {
         console.warn('AudioContext resume failed:', error);
       }
     }
+    // Woken by a note with the page still away (a MIDI keyboard, say): it may
+    // sleep again once that has rung out.
+    if (this.sleepRequest && this.sleepTimer === null) this.armSleep();
     // A one-frame silent buffer nudges iOS into actually opening the output.
     if (this.context.state === 'running') {
       const silent = this.context.createBuffer(1, 1, this.context.sampleRate);
@@ -668,7 +682,30 @@ export class AudioEngine {
   /** Timing pulses which continue while ordinary page timers are throttled. */
   subscribeSchedulerTick(listener: () => void): () => void {
     this.schedulerTickListeners.add(listener);
-    return () => this.schedulerTickListeners.delete(listener);
+    this.updateSchedulerTicker();
+    return () => {
+      this.schedulerTickListeners.delete(listener);
+      this.updateSchedulerTicker();
+    };
+  }
+
+  /**
+   * Pulse only while something listens. The worklet would otherwise wake the
+   * page 40 times a second for as long as the app is open — idle, or hidden —
+   * which keeps an old machine's CPU from ever resting. Unplugged, it is not
+   * rendered at all; told to stop, it stays quiet wherever a browser renders
+   * it anyway.
+   */
+  private updateSchedulerTicker(): void {
+    const ticker = this.schedulerTicker;
+    const context = this.context;
+    if (!ticker || !context) return;
+    const wanted = this.schedulerTickListeners.size > 0;
+    if (wanted === this.schedulerTickerOn) return;
+    this.schedulerTickerOn = wanted;
+    ticker.port.postMessage(wanted);
+    if (wanted) ticker.connect(context.destination);
+    else ticker.disconnect();
   }
 
   private async initializeSchedulerTicker(context: AudioContext): Promise<void> {
@@ -683,9 +720,11 @@ export class AudioEngine {
         for (const listener of this.schedulerTickListeners) listener();
       };
       // The processor emits silence, but connecting it keeps it participating
-      // in the render graph (and therefore ticking) in the background.
-      ticker.connect(context.destination);
+      // in the render graph (and therefore ticking) in the background. It is
+      // connected only while a listener wants pulses.
       this.schedulerTicker = ticker;
+      this.schedulerTickerOn = false;
+      this.updateSchedulerTicker();
     } catch (error) {
       // The normal setInterval scheduler remains available as a fallback.
       console.warn('Background playback scheduler unavailable:', error);
@@ -772,14 +811,110 @@ export class AudioEngine {
     await this.unlockFromUserGesture();
   }
 
+  /**
+   * Put the audio device to sleep once whatever still sounds has died away,
+   * if `stillWanted()` agrees then. `tailSeconds` is how long the last sound
+   * takes to die (a release and the room's reverb): the device sleeps only a
+   * whole such stretch after the last voice ended, so a note still ringing — a
+   * take's last chord, say, playing out in the background — is heard to its
+   * end, tail and all. A suspended context costs nothing: no
+   * render thread, no convolver, no output; and nothing is frozen mid-fade, to
+   * be heard again on waking. Only silence is skipped.
+   */
+  sleepAfter(tailSeconds: number, stillWanted: () => boolean): void {
+    this.cancelSleep();
+    this.sleepRequest = { tailSeconds, stillWanted };
+    this.armSleep();
+  }
+
+  /**
+   * Wait for the stretch of silence the standing `sleepRequest` asks for, then
+   * sleep. Notes played meanwhile only put it off: they are voices, and the
+   * device sleeps only once a whole stretch has passed since the last. The
+   * request stands until the page is back (`wake`), so a note that wakes the
+   * device with the page still away is followed by a sleep of its own.
+   */
+  private armSleep(): void {
+    const request = this.sleepRequest;
+    const context = this.context;
+    if (!request || !context || context.state !== 'running') return;
+    const { tailSeconds, stillWanted } = request;
+    const check = () => {
+      this.sleepTimer = null;
+      if (this.context !== context || context.state !== 'running' || !stillWanted()) return;
+      // A voice sounding, or one ended less than a tail ago — however short it
+      // was, between two looks — puts the sleep off until that tail is out.
+      const voices = this.voices;
+      const quietFor = voices ? context.currentTime - voices.lastVoiceEndedAt : Infinity;
+      const waitS = voices && voices.voiceCount > 0 ? tailSeconds : tailSeconds - quietFor;
+      if (waitS > 0) {
+        this.sleepTimer = setTimeout(check, waitS * 1000);
+        return;
+      }
+      this.asleep = true;
+      // The iPhone's silent media session would keep the device busy too.
+      releasePlaybackSession();
+      context.suspend().catch(() => {
+        this.asleep = false;
+      });
+    };
+    this.sleepTimer = setTimeout(check, tailSeconds * 1000);
+  }
+
+  /**
+   * Call off a pending sleep, and wake a context `sleepAfter` put to sleep.
+   * Silent — nothing sounded when it slept — so it may run as the page comes
+   * back, ahead of the first key, which then sounds on time. The next press
+   * unlocks the audio as well: a browser that wants a gesture to resume gets
+   * one, and the iPhone's silent-switch session, stopped for the sleep, can
+   * only start again from one.
+   */
+  wake(): void {
+    this.cancelSleep();
+    if (!this.asleep) return;
+    this.asleep = false;
+    const context = this.context;
+    if (!context || context.state === 'closed') return;
+    void context.resume().catch(() => undefined);
+    this.unlockOnNextGesture();
+  }
+
+  private unlockOnNextGesture(): void {
+    if (this.pendingGestureUnlock) return;
+    const unlock = () => {
+      window.removeEventListener('pointerdown', unlock, true);
+      window.removeEventListener('keydown', unlock, true);
+      this.pendingGestureUnlock = null;
+      void this.unlockFromUserGesture();
+    };
+    this.pendingGestureUnlock = unlock;
+    window.addEventListener('pointerdown', unlock, true);
+    window.addEventListener('keydown', unlock, true);
+  }
+
+  private cancelSleep(): void {
+    this.sleepRequest = null;
+    if (this.sleepTimer === null) return;
+    clearTimeout(this.sleepTimer);
+    this.sleepTimer = null;
+  }
+
   dispose(): void {
     // A switch still decoding has no context left to take over in.
     this.switchGeneration += 1;
     this.pendingSwitch = null;
     this.stopWatchingSwitchProgress();
     this.setSwitchState({ pending: null, failed: null, progress: 0 });
+    this.cancelSleep();
+    this.asleep = false;
+    if (this.pendingGestureUnlock) {
+      window.removeEventListener('pointerdown', this.pendingGestureUnlock, true);
+      window.removeEventListener('keydown', this.pendingGestureUnlock, true);
+      this.pendingGestureUnlock = null;
+    }
     this.schedulerTicker?.disconnect();
     this.schedulerTicker = null;
+    this.schedulerTickerOn = false;
     this.voices?.dispose();
     this.graph?.dispose();
     void this.context?.close();

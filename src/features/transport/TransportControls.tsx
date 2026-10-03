@@ -1,7 +1,12 @@
 import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { TooltipButton } from '@/ui/TooltipButton';
 import { useCallback } from 'react';
-import { usePlayheadMs, useTrainingWaiting, useTransportState } from '@/app/hooks/useTransport';
+import {
+  usePlayhead,
+  usePlayheadMs,
+  useTrainingWaiting,
+  useTransportState,
+} from '@/app/hooks/useTransport';
 import { usePianoPlayable, usePianoReady } from '@/app/hooks/useAudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -20,6 +25,60 @@ const strokeProps = {
   stroke: 'none',
 } as const;
 
+const atStart = (ms: number) => ms === 0;
+
+/**
+ * The time readout. On its own, so that the playhead, which changes ten times
+ * a second during playback, renders this and not every control beside it.
+ */
+function PlayheadReadout({ durationMs }: { durationMs: number }) {
+  const playheadMs = usePlayheadMs();
+  return (
+    <span className="transport__time" aria-live="off">
+      {formatDurationMs(playheadMs, true)}
+      {/* Dropped on a phone, where the row is needed for the mode select
+          and the seek slider already shows how much take there is. */}
+      <span className="transport__total"> / {formatDurationMs(durationMs, true)}</span>
+    </span>
+  );
+}
+
+/** The seek slider, rendered with the playhead for the same reason. */
+function SeekSlider({
+  durationMs,
+  disabled,
+  playing,
+}: {
+  durationMs: number;
+  disabled: boolean;
+  playing: boolean;
+}) {
+  const m = useMessages();
+  const playheadMs = usePlayheadMs();
+  const onSeek = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const value = Number(event.target.value);
+      if (playing) transportController.pause();
+      transportController.seek(value);
+    },
+    [playing],
+  );
+  return (
+    <input
+      type="range"
+      className="transport__seek"
+      min={0}
+      max={Math.max(durationMs, 1)}
+      step={10}
+      value={Math.min(playheadMs, durationMs)}
+      onChange={onSeek}
+      disabled={disabled}
+      aria-label={m.transport.seekPosition}
+      aria-valuetext={formatDurationMs(playheadMs, true)}
+    />
+  );
+}
+
 export function TransportControls() {
   const m = useMessages();
   const desktop = useMediaQuery('(min-width: 900px) and (min-height: 501px)');
@@ -28,9 +87,10 @@ export function TransportControls() {
   // Play carries on through a change of piano; a recording waits for the new one.
   const pianoPlayable = usePianoPlayable();
   const pianoReady = usePianoReady();
-  const playheadMs = usePlayheadMs();
-  const take = useTakeStore((s) => s.take);
-  const durationMs = effectivePlaybackDurationMs(take);
+  const playheadAtStart = usePlayhead(atStart);
+  // A number, so a note recorded or an edit renders the controls only when it
+  // changes how long the take plays.
+  const durationMs = useTakeStore((s) => effectivePlaybackDurationMs(s.take));
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
   const canUndoPass = useTakeStore(
     (s) => s.lastPassNoteIds.length > 0 || s.lastPassPedalEvents.length > 0,
@@ -67,15 +127,6 @@ export function TransportControls() {
     if (playing) transportController.pause();
     else transportController.play();
   }, [playing]);
-
-  const onSeek = useCallback(
-    (event: React.ChangeEvent<HTMLInputElement>) => {
-      const value = Number(event.target.value);
-      if (playing) transportController.pause();
-      transportController.seek(value);
-    },
-    [playing],
-  );
 
   const seekDisabled = recording || durationMs === 0;
 
@@ -131,19 +182,14 @@ export function TransportControls() {
           className="transport__btn"
           aria-label={m.transport.stop}
           onClick={() => transportController.stop()}
-          disabled={state === 'idle' && playheadMs === 0}
+          disabled={state === 'idle' && playheadAtStart}
         >
           <svg viewBox="0 0 24 24" aria-hidden="true" {...strokeProps}>
             <rect x="6" y="6" width="12" height="12" rx="1" />
           </svg>
         </TooltipButton>
 
-        <span className="transport__time" aria-live="off">
-          {formatDurationMs(playheadMs, true)}
-          {/* Dropped on a phone, where the row is needed for the mode select
-              and the seek slider already shows how much take there is. */}
-          <span className="transport__total"> / {formatDurationMs(durationMs, true)}</span>
-        </span>
+        <PlayheadReadout durationMs={durationMs} />
 
         {canUndoPass && !recording && !playing ? (
           <button
@@ -160,18 +206,7 @@ export function TransportControls() {
       </div>
 
       <div className="transport__seek-row">
-        <input
-          type="range"
-          className="transport__seek"
-          min={0}
-          max={Math.max(durationMs, 1)}
-          step={10}
-          value={Math.min(playheadMs, durationMs)}
-          onChange={onSeek}
-          disabled={seekDisabled}
-          aria-label={m.transport.seekPosition}
-          aria-valuetext={formatDurationMs(playheadMs, true)}
-        />
+        <SeekSlider durationMs={durationMs} disabled={seekDisabled} playing={playing} />
         {/* Practice controls: playback only, so a recording pass leaves them be. */}
         <SpeedMenu disabled={recording || !hasNotes} />
         <LoopButton disabled={recording || !hasNotes} />

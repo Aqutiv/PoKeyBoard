@@ -32,6 +32,19 @@ const getPlayheadSnapshot = () =>
  * in its own rAF loop instead of going through React state.
  */
 export function usePlayheadMs(): number {
+  return usePlayhead(identity);
+}
+
+const identity = (ms: number) => ms;
+
+/**
+ * What `select` makes of the playhead (as `usePlayheadMs` reads it), rendering
+ * only when that changes: a control that needs only whether the playhead is at
+ * the start, or the tempo it falls in, is not rendered ten times a second for
+ * a value it does not show. `select` should be stable (useCallback) and return
+ * a primitive.
+ */
+export function usePlayhead<T>(select: (playheadMs: number) => T): T {
   const state = useTransportState();
   const moving = state === 'playing' || state === 'recording' || state === 'countIn';
 
@@ -47,5 +60,5 @@ export function usePlayheadMs(): number {
     [moving],
   );
 
-  return useSyncExternalStore(subscribePlayhead, getPlayheadSnapshot);
+  return useSyncExternalStore(subscribePlayhead, () => select(getPlayheadSnapshot()));
 }

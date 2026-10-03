@@ -179,3 +179,30 @@ describe('isPedalDownAt', () => {
     expect(extended!.durationMs).toBe(250); // rings to the 400ms pedal-up
   });
 });
+
+describe('the pedalled end, asked for again', () => {
+  const notes: NoteEvent[] = [
+    { id: 'a', midi: 60, startMs: 0, durationMs: 500, velocity: 0.7 },
+    { id: 'b', midi: 64, startMs: 1_000, durationMs: 500, velocity: 0.7 },
+  ];
+  const pedals: PedalEvent[] = [
+    { atMs: 900, down: true },
+    { atMs: 4_000, down: false },
+  ];
+
+  it('answers the same pair of arrays the same way, and a new pair afresh', () => {
+    const take = createEmptyTake({ notes, pedalEvents: pedals, durationMs: 1_500 });
+    expect(effectivePlaybackDurationMs(take)).toBe(4_000);
+    expect(effectivePlaybackDurationMs(take)).toBe(4_000);
+    // A take keeps its arrays when only its stored length changes.
+    expect(effectivePlaybackDurationMs({ ...take, durationMs: 9_000 })).toBe(9_000);
+    // New arrays, new answer.
+    const lifted = [
+      { atMs: 900, down: true },
+      { atMs: 2_000, down: false },
+    ];
+    expect(effectivePlaybackDurationMs({ ...take, pedalEvents: lifted })).toBe(2_000);
+    const later = [...notes, { id: 'c', midi: 67, startMs: 5_000, durationMs: 800, velocity: 0.7 }];
+    expect(effectivePlaybackDurationMs({ ...take, notes: later })).toBe(5_800);
+  });
+});

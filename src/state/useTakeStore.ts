@@ -3,8 +3,8 @@ import { audioEngine } from '@/audio/AudioEngine';
 import {
   computeTakeDurationMs,
   createEmptyTake,
+  mergeNotes,
   removeNotesByIds,
-  sortNotes,
 } from '@/domain/noteEvents';
 import {
   reverbRoomOf,
@@ -123,7 +123,7 @@ export const useTakeStore = create<TakeStoreState>()((set) => ({
 
   appendRecordedNotes: (notes, pedals, passNoteIds) =>
     set((state) => {
-      const mergedNotes = sortNotes([...state.take.notes, ...notes]);
+      const mergedNotes = mergeNotes(state.take.notes, notes);
       const mergedPedals = [...state.take.pedalEvents, ...pedals].sort(
         (a, b) => a.atMs - b.atMs || Number(a.down) - Number(b.down),
       );
