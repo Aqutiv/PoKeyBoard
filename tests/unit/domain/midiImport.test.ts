@@ -338,6 +338,58 @@ describe('midiToTake: notes', () => {
     }
   });
 
+  it('ends every note a channel holds at an All Notes Off (CC123)', () => {
+    // C4 struck and never let go, a CC123, then C4 struck and let go again:
+    // without the controller, the one note-off would end the first strike.
+    const take = midiToTake(
+      smf(0, 480, [[[0, 0x90, 60, 100], [480, 0xb0, 123, 0], ...played(0, 60, 960, 1440)]]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => [n.startMs, n.durationMs])).toEqual([
+      [0, 500],
+      [1000, 500],
+    ]);
+  });
+
+  it('ends every note a channel holds at an All Sound Off (CC120) too', () => {
+    const take = midiToTake(
+      smf(0, 480, [
+        [[0, 0x92, 60, 100], [0, 0x92, 64, 100], [480, 0xb2, 120, 0], ...played(2, 60, 960, 1440)],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => [n.midi, n.startMs, n.durationMs])).toEqual([
+      [60, 0, 500],
+      [64, 0, 500],
+      [60, 1000, 500],
+    ]);
+  });
+
+  it('leaves the notes of other channels and other tracks alone', () => {
+    const otherChannel = midiToTake(
+      smf(0, 480, [
+        [
+          [0, 0x90, 60, 100],
+          [480, 0xb1, 123, 0],
+          [960, 0x80, 60, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(otherChannel.notes.map((n) => n.durationMs)).toEqual([1000]);
+    const otherTrack = midiToTake(
+      smf(1, 480, [
+        [
+          [0, 0x90, 60, 100],
+          [960, 0x80, 60, 0],
+        ],
+        [[480, 0xb0, 123, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(otherTrack.notes.map((n) => n.durationMs)).toEqual([1000]);
+  });
+
   it('ends a note that is never let go where its track ends', () => {
     const take = midiToTake(smf(0, 480, [[[0, 0x90, 60, 100], ...played(0, 64, 0, 960)]]), 'x.mid');
     expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1000);

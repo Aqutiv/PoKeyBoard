@@ -34,6 +34,12 @@ export function isMidiFileName(name: string): boolean {
 /** General MIDI keeps channel 10 (9 counted from zero) for drums. */
 const DRUM_CHANNEL = 9;
 const SUSTAIN_CONTROLLER = 64;
+/**
+ * All Sound Off and All Notes Off: the two controllers that end every note a
+ * channel holds, as `features/keyboard/midiInput.ts` treats them live.
+ */
+const ALL_SOUND_OFF_CONTROLLER = 120;
+const ALL_NOTES_OFF_CONTROLLER = 123;
 /** A sustain pedal is down from this value up, as General MIDI reads it. */
 const PEDAL_DOWN_FROM = 64;
 
@@ -383,7 +389,10 @@ interface OpenStrikes {
  * Every note, a note-on paired with the first note-off for the same key on the
  * same channel of the same track (first in, first out, so a key struck again
  * before it was let go keeps both strikes). A note-on at velocity 0 is a
- * note-off, as MIDI says. A note never let go ends where its track does.
+ * note-off, as MIDI says. All Sound Off and All Notes Off end every note their
+ * channel holds in that track, there and then — the sustain pedal is its own
+ * controller and is left alone, so a note it holds still rings. A note never
+ * let go ends where its track does.
  */
 function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
   const notes: TickNote[] = [];
@@ -391,8 +400,27 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
   let seq = 0;
   smf.tracks.forEach((track, trackIndex) => {
     const open = new Map<number, OpenStrikes>();
+    /** End every strike still open on one key, at `endTick`, and empty its queue. */
+    const endAll = (queue: OpenStrikes, endTick: number): void => {
+      for (let i = queue.head; i < queue.starts.length; i += 1) {
+        notes.push({ ...(queue.starts[i] as Omit<TickNote, 'endTick'>), endTick });
+      }
+      queue.starts = [];
+      queue.head = 0;
+    };
     for (const event of track.events) {
       if (event.type !== 'channel') continue;
+      if (
+        event.command === 0xb0 &&
+        (event.data1 === ALL_SOUND_OFF_CONTROLLER || event.data1 === ALL_NOTES_OFF_CONTROLLER) &&
+        event.channel !== DRUM_CHANNEL
+      ) {
+        for (let midi = 0; midi < 128; midi += 1) {
+          const queue = open.get(event.channel * 128 + midi);
+          if (queue) endAll(queue, event.tick);
+        }
+        continue;
+      }
       const isOn = event.command === 0x90 && event.data2 > 0;
       const isOff = event.command === 0x80 || (event.command === 0x90 && event.data2 === 0);
       if (!isOn && !isOff) continue;
@@ -429,11 +457,7 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
         queue.head = 0;
       }
     }
-    for (const queue of open.values()) {
-      for (let i = queue.head; i < queue.starts.length; i += 1) {
-        notes.push({ ...(queue.starts[i] as Omit<TickNote, 'endTick'>), endTick: track.endTick });
-      }
-    }
+    for (const queue of open.values()) endAll(queue, track.endTick);
   });
   return { notes, drumNotes };
 }
