@@ -680,6 +680,24 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
   return pedals;
 }
 
+/**
+ * At most as many pedal changes as a take holds (the note limit caps them too).
+ * A file may change pedal more often than that — a pedal hovering about the
+ * half-way point through a long recording — and is still worth opening: the
+ * changes past the limit are left out, as tempo changes past theirs are, and
+ * the pedal is let up where they stop rather than held for the rest of the
+ * piece. The changes alternate, a press after a release and a release after a
+ * press, so dropping a last press leaves a release last.
+ */
+function withinPedalLimit(
+  pedals: { atMs: number; down: boolean }[],
+): { atMs: number; down: boolean }[] {
+  if (pedals.length <= MAX_NOTE_COUNT) return pedals;
+  const kept = pedals.slice(0, MAX_NOTE_COUNT);
+  if (kept[kept.length - 1]?.down === true) kept.pop();
+  return kept;
+}
+
 // ---------------------------------------------------------------------------
 
 /**
@@ -747,7 +765,7 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
         staff: staff(note),
       })),
       nextSeq: notes.length,
-      pedals: collectPedal(smf, msAtTick),
+      pedals: withinPedalLimit(collectPedal(smf, msAtTick)),
       tempoMap: createTakeTempoMap({ bpm: base, timeSignature: meter, changes }),
       timeSignature: meter,
       keySignature: keyOf?.fifths ?? null,

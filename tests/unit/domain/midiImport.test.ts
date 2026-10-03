@@ -625,6 +625,16 @@ describe('midiToTake: pedal', () => {
     expect(up.pedalEvents).toEqual([]);
   });
 
+  it('keeps the pedal changes a take can hold, and lets it up where they stop', () => {
+    // One note under more pedal changes than a take holds, a tick apart.
+    const changes: Ev[] = [];
+    for (let i = 0; i < MAX_NOTE_COUNT + 2; i += 1) changes.push(pedal(0, i, i % 2 === 0));
+    const take = midiToTake(smf(0, 480, [[...changes, ...played(0, 60, 0, 480)]]), 'x.mid');
+    expect(take.pedalEvents.length).toBeLessThanOrEqual(MAX_NOTE_COUNT);
+    expect(take.pedalEvents.at(-1)?.down).toBe(false);
+    expect(() => parseTakeJson(take)).not.toThrow();
+  });
+
   it('lets the pedal up at a Reset All Controllers (CC121)', () => {
     const take = midiToTake(
       smf(0, 480, [[pedal(0, 0, true), [480, 0xb0, 121, 0], ...played(0, 60, 0, 960)]]),
