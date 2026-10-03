@@ -18,7 +18,7 @@ const SCORE_XML =
  * A type 0 MIDI file named "Linked Melody": two quarter notes at ♩=120,
  * written byte by byte so the test does not lean on the exporter.
  */
-function midiBytes(): Uint8Array {
+function midiBytes(): Uint8Array<ArrayBuffer> {
   const title = [...new TextEncoder().encode('Linked Melody')];
   const events = [
     [0x00, 0xff, 0x03, title.length, ...title],
@@ -201,6 +201,49 @@ describe('MIDI files', () => {
     await expect(
       previewImportScoreBytes(new TextEncoder().encode('<score-partwise'), 'song.musicxml'),
     ).rejects.toBeInstanceOf(ScoreImportError);
+  });
+});
+
+describe('previewImportFile: a file with no telling name', () => {
+  it('previews an extensionless MIDI file as a score, by its header', async () => {
+    const { previewImportFile } = await loadService();
+    const preview = await previewImportFile(new File([midiBytes()], 'song'));
+    expect(preview.parsed.take.notes.map((note) => note.midi)).toEqual([60, 64]);
+    expect(preview.parsed.take.title).toBe('Linked Melody');
+  });
+
+  it('previews a MIDI file under a name it does not know, such as .kar', async () => {
+    const { previewImportFile } = await loadService();
+    const preview = await previewImportFile(new File([midiBytes()], 'song.kar'));
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('previews an extensionless MXL archive and raw MusicXML as scores', async () => {
+    const { previewImportFile } = await loadService();
+    const mxl = zipSync({ 'score.xml': strToU8(SCORE_XML) });
+    expect((await previewImportFile(new File([mxl], 'score'))).parsed.take.notes).toHaveLength(2);
+    const xml = new File([SCORE_XML], 'score');
+    expect((await previewImportFile(xml)).parsed.take.notes).toHaveLength(2);
+  });
+
+  it('still reads take JSON, and takes a .json name at its word', async () => {
+    const { previewImportFile, ImportValidationError } = await loadService();
+    const take = await previewImportFile(new File([takeJson()], 'take'));
+    expect(take.parsed.take.title).toBe('Linked Take');
+    await expect(
+      previewImportFile(new File(['{"schemaVersion": 1, "notes": "nope"}'], 'bad.json')),
+    ).rejects.toBeInstanceOf(ImportValidationError);
+    // MIDI bytes behind a .json name are a take file that is not valid.
+    await expect(previewImportFile(new File([midiBytes()], 'bad.json'))).rejects.toBeInstanceOf(
+      ImportValidationError,
+    );
+  });
+
+  it('gives an unrecognised file the take error, as before', async () => {
+    const { previewImportFile, ImportValidationError } = await loadService();
+    await expect(previewImportFile(new File(['hello'], 'notes'))).rejects.toBeInstanceOf(
+      ImportValidationError,
+    );
   });
 });
 

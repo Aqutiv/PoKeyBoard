@@ -315,6 +315,29 @@ test.describe('takes library', () => {
     await expect(dialog).toBeVisible();
   });
 
+  test('imports a MIDI file dropped with no file extension', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    // Both pages render as `.page`, so wait or the drop lands on Play.
+    await expect(page.getByRole('button', { name: 'Backup all takes' })).toBeVisible();
+
+    // A file named without an extension says nothing about what it is; its
+    // MThd header does.
+    await page.locator('.page').evaluate(
+      (node, bytes) => {
+        const data = new DataTransfer();
+        data.items.add(new File([new Uint8Array(bytes)], 'song'));
+        node.dispatchEvent(new DragEvent('drop', { dataTransfer: data, bubbles: true }));
+      },
+      [...midiFile()],
+    );
+
+    const preview = page.getByRole('dialog', { name: 'Import take' });
+    await expect(preview).toBeVisible();
+    await expect(preview).toContainText('MIDI melody');
+    await expect(preview.locator('dt', { hasText: 'Notes' }).locator('+ dd')).toHaveText('4');
+  });
+
   test('imports a score dropped as a link from another browser window', async ({ page }) => {
     await gotoAppReady(page);
     await page.route('**/fixtures/dropped.musicxml', (route) =>

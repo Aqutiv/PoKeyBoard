@@ -40,6 +40,8 @@ import { newId } from '@/utils/ids';
 const MAX_TAKE_IMPORT_BYTES = 10 * 1024 * 1024;
 const MAX_SCORE_IMPORT_BYTES = 50 * 1024 * 1024;
 const MAX_BACKUP_IMPORT_BYTES = 100 * 1024 * 1024;
+/** How much of a file's start is read to tell what it is; see `kindFromBytes`. */
+const SNIFF_BYTES = 64;
 
 function rejectOversizedBytes(byteLength: number, maximumBytes: number, kind: string): void {
   if (byteLength > maximumBytes) {
@@ -279,7 +281,21 @@ export async function previewImportScoreBytes(
   return { parsed, collision, fileName };
 }
 
+/**
+ * Preview a picked or dropped file that its name does not mark as a score:
+ * take JSON, unless its first bytes say it is a score. A MIDI file saved as
+ * plain `song`, or as a karaoke `.kar`, is still a MIDI file, so a file whose
+ * name does not end in `.json` has its first 64 bytes read: a MIDI header, an
+ * MXL zip or MusicXML's opening `<` sends it to the score importer. Anything
+ * else is read as a take, whose error is the right one for a wrong pick; and a
+ * `.json` name is taken at its word, as the score picker's fallback relies on.
+ */
 export async function previewImportFile(file: File): Promise<ImportPreview> {
+  if (!/\.json$/i.test(file.name)) {
+    const head = new Uint8Array(await file.slice(0, SNIFF_BYTES).arrayBuffer());
+    const kind = kindFromBytes(head);
+    if (kind !== null && kind !== 'take') return previewImportScoreFile(file);
+  }
   rejectOversizedFile(file, MAX_TAKE_IMPORT_BYTES, 'The take file');
   return previewImportTakeText(await file.text(), file.name);
 }
@@ -314,14 +330,17 @@ function kindFromContentType(header: string | null): RemoteImportKind | null {
   return null;
 }
 
-/** Last resort: hosts lie about Content-Type (raw GitHub serves MusicXML as text/plain). */
+/**
+ * Last resort, from a file's first bytes: hosts lie about Content-Type (raw
+ * GitHub serves MusicXML as text/plain), and a file's name may say nothing.
+ */
 function kindFromBytes(bytes: Uint8Array): RemoteImportKind | null {
   if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
     return 'score'; // MXL is a zip
   }
   if (hasMidiHeader(bytes)) return 'score'; // a Standard MIDI File
   const skippable = new Set([0x20, 0x09, 0x0a, 0x0d, 0xef, 0xbb, 0xbf]); // space, tabs, EOLs, BOM
-  for (const byte of bytes.subarray(0, 64)) {
+  for (const byte of bytes.subarray(0, SNIFF_BYTES)) {
     if (skippable.has(byte)) continue;
     if (byte === 0x3c) return 'score'; // '<' — raw MusicXML
     if (byte === 0x7b) return 'take'; // '{' — take JSON
