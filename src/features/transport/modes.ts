@@ -18,6 +18,13 @@ export const PLAYBACK_MODES = [
   'training-both',
 ] as const;
 
+/**
+ * How a practice run meets the notes it asks for: `wait` holds at each one
+ * until the player has played it, as the training modes do; `playAlong` keeps
+ * the take's time, and the player plays along.
+ */
+export type PracticeStyle = 'wait' | 'playAlong';
+
 /** The hand a playback mode trains, or null when it does not train at all. */
 export function trainingHandFor(mode: PlaybackMode): TrainingHand | null {
   switch (mode) {

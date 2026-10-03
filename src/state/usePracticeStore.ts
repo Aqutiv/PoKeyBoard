@@ -3,7 +3,8 @@ import { create } from 'zustand';
 // session, which is what reads the transport's events.
 import type { TrainingHand } from '@/domain/trainingGate';
 import type { WaitReport } from '@/features/practice/trainingReport';
-import type { PracticeStyle, RunEndReason } from '@/features/transport/practiceEvents';
+import type { PracticeStyle } from '@/features/transport/modes';
+import type { RunEndReason } from '@/features/transport/practiceEvents';
 
 /** What every result says, whichever way the run was practised. */
 interface PracticeResultBase {

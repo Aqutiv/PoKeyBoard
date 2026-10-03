@@ -24,6 +24,7 @@ import {
 } from '@/domain/takeTypes';
 import { countInMsAt, createTakeTempoMap } from '@/domain/tempoMap';
 import {
+  askedNotes,
   CHORD_WINDOW_MS,
   EARLY_PRESS_MS,
   nextTrainingGate,
@@ -34,6 +35,7 @@ import { useTakeStore } from '@/state/useTakeStore';
 import { newId } from '@/utils/ids';
 import { beatDurationMs, clamp } from '@/utils/timing';
 import { trainingHandFor, type RecordMode } from './modes';
+import type { PracticeEvent, PracticeRun, RunEndReason, RunEvent } from './practiceEvents';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
 import { playableLoop, playFromMs } from './practiceLoop';
 import { foldIntoLoop, loopPassAt, TransportClock, type ClockRun } from './transportClock';
@@ -152,6 +154,17 @@ export class TransportController {
    */
   private readonly trainingSkips = new Map<number, Set<string>>();
 
+  // Practice runs
+  private readonly practiceListeners = new Set<(event: PracticeEvent) => void>();
+  /**
+   * The practice run under way, if any: from when playback under a training
+   * mode begins until something ends it. Its holds, and the resumes from them,
+   * are all part of it; see `beginPracticeRun`.
+   */
+  private practiceRun: PracticeRun | null = null;
+  /** How many practice runs have started, which numbers the next. */
+  private practiceRunCount = 0;
+
   /** Callbacks fired when a recording pass has been finalized (autosave). */
   readonly onRecordingFinalized = new Set<() => void>();
 
@@ -226,6 +239,18 @@ export class TransportController {
     return () => this.stateListeners.delete(listener);
   }
 
+  /**
+   * Hear how practice runs go; see `PracticeEvent`. Listeners are told
+   * synchronously, from inside the command each event comes from, so they
+   * take note and leave the transport alone. One that throws is reported and
+   * passed over: nothing a listener does stops the transport finishing what
+   * it started.
+   */
+  subscribePractice(listener: (event: PracticeEvent) => void): () => void {
+    this.practiceListeners.add(listener);
+    return () => this.practiceListeners.delete(listener);
+  }
+
   private send(event: TransportEvent): boolean {
     const next = transition(this.state, event);
     if (next === null) return false;
@@ -281,6 +306,7 @@ export class TransportController {
 
   fail(message: string): void {
     this.errorMessage = message;
+    this.endPracticeRun('failed');
     this.stopEverything();
     this.send('FAIL');
   }
@@ -308,6 +334,7 @@ export class TransportController {
   beginScrub(): boolean {
     if (!canTransition(this.state, 'SCRUB_START')) return false;
     this.scrubReturnState = this.state === 'paused' ? 'paused' : 'idle';
+    this.endPracticeRun('seek');
     this.clearTrainingGate();
     this.scrubTimeMs = this.pausedPlayheadMs;
     return this.send('SCRUB_START');
@@ -330,6 +357,7 @@ export class TransportController {
 
   seek(takeMs: number): void {
     if (this.state === 'playing' || this.state === 'recording' || this.state === 'countIn') return;
+    this.endPracticeRun('seek');
     this.clearTrainingGate();
     const duration = this.takeDurationMs();
     this.pausedPlayheadMs = clamp(Math.round(takeMs), 0, duration);
@@ -414,6 +442,7 @@ export class TransportController {
 
   async record(mode: RecordMode = 'overdub'): Promise<void> {
     if (!this.isPianoReady() || !canTransition(this.state, 'RECORD')) return;
+    this.endPracticeRun('record');
     this.clearTrainingGate();
     await audioEngine.unlockFromUserGesture();
     if (!this.isPianoReady() || !canTransition(this.state, 'RECORD')) return;
@@ -600,6 +629,11 @@ export class TransportController {
     if (this.trainingWaiting && this.trainingGate) {
       const gateMs = this.trainingGate.atMs;
       this.endTrainingWait();
+      this.tellPractice({
+        type: 'hold-cleared',
+        skipped: true,
+        audioTime: audioEngine.currentTime,
+      });
       this.startPlayback({ skipNoteIds: null, gateFromMs: gateMs + CHORD_WINDOW_MS + 1 });
       return;
     }
@@ -623,15 +657,17 @@ export class TransportController {
     this.playLoop = loop;
     this.runFromMs = fromMs;
     this.loopPassesBefore = 0;
-    this.clock.start(fromMs, audioEngine.currentTime + (resume ? RESUME_SLACK_S : START_SLACK_S), {
-      rate: this.getSpeed(),
-      loop,
-    });
+    const anchorAudioTime = audioEngine.currentTime + (resume ? RESUME_SLACK_S : START_SLACK_S);
+    this.clock.start(fromMs, anchorAudioTime, { rate: this.getSpeed(), loop });
     if (this.metronomeOn) {
       this.configureMetronome();
       this.metronome.start(this.takeGrid());
     }
     this.send('PLAY');
+    // A practice run goes on through every hold it stops at, so a resume from
+    // one is not a new run. It starts before its first hold is armed, so that
+    // nothing in it can come before its start.
+    if (!this.practiceRun) this.beginPracticeRun(notes, fromMs, anchorAudioTime);
     // What the player has just played at a hold is theirs, in the pass the
     // run resumes in.
     this.trainingSkips.clear();
@@ -737,7 +773,7 @@ export class TransportController {
     if (this.state === 'playing' && !loop) {
       const durationMs = this.playDurationMs;
       if (this.playCursor >= this.playNotes.length && this.clock.currentTakeMs() >= durationMs) {
-        this.pauseInternal(durationMs, { ringOut: true });
+        this.pauseInternal(durationMs, { ringOut: true, reason: 'end' });
       }
     }
   }
@@ -772,15 +808,29 @@ export class TransportController {
    * `refreshMetronomeConfig`: the setting is read here, never pushed in.
    */
   refreshTrainingMode(): void {
+    // A practice run trains one hand. Choosing another, or none, ends it;
+    // choosing the same one again carries it on.
+    const hand = trainingHandFor(useSettingsStore.getState().playbackMode);
+    const handChanged = hand !== (this.practiceRun?.hand ?? null);
     if (this.trainingWaiting) {
       // Changing the mode at a hold is as good as saying "carry on": let that
       // moment through and run on under the new mode. Clearing the gate alone
       // would strip the targets and the status but leave the transport parked,
-      // which is not what changing a mode mid-playback promises.
+      // which is not what changing a mode mid-playback promises. Another hand
+      // starts its own run, from the hold.
+      if (handChanged) this.endPracticeRun('mode');
       this.play();
       return;
     }
     if (this.state !== 'playing') return;
+    if (handChanged) {
+      this.endPracticeRun('mode');
+      this.beginPracticeRun(
+        this.playNotes,
+        Math.round(this.clock.currentTakeMs()),
+        audioEngine.currentTime,
+      );
+    }
     // Notes inside the lookahead are already scheduled and will sound; a gate
     // on one of them would stop after it had been heard.
     this.armTrainingGate(this.clock.currentVirtualMs() + SCHEDULE_AHEAD_MS * this.clock.rate);
@@ -842,8 +892,10 @@ export class TransportController {
   private beginTrainingWait(): void {
     const gate = this.trainingGate;
     if (!gate) return;
-    // Taken while still playing, before the pause below parks the playhead.
+    // Taken while still playing, before the pause below parks the playhead
+    // and stops the clock that knows when the gate's notes fell due.
     this.trainingPassStartMs = this.getPassStartMs();
+    const dueAudioTime = this.clock.audioTimeForVirtualMs(this.trainingGateVirtualMs);
     this.trainingWaiting = true;
     // Only the flashes start afresh: the keys already played for this hold on
     // the way to it still count.
@@ -853,6 +905,7 @@ export class TransportController {
     // what is sounding ring rather than cutting it: the keys the player holds
     // are theirs, and the take's own notes end where they were written to.
     this.pauseInternal(gate.atMs, { ringOut: true });
+    this.tellPractice({ type: 'hold', atMs: gate.atMs, midis: [...gate.midis], dueAudioTime });
     for (const listener of this.stateListeners) listener();
   }
 
@@ -860,7 +913,8 @@ export class TransportController {
     const gate = this.trainingGate;
     if (!gate || event.type !== 'on') return;
     if (this.trainingWaiting) {
-      if (gate.midis.has(event.midi)) {
+      const wanted = gate.midis.has(event.midi);
+      if (wanted) {
         // Presses accumulate rather than having to land together: a mouse is
         // one pointer and physically cannot hold a chord.
         this.trainingSatisfied.add(event.midi);
@@ -869,8 +923,12 @@ export class TransportController {
         this.trainingWrong.set(event.midi, Date.now() + WRONG_FLASH_MS);
         this.armWrongExpiry();
       }
+      // Told before the hold clears, when this is the key that clears it.
+      this.tellPractice({ type: 'hold-key', midi: event.midi, wanted, audioTime: event.audioTime });
       for (const listener of this.stateListeners) listener();
-      if (this.trainingSatisfied.size >= gate.midis.size) this.resumeFromTrainingGate(gate);
+      if (this.trainingSatisfied.size >= gate.midis.size) {
+        this.resumeFromTrainingGate(gate, event.audioTime);
+      }
       return;
     }
     // On the way to the hold, a key it asks for counts from a moment before
@@ -903,8 +961,10 @@ export class TransportController {
     );
   }
 
-  private resumeFromTrainingGate(gate: TrainingGate): void {
+  /** Let playback go on from a hold the player has played, by a key at `audioTime`. */
+  private resumeFromTrainingGate(gate: TrainingGate, audioTime: number): void {
     this.endTrainingWait();
+    this.tellPractice({ type: 'hold-cleared', skipped: false, audioTime });
     this.startPlayback({
       skipNoteIds: gate.noteIds,
       gateFromMs: gate.atMs + CHORD_WINDOW_MS + 1,
@@ -917,6 +977,8 @@ export class TransportController {
    * does after a hold, and runs straight on to the next.
    */
   private passTrainingGate(gate: TrainingGate): void {
+    // Told first: the tick below may already reach the next hold.
+    this.tellPractice({ type: 'step', atMs: gate.atMs, midis: [...gate.midis] });
     const loop = this.playLoop;
     const passMs = loop ? loop.endMs - loop.startMs : 0;
     const pass = loop ? Math.round((this.trainingGateVirtualMs - gate.atMs) / passMs) : 0;
@@ -940,10 +1002,74 @@ export class TransportController {
   }
 
   private clearTrainingGate(): void {
+    // A practice run is its holds: with them gone, it is over. Everything that
+    // drops them ends it first, for its own reason; this is the backstop.
+    this.endPracticeRun('stop');
     this.endTrainingWait();
     this.trainingGate = null;
     this.trainingSkips.clear();
     this.syncTrainingInput();
+  }
+
+  // --------------------------------------------------- practice runs --
+
+  /**
+   * Start a practice run, when the playback mode trains a hand and there is
+   * take left to play: from `fromMs`, which the run's clock reaches at
+   * `anchorAudioTime`, asking for that hand's notes among `notes` (the take's,
+   * as playback strikes them).
+   */
+  private beginPracticeRun(
+    notes: readonly NoteEvent[],
+    fromMs: number,
+    anchorAudioTime: number,
+  ): void {
+    const hand = trainingHandFor(useSettingsStore.getState().playbackMode);
+    if (hand === null || fromMs >= this.playDurationMs) return;
+    const take = useTakeStore.getState().take;
+    this.practiceRunCount += 1;
+    this.practiceRun = {
+      runId: this.practiceRunCount,
+      takeId: take.id,
+      style: 'wait',
+      hand,
+      fromMs,
+      loop: this.playLoop,
+      speed: this.clock.rate,
+      anchorAudioTime,
+      countInMs: 0,
+      durationMs: this.playDurationMs,
+      tempo: take.tempo,
+      asked: askedNotes(notes, hand),
+      noteCount: take.notes.length,
+      takeDurationMs: take.durationMs,
+    };
+    this.tellPractice({ type: 'run-start', run: this.practiceRun });
+  }
+
+  /**
+   * End the practice run under way, if there is one, for `reason`: the first
+   * reason given is the one that counts. It is gone before its listeners hear,
+   * so nothing they do can end it twice.
+   */
+  private endPracticeRun(reason: RunEndReason): void {
+    const run = this.practiceRun;
+    if (!run) return;
+    this.practiceRun = null;
+    this.tellPractice({ type: 'run-end', reason, audioTime: null }, run);
+  }
+
+  /** Tell the practice listeners what happened in `run`, the one under way unless named. */
+  private tellPractice(event: RunEvent, run = this.practiceRun): void {
+    if (!run) return;
+    const told: PracticeEvent = { runId: run.runId, ...event };
+    for (const listener of this.practiceListeners) {
+      try {
+        listener(told);
+      } catch (error) {
+        console.error('A practice listener failed:', error);
+      }
+    }
   }
 
   // ------------------------------------------------- speed and loop --
@@ -965,6 +1091,11 @@ export class TransportController {
       this.retimeRun({ rate: next });
     } else if (this.metronome.isRunning && (this.state === 'idle' || this.state === 'paused')) {
       this.metronome.setGrid(this.practiceGrid());
+    }
+    // A run waiting at a hold goes on at the new speed once it resumes; one
+    // playing has been told by `retimeRun`, from the moment it took effect.
+    if (this.state !== 'playing') {
+      this.tellPractice({ type: 'speed', speed: next, audioTime: null });
     }
     for (const listener of this.stateListeners) listener();
   }
@@ -998,6 +1129,9 @@ export class TransportController {
    * from where it is — or from the top of the new loop, when that is outside it.
    */
   setLoop(loop: PlaybackLoop | null): void {
+    // A practice run plays the passage it started on, so another is another
+    // run, even one set at a hold.
+    this.endPracticeRun('loop');
     useTakeStore.getState().setPlaybackLoop(loop);
     if (this.state === 'playing') {
       this.pauseInternal(Math.round(this.clock.currentTakeMs()));
@@ -1056,6 +1190,9 @@ export class TransportController {
       this.trainingGateVirtualMs = this.trainingGate.atMs + (gatePass - playheadPass) * passMs;
     }
     if (this.metronome.isRunning) this.metronome.retime(this.takeGrid());
+    if (run.rate !== undefined) {
+      this.tellPractice({ type: 'speed', speed: run.rate, audioTime: now });
+    }
   }
 
   pause(): void {
@@ -1074,11 +1211,19 @@ export class TransportController {
    * them. The keys they hold keep sounding. The take's notes end where they
    * were written to: nothing past the hold was queued, so every key-up still to
    * come is already scheduled.
+   *
+   * Any other pause ends the practice run under way, for `reason`.
    */
-  private pauseInternal(atMs: number, { ringOut = false } = {}): void {
-    // A training wait is a pause that keeps its gate; every other pause drops
-    // it, so resuming by hand never lands back on the same hold.
-    if (!this.trainingWaiting) this.clearTrainingGate();
+  private pauseInternal(
+    atMs: number,
+    { ringOut = false, reason = 'pause' }: { ringOut?: boolean; reason?: RunEndReason } = {},
+  ): void {
+    // A training wait is a pause that keeps its gate, and its run; every other
+    // pause drops both, so resuming by hand never lands back on the same hold.
+    if (!this.trainingWaiting) {
+      this.endPracticeRun(reason);
+      this.clearTrainingGate();
+    }
     this.clearScheduler();
     this.metronome.stop();
     if (!ringOut) audioEngine.allNotesOff();
@@ -1090,6 +1235,7 @@ export class TransportController {
   }
 
   stop(): void {
+    this.endPracticeRun('stop');
     switch (this.state) {
       case 'countIn': {
         if (this.countInTimer !== null) {
@@ -1164,6 +1310,7 @@ export class TransportController {
 
   /** Called by the lifecycle layer when the page hides mid-activity. */
   handleInterruption(): void {
+    this.endPracticeRun('interrupted');
     this.clearTrainingGate();
     if (this.state === 'recording' || this.state === 'countIn') {
       this.stop();
@@ -1180,7 +1327,9 @@ export class TransportController {
    */
   handleNavigation(): void {
     // A wait left armed on another route would resume playback from a
-    // keypress the user meant for that page's keyboard.
+    // keypress the user meant for that page's keyboard. Playback carries on
+    // without its holds, so the practice run ends here.
+    this.endPracticeRun('navigation');
     this.clearTrainingGate();
     if (this.state === 'recording' || this.state === 'countIn') {
       this.stop();
