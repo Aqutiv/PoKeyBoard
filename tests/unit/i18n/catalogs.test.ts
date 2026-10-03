@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { db } from '@/data/db';
 import { loadSettings, saveSettings } from '@/data/settingsRepository';
-import { catalogs, SUPPORTED_LANGUAGES } from '@/i18n';
+import { SUPPORTED_LANGUAGES } from '@/i18n';
+import { catalogs } from './allCatalogs';
 import { en } from '@/i18n/en';
 import type { Messages } from '@/i18n/types';
 import { SETTINGS_DEFAULTS, useSettingsStore } from '@/state/useSettingsStore';

@@ -69,7 +69,7 @@ import {
 import { roundEntryAt } from '@/features/learn/rounds';
 import { isBlackKey } from '@/utils/midi';
 import { LEARN_LEVEL_IDS } from '@/features/learn/levels';
-import { catalogs } from '@/i18n';
+import { catalogs } from '../i18n/allCatalogs';
 import { SUPPORTED_LANGUAGES } from '@/i18n/types';
 
 describe('learn catalog', () => {

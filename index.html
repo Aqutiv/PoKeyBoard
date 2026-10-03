@@ -45,7 +45,14 @@
     <title>PoKeyBoard</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Shown from the first paint, before any script has run; React replaces it
+         with its own identical copy (providers.tsx) and then with the app. -->
+    <div id="root">
+      <div class="app-boot app-boot--static" role="status" aria-live="polite">
+        <span class="app-boot__wordmark" aria-hidden="true">PoKeyBoard</span>
+        Loading…
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

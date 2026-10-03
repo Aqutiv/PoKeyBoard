@@ -2,11 +2,12 @@ import { audioEngine } from '@/audio/AudioEngine';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { reverbRoomOf, type Take } from '@/domain/takeTypes';
-import { resolveLibraryTake } from '@/features/library/catalog';
 import { transportController } from '@/features/transport/transportController';
-import { applySystemLanguageIfUnpinned } from '@/i18n/languagePreference';
+import { loadCatalog } from '@/i18n';
+import { applySystemLanguageIfUnpinned, isLanguageExplicit } from '@/i18n/languagePreference';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
+import { settledWithin, untilAborted } from '@/utils/deadline';
 import { QuotaExceededStorageError, toErrorMessageKey } from '@/utils/errors';
 import type { ErrorMessageKey } from '@/i18n/types';
 import { invalidateCachedAudio } from './audioCacheRepository';
@@ -36,6 +37,12 @@ const SETTINGS_DEBOUNCE_MS = 500;
  * so restoring the last take must never be the thing that blocks boot.
  */
 const SCORE_RESTORE_TIMEOUT_MS = 8_000;
+/**
+ * How long startup will wait for the saved language's catalog. A stalled
+ * connection can leave its chunk pending forever; past this the app opens in
+ * English, and switches as soon as the catalog does arrive.
+ */
+const CATALOG_RESTORE_TIMEOUT_MS = 4_000;
 
 /**
  * Autosave and restore glue: watches the stores, debounces writes, forces
@@ -60,9 +67,19 @@ class PersistenceService {
 
   private async initialize(): Promise<void> {
     let restoredTake = false;
+    // Three independent IndexedDB reads, started together rather than one after
+    // another: on a slow machine each is a round trip the first screen waits on.
+    // Each is awaited (and its failure handled) where it was before.
+    const settingsRead = loadSettings();
+    const languageExplicitRead = isLanguageExplicit();
+    const lastIdRead = getMetadata<string>(META_LAST_OPEN_TAKE);
+    // Kept from rejecting unawaited; the await below still sees the error.
+    languageExplicitRead.catch(() => undefined);
+    lastIdRead.catch(() => undefined);
+    let catalogRead: Promise<unknown> = Promise.resolve();
 
     try {
-      const stored = await loadSettings();
+      const stored = await settingsRead;
       useSettingsStore.setState(stored);
       const settings = useSettingsStore.getState();
       audioEngine.setMasterVolume(settings.masterVolume);
@@ -73,7 +90,13 @@ class PersistenceService {
       // Default to the OS language unless the user has pinned one. Runs before
       // the autosave subscription below so an unpinned language isn't written
       // back — it stays re-derived from the OS on each launch.
-      await applySystemLanguageIfUnpinned();
+      await applySystemLanguageIfUnpinned(languageExplicitRead);
+      // The saved language's catalog, fetched while the take restores, so the
+      // app opens in it rather than flashing through English.
+      catalogRead = settledWithin(
+        loadCatalog(useSettingsStore.getState().language),
+        CATALOG_RESTORE_TIMEOUT_MS,
+      );
     } catch (error) {
       console.error('Settings restore failed:', error);
     } finally {
@@ -82,7 +105,7 @@ class PersistenceService {
     }
 
     try {
-      const lastId = await getMetadata<string>(META_LAST_OPEN_TAKE);
+      const lastId = await lastIdRead;
       if (lastId) {
         // Library takes have no stored row — rebuild pristine from the
         // catalog (in-session tweaks to them are ephemeral). A vendored score
@@ -128,6 +151,9 @@ class PersistenceService {
       useTakeStore.getState().setTake(take);
       transportController.restorePlayhead(0);
     }
+
+    // Never rejects, and never waits past its deadline: English meanwhile.
+    await catalogRead;
 
     useTakeStore.subscribe((state, previous) => {
       if (state.take !== previous.take && state.dirty) this.scheduleSave();
@@ -209,15 +235,22 @@ class PersistenceService {
   }
 
   /**
-   * Rebuild a library take for startup, under a deadline. Authored tracks
-   * resolve synchronously and never reach the timer; a vendored score that has
-   * not been cached yet is a network round trip standing between the user and
-   * a usable app, so it gets bounded rather than awaited indefinitely.
+   * Rebuild a library take for startup, under a deadline. The catalog's code,
+   * and a vendored score that has not been cached yet, are network round trips
+   * standing between the user and a usable app, so they are bounded rather than
+   * awaited indefinitely.
    */
   private async restoreLibraryTake(takeId: string): Promise<Take | undefined> {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), SCORE_RESTORE_TIMEOUT_MS);
     try {
+      // Fetched only when the last take was a library one: the catalog carries
+      // every authored track and the score importer, which no other launch needs.
+      // The deadline covers fetching that code too, which cannot be called off.
+      const { resolveLibraryTake } = await untilAborted(
+        import('@/features/library/catalog'),
+        controller.signal,
+      );
       return await resolveLibraryTake(takeId, controller.signal);
     } finally {
       clearTimeout(timer);

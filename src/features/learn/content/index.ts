@@ -6,11 +6,11 @@ import type { ChapterProse } from './types';
  * Lesson prose, per chapter and language.
  *
  * Long-form teaching text deliberately does not live in the `Messages`
- * catalog. Two reasons, both structural: `src/i18n/index.ts` imports all four
- * catalogs eagerly, so prose there would ship every locale's lesson text to
- * every user; and the parity test walks arrays by index, which would length-lock
- * every paragraph across all four locales and make an English-only chapter
- * impossible to ship.
+ * catalog. Two reasons, both structural: a catalog is loaded whole, so prose
+ * there would ship every chapter's lesson text to every user of that language
+ * (and all of it, in English, to everyone); and the parity test walks arrays by
+ * index, which would length-lock every paragraph across all four locales and
+ * make an English-only chapter impossible to ship.
  *
  * Chapter titles and blurbs — the browsable surface — stay in `Messages` and
  * are translated. Only the inside of a chapter falls back.
