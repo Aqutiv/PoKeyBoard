@@ -78,7 +78,9 @@ function cellName(cell: ResultCell): string {
 /**
  * Each part of the run, coloured by how it went: four-bar sections, each a
  * button that loops it, or the latest passes round a loop. The share right
- * is written on each, so the colour is never all there is to go on.
+ * is written on each, so the colour is never all there is to go on; as a
+ * percentage, since "3/4" in a music app reads as a time signature. Words
+ * stand in for it all, with the counts, for a screen reader.
  */
 function ResultCells({ cells }: { cells: readonly ResultCell[] }) {
   const m = useMessages();
@@ -91,27 +93,27 @@ function ResultCells({ cells }: { cells: readonly ResultCell[] }) {
       </span>
       <ol className="practice-results__list" aria-labelledby={captionId}>
         {cells.map((cell) => {
-          const content = (
-            <>
-              <span className="practice-cell__name">{cellName(cell)}</span>
-              <span className="practice-cell__score">
-                {cell.good}/{cell.total}
+          const face = (
+            <span className="practice-cell__face" aria-hidden="true">
+              {cellName(cell)} ·{' '}
+              <span className="practice-cell__share">
+                {m.practice.cellShare({ percent: percentRight(cell.good, cell.total) })}
               </span>
-            </>
+            </span>
           );
           if (cell.kind === 'pass') {
+            // In words inside the item rather than as its label, which a
+            // screen reader may pass over on a list item.
             return (
               <li
                 key={`pass-${cell.pass}`}
                 className={`practice-cell practice-cell--${cell.grade}`}
                 data-grade={cell.grade}
-                aria-label={m.practice.passCell({
-                  pass: cell.pass,
-                  good: cell.good,
-                  total: cell.total,
-                })}
               >
-                {content}
+                {face}
+                <span className="visually-hidden">
+                  {m.practice.passCell({ pass: cell.pass, good: cell.good, total: cell.total })}
+                </span>
               </li>
             );
           }
@@ -131,7 +133,7 @@ function ResultCells({ cells }: { cells: readonly ResultCell[] }) {
                 aria-label={`${label} ${loop}`}
                 onClick={() => loopSection(cell)}
               >
-                {content}
+                {face}
               </button>
             </li>
           );

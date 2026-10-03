@@ -131,6 +131,7 @@ export const mg: Messages = {
     slowHolds: ({ count }) => `fiandrasana ${count} mihoatra ny 2 s`,
     inFlow: ({ count }) => `naoty ${count} tsy nijanonana`,
     atSpeed: ({ percent }) => `amin’ny hafainganana ${percent}%`,
+    cellShare: ({ percent }) => `${percent}%`,
     sectionsLabel: 'Mizana',
     passesLabel: 'Fihodinana',
     sectionCell: ({ from, to, good, total }) =>

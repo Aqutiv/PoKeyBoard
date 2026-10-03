@@ -58,12 +58,13 @@
 }
 
 /* A part of the run, in the colour of its grade. The share right is written
-   on it too, so the colour is never all there is to go on. */
+   on it too, so the colour is never all there is to go on. Positioned for the
+   words a pass keeps hidden for screen readers. */
 .practice-cell {
   --grade: var(--border-strong);
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
   min-height: 30px;
   padding: 0 8px;
   background: var(--surface-2);
@@ -93,7 +94,7 @@
   }
 }
 
-.practice-cell__score {
+.practice-cell__share {
   font-weight: 600;
 }
 

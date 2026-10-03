@@ -40,6 +40,13 @@ function renderCard(language: SupportedLanguage = 'en', m: Messages = en): void 
   );
 }
 
+/** What a screen reader reads of `element`: its text, less anything hidden from it. */
+function spoken(element: Element): string {
+  const copy = element.cloneNode(true) as Element;
+  for (const hidden of copy.querySelectorAll('[aria-hidden="true"]')) hidden.remove();
+  return copy.textContent ?? '';
+}
+
 const card = () => screen.queryByRole('group');
 const facts = () => card()?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim();
 const show = (result = waitResult()) => act(() => usePracticeStore.getState().show(result));
@@ -163,9 +170,10 @@ describe('the practice results card', () => {
       'Bars 5–8: 3 of 4 right first time. Loop these bars.',
       'Bar 9: 0 of 1 right first time. Loop this bar.',
     ]);
-    // On the cell itself, the bars and the share of them right.
-    expect(cells[0]).toHaveTextContent(/^5–8\s*3\/4$/);
-    expect(cells[1]).toHaveTextContent(/^9\s*0\/1$/);
+    // On the cell itself, the bars and the share right, rounded down as the
+    // headline's is: counts would read as a time signature.
+    expect(cells[0]).toHaveTextContent(/^5–8 · 75%$/);
+    expect(cells[1]).toHaveTextContent(/^9 · 0%$/);
     expect(cells.map((cell) => cell.dataset.grade)).toEqual(['fair', 'weak']);
   });
 
@@ -182,11 +190,15 @@ describe('the practice results card', () => {
       }),
     );
     const list = within(card()!).getByRole('list', { name: 'Passes' });
-    expect(
-      within(list)
-        .getAllByRole('listitem')
-        .map((cell) => cell.getAttribute('aria-label')),
-    ).toEqual(['Pass 3: 4 of 4 right first time', 'Pass 4: 2 of 4 right first time']);
+    const cells = within(list).getAllByRole('listitem');
+    // Read out in words, not from a label a reader may pass over on a list item.
+    expect(cells.map((cell) => cell.getAttribute('aria-label'))).toEqual([null, null]);
+    expect(cells.map(spoken)).toEqual([
+      'Pass 3: 4 of 4 right first time',
+      'Pass 4: 2 of 4 right first time',
+    ]);
+    expect(cells[0]).toHaveTextContent(/^3 · 100%/);
+    expect(cells[1]).toHaveTextContent(/^4 · 50%/);
     // A pass is not a passage of the take: there is nothing to loop.
     expect(within(list).queryByRole('button')).toBeNull();
   });

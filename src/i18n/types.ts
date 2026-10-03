@@ -271,6 +271,8 @@ export interface Messages {
     inFlow: (p: { count: number }) => string;
     /** The slowest speed the run went at, when below the take's own. */
     atSpeed: (p: { percent: number }) => string;
+    /** The share of a section or a pass right first time, written on its cell. */
+    cellShare: (p: { percent: number }) => string;
     /** Names the row of four-bar sections, and the row of passes round a loop. */
     sectionsLabel: string;
     passesLabel: string;

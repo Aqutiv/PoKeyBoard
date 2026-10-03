@@ -128,6 +128,7 @@ export const es: Messages = {
     slowHolds: ({ count }) => `${count} ${count === 1 ? 'espera' : 'esperas'} de más de 2 s`,
     inFlow: ({ count }) => `${count} sin parar`,
     atSpeed: ({ percent }) => `al ${percent} % de velocidad`,
+    cellShare: ({ percent }) => `${percent} %`,
     sectionsLabel: 'Compases',
     passesLabel: 'Vueltas',
     sectionCell: ({ from, to, good, total }) =>

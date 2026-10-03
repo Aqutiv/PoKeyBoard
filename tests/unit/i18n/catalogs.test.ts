@@ -55,6 +55,7 @@ describe('i18n catalogs', () => {
         expect(m.practice.inFlow({ count }), lang).toContain(String(count));
       }
       expect(m.practice.atSpeed({ percent: 60 }), lang).toContain('60');
+      expect(m.practice.cellShare({ percent: 75 }), lang).toMatch(/^75\s?%$/);
       expect(m.practice.sectionCell({ from: 5, to: 8, good: 3, total: 4 }), lang).toMatch(
         /5–8\D+3\D+4/,
       );
