@@ -314,7 +314,17 @@ class PersistenceService {
       }
 
       const current = useTakeStore.getState();
-      if (current.dirty && !isLibraryTakeId(current.take.id)) continue;
+      // Notes recorded while that write was under way are left for the save
+      // already scheduled for them (`RECORDING_AUTOSAVE_MS`), or the one when
+      // recording stops, rather than written again straight away — on slow
+      // storage, back to back for as long as the playing lasts.
+      if (
+        current.dirty &&
+        !isLibraryTakeId(current.take.id) &&
+        transportController.getState() !== 'recording'
+      ) {
+        continue;
+      }
       this.setStatus('saved', null);
       return;
     }
