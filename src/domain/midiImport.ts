@@ -450,25 +450,28 @@ function isSilencing(event: SmfChannelEvent): boolean {
  * the order of two tracks' messages at one tick means nothing.
  *
  * All Sound Off and All Notes Off end every note their channel holds, in every
- * track, there and then. On a tick they are taken before any note struck on
- * it, so a track that opens with one as a reset never cuts short another
- * track's first notes. (The sustain pedal is its own controller; what it holds
- * is `collectPedal`'s business.) A note never let go ends where its track does.
+ * track, there and then: every note struck before their tick, and those their
+ * own track struck on it before them, in file order. Another track's note
+ * struck on the same tick is left be, whichever came first, so a track that
+ * opens with one as a reset never cuts short another track's first notes.
+ * (The sustain pedal is its own controller; what it holds is
+ * `collectPedal`'s business.) A note never let go ends where its track does.
  */
 function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
   const timeline: { event: SmfChannelEvent; track: number; silencing: boolean }[] = [];
   smf.tracks.forEach((track, trackIndex) => {
     for (const event of track.events) {
       if (event.type !== 'channel') continue;
-      timeline.push({ event, track: trackIndex, silencing: isSilencing(event) });
+      // Only what pairs notes is kept: a file may hold hundreds of thousands
+      // of other messages — pitch bends, pressure — that would only be sorted
+      // to be skipped.
+      const silencing = isSilencing(event);
+      if (!silencing && event.command !== 0x90 && event.command !== 0x80) continue;
+      timeline.push({ event, track: trackIndex, silencing });
     }
   });
-  // Stable, so each track's messages keep the file's order within a tick —
-  // the silencing controllers apart, which go first.
-  timeline.sort(
-    (a, b) =>
-      a.event.tick - b.event.tick || Number(b.silencing) - Number(a.silencing) || a.track - b.track,
-  );
+  // Stable, so each track's messages keep the file's order within a tick.
+  timeline.sort((a, b) => a.event.tick - b.event.tick || a.track - b.track);
 
   const notes: TickNote[] = [];
   let drumNotes = 0;
@@ -496,15 +499,36 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
   // Notes Off has to end. A file may send thousands of them, so each looks only
   // at what its channel holds rather than sweeping every key of every track.
   const sounding = new Map<number, Set<StrikeQueue>>();
+  // Per channel, the tick its strikes from before were last all ended on: the
+  // first All Notes Off of a tick ends them, and any more on it need not look.
+  const silencedOn = new Map<number, number>();
+  // Per part, the strikes it made on the tick it last struck on: an All Notes
+  // Off later in that track's tick ends them too, the file's order being theirs.
+  const fresh = new Map<number, { tick: number; strikes: Strike[] }>();
 
   for (const { event, track, silencing } of timeline) {
     const part = partKey(track, event.channel);
     if (silencing) {
       if (event.channel === DRUM_CHANNEL) continue;
-      const held = sounding.get(event.channel);
-      if (held) {
-        for (const queue of held) endWaiting(queue, event.tick);
-        held.clear();
+      const { tick, channel } = event;
+      const held = sounding.get(channel);
+      if (held && silencedOn.get(channel) !== tick) {
+        silencedOn.set(channel, tick);
+        for (const queue of held) {
+          // Every strike from before this tick; one struck on it by another
+          // track waits, and its queue with it.
+          let strike = oldestWaiting(queue);
+          while (strike !== undefined && strike.startTick < tick) {
+            end(strike, tick);
+            strike = oldestWaiting(queue);
+          }
+          if (strike === undefined) held.delete(queue);
+        }
+      }
+      const ownFresh = fresh.get(part);
+      if (ownFresh?.tick === tick) {
+        for (const strike of ownFresh.strikes) if (!strike.ended) end(strike, tick);
+        ownFresh.strikes = [];
       }
       continue;
     }
@@ -535,6 +559,12 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
         sounding.set(event.channel, held);
       }
       held.add(ownQueue);
+      let ownFresh = fresh.get(part);
+      if (ownFresh?.tick !== event.tick) {
+        ownFresh = { tick: event.tick, strikes: [] };
+        fresh.set(part, ownFresh);
+      }
+      ownFresh.strikes.push(strike);
       continue;
     }
     let strike = oldestWaiting(ownQueue);

@@ -451,7 +451,39 @@ describe('midiToTake: notes', () => {
     expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
   });
 
-  it('takes a tick’s silencing controllers before the notes struck on it', () => {
+  it('ends a note its own track struck just before, on the same tick', () => {
+    // Within a track the file's order holds: struck, then silenced, at 480.
+    const take = midiToTake(
+      smf(0, 480, [
+        [
+          [480, 0x90, 60, 100],
+          [480, 0xb0, 123, 0],
+          [960, 0x80, 60, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => [n.startMs, n.durationMs])).toEqual([[500, 1]]);
+  });
+
+  it('pairs notes the same around messages it has no use for', () => {
+    // Pitch bend, pressure and a program change between a note's ends.
+    const take = midiToTake(
+      smf(0, 480, [
+        [
+          [0, 0x90, 60, 100],
+          [120, 0xe0, 0, 64],
+          [240, 0xd0, 40],
+          [360, 0xc0, 5],
+          [480, 0x80, 60, 0],
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => [n.startMs, n.durationMs])).toEqual([[0, 500]]);
+  });
+
+  it('never silences another track’s note struck on the same tick', () => {
     // Each hand's track opens with an All Notes Off on the shared channel, on
     // the tick its first note is struck: a reset, not an end to the other's.
     const take = midiToTake(
