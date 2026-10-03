@@ -318,6 +318,34 @@ describe('midiToTake: notes', () => {
     ]);
   });
 
+  it('pairs a note-off written in another track with the strike it ends', () => {
+    // Type 1: the strike in one track, its note-off in the next, one channel.
+    const take = midiToTake(
+      smf(1, 480, [[[0, 0x90, 60, 100]], [[480, 0x80, 60, 0], ...played(0, 64, 960, 1440)]]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => [n.midi, n.startMs, n.durationMs])).toEqual([
+      [60, 0, 500],
+      [64, 1000, 500],
+    ]);
+  });
+
+  it('lets a track end its own strikes first when two tracks share a channel', () => {
+    // Both hands on channel 1, one key held by each, overlapping.
+    const take = midiToTake(smf(1, 480, [played(0, 60, 0, 960), played(0, 60, 480, 720)]), 'x.mid');
+    expect(take.notes.map((n) => [n.startMs, n.durationMs])).toEqual([
+      [0, 1000],
+      [500, 250],
+    ]);
+  });
+
+  it('never ends another track’s strike on the very tick it is struck', () => {
+    // A stray note-off in one track lands on the tick another track strikes the
+    // key; which of the two came first means nothing, so the strike is kept.
+    const take = midiToTake(smf(1, 480, [played(0, 60, 480, 960), [[480, 0x80, 60, 0]]]), 'x.mid');
+    expect(take.notes.map((n) => [n.startMs, n.durationMs])).toEqual([[500, 500]]);
+  });
+
   it('pairs 20,000 strikes of one key with their note-offs first in, first out', () => {
     // At 500 ticks a quarter and the default ♩=120, a tick is a millisecond.
     // Strike i comes at i ms, and every note-off after the last strike, 2 ms

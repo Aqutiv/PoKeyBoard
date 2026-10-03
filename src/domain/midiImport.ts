@@ -1,6 +1,12 @@
 import { MidiImportError } from '@/utils/errors';
 import { buildImportedTake, importedTimeSignature, type ImportedNote } from './importedTake';
-import { readSmf, type SmfFile, type SmfMetaEvent } from './smfReader';
+import {
+  readSmf,
+  type SmfChannelEvent,
+  type SmfFile,
+  type SmfMetaEvent,
+  type SmfTrack,
+} from './smfReader';
 import { createTakeTempoMap } from './tempoMap';
 import {
   MAX_FIFTHS,
@@ -373,104 +379,167 @@ function fileKey(smf: SmfFile): { fifths: number; mode: 'major' | 'minor' } | nu
 // Notes, hands and the pedal.
 // ---------------------------------------------------------------------------
 
-/**
- * One key's strikes still waiting for a note-off, oldest first. A note-off
- * takes the strike at `head` and moves it on, rather than shifting the array:
- * a key struck thousands of times before it is let go would otherwise make
- * every note-off move every strike still waiting.
- */
-interface OpenStrikes {
-  starts: Omit<TickNote, 'endTick'>[];
-  /** The oldest strike not yet paired; those before it have been. */
-  head: number;
+/** A note-on waiting for the note-off that ends it. */
+interface Strike extends Omit<TickNote, 'endTick'> {
+  /** Paired already — by a note-off, possibly another track's, or a silencing controller. */
+  ended: boolean;
 }
 
 /**
- * Every note, a note-on paired with the first note-off for the same key on the
- * same channel of the same track (first in, first out, so a key struck again
- * before it was let go keeps both strikes). A note-on at velocity 0 is a
- * note-off, as MIDI says. All Sound Off and All Notes Off end every note their
- * channel holds in that track, there and then — the sustain pedal is its own
- * controller and is left alone, so a note it holds still rings. A note never
- * let go ends where its track does.
+ * Strikes in the order they were made, oldest first. A strike may wait in more
+ * than one queue (its own track's, and every track's), so one ended through
+ * another queue is skipped here when the head reaches it. The head moves on
+ * rather than the array shifting: a key struck thousands of times before it
+ * is let go would otherwise make every note-off move every strike waiting.
+ */
+interface StrikeQueue {
+  strikes: Strike[];
+  /** No strike before this one is still waiting. */
+  head: number;
+}
+
+/** The oldest strike in a queue still waiting, or undefined; empties a spent queue. */
+function oldestWaiting(queue: StrikeQueue): Strike | undefined {
+  while (queue.head < queue.strikes.length && (queue.strikes[queue.head] as Strike).ended) {
+    queue.head += 1;
+  }
+  if (queue.head === queue.strikes.length) {
+    queue.strikes = [];
+    queue.head = 0;
+    return undefined;
+  }
+  return queue.strikes[queue.head];
+}
+
+/** A map's queue for `key`, made empty the first time it is asked for. */
+function queueAt(queues: Map<number, StrikeQueue>, key: number): StrikeQueue {
+  let queue = queues.get(key);
+  if (!queue) {
+    queue = { strikes: [], head: 0 };
+    queues.set(key, queue);
+  }
+  return queue;
+}
+
+/** One track's part on one channel, as a number: what a silencing controller addresses. */
+function partKey(track: number, channel: number): number {
+  return track * 16 + channel;
+}
+
+/**
+ * Every note: a note-on paired with the first note-off for the same key on the
+ * same channel (first in, first out, so a key struck again before it was let
+ * go keeps both strikes). A note-on at velocity 0 is a note-off, as MIDI says.
+ *
+ * Every track's messages are read on one timeline — by tick, then by track,
+ * each track's own in file order — because a channel is what MIDI addresses,
+ * and a file may keep a note's end in another track than its start. A track's
+ * own strikes are let go first, so two hands sharing a channel in two tracks
+ * each keep their own notes; a note-off with none of its own track's to end
+ * takes another track's oldest — but never one struck on that very tick, as
+ * the order of two tracks' messages at one tick means nothing.
+ *
+ * All Sound Off and All Notes Off end every note their channel holds in that
+ * track, there and then — the sustain pedal is its own controller and is left
+ * alone, so a note it holds still rings. A note never let go ends where its
+ * track does.
  */
 function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
+  const timeline: { event: SmfChannelEvent; track: number }[] = [];
+  smf.tracks.forEach((track, trackIndex) => {
+    for (const event of track.events) {
+      if (event.type === 'channel') timeline.push({ event, track: trackIndex });
+    }
+  });
+  // Stable, so each track's messages keep the file's order within a tick.
+  timeline.sort((a, b) => a.event.tick - b.event.tick || a.track - b.track);
+
   const notes: TickNote[] = [];
   let drumNotes = 0;
   let seq = 0;
-  smf.tracks.forEach((track, trackIndex) => {
-    const open = new Map<number, OpenStrikes>();
-    // Per channel, the keys with a strike still waiting: what an All Notes Off
-    // has to end. A file may send thousands of them, so each looks only at what
-    // its channel holds rather than sweeping every key.
-    const sounding = new Map<number, Set<OpenStrikes>>();
-    /** End every strike still open on one key, at `endTick`, and empty its queue. */
-    const endAll = (queue: OpenStrikes, endTick: number): void => {
-      for (let i = queue.head; i < queue.starts.length; i += 1) {
-        notes.push({ ...(queue.starts[i] as Omit<TickNote, 'endTick'>), endTick });
-      }
-      queue.starts = [];
-      queue.head = 0;
-    };
-    for (const event of track.events) {
-      if (event.type !== 'channel') continue;
-      if (
-        event.command === 0xb0 &&
-        (event.data1 === ALL_SOUND_OFF_CONTROLLER || event.data1 === ALL_NOTES_OFF_CONTROLLER) &&
-        event.channel !== DRUM_CHANNEL
-      ) {
-        const held = sounding.get(event.channel);
-        if (held) {
-          for (const queue of held) endAll(queue, event.tick);
-          held.clear();
-        }
-        continue;
-      }
-      const isOn = event.command === 0x90 && event.data2 > 0;
-      const isOff = event.command === 0x80 || (event.command === 0x90 && event.data2 === 0);
-      if (!isOn && !isOff) continue;
-      if (event.channel === DRUM_CHANNEL) {
-        if (isOn) drumNotes += 1;
-        continue;
-      }
-      const key = event.channel * 128 + event.data1;
-      if (isOn) {
-        let queue = open.get(key);
-        if (!queue) {
-          queue = { starts: [], head: 0 };
-          open.set(key, queue);
-        }
-        queue.starts.push({
-          midi: event.data1,
-          startTick: event.tick,
-          velocity: event.data2 / 127,
-          seq: seq++,
-          track: trackIndex,
-          channel: event.channel,
-        });
-        let held = sounding.get(event.channel);
-        if (!held) {
-          held = new Set();
-          sounding.set(event.channel, held);
-        }
-        held.add(queue);
-        continue;
-      }
-      const queue = open.get(key);
-      // A note-off with nothing struck to let go of is ignored.
-      if (!queue || queue.head === queue.starts.length) continue;
-      const started = queue.starts[queue.head] as Omit<TickNote, 'endTick'>;
-      queue.head += 1;
-      notes.push({ ...started, endTick: event.tick });
-      if (queue.head === queue.starts.length) {
-        // Every strike paired: start the key's queue afresh.
-        queue.starts = [];
-        queue.head = 0;
-        sounding.get(event.channel)?.delete(queue);
-      }
+  const end = (strike: Strike, endTick: number): void => {
+    strike.ended = true;
+    const { midi, startTick, velocity, seq: order, track, channel } = strike;
+    notes.push({ midi, startTick, endTick, velocity, seq: order, track, channel });
+  };
+  /** End every strike a queue still holds, at `endTick`, and empty it. */
+  const endWaiting = (queue: StrikeQueue, endTick: number): void => {
+    for (let i = queue.head; i < queue.strikes.length; i += 1) {
+      const strike = queue.strikes[i] as Strike;
+      if (!strike.ended) end(strike, endTick);
     }
-    for (const queue of open.values()) endAll(queue, track.endTick);
-  });
+    queue.strikes = [];
+    queue.head = 0;
+  };
+
+  // Each track's strikes of each key, keyed by part and key.
+  const own = new Map<number, StrikeQueue>();
+  // Every track's strikes of each key on each channel, keyed by channel and key.
+  const shared = new Map<number, StrikeQueue>();
+  // Per part, its keys with a strike still waiting: what an All Notes Off has
+  // to end. A file may send thousands of them, so each looks only at what its
+  // part holds rather than sweeping every key.
+  const sounding = new Map<number, Set<StrikeQueue>>();
+
+  for (const { event, track } of timeline) {
+    const part = partKey(track, event.channel);
+    if (
+      event.command === 0xb0 &&
+      (event.data1 === ALL_SOUND_OFF_CONTROLLER || event.data1 === ALL_NOTES_OFF_CONTROLLER) &&
+      event.channel !== DRUM_CHANNEL
+    ) {
+      const held = sounding.get(part);
+      if (held) {
+        for (const queue of held) endWaiting(queue, event.tick);
+        held.clear();
+      }
+      continue;
+    }
+    const isOn = event.command === 0x90 && event.data2 > 0;
+    const isOff = event.command === 0x80 || (event.command === 0x90 && event.data2 === 0);
+    if (!isOn && !isOff) continue;
+    if (event.channel === DRUM_CHANNEL) {
+      if (isOn) drumNotes += 1;
+      continue;
+    }
+    const ownQueue = queueAt(own, part * 128 + event.data1);
+    const sharedQueue = queueAt(shared, event.channel * 128 + event.data1);
+    if (isOn) {
+      const strike: Strike = {
+        midi: event.data1,
+        startTick: event.tick,
+        velocity: event.data2 / 127,
+        seq: seq++,
+        track,
+        channel: event.channel,
+        ended: false,
+      };
+      ownQueue.strikes.push(strike);
+      sharedQueue.strikes.push(strike);
+      let held = sounding.get(part);
+      if (!held) {
+        held = new Set();
+        sounding.set(part, held);
+      }
+      held.add(ownQueue);
+      continue;
+    }
+    let strike = oldestWaiting(ownQueue);
+    if (strike === undefined) {
+      // None of this track's own: another track's oldest, struck before now.
+      const other = oldestWaiting(sharedQueue);
+      if (other !== undefined && other.startTick < event.tick) strike = other;
+    }
+    // A note-off with nothing struck to let go of is ignored.
+    if (strike === undefined) continue;
+    end(strike, event.tick);
+    if (oldestWaiting(ownQueue) === undefined) sounding.get(part)?.delete(ownQueue);
+  }
+  for (const [key, queue] of own) {
+    // The part and key are in the queue's own key; its track ends what it left.
+    const track = smf.tracks[Math.floor(key / (16 * 128))] as SmfTrack;
+    endWaiting(queue, track.endTick);
+  }
   return { notes, drumNotes };
 }
 
