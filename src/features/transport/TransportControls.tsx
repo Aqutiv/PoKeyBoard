@@ -2,6 +2,7 @@ import { useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { TooltipButton } from '@/ui/TooltipButton';
 import { useCallback } from 'react';
 import {
+  useCountingIn,
   usePlayhead,
   usePlayheadMs,
   useTrainingWaiting,
@@ -100,6 +101,10 @@ export function TransportControls() {
   const undoLastPass = useTakeStore((s) => s.undoLastPass);
   const recordMode = useSettingsStore((s) => s.recordMode);
   const waitingForTraining = useTrainingWaiting();
+  const runCountingIn = useCountingIn();
+  // A recording's count-in, or a Keep-time run's: either way, the bars before
+  // the music sets off.
+  const countingIn = state === 'countIn' || runCountingIn;
 
   const recording = state === 'recording' || state === 'countIn';
   const playing = state === 'playing';
@@ -213,7 +218,7 @@ export function TransportControls() {
         <SpeedMenu disabled={recording || !hasNotes} />
         <LoopButton disabled={recording || !hasNotes} />
       </div>
-      {desktop && practiceStyle !== null && !recording && !waitingForTraining ? (
+      {desktop && practiceStyle !== null && !recording && !waitingForTraining && !countingIn ? (
         <p className="transport__status">
           {practiceStyle === 'wait' ? m.workflow.practiceHint : m.workflow.keepTimeHint}
         </p>
@@ -223,7 +228,7 @@ export function TransportControls() {
           {m.transport.waitingForYou}
         </p>
       ) : null}
-      {state === 'countIn' ? (
+      {countingIn ? (
         <p className="transport__status" role="status">
           {m.transport.countIn}
         </p>

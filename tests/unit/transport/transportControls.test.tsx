@@ -2,16 +2,22 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { PlaybackMode } from '@/features/transport/modes';
 import { TransportControls } from '@/features/transport/TransportControls';
+import type { TransportState } from '@/features/transport/transportMachine';
 import { en } from '@/i18n/en';
 import { I18nContext } from '@/i18n/i18nContext';
 import { SETTINGS_DEFAULTS, useSettingsStore } from '@/state/useSettingsStore';
 
-const mock = vi.hoisted(() => ({ desktop: true }));
+const mock = vi.hoisted(() => ({
+  desktop: true,
+  state: 'idle' as TransportState,
+  countingIn: false,
+}));
 
 vi.mock('@/app/hooks/useMediaQuery', () => ({ useMediaQuery: () => mock.desktop }));
 vi.mock('@/app/hooks/useTransport', () => ({
-  useTransportState: () => 'idle',
+  useTransportState: () => mock.state,
   useTrainingWaiting: () => false,
+  useCountingIn: () => mock.countingIn,
   usePlayheadMs: () => 0,
   usePlayhead: <T,>(select: (playheadMs: number) => T) => select(0),
 }));
@@ -35,13 +41,15 @@ function renderControls(playbackMode: PlaybackMode): void {
   );
 }
 
-describe('the practice hint under the transport', () => {
-  beforeEach(() => {
-    mock.desktop = true;
-    useSettingsStore.setState({ ...SETTINGS_DEFAULTS });
-  });
-  afterEach(cleanup);
+beforeEach(() => {
+  mock.desktop = true;
+  mock.state = 'idle';
+  mock.countingIn = false;
+  useSettingsStore.setState({ ...SETTINGS_DEFAULTS });
+});
+afterEach(cleanup);
 
+describe('the practice hint under the transport', () => {
   it('says playback waits, in Wait for me', () => {
     renderControls('training-right');
 
@@ -65,5 +73,33 @@ describe('the practice hint under the transport', () => {
     mock.desktop = false;
     renderControls('playalong-both');
     expect(screen.queryByText(KEEP_TIME_HINT)).toBeNull();
+  });
+});
+
+describe('the count-in under the transport', () => {
+  it('says Count-in… while a Keep-time run counts in, in place of its hint', () => {
+    mock.state = 'playing';
+    mock.countingIn = true;
+    renderControls('playalong-left');
+
+    expect(screen.getByRole('status')).toHaveTextContent('Count-in…');
+    expect(screen.queryByText(KEEP_TIME_HINT)).toBeNull();
+  });
+
+  it('says it on a phone too, where no hint shows', () => {
+    mock.desktop = false;
+    mock.state = 'playing';
+    mock.countingIn = true;
+    renderControls('playalong-left');
+
+    expect(screen.getByRole('status')).toHaveTextContent('Count-in…');
+  });
+
+  it('goes back to the hint once the run sets off', () => {
+    mock.state = 'playing';
+    renderControls('playalong-left');
+
+    expect(screen.queryByText('Count-in…')).toBeNull();
+    expect(screen.getByText(KEEP_TIME_HINT)).toBeTruthy();
   });
 });

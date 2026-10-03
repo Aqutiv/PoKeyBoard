@@ -115,8 +115,8 @@ function pinchedSeconds(from: WaterfallSeconds, scale: number): WaterfallSeconds
  * takes `fallMs` (the fall speed) to fall at any playback speed, so the view
  * shows less of the take when it plays slower. While a recording counts in,
  * the clock already runs toward the recording's start, so the take's notes
- * fall in to meet it; recording itself runs straight through at the take's
- * own speed. A run falls at its own rate and round its own loop, and what it
+ * fall in to meet it, as they do while a Keep-time run counts in; recording
+ * itself runs straight through at the take's own speed. A run falls at its own rate and round its own loop, and what it
  * does not play — a note held from before where its pass began — falls as an
  * outline. A scrub goes round the loop as the drag carries it, outlining what
  * it has not crossed, and a transport at rest shows what pressing play would
@@ -129,7 +129,11 @@ function timelineNow(loopAtRest: PlaybackLoop | null, fallMs: number): Waterfall
   const passStartMs = transportController.getPassStartMs();
   if (state === 'countIn')
     return { nowMs: clock.currentTakeMs(), spanMs: fallMs, loop: null, passStartMs };
-  const nowMs = transportController.getPlayheadMs();
+  // A Keep-time run's count-in holds the playhead at the run's start while the
+  // clock runs toward it, as a recording's does: the notes fall in to meet it.
+  const nowMs = transportController.isCountingIn()
+    ? clock.currentTakeMs()
+    : transportController.getPlayheadMs();
   if (state === 'recording') return { nowMs, spanMs: fallMs, loop: null, passStartMs };
   if (state === 'playing')
     return { nowMs, spanMs: fallMs * clock.rate, loop: clock.loop, passStartMs };
