@@ -144,6 +144,7 @@ export const fr: Messages = {
     importMenuLabel: 'Options d’importation',
     importJson: 'Fichier de prise (JSON)',
     importMxl: 'Partition (MXL)',
+    importMidi: 'Fichier MIDI (.mid)',
     importUrl: 'Depuis un lien (URL)',
     loading: 'Chargement…',
     empty:
@@ -165,6 +166,7 @@ export const fr: Messages = {
     restoreBackup: 'Restaurer une sauvegarde',
     importFileLabel: 'Importer un fichier JSON de prise',
     importMxlFileLabel: 'Importer un fichier MusicXML',
+    importMidiFileLabel: 'Importer un fichier MIDI',
     restoreFileLabel: 'Restaurer un fichier de sauvegarde',
     removeNotesConfirm: ({ title }) => `Supprimer toutes les notes de « ${title} » ?`,
     deleteConfirm: ({ title }) => `Supprimer « ${title} » ? Cette action est irréversible.`,
@@ -405,7 +407,7 @@ export const fr: Messages = {
     title: 'Importer depuis un lien',
     urlLabel: 'Lien du fichier',
     placeholder: 'https://exemple.com/partition.mxl',
-    hint: 'Collez un lien direct vers un fichier .mxl, .musicxml, .xml ou .json PoKeyBoard. Le site qui l’héberge doit autoriser les téléchargements depuis d’autres applications, ce que beaucoup ne font pas.',
+    hint: 'Collez un lien direct vers un fichier .mxl, .musicxml, .xml, .mid ou .json PoKeyBoard. Le site qui l’héberge doit autoriser les téléchargements depuis d’autres applications, ce que beaucoup ne font pas.',
     loading: 'Téléchargement…',
     httpError: ({ status }) =>
       `Le site a répondu par une erreur (${status}). Vérifiez le lien et réessayez.`,
@@ -665,7 +667,7 @@ export const fr: Messages = {
       },
       {
         title: 'Exporter et partager',
-        body: 'Rendez une prise en MP3 ou en FLAC, gravez-la en partition PDF ou transmettez le JSON brut. Les partitions entrent aussi — importez un MusicXML ou une prise PoKeyBoard depuis un fichier ou un lien direct.',
+        body: 'Rendez une prise en MP3 ou en FLAC, gravez-la en partition PDF ou transmettez le JSON brut. Les partitions entrent aussi — importez un MusicXML, un MIDI ou une prise PoKeyBoard depuis un fichier ou un lien direct.',
       },
     ],
     privacyTitle: 'Où vit votre musique',
@@ -717,6 +719,9 @@ export const fr: Messages = {
     generic: 'Une erreur s’est produite.',
     notValidTake: 'Ce fichier n’est pas une prise PoKeyBoard valide.',
     notValidScore: 'Ce fichier n’a pas pu être lu comme une partition MusicXML.',
+    notValidMidi: 'Ce fichier n’a pas pu être lu comme un fichier MIDI.',
+    midiUnsupported:
+      'Ce fichier MIDI est écrit sous une forme que PoKeyBoard ne sait pas ouvrir (type 2, ou minuté en images SMPTE). Enregistrez-le de nouveau au type 0 ou 1, puis importez celui-ci.',
     storageFailed:
       'L’enregistrement dans ce navigateur a échoué. Votre dernière modification peut ne pas être stockée.',
     storageFull: 'Le stockage est plein. Libérez de l’espace ou exportez vos prises en sauvegarde.',

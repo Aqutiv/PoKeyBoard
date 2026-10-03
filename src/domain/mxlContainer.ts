@@ -1,9 +1,12 @@
 import { unzipSync } from 'fflate';
 import { ScoreImportError } from '@/utils/errors';
 
-/** File names the score importer accepts: compressed MXL or raw MusicXML. */
+/**
+ * File names the score importer accepts: compressed MXL, raw MusicXML, or a
+ * Standard MIDI File (which `previewImportScoreBytes` hands to the MIDI reader).
+ */
 export function isScoreFileName(name: string): boolean {
-  return /\.(mxl|musicxml|xml)$/i.test(name);
+  return /\.(mxl|musicxml|xml|mid|midi)$/i.test(name);
 }
 
 /** Per-entry decompressed cap; anything larger is treated as hostile. */

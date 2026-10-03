@@ -19,6 +19,8 @@ export type ErrorMessageKey =
   | 'generic'
   | 'notValidTake'
   | 'notValidScore'
+  | 'notValidMidi'
+  | 'midiUnsupported'
   | 'storageFailed'
   | 'storageFull'
   | 'audioUnavailable'
@@ -269,6 +271,7 @@ export interface Messages {
     importMenuLabel: string;
     importJson: string;
     importMxl: string;
+    importMidi: string;
     importUrl: string;
     loading: string;
     empty: string;
@@ -288,6 +291,7 @@ export interface Messages {
     restoreBackup: string;
     importFileLabel: string;
     importMxlFileLabel: string;
+    importMidiFileLabel: string;
     restoreFileLabel: string;
     removeNotesConfirm: (p: { title: string }) => string;
     deleteConfirm: (p: { title: string }) => string;

@@ -58,6 +58,7 @@ export function TakesPage() {
   const [dragOver, setDragOver] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const scoreInputRef = useRef<HTMLInputElement | null>(null);
+  const midiInputRef = useRef<HTMLInputElement | null>(null);
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(() => {
@@ -135,6 +136,24 @@ export function TakesPage() {
       // .json. Anything else stays a score, which keeps the MusicXML wording
       // for a wrong pick made from the "Music score" menu item.
       void (/\.json$/i.test(file.name) ? previewImportFile(file) : previewImportScoreFile(file))
+        .then(openPreview)
+        .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
+    },
+    [m, openPreview],
+  );
+
+  const onMidiImportChosen = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      event.target.value = '';
+      if (!file) return;
+      // Picked from "MIDI file (.mid)", so a file whose bytes say nothing — a
+      // damaged .kar, or one saved with no extension — is reported as the MIDI
+      // file it was picked as. The bytes still have the last word: a score
+      // picked here imports as one. An explicit .json is a take, as above.
+      void (
+        /\.json$/i.test(file.name) ? previewImportFile(file) : previewImportScoreFile(file, true)
+      )
         .then(openPreview)
         .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
     },
@@ -234,6 +253,7 @@ export function TakesPage() {
             align="right"
             items={[
               { label: m.takes.importMxl, onSelect: () => scoreInputRef.current?.click() },
+              { label: m.takes.importMidi, onSelect: () => midiInputRef.current?.click() },
               { label: m.takes.importJson, onSelect: () => importInputRef.current?.click() },
               { label: m.takes.importUrl, onSelect: () => setUrlDialogOpen(true) },
             ]}
@@ -466,6 +486,15 @@ export function TakesPage() {
         className="visually-hidden"
         onChange={onScoreImportChosen}
         aria-label={m.takes.importMxlFileLabel}
+      />
+      {/* No accept here either: iOS Files does not reliably tie .mid to a MIME
+          type, and an unmatched filter greys the file out. */}
+      <input
+        ref={midiInputRef}
+        type="file"
+        className="visually-hidden"
+        onChange={onMidiImportChosen}
+        aria-label={m.takes.importMidiFileLabel}
       />
       <input
         ref={restoreInputRef}

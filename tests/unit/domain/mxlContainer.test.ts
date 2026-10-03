@@ -29,6 +29,13 @@ describe('isScoreFileName', () => {
     expect(isScoreFileName('song.xml')).toBe(true);
   });
 
+  it('accepts MIDI files, mid and midi in any case', () => {
+    expect(isScoreFileName('song.mid')).toBe(true);
+    expect(isScoreFileName('SONG.MID')).toBe(true);
+    expect(isScoreFileName('song.midi')).toBe(true);
+    expect(isScoreFileName('song.midx')).toBe(false);
+  });
+
   it('rejects other extensions', () => {
     expect(isScoreFileName('take.json')).toBe(false);
     expect(isScoreFileName('take.pokeyboard.json')).toBe(false);

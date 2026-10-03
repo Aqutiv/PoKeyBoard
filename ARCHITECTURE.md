@@ -26,7 +26,11 @@ src/
                 tempoMap (piecewise beats↔ms; shared by import, library, score),
                 hands (which hand plays a note), fingering (pure: which finger
                 plays each note, the score's own or worked out), midiExport
-                (Standard MIDI File writer), trainingGate (pure)
+                (Standard MIDI File writer), musicXmlImport and mxlContainer
+                (MusicXML and MXL to a take), smfReader and midiImport (MIDI
+                bytes, then MIDI to a take), importedTake (the last step both
+                imports share: ids, rounding, limits, title, tempo changes),
+                trainingGate (pure)
   data/         db (Dexie v1), takeRepository, settingsRepository,
                 audioCacheRepository, metadataRepository, persistence (autosave)
   features/

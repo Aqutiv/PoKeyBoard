@@ -14,6 +14,28 @@ const SCORE_XML =
   '<note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration></note>' +
   '</measure></part></score-partwise>';
 
+/**
+ * A type 0 MIDI file named "Linked Melody": two quarter notes at ♩=120,
+ * written byte by byte so the test does not lean on the exporter.
+ */
+function midiBytes(): Uint8Array<ArrayBuffer> {
+  const title = [...new TextEncoder().encode('Linked Melody')];
+  const events = [
+    [0x00, 0xff, 0x03, title.length, ...title],
+    [0x00, 0x90, 60, 100],
+    [0x83, 0x60, 0x80, 60, 0], // 480 ticks later
+    [0x00, 0x90, 64, 100],
+    [0x83, 0x60, 0x80, 64, 0],
+    [0x00, 0xff, 0x2f, 0x00],
+  ].flat();
+  const n = events.length;
+  return Uint8Array.from([
+    ...[0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0], // MThd, type 0, 480
+    ...[0x4d, 0x54, 0x72, 0x6b, (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff],
+    ...events,
+  ]);
+}
+
 function takeJson(): string {
   return JSON.stringify({
     schemaVersion: 1,
@@ -116,6 +138,179 @@ afterEach(() => {
   vi.doUnmock('@/features/transport/transportController');
   vi.doUnmock('@/features/notation/scrubController');
   vi.resetModules();
+});
+
+describe('MIDI files', () => {
+  it('imports a MIDI file by its .mid link', async () => {
+    const { previewImportUrl } = await loadService();
+    fetchMock.mockResolvedValue(
+      streamingResponse(midiBytes(), { headers: { 'content-type': 'application/octet-stream' } }),
+    );
+
+    const preview = await previewImportUrl('https://x.test/files/melody.mid');
+    expect(preview.parsed.take.notes.map((note) => note.midi)).toEqual([60, 64]);
+    expect(preview.parsed.take.title).toBe('Linked Melody');
+    expect(preview.parsed.repairs).toEqual([]);
+  });
+
+  it('knows a MIDI file by its Content-Type', async () => {
+    const { previewImportUrl } = await loadService();
+    for (const type of ['audio/midi', 'audio/x-midi', 'audio/mid']) {
+      fetchMock.mockResolvedValue(
+        streamingResponse(midiBytes(), { headers: { 'content-type': type } }),
+      );
+      const preview = await previewImportUrl('https://x.test/download?id=7');
+      expect(preview.parsed.take.notes).toHaveLength(2);
+    }
+  });
+
+  it('knows a MIDI file by its MThd header alone', async () => {
+    const { previewImportUrl } = await loadService();
+    fetchMock.mockResolvedValue(
+      streamingResponse(midiBytes(), { headers: { 'content-type': 'text/plain' } }),
+    );
+
+    // No extension and a useless Content-Type: only the byte sniff saves this.
+    const preview = await previewImportUrl('https://x.test/download');
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('reads MIDI bytes as MIDI whatever the file is called', async () => {
+    const { previewImportScoreBytes } = await loadService();
+    const preview = await previewImportScoreBytes(midiBytes(), 'misnamed.xml');
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('reports a damaged .mid file as a MIDI problem, not a MusicXML one', async () => {
+    const { previewImportScoreBytes, previewImportScoreFile, MidiImportError } =
+      await loadService();
+    await expect(
+      previewImportScoreBytes(new TextEncoder().encode('not midi'), 'song.mid'),
+    ).rejects.toBeInstanceOf(MidiImportError);
+    const truncated = midiBytes().subarray(0, 30);
+    await expect(previewImportScoreBytes(truncated, 'song.MIDI')).rejects.toBeInstanceOf(
+      MidiImportError,
+    );
+    const huge = new File([new Uint8Array(8)], 'huge.mid');
+    Object.defineProperty(huge, 'size', { value: 60 * 1024 * 1024 });
+    await expect(previewImportScoreFile(huge)).rejects.toBeInstanceOf(MidiImportError);
+  });
+
+  it('keeps a MIDI Content-Type in mind when the body turns out damaged', async () => {
+    const { previewImportUrl, MidiImportError } = await loadService();
+    const failureOf = async (url: string, type: string) => {
+      fetchMock.mockResolvedValue(
+        textResponse('not a MIDI file', { headers: { 'content-type': type } }),
+      );
+      const error: unknown = await previewImportUrl(url).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(MidiImportError);
+      return (error as InstanceType<typeof MidiImportError>).messageKey;
+    };
+    // No file name at all: the link ends in a slash.
+    expect(await failureOf('https://x.test/', 'audio/midi')).toBe('notValidMidi');
+    // A name that says nothing either way.
+    expect(await failureOf('https://x.test/download', 'audio/midi')).toBe('notValidMidi');
+    expect(await failureOf('https://x.test/download', 'audio/x-midi; charset=binary')).toBe(
+      'notValidMidi',
+    );
+    expect(await failureOf('https://x.test/get/7', 'audio/mid')).toBe('notValidMidi');
+  });
+
+  it('keeps a .mid name in mind whatever the host says the type is', async () => {
+    const { previewImportUrl, MidiImportError } = await loadService();
+    fetchMock.mockResolvedValue(
+      textResponse('not a MIDI file', { headers: { 'content-type': 'application/xml' } }),
+    );
+    await expect(previewImportUrl('https://x.test/song.midi')).rejects.toBeInstanceOf(
+      MidiImportError,
+    );
+  });
+
+  it('reports an oversized extensionless MIDI file as a MIDI problem', async () => {
+    const { previewImportFile, MidiImportError } = await loadService();
+    const huge = new File([midiBytes()], 'song');
+    Object.defineProperty(huge, 'size', { value: 60 * 1024 * 1024 });
+    await expect(previewImportFile(huge)).rejects.toBeInstanceOf(MidiImportError);
+  });
+
+  it('still reports a damaged MusicXML file as a MusicXML problem', async () => {
+    const { previewImportScoreBytes, ScoreImportError } = await loadService();
+    await expect(
+      previewImportScoreBytes(new TextEncoder().encode('<score-partwise'), 'song.musicxml'),
+    ).rejects.toBeInstanceOf(ScoreImportError);
+  });
+});
+
+describe('previewImportScoreFile: picked as MIDI', () => {
+  it('reports a damaged pick from the MIDI menu as a MIDI file, whatever its name', async () => {
+    const { previewImportScoreFile, MidiImportError } = await loadService();
+    for (const name of ['song', 'song.kar']) {
+      const error: unknown = await previewImportScoreFile(
+        new File(['not a MIDI file'], name),
+        true,
+      ).catch((caught: unknown) => caught);
+      expect(error).toBeInstanceOf(MidiImportError);
+      expect((error as InstanceType<typeof MidiImportError>).messageKey).toBe('notValidMidi');
+    }
+  });
+
+  it('lets the bytes have the last word: an MXL picked as MIDI still imports', async () => {
+    const { previewImportScoreFile } = await loadService();
+    const mxl = zipSync({ 'score.xml': strToU8(SCORE_XML) });
+    const preview = await previewImportScoreFile(new File([mxl], 'song.mxl'), true);
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('imports MusicXML or MXL saved under a .mid name as the score it is', async () => {
+    const { previewImportScoreFile, previewImportScoreBytes } = await loadService();
+    const xml = await previewImportScoreFile(new File([SCORE_XML], 'song.mid'));
+    expect(xml.parsed.take.notes).toHaveLength(2);
+    const mxl = zipSync({ 'score.xml': strToU8(SCORE_XML) });
+    expect((await previewImportScoreBytes(mxl, 'song.midi')).parsed.take.notes).toHaveLength(2);
+  });
+});
+
+describe('previewImportFile: a file with no telling name', () => {
+  it('previews an extensionless MIDI file as a score, by its header', async () => {
+    const { previewImportFile } = await loadService();
+    const preview = await previewImportFile(new File([midiBytes()], 'song'));
+    expect(preview.parsed.take.notes.map((note) => note.midi)).toEqual([60, 64]);
+    expect(preview.parsed.take.title).toBe('Linked Melody');
+  });
+
+  it('previews a MIDI file under a name it does not know, such as .kar', async () => {
+    const { previewImportFile } = await loadService();
+    const preview = await previewImportFile(new File([midiBytes()], 'song.kar'));
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('previews an extensionless MXL archive and raw MusicXML as scores', async () => {
+    const { previewImportFile } = await loadService();
+    const mxl = zipSync({ 'score.xml': strToU8(SCORE_XML) });
+    expect((await previewImportFile(new File([mxl], 'score'))).parsed.take.notes).toHaveLength(2);
+    const xml = new File([SCORE_XML], 'score');
+    expect((await previewImportFile(xml)).parsed.take.notes).toHaveLength(2);
+  });
+
+  it('still reads take JSON, and takes a .json name at its word', async () => {
+    const { previewImportFile, ImportValidationError } = await loadService();
+    const take = await previewImportFile(new File([takeJson()], 'take'));
+    expect(take.parsed.take.title).toBe('Linked Take');
+    await expect(
+      previewImportFile(new File(['{"schemaVersion": 1, "notes": "nope"}'], 'bad.json')),
+    ).rejects.toBeInstanceOf(ImportValidationError);
+    // MIDI bytes behind a .json name are a take file that is not valid.
+    await expect(previewImportFile(new File([midiBytes()], 'bad.json'))).rejects.toBeInstanceOf(
+      ImportValidationError,
+    );
+  });
+
+  it('gives an unrecognised file the take error, as before', async () => {
+    const { previewImportFile, ImportValidationError } = await loadService();
+    await expect(previewImportFile(new File(['hello'], 'notes'))).rejects.toBeInstanceOf(
+      ImportValidationError,
+    );
+  });
 });
 
 async function expectRemoteFailure(promise: Promise<ImportPreview>, ctor: unknown, kind: string) {
