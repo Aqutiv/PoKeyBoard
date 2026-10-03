@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   canTransition,
   isBusyState,
+  isExportState,
   transition,
   type TransportState,
 } from '@/features/transport/transportMachine';
@@ -72,5 +73,15 @@ describe('transport state machine', () => {
     expect(isBusyState('idle')).toBe(false);
     expect(isBusyState('paused')).toBe(false);
     expect(isBusyState('audioReady')).toBe(false);
+  });
+
+  it('flags the states an export is under way in, for the import inbox', () => {
+    expect(isExportState('renderingSheet')).toBe(true);
+    expect(isExportState('renderingAudio')).toBe(true);
+    expect(isExportState('encodingAudio')).toBe(true);
+    // Done exporting: the dialog showing the file holds the inbox on its own.
+    expect(isExportState('audioReady')).toBe(false);
+    expect(isExportState('playing')).toBe(false);
+    expect(isExportState('recording')).toBe(false);
   });
 });
