@@ -113,8 +113,11 @@ export function isBusyState(state: TransportState): boolean {
     state === 'recording' ||
     state === 'playing' ||
     state === 'scrubbing' ||
-    state === 'renderingSheet' ||
-    state === 'renderingAudio' ||
-    state === 'encodingAudio'
+    isExportState(state)
   );
+}
+
+/** States in which an audio or sheet export is under way. */
+export function isExportState(state: TransportState): boolean {
+  return state === 'renderingSheet' || state === 'renderingAudio' || state === 'encodingAudio';
 }

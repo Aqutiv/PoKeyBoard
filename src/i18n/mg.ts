@@ -175,7 +175,6 @@ export const mg: Messages = {
     notesCleared: 'Voafafa ny naoty.',
     deleted: 'Voafafa.',
     backupDownloaded: 'Voatariny ny tahiry.',
-    takeImported: 'Voampiditra ny rakitra.',
     backupRestored: ({ imported, skipped, settingsRestored }) =>
       `Tahiry voaverina: rakitra ${imported}` +
       (skipped > 0 ? `, ${skipped} nolavina` : '') +
@@ -405,6 +404,7 @@ export const mg: Messages = {
     replaceExisting: 'Soloy ny rakitra efa misy',
     cancel: 'Aoka',
     import: 'Ampidiro',
+    close: 'Akatona',
   },
   importUrlDialog: {
     title: 'Ampidiro avy amin’ny rohy',

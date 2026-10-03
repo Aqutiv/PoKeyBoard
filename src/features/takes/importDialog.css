@@ -1,0 +1,62 @@
+/* The import inbox's dialogs. They load with the dialogs rather than with
+   takes.css, because the inbox opens over any route, not just Takes. */
+
+.import-preview {
+  margin: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 16px;
+}
+
+.import-preview dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--text-faint);
+}
+
+.import-preview dd {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+
+.import-repairs {
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--text-dim);
+}
+
+.import-repairs ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+}
+
+.import-collision {
+  margin: 14px 0 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.import-collision legend {
+  font-size: 13px;
+  color: var(--text-dim);
+  padding: 0 4px;
+}
+
+.import-collision label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+/* Sized and coloured like the export dialogs' and the link dialog's errors. */
+.import-failure {
+  margin: 0;
+  font-size: 13px;
+  color: var(--record);
+}

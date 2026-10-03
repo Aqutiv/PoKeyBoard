@@ -297,7 +297,6 @@ export interface Messages {
     notesCleared: string;
     deleted: string;
     backupDownloaded: string;
-    takeImported: string;
     backupRestored: (p: { imported: number; skipped: number; settingsRestored: boolean }) => string;
   };
   library: {
@@ -438,6 +437,8 @@ export interface Messages {
     replaceExisting: string;
     cancel: string;
     import: string;
+    /** Closes the alert saying why a confirmed import could not be stored. */
+    close: string;
   };
   importUrlDialog: {
     title: string;
