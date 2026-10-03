@@ -153,6 +153,13 @@ export class TransportController {
   private errorMessage: string | null = null;
 
   private metronomeOn = false;
+  /**
+   * The metronome is on because a Keep-time run had nothing else to keep the
+   * beat (see `beginPracticeRun`), not because the player switched it on: it
+   * goes off again when that run ends, unless the player touches the switch
+   * first and makes it theirs.
+   */
+  private metronomeForRun = false;
   private pausedPlayheadMs = 0;
   private scrubTimeMs = 0;
   private scrubReturnState: 'idle' | 'paused' = 'idle';
@@ -451,8 +458,13 @@ export class TransportController {
     return this.metronomeOn;
   }
 
+  /**
+   * Switch the metronome on or off. A switch the player throws makes it
+   * theirs: the run that turned it on leaves it as they set it when it ends.
+   */
   setMetronomeOn(on: boolean): void {
     this.metronomeOn = on;
+    this.metronomeForRun = false;
     if (this.preRoll) {
       // A count-in clicks either way: the switch says only whether the take's
       // own beat carries on once the run sets off. The clicks still to come
@@ -1202,7 +1214,8 @@ export class TransportController {
    * A run that keeps time leaves those notes to the player, and so may leave
    * playback nothing to sound — the hand of a piece written for one hand, or
    * both hands. Then nothing would keep the beat for the player but the
-   * metronome, so it comes on, as its switch shows, for them to turn off.
+   * metronome, so it comes on, as its switch shows, for them to turn off; and
+   * goes off again with the run, unless they have switched it themselves.
    */
   private beginPracticeRun(
     notes: readonly NoteEvent[],
@@ -1236,6 +1249,7 @@ export class TransportController {
     this.tellPractice({ type: 'run-start', run: this.practiceRun });
     if (style === 'playAlong' && !this.metronomeOn && !this.soundsAnything(notes, fromMs)) {
       this.setMetronomeOn(true);
+      this.metronomeForRun = true;
     }
   }
 
@@ -1269,6 +1283,11 @@ export class TransportController {
     // Whatever plays on now plays the take whole: a run ended by a change of
     // page leaves plain playback behind it, as one that waits leaves its holds.
     this.playAlongMuted = EMPTY_IDS;
+    // And without the metronome the run turned on for itself.
+    if (this.metronomeForRun) {
+      this.metronomeForRun = false;
+      this.setMetronomeOn(false);
+    }
     // A run that keeps time ends at a moment in its music. One that waits may
     // end at a hold, where its music stands still, so it names none.
     const audioTime = run.style === 'playAlong' ? audioEngine.currentTime : null;

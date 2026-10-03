@@ -212,7 +212,8 @@ than let through. The Modes menu does nothing for a choice already made, so a
 second click on it never pauses a run or lets a hold through. A run that would
 sound nothing (both hands, or the hand of a piece written for one) turns the
 metronome on at its start, visibly, for the player to turn off: without it,
-nothing would keep the beat.
+nothing would keep the beat. It goes off again when that run ends, unless the
+player has touched its switch in the meantime, which makes the choice theirs.
 
 ## Choosing a piano
 

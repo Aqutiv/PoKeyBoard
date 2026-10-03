@@ -558,3 +558,61 @@ describe('a change of practice mode with Keep time', () => {
     expect(told().slice(before)).toEqual([]);
   });
 });
+
+describe('the metronome a Keep-time run turns on', () => {
+  beforeEach(() => {
+    // Both hands: nothing left to sound, so the run turns the metronome on.
+    useSettingsStore.getState().setPlaybackMode('playalong-both');
+  });
+
+  it('goes back off when the run that turned it on ends', () => {
+    transportController.play();
+    expect(transportController.isMetronomeOn()).toBe(true);
+    runTo(600);
+    transportController.pause();
+    expect(transportController.isMetronomeOn()).toBe(false);
+
+    // Played to its end, the same.
+    transportController.seek(0);
+    transportController.play();
+    expect(transportController.isMetronomeOn()).toBe(true);
+    runToEnd();
+    expect(transportController.isMetronomeOn()).toBe(false);
+  });
+
+  it('goes back off with the run on a change of page, leaving plain playback', () => {
+    transportController.play();
+    runTo(600);
+    transportController.handleNavigation();
+    expect(transportController.getState()).toBe('playing');
+    expect(transportController.isMetronomeOn()).toBe(false);
+  });
+
+  it('stays as the player sets it during the run', () => {
+    transportController.play();
+    // Off and on again: on is the player's choice now, not the run's.
+    transportController.setMetronomeOn(false);
+    transportController.setMetronomeOn(true);
+    runTo(600);
+    transportController.pause();
+    expect(transportController.isMetronomeOn()).toBe(true);
+  });
+
+  it('stays on where the player had it on before the run', () => {
+    transportController.setMetronomeOn(true);
+    transportController.play();
+    runTo(600);
+    transportController.pause();
+    expect(transportController.isMetronomeOn()).toBe(true);
+  });
+
+  it('stays on through a run started again at a new speed', () => {
+    transportController.play();
+    run(0.5);
+    transportController.setSpeed(0.5);
+    expect(transportController.isCountingIn()).toBe(true);
+    expect(transportController.isMetronomeOn()).toBe(true);
+    transportController.pause();
+    expect(transportController.isMetronomeOn()).toBe(false);
+  });
+});

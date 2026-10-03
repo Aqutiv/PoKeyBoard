@@ -76,11 +76,15 @@ function countInStatus(page: Page) {
   return page.getByRole('status').filter({ hasText: 'Count-in' });
 }
 
-/** Play from the start, and wait for the take to play to its end. */
-async function playThrough(page: Page): Promise<void> {
+/**
+ * Play from the start, and wait for the take to play to its end; `meanwhile`
+ * looks on while it plays.
+ */
+async function playThrough(page: Page, meanwhile?: () => Promise<void>): Promise<void> {
   await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
   await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
   await expect(transport(page).getByRole('button', { name: 'Pause', exact: true })).toBeVisible();
+  await meanwhile?.();
   await expect(transport(page).getByRole('button', { name: 'Play', exact: true })).toBeVisible({
     timeout: 15_000,
   });
@@ -157,10 +161,13 @@ test.describe('Keep time', () => {
     // Both notes are right hand: practising it leaves the take nothing to sound.
     await chooseKeepTime(page, 'Practice right');
     await resetPianoVoices(page);
-    await playThrough(page);
+    await playThrough(page, async () => {
+      // So the metronome keeps the beat while the run lasts, as its switch says…
+      await expect(page.getByRole('button', { name: /^Metronome on/ })).toBeVisible();
+    });
     expect(await pianoVoices(page)).toBe(0);
-    // So the metronome keeps the beat, and says so on its switch.
-    await expect(page.getByRole('button', { name: /^Metronome on/ })).toBeVisible();
+    // …and goes off again with the run.
+    await expect(page.getByRole('button', { name: 'Metronome off' })).toBeVisible();
 
     // Practising the other hand, the take plays its notes.
     await page.getByRole('button', { name: 'Practice left', exact: true }).click();
