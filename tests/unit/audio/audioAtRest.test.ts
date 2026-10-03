@@ -29,7 +29,10 @@ class FakeTickerNode {
 /** A context that can be suspended and resumed, with a worklet to load. */
 class FakeAudioContext {
   state: AudioContextState = 'running';
-  readonly currentTime = 0;
+  /** The audio clock, run off the (faked) wall clock. */
+  get currentTime(): number {
+    return Date.now() / 1000;
+  }
   readonly sampleRate = 48_000;
   readonly destination = { kind: 'destination' };
   readonly audioWorklet = { addModule: vi.fn(() => Promise.resolve()) };
@@ -183,25 +186,58 @@ describe('sleeping while the page is away', () => {
 });
 
 describe('sleeping only once everything has rung out', () => {
-  it('waits a whole quiet stretch after the last voice', async () => {
+  /** The engine's voices, with how many sound and when the last ended under the test's control. */
+  function stubVoices(engine: AudioEngine) {
+    const voices = (
+      engine as unknown as { voices: { voiceCount: number; lastVoiceEndedAt: number } }
+    ).voices;
+    return {
+      count: vi.spyOn(voices, 'voiceCount', 'get').mockReturnValue(0),
+      endedAt: vi.spyOn(voices, 'lastVoiceEndedAt', 'get').mockReturnValue(-Infinity),
+    };
+  }
+  const nowS = () => Date.now() / 1000;
+
+  it('waits a whole tail after the last voice ends', async () => {
     const { engine, context } = await readyEngine();
-    const voices = (engine as unknown as { voices: { voiceCount: number } }).voices;
-    const count = vi.spyOn(voices, 'voiceCount', 'get');
+    const { count, endedAt } = stubVoices(engine);
+    vi.useFakeTimers();
     count.mockReturnValue(2);
+    engine.sleepAfter(1, () => true);
+    vi.advanceTimersByTime(1000); // still sounding: look again a tail later
+    vi.advanceTimersByTime(500);
+    count.mockReturnValue(0);
+    endedAt.mockReturnValue(nowS()); // ends half way to the next look
+    vi.advanceTimersByTime(500);
+    expect(context.suspend).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(499);
+    expect(context.suspend).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
+    expect(context.suspend).toHaveBeenCalledOnce();
+  });
+
+  it('hears a note that came and went between two looks', async () => {
+    const { engine, context } = await readyEngine();
+    const { count, endedAt } = stubVoices(engine);
     vi.useFakeTimers();
     engine.sleepAfter(1, () => true);
-    vi.advanceTimersByTime(1000); // still sounding: look again later
+    vi.advanceTimersByTime(300);
+    count.mockReturnValue(1);
+    engine.noteOn(60, 0.5, 'midi');
+    vi.advanceTimersByTime(500);
     count.mockReturnValue(0);
-    vi.advanceTimersByTime(1000); // just ended: its tail gets a stretch
+    endedAt.mockReturnValue(nowS()); // a short note, over before the look at 1 s
+    vi.advanceTimersByTime(200);
     expect(context.suspend).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1000);
+    vi.advanceTimersByTime(799);
+    expect(context.suspend).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
     expect(context.suspend).toHaveBeenCalledOnce();
   });
 
   it('sleeps again after a note played with the page away has rung out', async () => {
     const { engine, context } = await readyEngine();
-    const voices = (engine as unknown as { voices: { voiceCount: number } }).voices;
-    const count = vi.spyOn(voices, 'voiceCount', 'get').mockReturnValue(0);
+    const { count, endedAt } = stubVoices(engine);
     vi.useFakeTimers();
     engine.sleepAfter(1, () => true);
     vi.advanceTimersByTime(1000);
@@ -213,27 +249,11 @@ describe('sleeping only once everything has rung out', () => {
     await vi.waitFor(() => expect(context.state).toBe('running'));
     vi.advanceTimersByTime(1000);
     expect(context.suspend).toHaveBeenCalledOnce();
-    // Let go, and rung out: asleep again a quiet stretch later.
+    // Let go, and rung out: asleep again a tail later.
     count.mockReturnValue(0);
-    vi.advanceTimersByTime(2000);
+    endedAt.mockReturnValue(nowS());
+    vi.advanceTimersByTime(1000);
     expect(context.suspend).toHaveBeenCalledTimes(2);
-  });
-
-  it('a note played while the sleep waits only puts it off', async () => {
-    const { engine, context } = await readyEngine();
-    const voices = (engine as unknown as { voices: { voiceCount: number } }).voices;
-    const count = vi.spyOn(voices, 'voiceCount', 'get').mockReturnValue(0);
-    vi.useFakeTimers();
-    engine.sleepAfter(1, () => true);
-    vi.advanceTimersByTime(500);
-    count.mockReturnValue(1);
-    engine.noteOn(60, 0.5, 'midi');
-    vi.advanceTimersByTime(500);
-    count.mockReturnValue(0);
-    vi.advanceTimersByTime(1000);
-    expect(context.suspend).not.toHaveBeenCalled();
-    vi.advanceTimersByTime(1000);
-    expect(context.suspend).toHaveBeenCalledOnce();
   });
 
   it('unlocks again at the next press after waking', async () => {

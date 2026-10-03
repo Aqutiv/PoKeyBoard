@@ -36,6 +36,7 @@ interface Voice extends SampleVoice {
  * the UI subscribes to the active-note set it exposes.
  */
 export class VoiceManager {
+  private lastEndedAt = Number.NEGATIVE_INFINITY;
   private readonly voices = new Set<Voice>();
   private readonly sustainSources = new Set<NoteSourceId>();
   private readonly activeListeners = new Set<(midis: ReadonlySet<number>) => void>();
@@ -99,6 +100,7 @@ export class VoiceManager {
     if (struckAgainAt !== undefined) dampSampleVoice(voice, struckAgainAt);
     this.voices.add(voice);
     voice.source.onended = () => {
+      this.lastEndedAt = this.context.currentTime;
       this.voices.delete(voice);
       disconnectSampleVoice(voice);
       // A key still held when its sound ends — its recording run out, or
@@ -257,6 +259,14 @@ export class VoiceManager {
 
   get voiceCount(): number {
     return this.voices.size;
+  }
+
+  /**
+   * When, on the audio clock, the last voice to end ended; -Infinity before any
+   * has. With `voiceCount`, it says how long the piano has been silent.
+   */
+  get lastVoiceEndedAt(): number {
+    return this.lastEndedAt;
   }
 
   dispose(): void {

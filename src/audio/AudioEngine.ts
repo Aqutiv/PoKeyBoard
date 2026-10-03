@@ -814,10 +814,10 @@ export class AudioEngine {
   /**
    * Put the audio device to sleep once whatever still sounds has died away,
    * if `stillWanted()` agrees then. `tailSeconds` is how long the last sound
-   * takes to die (a release and the room's reverb): the device sleeps only
-   * after a whole such stretch in which no voice sounded, so a note still
-   * ringing — a take's last chord, say, playing out in the background — is
-   * heard to its end, tail and all. A suspended context costs nothing: no
+   * takes to die (a release and the room's reverb): the device sleeps only a
+   * whole such stretch after the last voice ended, so a note still ringing — a
+   * take's last chord, say, playing out in the background — is heard to its
+   * end, tail and all. A suspended context costs nothing: no
    * render thread, no convolver, no output; and nothing is frozen mid-fade, to
    * be heard again on waking. Only silence is skipped.
    */
@@ -830,7 +830,7 @@ export class AudioEngine {
   /**
    * Wait for the stretch of silence the standing `sleepRequest` asks for, then
    * sleep. Notes played meanwhile only put it off: they are voices, and the
-   * device sleeps only once a whole stretch has passed without any. The
+   * device sleeps only once a whole stretch has passed since the last. The
    * request stands until the page is back (`wake`), so a note that wakes the
    * device with the page still away is followed by a sleep of its own.
    */
@@ -839,15 +839,16 @@ export class AudioEngine {
     const context = this.context;
     if (!request || !context || context.state !== 'running') return;
     const { tailSeconds, stillWanted } = request;
-    let heardVoices = false;
     const check = () => {
       this.sleepTimer = null;
       if (this.context !== context || context.state !== 'running' || !stillWanted()) return;
-      // A voice now, or one since the last look: give its tail a whole stretch.
-      const sounding = (this.voices?.voiceCount ?? 0) > 0;
-      if (sounding || heardVoices) {
-        heardVoices = sounding;
-        this.sleepTimer = setTimeout(check, tailSeconds * 1000);
+      // A voice sounding, or one ended less than a tail ago — however short it
+      // was, between two looks — puts the sleep off until that tail is out.
+      const voices = this.voices;
+      const quietFor = voices ? context.currentTime - voices.lastVoiceEndedAt : Infinity;
+      const waitS = voices && voices.voiceCount > 0 ? tailSeconds : tailSeconds - quietFor;
+      if (waitS > 0) {
+        this.sleepTimer = setTimeout(check, waitS * 1000);
         return;
       }
       this.asleep = true;
