@@ -55,7 +55,8 @@ src/
                 subset the live score and the sheet draw: generated metrics
                 and outlines, drawGlyph, engravingGlyphs — see SHEET_EXPORT.md)
     transport/  transportMachine (pure), transportClock, transportController,
-                sustainPedal, modes, TransportControls, ModeMenu
+                practiceEvents (what a practice run reports), sustainPedal,
+                modes, TransportControls, ModeMenu
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportInbox (the import preview and
                 its failure alert, over any route), ImportTakeDialog,
@@ -143,6 +144,28 @@ a hold lets that note through, so the feature can never wedge the transport.
 
 Only plain playback gates. An overdub pass sounds its backing through the same
 scheduler and must never stop to ask for a note.
+
+A practice run is one stretch of training, kept by the controller from the
+playback that starts it to whatever ends it. Play under a training mode starts
+one from the playhead, unless nothing is left to play, and so does a training
+mode chosen mid-playback. Holds are never its boundaries: a run goes on through
+every hold and every resume from one. It ends once, and says why: the take
+played to its `end`; a `pause` or a `stop`; a `seek` or a scrub; a `loop` set or
+cleared, even at a hold; another hand or none chosen (`mode`; the same hand
+again carries the run on); `navigation` to another page, which drops the holds
+while playback plays on; an `interrupted` page, or a take swapped for another;
+a `record`; or a `failed` transport. Clearing the gate ends any run still under
+way, as a backstop.
+
+`subscribePractice` tells listeners what happens in a run, each event carrying
+its run's id (`practiceEvents.ts`): `run-start`, with what the run practises —
+the hand, where from, the speed and the loop, its clock's anchor, and every note
+it will ask for (`askedNotes`); `hold`, with when its notes fell due; `hold-key`
+for every key pressed at a hold, wanted or not; `hold-cleared`, played or
+skipped by Play; `step`, for a hold whose keys all came early, so playback never
+stopped; `speed`; and `run-end`. Listeners are told synchronously, from inside
+the command, and one that throws is reported and passed over: nothing a listener
+does can stop the transport finishing what it started.
 
 ## Choosing a piano
 

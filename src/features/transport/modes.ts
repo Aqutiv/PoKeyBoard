@@ -34,8 +34,9 @@ export const PLAYBACK_MODES = [
 ] as const;
 
 /**
- * How a hand is practised: playback waits for each of its notes, or keeps
- * time and leaves them to the player.
+ * How a practice run meets the notes it asks for: `wait` holds at each one
+ * until the player has played it, as the training modes do; `playAlong` keeps
+ * the take's time, and the player plays along.
  */
 export type PracticeStyle = 'wait' | 'playAlong';
 
