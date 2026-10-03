@@ -144,7 +144,7 @@ describe('sleeping while the page is away', () => {
     expect(context.suspend).toHaveBeenCalledOnce();
   });
 
-  it('stays awake when no longer wanted, called off, or played', async () => {
+  it('stays awake when no longer wanted, or called off', async () => {
     const { engine, context } = await readyEngine();
     vi.useFakeTimers();
     engine.sleepAfter(1, () => false);
@@ -152,10 +152,6 @@ describe('sleeping while the page is away', () => {
 
     engine.sleepAfter(1, () => true);
     engine.wake();
-    vi.advanceTimersByTime(1000);
-
-    engine.sleepAfter(1, () => true);
-    engine.noteOn(60, 0.5, 'midi');
     vi.advanceTimersByTime(1000);
 
     expect(context.suspend).not.toHaveBeenCalled();
@@ -197,6 +193,44 @@ describe('sleeping only once everything has rung out', () => {
     vi.advanceTimersByTime(1000); // still sounding: look again later
     count.mockReturnValue(0);
     vi.advanceTimersByTime(1000); // just ended: its tail gets a stretch
+    expect(context.suspend).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1000);
+    expect(context.suspend).toHaveBeenCalledOnce();
+  });
+
+  it('sleeps again after a note played with the page away has rung out', async () => {
+    const { engine, context } = await readyEngine();
+    const voices = (engine as unknown as { voices: { voiceCount: number } }).voices;
+    const count = vi.spyOn(voices, 'voiceCount', 'get').mockReturnValue(0);
+    vi.useFakeTimers();
+    engine.sleepAfter(1, () => true);
+    vi.advanceTimersByTime(1000);
+    expect(context.suspend).toHaveBeenCalledOnce();
+
+    // A MIDI note: it wakes the device, and sounds.
+    count.mockReturnValue(1);
+    engine.noteOn(60, 0.5, 'midi');
+    await vi.waitFor(() => expect(context.state).toBe('running'));
+    vi.advanceTimersByTime(1000);
+    expect(context.suspend).toHaveBeenCalledOnce();
+    // Let go, and rung out: asleep again a quiet stretch later.
+    count.mockReturnValue(0);
+    vi.advanceTimersByTime(2000);
+    expect(context.suspend).toHaveBeenCalledTimes(2);
+  });
+
+  it('a note played while the sleep waits only puts it off', async () => {
+    const { engine, context } = await readyEngine();
+    const voices = (engine as unknown as { voices: { voiceCount: number } }).voices;
+    const count = vi.spyOn(voices, 'voiceCount', 'get').mockReturnValue(0);
+    vi.useFakeTimers();
+    engine.sleepAfter(1, () => true);
+    vi.advanceTimersByTime(500);
+    count.mockReturnValue(1);
+    engine.noteOn(60, 0.5, 'midi');
+    vi.advanceTimersByTime(500);
+    count.mockReturnValue(0);
+    vi.advanceTimersByTime(1000);
     expect(context.suspend).not.toHaveBeenCalled();
     vi.advanceTimersByTime(1000);
     expect(context.suspend).toHaveBeenCalledOnce();

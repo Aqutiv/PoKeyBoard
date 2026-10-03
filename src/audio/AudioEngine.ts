@@ -100,7 +100,9 @@ export class AudioEngine {
   private schedulerTicker: AudioWorkletNode | null = null;
   /** Whether the ticker is wired up and pulsing; see `updateSchedulerTicker`. */
   private schedulerTickerOn = false;
-  /** A sleep waiting for the last sound to die away; see `sleepAfter`. */
+  /** The sleep asked for while the page is away; see `sleepAfter`. */
+  private sleepRequest: { tailSeconds: number; stillWanted: () => boolean } | null = null;
+  /** The next look at whether that sleep can come yet. */
   private sleepTimer: ReturnType<typeof setTimeout> | null = null;
   /** Whether the context is suspended because `sleepAfter` put it to sleep. */
   private asleep = false;
@@ -490,8 +492,6 @@ export class AudioEngine {
   async unlockFromUserGesture(): Promise<void> {
     this.initialize();
     if (!this.context) return;
-    // Something is about to sound: no sleep may cut it off.
-    this.cancelSleep();
     this.asleep = false;
     // Keep Web Audio audible with the iPhone silent switch engaged.
     ensurePlaybackSession();
@@ -502,6 +502,9 @@ export class AudioEngine {
         console.warn('AudioContext resume failed:', error);
       }
     }
+    // Woken by a note with the page still away (a MIDI keyboard, say): it may
+    // sleep again once that has rung out.
+    if (this.sleepRequest && this.sleepTimer === null) this.armSleep();
     // A one-frame silent buffer nudges iOS into actually opening the output.
     if (this.context.state === 'running') {
       const silent = this.context.createBuffer(1, 1, this.context.sampleRate);
@@ -652,10 +655,6 @@ export class AudioEngine {
     if (this.context.state !== 'running') {
       // noteOn always originates from a gesture; resume opportunistically.
       void this.unlockFromUserGesture();
-    } else {
-      // A note played while a sleep waits (a MIDI keyboard, say, with the page
-      // hidden) keeps the piano awake.
-      this.cancelSleep();
     }
     const sample = this.bank.getSample(midi, velocity, { tone: this.toneFollowsTouch });
     if (!sample) return false;
@@ -824,8 +823,22 @@ export class AudioEngine {
    */
   sleepAfter(tailSeconds: number, stillWanted: () => boolean): void {
     this.cancelSleep();
+    this.sleepRequest = { tailSeconds, stillWanted };
+    this.armSleep();
+  }
+
+  /**
+   * Wait for the stretch of silence the standing `sleepRequest` asks for, then
+   * sleep. Notes played meanwhile only put it off: they are voices, and the
+   * device sleeps only once a whole stretch has passed without any. The
+   * request stands until the page is back (`wake`), so a note that wakes the
+   * device with the page still away is followed by a sleep of its own.
+   */
+  private armSleep(): void {
+    const request = this.sleepRequest;
     const context = this.context;
-    if (!context || context.state !== 'running') return;
+    if (!request || !context || context.state !== 'running') return;
+    const { tailSeconds, stillWanted } = request;
     let heardVoices = false;
     const check = () => {
       this.sleepTimer = null;
@@ -879,6 +892,7 @@ export class AudioEngine {
   }
 
   private cancelSleep(): void {
+    this.sleepRequest = null;
     if (this.sleepTimer === null) return;
     clearTimeout(this.sleepTimer);
     this.sleepTimer = null;
