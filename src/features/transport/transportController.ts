@@ -23,7 +23,12 @@ import {
   type PlaybackLoop,
 } from '@/domain/takeTypes';
 import { countInMsAt, createTakeTempoMap } from '@/domain/tempoMap';
-import { CHORD_WINDOW_MS, nextTrainingGate, type TrainingGate } from '@/domain/trainingGate';
+import {
+  CHORD_WINDOW_MS,
+  EARLY_PRESS_MS,
+  nextTrainingGate,
+  type TrainingGate,
+} from '@/domain/trainingGate';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { newId } from '@/utils/ids';
@@ -42,6 +47,13 @@ import {
 const SCHEDULER_INTERVAL_MS = 25;
 const SCHEDULE_AHEAD_MS = 150;
 const START_SLACK_S = 0.06;
+/**
+ * The lead when a training hold lets playback go. The player has just struck
+ * the key it waited for, so the other hand comes in with their note rather
+ * than audibly after it. The first tick queues what follows at once, so a
+ * short lead is enough.
+ */
+const RESUME_SLACK_S = 0.02;
 /** Lead-in before the first practice click, so it is never scheduled late. */
 const PRACTICE_CLICK_LEAD_S = 0.05;
 /** How long a key the user got wrong stays lit; matches the scrub flash. */
@@ -123,13 +135,22 @@ export class TransportController {
    * hold is a pause, but the pass it paused is still the one at the keys.
    */
   private trainingPassStartMs = 0;
+  /**
+   * The keys played for the gate that is armed, at its hold or on the way to
+   * it; see `EARLY_PRESS_MS`.
+   */
   private readonly trainingSatisfied = new Set<number>();
+  /** Listens to the keys from when a gate is armed until it is dropped. */
   private trainingInputUnsub: (() => void) | null = null;
   /** Wrong keys pressed at a wait point, midi → when the flash expires. */
   private readonly trainingWrong = new Map<number, number>();
   private wrongExpiryTimer: ReturnType<typeof setTimeout> | null = null;
-  /** Notes the user has just played live, so the take must not echo them. */
-  private trainingSkipNoteIds: ReadonlySet<string> | null = null;
+  /**
+   * Notes the user has just played live, so the take must not echo them. They
+   * are keyed by the pass of the run they fall in (see `TransportClock`), since
+   * a loop asks for them again every time round.
+   */
+  private readonly trainingSkips = new Map<number, Set<string>>();
 
   /** Callbacks fired when a recording pass has been finalized (autosave). */
   readonly onRecordingFinalized = new Set<() => void>();
@@ -602,7 +623,7 @@ export class TransportController {
     this.playLoop = loop;
     this.runFromMs = fromMs;
     this.loopPassesBefore = 0;
-    this.clock.start(fromMs, audioEngine.currentTime + START_SLACK_S, {
+    this.clock.start(fromMs, audioEngine.currentTime + (resume ? RESUME_SLACK_S : START_SLACK_S), {
       rate: this.getSpeed(),
       loop,
     });
@@ -611,7 +632,10 @@ export class TransportController {
       this.metronome.start(this.takeGrid());
     }
     this.send('PLAY');
-    this.trainingSkipNoteIds = resume?.skipNoteIds ?? null;
+    // What the player has just played at a hold is theirs, in the pass the
+    // run resumes in.
+    this.trainingSkips.clear();
+    if (resume?.skipNoteIds) this.trainingSkips.set(0, new Set(resume.skipNoteIds));
     // A resumed run looks for its next hold past the chord just cleared, but
     // not past the loop's end, or the next pass would skip the notes at its top.
     const gateFromMs = Math.min(resume?.gateFromMs ?? fromMs, loop?.endMs ?? Infinity);
@@ -667,6 +691,13 @@ export class TransportController {
     );
     const loop = this.playLoop;
     const passMs = loop ? loop.endMs - loop.startMs : 0;
+    // Skips for a pass behind the playhead are spent: nothing walks back there.
+    if (loop && this.trainingSkips.size > 0) {
+      const playheadPass = loopPassAt(loop, nowMs);
+      for (const pass of this.trainingSkips.keys()) {
+        if (pass < playheadPass) this.trainingSkips.delete(pass);
+      }
+    }
     // A note that has begun is past calling off.
     const audioNow = audioEngine.currentTime;
     this.queuedNotes = this.queuedNotes.filter((queued) => queued.audioTime > audioNow);
@@ -676,9 +707,9 @@ export class TransportController {
         const atMs = note.startMs + this.schedulePass * passMs;
         if (atMs > horizonMs) break;
         this.playCursor += 1;
-        // The notes a training hold let through were played once, in the pass
-        // the run resumed in, not forever.
-        if (this.schedulePass === 0 && this.trainingSkipNoteIds?.has(note.id)) continue;
+        // The notes the player played at a hold, or just before one, were
+        // played once, in their own pass, not every time round.
+        if (this.trainingSkips.get(this.schedulePass)?.has(note.id)) continue;
         // Written, not played: nothing to hear, though a hold still asks for it.
         if (isSilentNote(note)) continue;
         // A loop lets every key go at its end, as hands leave the keys to
@@ -758,6 +789,13 @@ export class TransportController {
 
   /** Arm the next hold at or after `fromMs` on the run's unwrapped timeline. */
   private armTrainingGate(fromMs: number): void {
+    // A key counts toward one hold only: what was played for the last is spent.
+    this.trainingSatisfied.clear();
+    this.placeTrainingGate(fromMs);
+    this.syncTrainingInput();
+  }
+
+  private placeTrainingGate(fromMs: number): void {
     this.trainingGate = null;
     // Only ever gates plain playback: an overdub pass sounds its backing
     // through the same scheduler and must never stop to ask for a note.
@@ -786,35 +824,63 @@ export class TransportController {
     }
   }
 
+  /**
+   * Listen to the keys while a gate is armed, on the way to its hold as well
+   * as at it, and not otherwise. Inside an input event this only ever keeps or
+   * drops the listener: the engine would hand a new one the very press it is
+   * delivering.
+   */
+  private syncTrainingInput(): void {
+    if (this.trainingGate && !this.trainingInputUnsub) {
+      this.trainingInputUnsub = audioEngine.subscribeInput((event) => this.onTrainingInput(event));
+    } else if (!this.trainingGate && this.trainingInputUnsub) {
+      this.trainingInputUnsub();
+      this.trainingInputUnsub = null;
+    }
+  }
+
   private beginTrainingWait(): void {
     const gate = this.trainingGate;
     if (!gate) return;
     // Taken while still playing, before the pause below parks the playhead.
     this.trainingPassStartMs = this.getPassStartMs();
     this.trainingWaiting = true;
-    this.trainingSatisfied.clear();
+    // Only the flashes start afresh: the keys already played for this hold on
+    // the way to it still count.
     this.trainingWrong.clear();
     // An ordinary pause, parked exactly on the gate: no new transport state,
-    // so nothing that switches on one has to learn about training.
-    this.pauseInternal(gate.atMs);
-    this.trainingInputUnsub = audioEngine.subscribeInput((event) => this.onTrainingInput(event));
+    // so nothing that switches on one has to learn about training. It lets
+    // what is sounding ring rather than cutting it: the keys the player holds
+    // are theirs, and the take's own notes end where they were written to.
+    this.pauseInternal(gate.atMs, { ringOut: true });
     for (const listener of this.stateListeners) listener();
   }
 
   private onTrainingInput(event: InputNoteEvent): void {
     const gate = this.trainingGate;
-    if (!this.trainingWaiting || !gate || event.type !== 'on') return;
-    if (gate.midis.has(event.midi)) {
-      // Presses accumulate rather than having to land together: a mouse is one
-      // pointer and physically cannot hold a chord.
-      this.trainingSatisfied.add(event.midi);
-    } else {
-      // Wrong keys sound and are flagged, but never block the way forward.
-      this.trainingWrong.set(event.midi, Date.now() + WRONG_FLASH_MS);
-      this.armWrongExpiry();
+    if (!gate || event.type !== 'on') return;
+    if (this.trainingWaiting) {
+      if (gate.midis.has(event.midi)) {
+        // Presses accumulate rather than having to land together: a mouse is
+        // one pointer and physically cannot hold a chord.
+        this.trainingSatisfied.add(event.midi);
+      } else {
+        // Wrong keys sound and are flagged, but never block the way forward.
+        this.trainingWrong.set(event.midi, Date.now() + WRONG_FLASH_MS);
+        this.armWrongExpiry();
+      }
+      for (const listener of this.stateListeners) listener();
+      if (this.trainingSatisfied.size >= gate.midis.size) this.resumeFromTrainingGate(gate);
+      return;
     }
-    for (const listener of this.stateListeners) listener();
-    if (this.trainingSatisfied.size >= gate.midis.size) this.resumeFromTrainingGate(gate);
+    // On the way to the hold, a key it asks for counts from a moment before
+    // its note is due, and from then until the hold catches up. Any other key
+    // is simply played: nothing has asked for anything yet.
+    if (this.state !== 'playing' || !gate.midis.has(event.midi)) return;
+    const dueAt = this.clock.audioTimeForVirtualMs(this.trainingGateVirtualMs);
+    if (event.audioTime < dueAt - EARLY_PRESS_MS / 1000) return;
+    this.trainingSatisfied.add(event.midi);
+    if (this.trainingSatisfied.size >= gate.midis.size) this.passTrainingGate(gate);
   }
 
   /**
@@ -845,19 +911,39 @@ export class TransportController {
     });
   }
 
+  /**
+   * Every key a hold asks for was played before playback reached it, so there
+   * is nothing to wait for. The take leaves those notes to the player, as it
+   * does after a hold, and runs straight on to the next.
+   */
+  private passTrainingGate(gate: TrainingGate): void {
+    const loop = this.playLoop;
+    const passMs = loop ? loop.endMs - loop.startMs : 0;
+    const pass = loop ? Math.round((this.trainingGateVirtualMs - gate.atMs) / passMs) : 0;
+    const skips = this.trainingSkips.get(pass) ?? new Set<string>();
+    for (const id of gate.noteIds) skips.add(id);
+    this.trainingSkips.set(pass, skips);
+    // Past the chord just played, as a resumed run looks, but not past the
+    // loop's end, or the next pass would skip the notes at its top.
+    const nextFromMs = Math.min(gate.atMs + CHORD_WINDOW_MS + 1, loop?.endMs ?? Infinity);
+    this.armTrainingGate(nextFromMs + pass * passMs);
+    // What the hold held back, the other hand's notes under it, goes out now
+    // and on time rather than on the next tick.
+    this.scheduleTick();
+  }
+
   private endTrainingWait(): void {
     this.trainingWaiting = false;
     this.trainingSatisfied.clear();
     this.trainingWrong.clear();
     this.armWrongExpiry();
-    this.trainingInputUnsub?.();
-    this.trainingInputUnsub = null;
   }
 
   private clearTrainingGate(): void {
     this.endTrainingWait();
     this.trainingGate = null;
-    this.trainingSkipNoteIds = null;
+    this.trainingSkips.clear();
+    this.syncTrainingInput();
   }
 
   // ------------------------------------------------- speed and loop --
@@ -957,9 +1043,15 @@ export class TransportController {
     this.clock.retime(run);
     this.schedulePass = Math.max(0, this.schedulePass - playheadPass);
     this.loopPassesBefore += playheadPass;
-    // The notes a training hold let through belong to the run's first pass,
-    // which is behind the playhead for good once it has gone round.
-    if (playheadPass > 0) this.trainingSkipNoteIds = null;
+    // The notes left to the player keep their passes, counted from here now.
+    // Any in a pass behind the playhead are behind it for good.
+    if (playheadPass > 0) {
+      const skips = [...this.trainingSkips];
+      this.trainingSkips.clear();
+      for (const [pass, ids] of skips) {
+        if (pass >= playheadPass) this.trainingSkips.set(pass - playheadPass, ids);
+      }
+    }
     if (loop && this.trainingGate) {
       this.trainingGateVirtualMs = this.trainingGate.atMs + (gatePass - playheadPass) * passMs;
     }
@@ -972,10 +1064,16 @@ export class TransportController {
   }
 
   /**
-   * `ringOut` is for a take that has played to its end. Every note has been
-   * let go by then, so all that still sounds is strings dying away, for
-   * seconds where a key has no damper; they are left to, as in an export,
-   * unless the player stops.
+   * `ringOut` leaves what is sounding to ring rather than cutting it.
+   *
+   * A take that has played to its end has let every note go by then, so all
+   * that still sounds is strings dying away, for seconds where a key has no
+   * damper. They are left to, as in an export, unless the player stops.
+   *
+   * At a training hold the music waits for the player rather than stopping on
+   * them. The keys they hold keep sounding. The take's notes end where they
+   * were written to: nothing past the hold was queued, so every key-up still to
+   * come is already scheduled.
    */
   private pauseInternal(atMs: number, { ringOut = false } = {}): void {
     // A training wait is a pause that keeps its gate; every other pause drops

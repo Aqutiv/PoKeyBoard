@@ -52,8 +52,9 @@ src/
     transport/  transportMachine (pure), transportClock, transportController,
                 sustainPedal, modes, TransportControls, ModeMenu
     metronome/  MetronomeControls
-    takes/      takesService, TakesPage, ImportTakeDialog, ImportUrlDialog,
-                remoteImportMessage
+    takes/      takesService, TakesPage, ImportInbox (the import preview and
+                its failure alert, over any route), ImportTakeDialog,
+                ImportUrlDialog, remoteImportMessage
     export/     ShareMenu, AudioExportDialog, SheetExportDialog, sheetPdfService,
                 sheetPdfWriter (vector PDF via pdfSurface/vectorSurface and
                 pdf-lib, dynamic import — see SHEET_EXPORT.md), midiFile
@@ -72,8 +73,9 @@ src/
                 SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
-  state/        zustand stores: take, settings, export-ui
-  app/          hash router, providers (service wiring), lifecycle, hooks
+  state/        zustand stores: take, settings, export-ui, import-ui
+  app/          hash router, providers (service wiring), lifecycle, hooks,
+                ImportDialogs (the shell's import inbox)
   ui/           shared controls: MenuButton, TooltipButton, SegmentedSwitch
                 (the library's folders, Learn's levels, Settings' sections)
 ```
@@ -108,12 +110,29 @@ scheduler: the lookahead horizon is capped just under the gate, so nothing past
 it is scheduled early, and the tick that crosses it pauses at the gate's own
 millisecond rather than wherever the 25 ms tick landed. Waiting is an ordinary
 `paused` plus a flag, not a new transport state — nothing that switches on
-`TransportState` has to learn about training. While it holds, the controller
-subscribes to the same input stream recording uses; presses accumulate (a mouse
-is one pointer and cannot hold a chord), extra keys flash and are ignored rather
-than blocking, and the notes the user just sounded are skipped by id when
-playback resumes, or the take would echo them a beat later. Pressing Play at a
-hold lets that note through, so the feature can never wedge the transport.
+`TransportState` has to learn about training. The hold pauses with `ringOut`, as
+a take's natural end does. The keys the player holds keep sounding and stay lit.
+The take's notes already struck end where they were written to: nothing past the
+gate was queued, so every key-up is already scheduled. Stop still silences
+everything.
+
+From the moment a gate is armed, not only once it holds, the controller listens
+to the same input stream recording uses. A key the gate asks for counts from
+`EARLY_PRESS_MS` (150 ms of real time, whatever the speed) before its note is
+due, because people play a hair ahead. That also catches a press between the
+note falling due and the tick that would stop for it. A press counts toward the
+one gate armed, so nothing played earlier is banked for later. If every key is
+in before the hold, playback never stops. The take leaves those notes to the
+player, and the next gate is armed past the chord, though no further than a
+loop's end, so the next pass's top is still asked for.
+
+At a hold, presses accumulate, including keys played on the way in (a mouse is
+one pointer and cannot hold a chord). Extra keys flash and are ignored rather
+than blocking. The notes the user just sounded are skipped by id in the pass
+they fall in, or the take would echo them a beat later; a loop asks for them
+again every time round. A resumed run leads in by 20 ms rather than a fresh
+start's 60, so the other hand comes in with the player's note. Pressing Play at
+a hold lets that note through, so the feature can never wedge the transport.
 
 Only plain playback gates. An overdub pass sounds its backing through the same
 scheduler and must never stop to ask for a note.
@@ -329,6 +348,29 @@ to every user (`i18n/index.ts` imports all four eagerly) and length-lock every
 paragraph across locales (the parity test walks arrays by index). The level
 toggle is an ordinary setting; chapter progress is a metadata row, Zod-parsed on
 read and therefore device-local rather than part of the settings backup.
+
+## Importing
+
+Every import ends in one inbox. Whatever reads the file — the Takes page's
+pickers, a dropped file or link, the link dialog — turns it into an
+`ImportPreview` and hands it to `useImportUiStore`. The shell's `ImportDialogs`,
+mounted once beside the export dialogs, shows it over whichever route is up; it
+reads only the stores, and loads `ImportInbox` (and `takesService` behind it)
+when there is something to show. Confirming commits the take (`commitImport`)
+and opens it on Play; a commit that fails says why in an alert dialog, since the
+inbox belongs to no one page. A newer preview replaces one still open and starts
+again at Copy, keyed by the store's `previewSeq`, so a choice to replace never
+carries over to another take. Living outside the routed view, a preview outlives
+a route change, and its modal backdrop keeps the nav out of reach meanwhile. The
+dialogs carry their own styles (`importDialog.css`), so they look the same on
+every route.
+
+The inbox waits its turn. While an export is under way (`isExportState`) or an
+export dialog is open, or a recording is counting in or running, a preview stays
+in the store and shows once that clears: two modals never stack, an import never
+swaps the active take out from under an export, and no dialog lands in the
+middle of a performance. Leaving a route already stops a recording, so only a
+file or link that finished loading after the user left Takes can meet one.
 
 ## Persistence and cache invalidation
 
