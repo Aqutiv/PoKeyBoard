@@ -31,6 +31,43 @@ const SCORE_XML =
   '<note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration></note>' +
   '</measure></part></score-partwise>';
 
+/** A MIDI variable-length number, as a file writes delta times. */
+function vlq(value: number): number[] {
+  const out = [value & 0x7f];
+  for (let rest = value >>> 7; rest > 0; rest >>>= 7) out.unshift((rest & 0x7f) | 0x80);
+  return out;
+}
+
+/**
+ * A type 0 MIDI file named "MIDI melody", written byte by byte: four quarter
+ * notes at ♩=100, C D E on channel 1 and a low C on channel 2.
+ */
+function midiFile(): Buffer {
+  const title = [...Buffer.from('MIDI melody', 'utf8')];
+  const quarter = 480;
+  const events = [
+    [0x00, 0xff, 0x03, title.length, ...title],
+    [0x00, 0xff, 0x51, 0x03, 0x09, 0x27, 0xc0], // 600 000 µs a quarter: ♩=100
+    [0x00, 0x91, 48, 90],
+    [0x00, 0x90, 60, 100],
+    [...vlq(quarter), 0x80, 60, 0],
+    [0x00, 0x90, 62, 100],
+    [...vlq(quarter), 0x80, 62, 0],
+    [0x00, 0x90, 64, 100],
+    [...vlq(quarter), 0x80, 64, 0],
+    [0x00, 0x81, 48, 0],
+    [0x00, 0xff, 0x2f, 0x00],
+  ].flat();
+  const length = events.length;
+  return Buffer.from([
+    ...Buffer.from('MThd', 'latin1'),
+    ...[0, 0, 0, 6, 0, 0, 0, 1, quarter >> 8, quarter & 0xff],
+    ...Buffer.from('MTrk', 'latin1'),
+    ...[(length >>> 24) & 0xff, (length >>> 16) & 0xff, (length >>> 8) & 0xff, length & 0xff],
+    ...events,
+  ]);
+}
+
 test.describe('takes library', () => {
   test('lists a recorded take; rename, duplicate, and delete work', async ({ page }) => {
     await gotoAppReady(page);
@@ -111,6 +148,47 @@ test.describe('takes library', () => {
     await expect(page.getByLabel('Import MusicXML file')).not.toHaveAttribute('accept');
   });
 
+  test('does not apply a native file-type filter to the MIDI picker', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+
+    // The same caution as the MusicXML picker: iOS Files greys out files whose
+    // type it does not tie to the filter, and .mid is not reliably tied.
+    await expect(page.getByLabel('Import MIDI file')).not.toHaveAttribute('accept');
+  });
+
+  test('imports a MIDI file with preview and opens it', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    await page.getByLabel('Import MIDI file').setInputFiles({
+      name: 'melody.mid',
+      mimeType: 'audio/midi',
+      buffer: midiFile(),
+    });
+
+    const dialog = page.getByRole('dialog', { name: 'Import take' });
+    await expect(dialog).toBeVisible();
+    // Titled from the file's own sequence name, not its file name.
+    await expect(dialog).toContainText('MIDI melody');
+    await expect(dialog.locator('dt', { hasText: 'Notes' }).locator('+ dd')).toHaveText('4');
+    await dialog.getByRole('button', { name: 'Import', exact: true }).click();
+    // Lands on Play with the imported take active.
+    await expect(page.getByRole('heading', { name: 'MIDI melody' })).toBeVisible();
+  });
+
+  test('a damaged MIDI file is reported as one', async ({ page }) => {
+    await gotoAppReady(page);
+    await nav(page).getByRole('button', { name: 'Takes' }).click();
+    await page.getByLabel('Import MIDI file').setInputFiles({
+      name: 'broken.mid',
+      mimeType: 'audio/midi',
+      buffer: midiFile().subarray(0, 30),
+    });
+    await expect(
+      page.getByRole('status').filter({ hasText: 'could not be read as a MIDI file' }),
+    ).toBeVisible();
+  });
+
   test('the Import menu opens each file picker', async ({ page }) => {
     await gotoAppReady(page);
     await nav(page).getByRole('button', { name: 'Takes' }).click();
@@ -120,6 +198,7 @@ test.describe('takes library', () => {
     const menu = page.getByRole('menu', { name: 'Import options' });
     await expect(menu.getByRole('menuitem')).toHaveText([
       'Music score (MXL)',
+      'MIDI file (.mid)',
       'Take file (JSON)',
       'From a link (URL)',
     ]);
@@ -131,6 +210,11 @@ test.describe('takes library', () => {
       'Import MusicXML file',
     );
     await expect(menu).toHaveCount(0);
+
+    await trigger.click();
+    const midiChooser = page.waitForEvent('filechooser');
+    await page.getByRole('menuitem', { name: 'MIDI file (.mid)' }).click();
+    expect(await (await midiChooser).element().getAttribute('aria-label')).toBe('Import MIDI file');
 
     await trigger.click();
     const takeChooser = page.waitForEvent('filechooser');

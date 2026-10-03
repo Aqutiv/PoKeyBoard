@@ -60,6 +60,7 @@ export function TakesPage() {
   const [dragOver, setDragOver] = useState(false);
   const importInputRef = useRef<HTMLInputElement | null>(null);
   const scoreInputRef = useRef<HTMLInputElement | null>(null);
+  const midiInputRef = useRef<HTMLInputElement | null>(null);
   const restoreInputRef = useRef<HTMLInputElement | null>(null);
 
   const refresh = useCallback(() => {
@@ -135,7 +136,9 @@ export function TakesPage() {
       // This picker carries no accept filter (iOS greys out .mxl), and the
       // blocked-link fallback sends take JSON here too, so honour an explicit
       // .json. Anything else stays a score, which keeps the MusicXML wording
-      // for a wrong pick made from the "Music score" menu item.
+      // for a wrong pick made from the "Music score" menu item. The MIDI
+      // picker shares this: a MIDI file is known by its header or its name,
+      // whichever picker it came through.
       void (/\.json$/i.test(file.name) ? previewImportFile(file) : previewImportScoreFile(file))
         .then(setImportPreview)
         .catch((error: unknown) => setMessage(m.errors[toErrorMessageKey(error)]));
@@ -236,6 +239,7 @@ export function TakesPage() {
             align="right"
             items={[
               { label: m.takes.importMxl, onSelect: () => scoreInputRef.current?.click() },
+              { label: m.takes.importMidi, onSelect: () => midiInputRef.current?.click() },
               { label: m.takes.importJson, onSelect: () => importInputRef.current?.click() },
               { label: m.takes.importUrl, onSelect: () => setUrlDialogOpen(true) },
             ]}
@@ -468,6 +472,15 @@ export function TakesPage() {
         className="visually-hidden"
         onChange={onScoreImportChosen}
         aria-label={m.takes.importMxlFileLabel}
+      />
+      {/* No accept here either: iOS Files does not reliably tie .mid to a MIME
+          type, and an unmatched filter greys the file out. */}
+      <input
+        ref={midiInputRef}
+        type="file"
+        className="visually-hidden"
+        onChange={onScoreImportChosen}
+        aria-label={m.takes.importMidiFileLabel}
       />
       <input
         ref={restoreInputRef}
