@@ -566,6 +566,17 @@ describe('midiToTake: pedal', () => {
     ]);
   });
 
+  it('lets the pedal up at a Reset All Controllers (CC121)', () => {
+    const take = midiToTake(
+      smf(0, 480, [[pedal(0, 0, true), [480, 0xb0, 121, 0], ...played(0, 60, 0, 960)]]),
+      'x.mid',
+    );
+    expect(take.pedalEvents).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 500, down: false },
+    ]);
+  });
+
   /** The pedal events of a one-note file whose pedal does what `changes` say. */
   function pedalOf(changes: readonly Ev[]) {
     return midiToTake(smf(0, 480, [[...changes, ...played(0, 60, 0, 1920)]]), 'x.mid').pedalEvents;

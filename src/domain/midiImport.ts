@@ -46,6 +46,8 @@ const SUSTAIN_CONTROLLER = 64;
  */
 const ALL_SOUND_OFF_CONTROLLER = 120;
 const ALL_NOTES_OFF_CONTROLLER = 123;
+/** Reset All Controllers: among them the sustain pedal, which it lets up. */
+const RESET_ALL_CONTROLLERS = 121;
 /** A sustain pedal is down from this value up, as General MIDI reads it. */
 const PEDAL_DOWN_FROM = 64;
 
@@ -586,7 +588,8 @@ interface PedalChange {
 /**
  * The sustain pedal, as one pedal. It is down while any channel holds it: the
  * app's own export writes the pedal into both hands' tracks, and a file from
- * elsewhere may pedal on several channels.
+ * elsewhere may pedal on several channels. A Reset All Controllers lets its
+ * channel's pedal up, as MIDI says it does.
  *
  * Changes on one tick are settled together rather than one by one, since the
  * order of two tracks' events at one tick means nothing. Each channel's own
@@ -602,17 +605,17 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
   const changes: PedalChange[] = [];
   for (const track of smf.tracks) {
     for (const event of track.events) {
-      if (
-        event.type === 'channel' &&
-        event.command === 0xb0 &&
-        event.data1 === SUSTAIN_CONTROLLER &&
-        event.channel !== DRUM_CHANNEL
-      ) {
+      if (event.type !== 'channel' || event.command !== 0xb0 || event.channel === DRUM_CHANNEL) {
+        continue;
+      }
+      if (event.data1 === SUSTAIN_CONTROLLER) {
         changes.push({
           tick: event.tick,
           channel: event.channel,
           down: event.data2 >= PEDAL_DOWN_FROM,
         });
+      } else if (event.data1 === RESET_ALL_CONTROLLERS) {
+        changes.push({ tick: event.tick, channel: event.channel, down: false });
       }
     }
   }
