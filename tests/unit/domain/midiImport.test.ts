@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { noteHand } from '@/domain/hands';
 import { takeToMidi } from '@/domain/midiExport';
 import { midiToTake } from '@/domain/midiImport';
@@ -363,6 +363,36 @@ describe('midiToTake: notes', () => {
       [64, 0, 500],
       [60, 1000, 500],
     ]);
+  });
+
+  it('ends a key struck again after it was let go, and nothing already ended', () => {
+    // C4 struck and let go, struck again, then the channel's All Notes Off.
+    const take = midiToTake(
+      smf(0, 480, [[...played(0, 60, 0, 240), [288, 0x90, 60, 100], [480, 0xb0, 123, 0]]]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => [n.startMs, n.durationMs])).toEqual([
+      [0, 250],
+      [300, 200],
+    ]);
+  });
+
+  it('looks only at the keys a channel holds when it is silenced', () => {
+    // A dense stream of All Notes Off with one note held elsewhere. Each must
+    // cost a look at what its channel holds, not a sweep of all 128 keys.
+    const panics = 5000;
+    const events: Ev[] = [[0, 0x90, 60, 100]];
+    for (let i = 1; i <= panics; i += 1) events.push([i, 0xb1, 123, 0]);
+    events.push([panics + 1, 0x80, 60, 0]);
+    const bytes = smf(0, 480, [events]);
+    const lookups = vi.spyOn(Map.prototype, 'get');
+    try {
+      const take = midiToTake(bytes, 'x.mid');
+      expect(take.notes).toHaveLength(1);
+      expect(lookups.mock.calls.length).toBeLessThan(panics * 4);
+    } finally {
+      lookups.mockRestore();
+    }
   });
 
   it('leaves the notes of other channels and other tracks alone', () => {

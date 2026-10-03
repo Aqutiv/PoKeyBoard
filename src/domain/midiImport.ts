@@ -400,6 +400,10 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
   let seq = 0;
   smf.tracks.forEach((track, trackIndex) => {
     const open = new Map<number, OpenStrikes>();
+    // Per channel, the keys with a strike still waiting: what an All Notes Off
+    // has to end. A file may send thousands of them, so each looks only at what
+    // its channel holds rather than sweeping every key.
+    const sounding = new Map<number, Set<OpenStrikes>>();
     /** End every strike still open on one key, at `endTick`, and empty its queue. */
     const endAll = (queue: OpenStrikes, endTick: number): void => {
       for (let i = queue.head; i < queue.starts.length; i += 1) {
@@ -415,9 +419,10 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
         (event.data1 === ALL_SOUND_OFF_CONTROLLER || event.data1 === ALL_NOTES_OFF_CONTROLLER) &&
         event.channel !== DRUM_CHANNEL
       ) {
-        for (let midi = 0; midi < 128; midi += 1) {
-          const queue = open.get(event.channel * 128 + midi);
-          if (queue) endAll(queue, event.tick);
+        const held = sounding.get(event.channel);
+        if (held) {
+          for (const queue of held) endAll(queue, event.tick);
+          held.clear();
         }
         continue;
       }
@@ -443,6 +448,12 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
           track: trackIndex,
           channel: event.channel,
         });
+        let held = sounding.get(event.channel);
+        if (!held) {
+          held = new Set();
+          sounding.set(event.channel, held);
+        }
+        held.add(queue);
         continue;
       }
       const queue = open.get(key);
@@ -455,6 +466,7 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
         // Every strike paired: start the key's queue afresh.
         queue.starts = [];
         queue.head = 0;
+        sounding.get(event.channel)?.delete(queue);
       }
     }
     for (const queue of open.values()) endAll(queue, track.endTick);
