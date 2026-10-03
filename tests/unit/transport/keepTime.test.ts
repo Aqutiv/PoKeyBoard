@@ -3,6 +3,7 @@ import type { InputNoteEvent } from '@/audio/AudioEngine';
 import type { ClickGrid } from '@/audio/MetronomeEngine';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
+import type { PlaybackMode } from '@/features/transport/modes';
 import type { PracticeEvent, PracticeRun } from '@/features/transport/practiceEvents';
 import { transportController } from '@/features/transport/transportController';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -124,6 +125,12 @@ function runToEnd(): void {
   for (let step = 0; step < 2000 && transportController.getState() === 'playing'; step += 1) {
     run(0.01);
   }
+}
+
+/** Choose a playback mode as the Modes menu does, taking effect mid-flight. */
+function choose(mode: PlaybackMode): void {
+  useSettingsStore.getState().setPlaybackMode(mode);
+  transportController.refreshTrainingMode();
 }
 
 /** The keys the take sounded, in the order they were handed to the engine. */
@@ -487,5 +494,67 @@ describe('the Keep time count-in', () => {
         { id: 'l1', midi: 43, startMs: 1000 },
       ],
     });
+  });
+});
+
+describe('a change of practice mode with Keep time', () => {
+  it.each<[from: PlaybackMode, to: PlaybackMode, then: string[]]>([
+    ['playalong-right', 'playalong-left', ['run-end mode']],
+    ['playalong-right', 'training-right', ['run-end mode']],
+    ['training-right', 'playalong-right', ['run-end mode']],
+    ['playalong-right', 'simple', ['run-end mode']],
+    ['simple', 'playalong-right', []],
+  ])('pauses where playback is, from %s to %s', (from, to, then) => {
+    useSettingsStore.getState().setPlaybackMode(from);
+    // Clear of the right hand's first note, so training plays on to 250.
+    transportController.seek(100);
+    transportController.play();
+    runTo(250);
+    expect(transportController.getState()).toBe('playing');
+    const at = transportController.getPlayheadMs();
+    const before = heard.length;
+    choose(to);
+    expect(transportController.getState()).toBe('paused');
+    expect(transportController.getPlayheadMs()).toBeCloseTo(at, 0);
+    expect(told().slice(before)).toEqual(then);
+  });
+
+  it('pauses during the count-in where the run starts', () => {
+    transportController.seek(500);
+    transportController.play();
+    run(1);
+    choose('playalong-left');
+    expect(transportController.getState()).toBe('paused');
+    expect(transportController.isCountingIn()).toBe(false);
+    expect(transportController.getPlayheadMs()).toBe(500);
+    expect(told()).toEqual(['run-start playAlong right', 'run-end mode']);
+  });
+
+  it('drops a hold, and stays at it, when Keep time is chosen there', () => {
+    useSettingsStore.getState().setPlaybackMode('training-right');
+    transportController.seek(100);
+    transportController.play();
+    runTo(600);
+    expect(transportController.isWaitingForTraining()).toBe(true);
+    const before = heard.length;
+    choose('playalong-right');
+    expect(transportController.isWaitingForTraining()).toBe(false);
+    expect(transportController.getTrainingTargets().size).toBe(0);
+    expect(transportController.getState()).toBe('paused');
+    expect(transportController.getPlayheadMs()).toBe(500);
+    expect(h.inputs.size).toBe(0);
+    // Not let through: nothing more is played, and the hold is not said to clear.
+    run(0.5);
+    expect(sounded()).not.toContain(65);
+    expect(told().slice(before)).toEqual(['run-end mode']);
+  });
+
+  it('leaves a Keep-time run be when its own mode is chosen again', () => {
+    transportController.play();
+    runTo(600);
+    const before = heard.length;
+    choose('playalong-right');
+    expect(transportController.getState()).toBe('playing');
+    expect(told().slice(before)).toEqual([]);
   });
 });

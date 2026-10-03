@@ -961,14 +961,37 @@ export class TransportController {
 
   /**
    * Re-read the playback mode. Called when the user changes it, so a switch
-   * mid-flight takes effect without stopping. Modelled on
+   * mid-flight takes effect at once: from one hand that waits to another, or
+   * to none, without stopping; to or from Keep time, by pausing. Modelled on
    * `refreshMetronomeConfig`: the setting is read here, never pushed in.
    */
   refreshTrainingMode(): void {
+    const mode = useSettingsStore.getState().playbackMode;
+    const run = this.practiceRun;
+    if (practiceStyleOf(mode) === 'playAlong' || run?.style === 'playAlong') {
+      // Keep time sets off counted in, the hand it leaves to the player muted,
+      // and neither can change under music already moving: another style or
+      // another hand pauses where playback is, for Play to start it afresh.
+      // A hold, which only a run that waits has, is dropped rather than let
+      // through, so the player is not rushed into the new run. The same mode
+      // chosen again carries the run on.
+      const changed =
+        practiceHandFor(mode) !== (run?.hand ?? null) ||
+        practiceStyleOf(mode) !== (run?.style ?? null);
+      if (!changed) return;
+      this.endPracticeRun('mode');
+      if (this.trainingWaiting) {
+        this.clearTrainingGate();
+        for (const listener of this.stateListeners) listener();
+      } else if (this.state === 'playing') {
+        this.pauseInternal(this.playingAtMs());
+      }
+      return;
+    }
     // A practice run trains one hand. Choosing another, or none, ends it;
     // choosing the same one again carries it on.
-    const hand = trainingHandFor(useSettingsStore.getState().playbackMode);
-    const handChanged = hand !== (this.practiceRun?.hand ?? null);
+    const hand = trainingHandFor(mode);
+    const handChanged = hand !== (run?.hand ?? null);
     if (this.trainingWaiting) {
       // Changing the mode at a hold is as good as saying "carry on": let that
       // moment through and run on under the new mode. Clearing the gate alone
