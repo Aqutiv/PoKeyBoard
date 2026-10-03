@@ -28,6 +28,12 @@ export interface SaveStatusSnapshot {
 }
 
 const AUTOSAVE_DEBOUNCE_MS = 800;
+/**
+ * How often, at most, a recording in progress is saved. A save writes the whole
+ * take, and the debounce alone would write it at every pause in the playing —
+ * on a slow machine, a hitch each time. Stopping saves it at once regardless.
+ */
+const RECORDING_AUTOSAVE_MS = 10_000;
 const SETTINGS_DEBOUNCE_MS = 500;
 /**
  * How long startup will wait for a vendored score to download before giving up
@@ -234,6 +240,15 @@ class PersistenceService {
   }
 
   scheduleSave(): void {
+    if (transportController.getState() === 'recording') {
+      // One save already coming covers this change too.
+      if (this.saveTimer !== null) return;
+      this.saveTimer = setTimeout(() => {
+        this.saveTimer = null;
+        void this.flushSave();
+      }, RECORDING_AUTOSAVE_MS);
+      return;
+    }
     if (this.saveTimer !== null) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;

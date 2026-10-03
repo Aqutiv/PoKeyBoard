@@ -2011,6 +2011,21 @@ export function drawScore(
   input: ScoreRenderInput,
   palette: ScorePalette,
 ): void {
+  drawScoreBase(ctx, view, input, palette);
+  drawScoreOverlay(ctx, view, input, palette);
+}
+
+/**
+ * The score up to and including the notes being recorded: everything that
+ * stays put while ghost notes fade over a score standing still, so that it can
+ * be drawn once and copied (`drawScoreOverlay` draws the rest, in order).
+ */
+export function drawScoreBase(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  input: ScoreRenderInput,
+  palette: ScorePalette,
+): void {
   ctx.clearRect(0, 0, view.widthPx, view.heightPx);
   if (input.loop) drawLoop(ctx, view, input.layout, input.loop, palette);
   drawStaffLines(ctx, view, palette);
@@ -2029,6 +2044,15 @@ export function drawScore(
   drawBeams(ctx, beamLines, palette);
   drawChords(ctx, view, input, palette, beamLines);
   drawOpenNotes(ctx, view, input, palette);
+}
+
+/** What `drawScore` draws over `drawScoreBase`: ghosts, clefs, playhead and gutter. */
+export function drawScoreOverlay(
+  ctx: CanvasRenderingContext2D,
+  view: ScoreView,
+  input: ScoreRenderInput,
+  palette: ScorePalette,
+): void {
   drawGhosts(ctx, view, input, palette);
   // Clefs go on last: this view is time-proportional, so there is not always
   // room for one, and a clef that gets painted over is worse than one drawn
@@ -2761,6 +2785,9 @@ function drawGhosts(
     ctx.save();
     ctx.globalAlpha = Math.max(0, Math.min(1, ghost.life));
     ctx.strokeStyle = palette.staffLine;
+    // As thin as the score's own ledger lines, rather than whatever was drawn
+    // last — a stem, as often as not — left the pen at.
+    ctx.lineWidth = 1;
     for (const step of ledgerLineSteps(position.step)) {
       const ly = yForStep(view, position.staff, step) + 0.5;
       ctx.beginPath();

@@ -9,6 +9,7 @@ import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
 import { scoreSpellings, spellingName } from '@/features/notation/scoreSpelling';
 import { wheelZoomSteps, ZOOM_STEP } from '@/features/notation/scoreZoom';
 import { scrubController } from '@/features/notation/scrubController';
+import { useCoalesced } from '@/features/notation/useCoalesced';
 import { playableLoop, playFromMs } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
@@ -163,17 +164,23 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     return (fromMs: number, toMs: number) =>
       barStartsBetween(map, tempo.timeSignature, fromMs, toMs);
   }, [tempo.bpm, tempo.timeSignature, tempo.changes]);
+  // Names and fingers read the whole take, so while a recording grows they
+  // follow it a few times a second rather than with every note (`useCoalesced`);
+  // a note just played falls unlabelled for that moment.
+  const recording = state === 'recording';
+  const labelledNotes = useCoalesced(notes, recording);
+  const labelledPedals = useCoalesced(pedalEvents, recording);
   // Each note's name as the score spells it, worked out only while names show.
   const keySignature = tempo.keySignature;
   const names = useMemo(() => {
     if (!showNames) return undefined;
-    const spellings = scoreSpellings(notes, { keySignature }, pedalEvents);
+    const spellings = scoreSpellings(labelledNotes, { keySignature }, labelledPedals);
     return new Map([...spellings].map(([id, spelling]) => [id, spellingName(spelling)]));
-  }, [showNames, notes, keySignature, pedalEvents]);
+  }, [showNames, labelledNotes, keySignature, labelledPedals]);
   // Each note's finger, the score's own or one worked out, only while they show.
   const fingerNumbers = useMemo(
-    () => (showFingerNumbers ? noteFingers(notes) : undefined),
-    [showFingerNumbers, notes],
+    () => (showFingerNumbers ? noteFingers(labelledNotes) : undefined),
+    [showFingerNumbers, labelledNotes],
   );
   const seconds = useSettingsStore((s) => s.waterfallSeconds);
   const setSeconds = useSettingsStore((s) => s.setWaterfallSeconds);

@@ -71,6 +71,7 @@ vi.mock('@/audio/AudioEngine', async () => {
 });
 vi.mock('@/features/transport/transportController', () => ({
   transportController: {
+    getState: () => 'idle',
     restorePlayhead: vi.fn(),
     onRecordingFinalized: new Set<() => void>(),
   },
