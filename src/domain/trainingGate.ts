@@ -13,6 +13,15 @@ export type TrainingHand = Hand | 'both';
  */
 export const CHORD_WINDOW_MS = 50;
 
+/**
+ * How long before a hold's moment a key it asks for already counts for it, in
+ * real time whatever the playback speed. People play a hair ahead of the
+ * beat, and a key that went down just before the music stopped for it should
+ * not be asked for again. A press counts toward the one hold coming up and no
+ * other, so nothing played earlier than this is banked for later.
+ */
+export const EARLY_PRESS_MS = 150;
+
 /** A point playback stops at until the user has played `midis`. */
 export interface TrainingGate {
   atMs: number;

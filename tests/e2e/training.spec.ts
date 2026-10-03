@@ -84,6 +84,35 @@ test.describe('training playback', () => {
     });
   });
 
+  test('keeps a key held into the next hold sounding, and lit', async ({ page }) => {
+    await gotoAppReady(page);
+    await recordShortTake(page, 350);
+
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    await chooseMode(page, /both hands/);
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    const c4 = page.getByRole('button', { name: 'C4 key' });
+    await expect(c4).toHaveAttribute('data-target', 'true');
+
+    // Played, and held on into the hold for E4 as a legato line would be.
+    await page.keyboard.down('KeyA'); // C4
+    await expect(page.getByRole('button', { name: 'E4 key' })).toHaveAttribute(
+      'data-target',
+      'true',
+      { timeout: 5_000 },
+    );
+    // The hold waits for the player rather than cutting them off: C4 is still
+    // down, so it still sounds, and stays lit.
+    await expect(c4).toHaveClass(/\bis-active\b/);
+    await page.keyboard.up('KeyA');
+    await expect(c4).not.toHaveClass(/\bis-active\b/);
+
+    await page.keyboard.press('KeyD'); // E4
+    await expect(page.getByText('Waiting for you to play the lit keys')).toHaveCount(0, {
+      timeout: 10_000,
+    });
+  });
+
   test('plays straight through in simple mode, and remembers the choice', async ({ page }) => {
     await gotoAppReady(page);
     await recordShortTake(page, 350);
