@@ -32,7 +32,7 @@ export interface LiveRun {
   style: PracticeStyle;
 }
 
-interface PracticeState {
+export interface PracticeState {
   /** The last run's result, until it is dismissed or the next run starts. */
   result: PracticeResult | null;
   /** The run under way, while there is one: its result comes when it ends. */
