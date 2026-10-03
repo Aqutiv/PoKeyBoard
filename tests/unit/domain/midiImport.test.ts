@@ -617,6 +617,30 @@ describe('midiToTake: pedal', () => {
     ]);
   });
 
+  it('lifts the pedal inside a millisecond only if it was ever all the way up', () => {
+    // Both hands hold; within one millisecond, on ticks of their own, one
+    // re-pedals and then the other. One channel is down throughout, so the
+    // pedal never lifts — where the same changes on one tick would be the
+    // export's change of pedal.
+    const ms = 9600 / 500; // ticks a millisecond at 9600 to the quarter, ♩=120
+    const at = 1000 * ms;
+    const staggered = midiToTake(
+      smf(0, 9600, [
+        [
+          pedal(0, 0, true),
+          pedal(1, 0, true),
+          pedal(0, at + 1, false),
+          pedal(0, at + 2, true),
+          pedal(1, at + 3, false),
+          pedal(1, at + 4, true),
+          ...played(0, 60, 0, 2 * at),
+        ],
+      ]),
+      'x.mid',
+    );
+    expect(staggered.pedalEvents).toEqual([{ atMs: 0, down: true }]);
+  });
+
   it('settles pedal changes that round to one millisecond in the file’s order', () => {
     // At 960 to the quarter and ♩=120 a tick is 0.52 ms: a press at tick 1 and
     // a release at tick 2 both land on 1 ms. Down then up nets nothing, where

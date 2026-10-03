@@ -622,8 +622,6 @@ function staffOf(notes: readonly TickNote[]): (note: TickNote) => NoteStaff | un
 /** One channel's sustain controller, as the file sends it. */
 interface PedalChange {
   tick: number;
-  /** Where the take keeps it: its tick's time, to the whole millisecond. */
-  atMs: number;
   channel: number;
   /**
    * Where the channel's pedal goes — or, for an All Sound Off, a break: up for
@@ -639,19 +637,23 @@ interface PedalChange {
  * channel's pedal up, as MIDI says it does; an All Sound Off silences what the
  * pedal holds too, so it breaks the pedal for an instant without moving it.
  *
- * Changes are settled together a moment at a time rather than one by one: a
- * moment is a whole millisecond, which is all a take keeps, and so all it can
- * order — two changes a tick apart at 960 to the quarter can share one, and a
- * take sorts one moment's release before its press whatever the file said.
- * (The order of two tracks' events at one tick means nothing anyway.) Each
- * channel's own changes are taken in the order the file gives them, so its
- * last is where it ends up; and it was up at some instant of the moment if it
- * was up already, or let go along the way. The pedal lifts at the moment if
- * every channel was up at some instant of it, and is down after it if any
- * channel ends down. So the change of pedal the export writes (both hands up,
- * then down, on one tick) is kept; a press and release inside one millisecond
- * nets nothing; and one hand changing pedal while the other holds it changes
- * nothing.
+ * Changes are settled in two steps. First a tick at a time, since the order
+ * of two tracks' events at one tick means nothing: each channel's changes in
+ * the order the file gives them, so its last is where it ends up, and it was
+ * up at some instant of the tick if it was up already or let go along the way.
+ * The pedal lifts at the tick if every channel was up at some instant of it,
+ * and is down after it if any channel ends down. So the change of pedal the
+ * export writes (both hands up, then down, on one tick) is kept, and one hand
+ * changing pedal while the other holds it changes nothing.
+ *
+ * Then a whole millisecond at a time, which is all a take keeps, and so all it
+ * can order — two changes a tick apart at 960 to the quarter can share one,
+ * and a take sorts one moment's release before its press whatever the file
+ * said. Across ticks the order is real, so each millisecond is what the pedal
+ * did in it, tick by tick: it lifts if it was ever up in it, and is down after
+ * if it ends down. A press and release inside one millisecond nets nothing,
+ * and two hands changing pedal on ticks of their own, one holding while the
+ * other changes, never lift it.
  */
 function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
   const changes: PedalChange[] = [];
@@ -666,7 +668,7 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
       else if (event.data1 === RESET_ALL_CONTROLLERS) to = 'up';
       else if (event.data1 === ALL_SOUND_OFF_CONTROLLER) to = 'break';
       else continue;
-      changes.push({ tick, atMs: Math.round(msAtTick(tick)), channel, to });
+      changes.push({ tick, channel, to });
     }
   }
   // Stable, and by tick alone, so each channel's changes keep the file's order.
@@ -674,14 +676,15 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
 
   /** The channels holding the pedal down; any other is up, seen or not. */
   const held = new Set<number>();
-  const pedals: { atMs: number; down: boolean }[] = [];
+  // The pedal tick by tick: its changes, each at its tick's whole millisecond.
+  const byTick: { atMs: number; down: boolean }[] = [];
   for (let first = 0; first < changes.length;) {
-    const { atMs } = changes[first] as PedalChange;
+    const { tick } = changes[first] as PedalChange;
     let next = first;
-    // Each channel that changes at this moment: where it ends up, and whether
-    // it was up at some instant of it.
+    // Each channel that changes at this tick: where it ends up, and whether it
+    // was up at some instant of it.
     const settled = new Map<number, { down: boolean; dipped: boolean }>();
-    for (; next < changes.length && (changes[next] as PedalChange).atMs === atMs; next += 1) {
+    for (; next < changes.length && (changes[next] as PedalChange).tick === tick; next += 1) {
       const { channel, to } = changes[next] as PedalChange;
       const state = settled.get(channel) ?? {
         down: held.has(channel),
@@ -693,7 +696,7 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
     }
 
     const wasDown = held.size > 0;
-    // A channel with nothing at this moment holds throughout if it was down.
+    // A channel with nothing at this tick holds throughout if it was down.
     let dipped = true;
     for (const channel of held) if (!settled.has(channel)) dipped = false;
     for (const state of settled.values()) if (!state.dipped) dipped = false;
@@ -703,8 +706,26 @@ function collectPedal(smf: SmfFile, msAtTick: (tick: number) => number) {
     }
     const isDown = held.size > 0;
 
-    if (wasDown && dipped) pedals.push({ atMs, down: false });
-    if (isDown && (!wasDown || dipped)) pedals.push({ atMs, down: true });
+    const atMs = Math.round(msAtTick(tick));
+    if (wasDown && dipped) byTick.push({ atMs, down: false });
+    if (isDown && (!wasDown || dipped)) byTick.push({ atMs, down: true });
+    first = next;
+  }
+
+  // Then a millisecond at a time, in the order the ticks gave.
+  const pedals: { atMs: number; down: boolean }[] = [];
+  let down = false;
+  for (let first = 0; first < byTick.length;) {
+    const { atMs } = byTick[first] as { atMs: number; down: boolean };
+    const wasDown = down;
+    let lifted = !wasDown;
+    let next = first;
+    for (; next < byTick.length && (byTick[next] as { atMs: number }).atMs === atMs; next += 1) {
+      down = (byTick[next] as { down: boolean }).down;
+      if (!down) lifted = true;
+    }
+    if (wasDown && lifted) pedals.push({ atMs, down: false });
+    if (down && (!wasDown || lifted)) pedals.push({ atMs, down: true });
     first = next;
   }
   return pedals;
