@@ -70,8 +70,11 @@ export function ModeMenu({ disabled, desktop = false }: ModeMenuProps) {
   const style = practiceStyleOf(playbackMode);
 
   const choosePlayback = (mode: PlaybackMode) => {
+    // A choice already made changes nothing, and must not look to the
+    // transport like a change: at a hold, that would let the hold through.
+    if (mode === playbackMode) return;
     setPlaybackMode(mode);
-    // A switch mid-playback takes effect without stopping.
+    // A switch mid-playback takes effect at once.
     transportController.refreshTrainingMode();
   };
 

@@ -163,6 +163,24 @@ describe('ModeMenu', () => {
     expect(useSettingsStore.getState().playbackMode).toBe('training-both');
   });
 
+  it('does nothing for a choice already made, so a hold is not let through', () => {
+    // As a Learn hand-off leaves it: waiting, though Keep time was last chosen here.
+    useSettingsStore.setState({ playbackMode: 'training-right', practiceStyle: 'playAlong' });
+    const setPlaybackMode = vi.spyOn(useSettingsStore.getState(), 'setPlaybackMode');
+    renderMenu();
+    open();
+    fireEvent.click(radio(/right hand/));
+    open();
+    fireEvent.click(radio(/Wait for me/));
+
+    expect(setPlaybackMode).not.toHaveBeenCalled();
+    expect(refreshTrainingMode).not.toHaveBeenCalled();
+    expect(useSettingsStore.getState().playbackMode).toBe('training-right');
+    // Wait for me was chosen, all the same, so a hand picked from Simple waits.
+    expect(useSettingsStore.getState().practiceStyle).toBe('wait');
+    setPlaybackMode.mockRestore();
+  });
+
   it('goes back to Simple, leaving the style remembered', () => {
     useSettingsStore.setState({ playbackMode: 'playalong-both', practiceStyle: 'playAlong' });
     renderMenu();
@@ -235,6 +253,16 @@ describe('ModeMenu on a desktop', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Listen' }));
     expect(useSettingsStore.getState().playbackMode).toBe('simple');
     expect(screen.queryByRole('group', { name: 'Practice style' })).toBeNull();
+  });
+
+  it('does nothing for a button already pressed', () => {
+    useSettingsStore.getState().setPlaybackMode('playalong-left');
+    renderMenu({ desktop: true });
+    fireEvent.click(screen.getByRole('button', { name: 'Practice left' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Keep time' }));
+
+    expect(refreshTrainingMode).not.toHaveBeenCalled();
+    expect(useSettingsStore.getState().playbackMode).toBe('playalong-left');
   });
 
   it('is closed to changes while a recording is running', () => {
