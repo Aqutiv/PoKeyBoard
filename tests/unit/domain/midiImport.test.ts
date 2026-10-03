@@ -576,6 +576,54 @@ describe('midiToTake: hands', () => {
   });
 });
 
+/** A track's Device Name meta event: the device its later messages go to. */
+function device(name: string): Ev {
+  const bytes = [...name].map((c) => c.charCodeAt(0));
+  return [0, 0xff, 0x09, bytes.length, ...bytes];
+}
+
+describe('midiToTake: devices', () => {
+  it('keeps one device’s All Notes Off off another device’s channel', () => {
+    const take = midiToTake(
+      smf(1, 480, [
+        [device('Piano A'), ...played(0, 60, 0, 960)],
+        [device('Piano B'), [480, 0xb0, 123, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.map((n) => n.durationMs)).toEqual([1000]);
+  });
+
+  it('pairs a note-off only with a strike on its own device', () => {
+    // Device A strikes C4 and never lets it go; device B's channel 1 lets a
+    // C4 go: not A's, which runs on to its track's end.
+    const take = midiToTake(
+      smf(1, 480, [
+        [device('Piano A'), [0, 0x90, 60, 100], ...played(0, 64, 960, 1440)],
+        [device('Piano B'), [480, 0x80, 60, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1500);
+  });
+
+  it('keeps one device’s pedal held while another device lets its own up', () => {
+    const take = midiToTake(
+      smf(1, 480, [
+        [device('Piano A'), pedal(0, 0, true), ...played(0, 60, 0, 960)],
+        [[0, 0xff, 0x21, 0x01, 0x01], pedal(0, 0, true), pedal(0, 480, false)],
+      ]),
+      'x.mid',
+    );
+    expect(take.pedalEvents).toEqual([{ atMs: 0, down: true }]);
+  });
+
+  it('reads tracks that name no device as one device, as before', () => {
+    const take = midiToTake(smf(1, 480, [played(0, 60, 0, 960), [[480, 0xb0, 123, 0]]]), 'x.mid');
+    expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
+  });
+});
+
 describe('midiToTake: pedal', () => {
   it('reads 64 and above as down', () => {
     const take = midiToTake(

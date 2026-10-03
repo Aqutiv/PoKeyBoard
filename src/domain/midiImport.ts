@@ -52,6 +52,9 @@ const RESET_ALL_CONTROLLERS = 121;
 const PEDAL_DOWN_FROM = 64;
 
 const META_TRACK_NAME = 0x03;
+/** Device (port) Name, and the older MIDI Port: which device a track's messages go to. */
+const META_DEVICE_NAME = 0x09;
+const META_PORT = 0x21;
 const META_TEMPO = 0x51;
 const META_TIME_SIGNATURE = 0x58;
 const META_KEY_SIGNATURE = 0x59;
@@ -381,6 +384,62 @@ function fileKey(smf: SmfFile): { fifths: number; mode: 'major' | 'minor' } | nu
 // Notes, hands and the pedal.
 // ---------------------------------------------------------------------------
 
+/**
+ * Where each channel message goes: its channel on its device, as one number.
+ *
+ * A channel belongs to a device. A file that drives several names each
+ * track's device — a Device Name (FF 09), or the older MIDI Port (FF 21) —
+ * and may use channel 1 of each for different parts, so a note-off, an All
+ * Notes Off or a pedal on one device's channel 1 is nothing to another's. A
+ * track takes the device it last named; one that names none, as almost every
+ * file, is the file's own device, so such files read exactly as by channel.
+ */
+interface ChannelAddressing {
+  /**
+   * Per track, each event's address, by its place in the track (a meta
+   * event's is unused): an array beside the events, as cheap to read as they are.
+   */
+  addresses: number[][];
+  /** One more than the highest address: what a track's addresses are counted in. */
+  span: number;
+}
+
+function channelAddressing(smf: SmfFile): ChannelAddressing {
+  const devices = new Map<string, number>();
+  const addresses = smf.tracks.map((track) => {
+    const ofTrack = new Array<number>(track.events.length);
+    let device = 0;
+    track.events.forEach((event, index) => {
+      if (event.type === 'channel') {
+        ofTrack[index] = device * 16 + event.channel;
+        return;
+      }
+      ofTrack[index] = -1;
+      let name: string | null;
+      if (event.metaType === META_DEVICE_NAME) {
+        const text = decodeName(event.data);
+        name = text.length > 0 ? `name:${text}` : null;
+      } else if (event.metaType === META_PORT && event.data.length >= 1) {
+        name = `port:${event.data[0] as number}`;
+      } else {
+        return;
+      }
+      if (name === null) {
+        device = 0;
+        return;
+      }
+      let found = devices.get(name);
+      if (found === undefined) {
+        found = devices.size + 1;
+        devices.set(name, found);
+      }
+      device = found;
+    });
+    return ofTrack;
+  });
+  return { addresses, span: (devices.size + 1) * 16 };
+}
+
 /** A note-on waiting for the note-off that ends it. */
 interface Strike extends Omit<TickNote, 'endTick'> {
   /** Paired already — by a note-off, possibly another track's, or a silencing controller. */
@@ -398,6 +457,8 @@ interface StrikeQueue {
   strikes: Strike[];
   /** No strike before this one is still waiting. */
   head: number;
+  /** The track a track's own queue is for; strikes it leaves end with that track. */
+  track?: number;
 }
 
 /** The oldest strike in a queue still waiting, or undefined; empties a spent queue. */
@@ -414,18 +475,13 @@ function oldestWaiting(queue: StrikeQueue): Strike | undefined {
 }
 
 /** A map's queue for `key`, made empty the first time it is asked for. */
-function queueAt(queues: Map<number, StrikeQueue>, key: number): StrikeQueue {
+function queueAt(queues: Map<number, StrikeQueue>, key: number, track?: number): StrikeQueue {
   let queue = queues.get(key);
   if (!queue) {
-    queue = { strikes: [], head: 0 };
+    queue = track === undefined ? { strikes: [], head: 0 } : { strikes: [], head: 0, track };
     queues.set(key, queue);
   }
   return queue;
-}
-
-/** One track's part on one channel, as a number: what a track's own strikes are kept by. */
-function partKey(track: number, channel: number): number {
-  return track * 16 + channel;
 }
 
 /** All Sound Off or All Notes Off: a message that ends every note its channel holds. */
@@ -457,18 +513,28 @@ function isSilencing(event: SmfChannelEvent): boolean {
  * (The sustain pedal is its own controller; what it holds is
  * `collectPedal`'s business.) A note never let go ends where its track does.
  */
-function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
-  const timeline: { event: SmfChannelEvent; track: number; silencing: boolean }[] = [];
+function collectNotes(
+  smf: SmfFile,
+  { addresses, span }: ChannelAddressing,
+): { notes: TickNote[]; drumNotes: number } {
+  const timeline: {
+    event: SmfChannelEvent;
+    track: number;
+    silencing: boolean;
+    /** Its channel on its device; see `channelAddressing`. */
+    address: number;
+  }[] = [];
   smf.tracks.forEach((track, trackIndex) => {
-    for (const event of track.events) {
-      if (event.type !== 'channel') continue;
+    const ofTrack = addresses[trackIndex] as number[];
+    track.events.forEach((event, index) => {
+      if (event.type !== 'channel') return;
       // Only what pairs notes is kept: a file may hold hundreds of thousands
       // of other messages — pitch bends, pressure — that would only be sorted
       // to be skipped.
       const silencing = isSilencing(event);
-      if (!silencing && event.command !== 0x90 && event.command !== 0x80) continue;
-      timeline.push({ event, track: trackIndex, silencing });
-    }
+      if (!silencing && event.command !== 0x90 && event.command !== 0x80) return;
+      timeline.push({ event, track: trackIndex, silencing, address: ofTrack[index] as number });
+    });
   });
   // Stable, so each track's messages keep the file's order within a tick.
   timeline.sort((a, b) => a.event.tick - b.event.tick || a.track - b.track);
@@ -491,9 +557,11 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
     queue.head = 0;
   };
 
-  // Each track's strikes of each key, keyed by part and key.
+  // Each track's strikes of each key, keyed by part (a track's channel on its
+  // device) and key.
   const own = new Map<number, StrikeQueue>();
-  // Every track's strikes of each key on each channel, keyed by channel and key.
+  // Every track's strikes of each key on each channel of each device, keyed by
+  // address and key.
   const shared = new Map<number, StrikeQueue>();
   // Per channel, the tracks' keys with a strike still waiting: what an All
   // Notes Off has to end. A file may send thousands of them, so each looks only
@@ -506,14 +574,14 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
   // Off later in that track's tick ends them too, the file's order being theirs.
   const fresh = new Map<number, { tick: number; strikes: Strike[] }>();
 
-  for (const { event, track, silencing } of timeline) {
-    const part = partKey(track, event.channel);
+  for (const { event, track, silencing, address } of timeline) {
+    const part = track * span + address;
     if (silencing) {
       if (event.channel === DRUM_CHANNEL) continue;
-      const { tick, channel } = event;
-      const held = sounding.get(channel);
-      if (held && silencedOn.get(channel) !== tick) {
-        silencedOn.set(channel, tick);
+      const { tick } = event;
+      const held = sounding.get(address);
+      if (held && silencedOn.get(address) !== tick) {
+        silencedOn.set(address, tick);
         for (const queue of held) {
           // Every strike from before this tick; one struck on it by another
           // track waits, and its queue with it.
@@ -539,8 +607,8 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
       if (isOn) drumNotes += 1;
       continue;
     }
-    const ownQueue = queueAt(own, part * 128 + event.data1);
-    const sharedQueue = queueAt(shared, event.channel * 128 + event.data1);
+    const ownQueue = queueAt(own, part * 128 + event.data1, track);
+    const sharedQueue = queueAt(shared, address * 128 + event.data1);
     if (isOn) {
       const strike: Strike = {
         midi: event.data1,
@@ -553,10 +621,10 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
       };
       ownQueue.strikes.push(strike);
       sharedQueue.strikes.push(strike);
-      let held = sounding.get(event.channel);
+      let held = sounding.get(address);
       if (!held) {
         held = new Set();
-        sounding.set(event.channel, held);
+        sounding.set(address, held);
       }
       held.add(ownQueue);
       let ownFresh = fresh.get(part);
@@ -576,11 +644,11 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
     // A note-off with nothing struck to let go of is ignored.
     if (strike === undefined) continue;
     end(strike, event.tick);
-    if (oldestWaiting(ownQueue) === undefined) sounding.get(event.channel)?.delete(ownQueue);
+    if (oldestWaiting(ownQueue) === undefined) sounding.get(address)?.delete(ownQueue);
   }
-  for (const [key, queue] of own) {
-    // The part and key are in the queue's own key; its track ends what it left.
-    const track = smf.tracks[Math.floor(key / (16 * 128))] as SmfTrack;
+  for (const queue of own.values()) {
+    // A track's own queue: its track ends what it left.
+    const track = smf.tracks[queue.track as number] as SmfTrack;
     endWaiting(queue, track.endTick);
   }
   return { notes, drumNotes };
@@ -624,6 +692,7 @@ interface PedalChange {
   tick: number;
   /** The track it was written in: within one track a tick's events are in order. */
   track: number;
+  /** Its channel on its device (see `channelAddressing`): whose pedal it moves. */
   channel: number;
   /**
    * Where the channel's pedal goes — or, for an All Sound Off, a break: up for
@@ -669,22 +738,25 @@ interface PedalChange {
  */
 function collectPedal(
   smf: SmfFile,
+  { addresses }: ChannelAddressing,
   msAtTick: (tick: number) => number,
 ): { pedals: { atMs: number; down: boolean }[]; heldAgainAfterBreak: Set<number> } {
   const changes: PedalChange[] = [];
   smf.tracks.forEach((source, track) => {
-    for (const event of source.events) {
+    const ofTrack = addresses[track] as number[];
+    source.events.forEach((event, index) => {
       if (event.type !== 'channel' || event.command !== 0xb0 || event.channel === DRUM_CHANNEL) {
-        continue;
+        return;
       }
-      const { tick, channel } = event;
+      const { tick } = event;
+      const channel = ofTrack[index] as number;
       let to: PedalChange['to'];
       if (event.data1 === SUSTAIN_CONTROLLER) to = event.data2 >= PEDAL_DOWN_FROM ? 'down' : 'up';
       else if (event.data1 === RESET_ALL_CONTROLLERS) to = 'up';
       else if (event.data1 === ALL_SOUND_OFF_CONTROLLER) to = 'break';
-      else continue;
+      else return;
       changes.push({ tick, track, channel, to });
-    }
+    });
   });
   // Stable, so each track's changes keep the file's order within a tick.
   changes.sort((a, b) => a.tick - b.tick || a.track - b.track);
@@ -836,7 +908,8 @@ function withinPedalLimit(
  */
 export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
   const smf = readSmf(bytes);
-  const { notes, drumNotes } = collectNotes(smf);
+  const addressing = channelAddressing(smf);
+  const { notes, drumNotes } = collectNotes(smf, addressing);
   if (notes.length === 0) {
     throw fail(
       drumNotes > 0
@@ -880,7 +953,7 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
 
   const staff = staffOf(notes);
   const keyOf = fileKey(smf);
-  const { pedals: settledPedals, heldAgainAfterBreak } = collectPedal(smf, msAtTick);
+  const { pedals: settledPedals, heldAgainAfterBreak } = collectPedal(smf, addressing, msAtTick);
   const pedals = withinPedalLimit(settledPedals);
   // The milliseconds the pedal goes down on, as the take keeps it: a break's
   // tick moves a note only where the pedal is still pressed again there once
