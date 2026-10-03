@@ -16,7 +16,7 @@ import type { ClickTrack } from './loudness';
 import { CLICK_LENGTH_S, clickBeatsForRange, scheduleClick } from './MetronomeEngine';
 import type { SampleSelection } from './audioTypes';
 import { createPianoGraph } from './PianoGraphFactory';
-import { REVERB_ROOM_PRESETS } from './reverbImpulse';
+import { roomTailSeconds } from './reverbImpulse';
 import {
   dampSampleVoice,
   nearestFrameTime,
@@ -28,10 +28,6 @@ import {
 } from './sampleVoice';
 
 const RENDER_SAMPLE_RATE = 48_000;
-/** The least ring-out after the last note: release plus the reverb tail. */
-const MIN_TAIL_S = 3.0;
-/** How long past its RT60 a room's tail is given, for the last of it to go. */
-const TAIL_PAST_RT60_S = 0.5;
 /**
  * How far ahead of an export's render its voices are made, in seconds. An
  * offline context works through every voice it holds on every render quantum,
@@ -208,13 +204,9 @@ export function undampedRingOutSeconds(
   return end;
 }
 
-/**
- * How long an export rings on after its last note, in seconds: three seconds,
- * which covers the release and every room up to Room, or for a longer room its
- * RT60 and half a second more, by when its tail has fallen past 60 dB.
- */
+/** How long an export rings on after its last note, in seconds: the room's tail. */
 export function renderTailSeconds(room: ReverbRoom): number {
-  return Math.max(MIN_TAIL_S, REVERB_ROOM_PRESETS[room].rt60S + TAIL_PAST_RT60_S);
+  return roomTailSeconds(room);
 }
 
 /**
