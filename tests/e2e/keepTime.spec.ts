@@ -204,6 +204,10 @@ test.describe('Keep time on a phone', () => {
     await expect(page.getByRole('menuitemradio', { name: 'Keep time' })).toHaveCount(0);
     await page.getByRole('menuitemradio', { name: 'Training — right hand' }).click();
     await modes.click();
+    // In sight as the menu opens, not scrolled out of its panel.
+    await expect(page.getByRole('menuitemradio', { name: 'Keep time' })).toBeInViewport({
+      ratio: 1,
+    });
     await page.getByRole('menuitemradio', { name: 'Keep time' }).click();
     await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('playalong-right');
 
