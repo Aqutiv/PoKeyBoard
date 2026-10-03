@@ -642,9 +642,10 @@ interface PedalChange {
  * Changes are settled in two steps. First a tick at a time: each track's in
  * the order the file gives them, while how two tracks' events at one tick fall
  * against each other is not known. The pedal lifts at the tick if its channels
- * can all have been up at one instant — none holding untouched, and each track
- * with an instant when every channel it changes is up — and is down after it
- * if any channel ends down. So the change of pedal the export writes (both
+ * can all have been up at one instant — none holding untouched, each track
+ * with an instant when every channel it changes alone is up, and a channel two
+ * tracks change let up by either — and is down after it if any channel ends
+ * down; a pedal down before the tick and up after it was let up, whatever else. So the change of pedal the export writes (both
  * hands up, then down, on one tick, in two tracks) is kept, and one hand
  * changing pedal while the other holds it changes nothing.
  *
@@ -708,22 +709,41 @@ function collectPedal(
     // channel holds throughout untouched, and each track, played in its own
     // order, has an instant when every channel it changes is up. How two
     // tracks' events at one tick fall against each other is not known, so any
-    // such instants count as one.
-    let dipped = true;
-    for (const channel of held) {
-      let touched = false;
-      for (const ofTrack of byTrack.values()) {
-        if (ofTrack.some((change) => change.channel === channel)) touched = true;
+    // such instants count as one — and a channel two tracks change can be up
+    // whenever either of them lets it up, since either may come last.
+    const tracksOf = new Map<number, Set<number>>();
+    for (const [track, ofTrack] of byTrack) {
+      for (const change of ofTrack) {
+        const tracks = tracksOf.get(change.channel) ?? new Set<number>();
+        tracks.add(track);
+        tracksOf.set(change.channel, tracks);
       }
-      if (!touched) dipped = false;
+    }
+    let dipped = true;
+    for (const channel of held) if (!tracksOf.has(channel)) dipped = false;
+    for (const [channel, tracks] of tracksOf) {
+      if (tracks.size < 2 || !dipped || !held.has(channel)) continue;
+      let letUp = false;
+      for (const track of tracks) {
+        const ofTrack = byTrack.get(track) as PedalChange[];
+        if (ofTrack.some((change) => change.channel === channel && change.to !== 'down')) {
+          letUp = true;
+        }
+      }
+      if (!letUp) dipped = false;
     }
     for (const ofTrack of byTrack.values()) {
       if (!dipped) break;
+      // This track's own channels; one shared with another track was settled above.
       const down = new Map<number, boolean>();
-      for (const change of ofTrack) down.set(change.channel, held.has(change.channel));
+      for (const change of ofTrack) {
+        if ((tracksOf.get(change.channel) as Set<number>).size > 1) continue;
+        down.set(change.channel, held.has(change.channel));
+      }
       const allUp = (): boolean => [...down.values()].every((isDown) => !isDown);
       let wasAllUp = allUp();
       for (const change of ofTrack) {
+        if (!down.has(change.channel)) continue;
         if (change.to === 'break') {
           // Up for an instant, then as it was.
           const before = down.get(change.channel) as boolean;
@@ -745,6 +765,10 @@ function collectPedal(
       }
     }
     const isDown = held.size > 0;
+
+    // A pedal down before the tick and up after it was let up, however its
+    // events fell.
+    if (!isDown) dipped = true;
 
     const atMs = Math.round(msAtTick(tick));
     if (wasDown && dipped) byTick.push({ atMs, down: false });

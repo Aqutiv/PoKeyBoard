@@ -822,6 +822,23 @@ describe('midiToTake: pedal', () => {
     }
   });
 
+  it('lets the pedal up when one track releases a channel another presses again', () => {
+    // A channel held; on one tick one track presses it again (redundantly)
+    // and another track lets it go. However the two fall, the pedal comes up.
+    const take = midiToTake(
+      smf(1, 480, [
+        [pedal(0, 0, true), pedal(0, 480, true)],
+        [pedal(0, 480, false)],
+        played(1, 60, 0, 960),
+      ]),
+      'x.mid',
+    );
+    expect(take.pedalEvents).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 500, down: false },
+    ]);
+  });
+
   it('never lifts the pedal one track’s channels hold in turn on one tick', () => {
     // A type 0 file: both channels held; on one tick channel 1 changes pedal,
     // then channel 2 does. One of them is down at every point of the file.
