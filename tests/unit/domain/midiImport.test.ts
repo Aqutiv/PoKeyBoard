@@ -318,6 +318,26 @@ describe('midiToTake: notes', () => {
     ]);
   });
 
+  it('pairs 20,000 strikes of one key with their note-offs first in, first out', () => {
+    // At 500 ticks a quarter and the default ♩=120, a tick is a millisecond.
+    // Strike i comes at i ms, and every note-off after the last strike, 2 ms
+    // apart: first in, first out, strike i ends at 20,000 + 2i ms and so lasts
+    // 20,000 + i. Any other pairing gives other lengths.
+    const count = 20_000;
+    const events: Ev[] = [];
+    for (let i = 0; i < count; i += 1) events.push([i, 0x90, 60, 1 + (i % 127)]);
+    for (let i = 0; i < count; i += 1) events.push([count + 2 * i, 0x80, 60, 0]);
+    const take = midiToTake(smf(0, 500, [events]), 'x.mid');
+    expect(take.notes).toHaveLength(count);
+    for (const i of [0, count / 2, count - 1]) {
+      expect(take.notes[i]).toMatchObject({
+        startMs: i,
+        durationMs: count + i,
+        velocity: (1 + (i % 127)) / 127,
+      });
+    }
+  });
+
   it('ends a note that is never let go where its track ends', () => {
     const take = midiToTake(smf(0, 480, [[[0, 0x90, 60, 100], ...played(0, 64, 0, 960)]]), 'x.mid');
     expect(take.notes.find((n) => n.midi === 60)!.durationMs).toBe(1000);

@@ -368,6 +368,18 @@ function fileKey(smf: SmfFile): { fifths: number; mode: 'major' | 'minor' } | nu
 // ---------------------------------------------------------------------------
 
 /**
+ * One key's strikes still waiting for a note-off, oldest first. A note-off
+ * takes the strike at `head` and moves it on, rather than shifting the array:
+ * a key struck thousands of times before it is let go would otherwise make
+ * every note-off move every strike still waiting.
+ */
+interface OpenStrikes {
+  starts: Omit<TickNote, 'endTick'>[];
+  /** The oldest strike not yet paired; those before it have been. */
+  head: number;
+}
+
+/**
  * Every note, a note-on paired with the first note-off for the same key on the
  * same channel of the same track (first in, first out, so a key struck again
  * before it was let go keeps both strikes). A note-on at velocity 0 is a
@@ -378,7 +390,7 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
   let drumNotes = 0;
   let seq = 0;
   smf.tracks.forEach((track, trackIndex) => {
-    const open = new Map<number, Omit<TickNote, 'endTick'>[]>();
+    const open = new Map<number, OpenStrikes>();
     for (const event of track.events) {
       if (event.type !== 'channel') continue;
       const isOn = event.command === 0x90 && event.data2 > 0;
@@ -390,8 +402,12 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
       }
       const key = event.channel * 128 + event.data1;
       if (isOn) {
-        const queue = open.get(key) ?? [];
-        queue.push({
+        let queue = open.get(key);
+        if (!queue) {
+          queue = { starts: [], head: 0 };
+          open.set(key, queue);
+        }
+        queue.starts.push({
           midi: event.data1,
           startTick: event.tick,
           velocity: event.data2 / 127,
@@ -399,14 +415,24 @@ function collectNotes(smf: SmfFile): { notes: TickNote[]; drumNotes: number } {
           track: trackIndex,
           channel: event.channel,
         });
-        open.set(key, queue);
         continue;
       }
-      const started = open.get(key)?.shift();
-      if (started) notes.push({ ...started, endTick: event.tick });
+      const queue = open.get(key);
+      // A note-off with nothing struck to let go of is ignored.
+      if (!queue || queue.head === queue.starts.length) continue;
+      const started = queue.starts[queue.head] as Omit<TickNote, 'endTick'>;
+      queue.head += 1;
+      notes.push({ ...started, endTick: event.tick });
+      if (queue.head === queue.starts.length) {
+        // Every strike paired: start the key's queue afresh.
+        queue.starts = [];
+        queue.head = 0;
+      }
     }
     for (const queue of open.values()) {
-      for (const started of queue) notes.push({ ...started, endTick: track.endTick });
+      for (let i = queue.head; i < queue.starts.length; i += 1) {
+        notes.push({ ...(queue.starts[i] as Omit<TickNote, 'endTick'>), endTick: track.endTick });
+      }
     }
   });
   return { notes, drumNotes };
