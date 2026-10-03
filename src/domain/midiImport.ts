@@ -637,7 +637,8 @@ interface PedalChange {
  * app's own export writes the pedal into both hands' tracks, and a file from
  * elsewhere may pedal on several channels. A Reset All Controllers lets its
  * channel's pedal up, as MIDI says it does; an All Sound Off silences what the
- * pedal holds too, so it breaks the pedal for an instant without moving it.
+ * pedal holds too, so it breaks the pedal for an instant without moving it —
+ * the take's one pedal, whatever other channels hold.
  *
  * Changes are settled in two steps. First a tick at a time: each track's in
  * the order the file gives them, while how two tracks' events at one tick fall
@@ -767,8 +768,14 @@ function collectPedal(
     const isDown = held.size > 0;
 
     // A pedal down before the tick and up after it was let up, however its
-    // events fell.
+    // events fell. And an All Sound Off breaks it whatever other channels
+    // hold: a take has one pedal, and leaving it down would hold on every note
+    // the controller silences — a channel holding the pedal through it loses
+    // what its pedal held, the lesser fault.
     if (!isDown) dipped = true;
+    for (const ofTrack of byTrack.values()) {
+      if (ofTrack.some((change) => change.to === 'break')) dipped = true;
+    }
 
     const atMs = Math.round(msAtTick(tick));
     if (wasDown && dipped) byTick.push({ atMs, down: false });

@@ -730,6 +730,24 @@ describe('midiToTake: pedal', () => {
     expect(take.notes.map((n) => n.durationMs)).toEqual([500]);
   });
 
+  it('breaks the pedal at an All Sound Off even while another channel holds it', () => {
+    // A take has one pedal: channel 2's All Sound Off must still silence the
+    // note it holds, though channel 1's pedal is down throughout.
+    const take = midiToTake(
+      smf(0, 480, [
+        [pedal(0, 0, true), pedal(1, 0, true), [0, 0x91, 60, 100], [480, 0xb1, 120, 0]],
+      ]),
+      'x.mid',
+    );
+    expect(take.pedalEvents).toEqual([
+      { atMs: 0, down: true },
+      { atMs: 500, down: false },
+      { atMs: 500, down: true },
+    ]);
+    const [sounded] = applySustainToNotes(take.notes, take.pedalEvents);
+    expect(sounded!.startMs + sounded!.durationMs).toBe(500);
+  });
+
   it('breaks a held pedal for an instant at an All Sound Off (CC120)', () => {
     // The pedal goes down and stays down; CC120 silences what it was holding,
     // and the pedal holds again from there.
