@@ -100,10 +100,31 @@ export function applySustainToNotes(
  * `take.durationMs`, but the pedal has no sound of its own to hold on.
  */
 export function effectivePlaybackDurationMs(take: Take): number {
-  let durationMs = take.durationMs;
-  for (const note of applySustainToNotes(take.notes, take.pedalEvents)) {
+  return Math.max(take.durationMs, pedalledEndMs(take.notes, take.pedalEvents));
+}
+
+/**
+ * The last sounding note's end with the pedal applied, kept per pair of note
+ * and pedal arrays. A take's arrays are replaced, never changed in place, so
+ * the pair names one answer; and the transport's readout, a scrub's every
+ * pointer move and the loop all ask, many times a second, of a take that may
+ * hold thousands of notes.
+ */
+const pedalledEnds = new WeakMap<readonly NoteEvent[], WeakMap<readonly PedalEvent[], number>>();
+
+function pedalledEndMs(notes: readonly NoteEvent[], pedals: readonly PedalEvent[]): number {
+  let byPedals = pedalledEnds.get(notes);
+  const known = byPedals?.get(pedals);
+  if (known !== undefined) return known;
+  let endMs = 0;
+  for (const note of applySustainToNotes(notes, pedals)) {
     if (isSilentNote(note)) continue;
-    durationMs = Math.max(durationMs, note.startMs + note.durationMs);
+    endMs = Math.max(endMs, note.startMs + note.durationMs);
   }
-  return durationMs;
+  if (!byPedals) {
+    byPedals = new WeakMap();
+    pedalledEnds.set(notes, byPedals);
+  }
+  byPedals.set(pedals, endMs);
+  return endMs;
 }

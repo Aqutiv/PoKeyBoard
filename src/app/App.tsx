@@ -5,11 +5,38 @@ import { ImportDialogs } from './ImportDialogs';
 import { NowPlaying } from './NowPlaying';
 import { AppNav } from './AppNav';
 import { AppProviders } from './providers';
-import { useRouter } from './routerContext';
+import { loadOnce } from '@/utils/loadOnce';
+import { parseHash, useRouter, type Route } from './routerContext';
 
-const AboutPage = lazy(() =>
-  import('@/features/about/AboutPage').then((module) => ({ default: module.AboutPage })),
-);
+const PAGES = {
+  about: loadOnce(() =>
+    import('@/features/about/AboutPage').then((module) => ({ default: module.AboutPage })),
+  ),
+  learn: loadOnce(() =>
+    import('@/features/learn/LearnPage').then((module) => ({ default: module.LearnPage })),
+  ),
+  library: loadOnce(() =>
+    import('@/features/library/LibraryPage').then((module) => ({ default: module.LibraryPage })),
+  ),
+  play: loadOnce(() =>
+    import('@/features/play/PlayPage').then((module) => ({ default: module.PlayPage })),
+  ),
+  settings: loadOnce(() =>
+    import('@/features/settings/SettingsPage').then((module) => ({
+      default: module.SettingsPage,
+    })),
+  ),
+  takes: loadOnce(() =>
+    import('@/features/takes/TakesPage').then((module) => ({ default: module.TakesPage })),
+  ),
+} satisfies Record<Route, unknown>;
+
+// The page the app opens on is fetched now, alongside the startup reads,
+// rather than once they are done: on a slow machine or connection, that is one
+// wait instead of two. Its lazy() below picks up the same download.
+PAGES[parseHash()]().catch(() => undefined);
+
+const AboutPage = lazy(PAGES.about);
 const AudioExportDialog = lazy(() =>
   import('@/features/export/AudioExportDialog').then((module) => ({
     default: module.AudioExportDialog,
@@ -25,21 +52,11 @@ const ShareLinkDialog = lazy(() =>
     default: module.ShareLinkDialog,
   })),
 );
-const LearnPage = lazy(() =>
-  import('@/features/learn/LearnPage').then((module) => ({ default: module.LearnPage })),
-);
-const LibraryPage = lazy(() =>
-  import('@/features/library/LibraryPage').then((module) => ({ default: module.LibraryPage })),
-);
-const PlayPage = lazy(() =>
-  import('@/features/play/PlayPage').then((module) => ({ default: module.PlayPage })),
-);
-const SettingsPage = lazy(() =>
-  import('@/features/settings/SettingsPage').then((module) => ({ default: module.SettingsPage })),
-);
-const TakesPage = lazy(() =>
-  import('@/features/takes/TakesPage').then((module) => ({ default: module.TakesPage })),
-);
+const LearnPage = lazy(PAGES.learn);
+const LibraryPage = lazy(PAGES.library);
+const PlayPage = lazy(PAGES.play);
+const SettingsPage = lazy(PAGES.settings);
+const TakesPage = lazy(PAGES.takes);
 
 function CurrentView() {
   const { route } = useRouter();

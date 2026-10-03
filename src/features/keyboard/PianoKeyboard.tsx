@@ -1,5 +1,6 @@
 import { TooltipButton } from '@/ui/TooltipButton';
 import {
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -74,6 +75,17 @@ const NO_KEYS: ReadonlyMap<number, KeyCue> = new Map();
 const TAKE_SHADE = '--take-shade';
 type KeyStyle = CSSProperties & { '--live-shade'?: string };
 
+/** Whether two sets of lit keys light the same keys, by the same hands, as deep. */
+function sameCues(a: ReadonlyMap<number, KeyCue>, b: ReadonlyMap<number, KeyCue>): boolean {
+  if (a === b) return true;
+  if (a.size !== b.size) return false;
+  for (const [midi, cue] of a) {
+    const other = b.get(midi);
+    if (!other || other.hand !== cue.hand || other.velocity !== cue.velocity) return false;
+  }
+  return true;
+}
+
 /** Set or clear a boolean data attribute, touching the DOM only on a change. */
 function setFlag(element: HTMLElement, name: string, on: boolean): void {
   if (on === name in element.dataset) return;
@@ -91,6 +103,68 @@ function syncPressed(element: HTMLElement): void {
   if (element.getAttribute('aria-pressed') === pressed) return;
   element.setAttribute('aria-pressed', pressed);
 }
+
+interface PianoKeyProps {
+  midi: number;
+  black: boolean;
+  /** Place and width on the bed, as CSS percentages. */
+  left: string;
+  width: string;
+  ariaLabel: string;
+  /** The name printed on a white key, or null. */
+  name: string | null;
+  active: boolean;
+  /** How deep a key the player holds is lit (`--live-shade`), or undefined. */
+  liveShade: string | undefined;
+  target: boolean;
+  wrong: boolean;
+  register: (midi: number, element: HTMLDivElement | null) => void;
+}
+
+/**
+ * One key. Memoised on plain values, so a key played re-renders that key and
+ * not the other eighty-seven: on a slow machine that is the difference between
+ * a note lighting at once and a frame late.
+ */
+const PianoKey = memo(function PianoKey({
+  midi,
+  black,
+  left,
+  width,
+  ariaLabel,
+  name,
+  active,
+  liveShade,
+  target,
+  wrong,
+  register,
+}: PianoKeyProps) {
+  const ref = useCallback(
+    (element: HTMLDivElement | null) => register(midi, element),
+    [register, midi],
+  );
+  const style: KeyStyle =
+    liveShade === undefined ? { left, width } : { left, width, '--live-shade': liveShade };
+  return (
+    <div
+      ref={ref}
+      role="button"
+      tabIndex={-1}
+      aria-label={ariaLabel}
+      className={`piano-key piano-key--${black ? 'black' : 'white'}${active ? ' is-active' : ''}${
+        target ? ' is-target' : ''
+      }${wrong ? ' is-wrong' : ''}`}
+      data-target={target ? 'true' : undefined}
+      style={style}
+    >
+      {name === null ? null : (
+        <span className="piano-key__label" aria-hidden="true">
+          {name}
+        </span>
+      )}
+    </div>
+  );
+});
 
 interface PianoKeyboardProps {
   /**
@@ -149,7 +223,7 @@ interface PianoKeyboardProps {
   minVisibleWhites?: number;
 }
 
-export function PianoKeyboard({
+export const PianoKeyboard = memo(function PianoKeyboard({
   playbackCues = false,
   followPlayback = false,
   controlsExtra,
@@ -337,9 +411,10 @@ export function PianoKeyboard({
   // cannot follow; and React, which rewrites a prop only when its own value
   // changes, would put a key the player lets go of back up while the take
   // still plays it. A layout effect, so it lands before paint as a prop would.
+  // Only the player's own presses (`is-active`) and new keys change it here.
   useLayoutEffect(() => {
     for (const element of keyElements.current.values()) syncPressed(element);
-  });
+  }, [liveVelocities, layout]);
 
   useEffect(() => {
     if (!playbackCues) return;
@@ -355,9 +430,30 @@ export function PianoKeyboard({
       return isPedalDownIn(pedalIntervals, ms);
     };
     let followedAt = Number.NEGATIVE_INFINITY;
+    /**
+     * What the keys were last drawn showing. Most frames of a performance light
+     * the same keys as the frame before, and then the eighty-eight keys need not
+     * be visited at all. A new layout makes new keys, which show nothing yet.
+     */
+    let shown: {
+      cues: ReadonlyMap<number, KeyCue>;
+      pedalDown: boolean;
+      followsVelocity: boolean;
+      layout: KeyboardLayout;
+    } | null = null;
 
     const show = (cues: ReadonlyMap<number, KeyCue>, pedalDown: boolean) => {
-      const { velocityShading: followsVelocity } = frameInputs.current;
+      const { velocityShading: followsVelocity, layout: currentLayout } = frameInputs.current;
+      if (
+        shown &&
+        shown.pedalDown === pedalDown &&
+        shown.followsVelocity === followsVelocity &&
+        shown.layout === currentLayout &&
+        sameCues(shown.cues, cues)
+      ) {
+        return;
+      }
+      shown = { cues, pedalDown, followsVelocity, layout: currentLayout };
       for (const [midi, element] of keyElements.current) {
         const cue = cues.get(midi);
         // Read back from the key rather than remembered, as the hand is: a key
@@ -576,34 +672,28 @@ export function PianoKeyboard({
     audioEngine.setSustain(!audioEngine.isSustainDown(), 'ui-pedal');
   }, []);
 
-  /**
-   * A key the user is holding. Keys the take plays wear `data-playback` instead,
-   * set by the frame loop above; where both apply, the user's own wins — a key
-   * they hold shows the plain active colour, whichever hand the take has, as
-   * deep as they struck it.
-   */
-  const isActive = useCallback((midi: number) => liveVelocities.has(midi), [liveVelocities]);
-
-  const registerKey = (midi: number) => (element: HTMLDivElement | null) => {
+  const registerKey = useCallback((midi: number, element: HTMLDivElement | null) => {
     if (element) keyElements.current.set(midi, element);
     else keyElements.current.delete(midi);
-  };
+  }, []);
 
-  const isTarget = useCallback((midi: number) => targetMidis?.has(midi) ?? false, [targetMidis]);
-
-  const isWrong = useCallback((midi: number) => wrongMidis?.has(midi) ?? false, [wrongMidis]);
-
-  const whiteWidthPercent = 100 / layout.whiteCount;
-
-  /** A key's place on the bed and, while the player holds it, how deep it is lit. */
-  const keyStyle = (midi: number, x: number, width: number): KeyStyle => {
-    const velocity = liveVelocities.get(midi);
-    return {
-      left: `${x * whiteWidthPercent}%`,
-      width: `${width * whiteWidthPercent}%`,
-      ...(velocity === undefined ? {} : { '--live-shade': keyShade(velocity, velocityShading) }),
-    };
-  };
+  /** What each key shows that only the layout and language decide, worked out once. */
+  const keyFaces = useMemo(() => {
+    const whiteWidthPercent = 100 / layout.whiteCount;
+    const faces = layout.keys.map((key) => {
+      const name = midiToNoteName(key.midi);
+      return {
+        midi: key.midi,
+        black: key.isBlack,
+        left: `${key.x * whiteWidthPercent}%`,
+        width: `${key.width * whiteWidthPercent}%`,
+        name,
+        ariaLabel: m.piano.keyLabel({ note: name }),
+      };
+    });
+    // White keys first, so the black ones sit over them.
+    return [...faces.filter((face) => !face.black), ...faces.filter((face) => face.black)];
+  }, [layout, m]);
 
   return (
     <div className="piano">
@@ -671,45 +761,30 @@ export function PianoKeyboard({
         onLostPointerCapture={onPointerEnd}
         onContextMenu={(event) => event.preventDefault()}
       >
-        {layout.keys
-          .filter((key) => !key.isBlack)
-          .map((key) => (
-            <div
-              key={key.midi}
-              ref={registerKey(key.midi)}
-              role="button"
-              tabIndex={-1}
-              aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
-              className={`piano-key piano-key--white${isActive(key.midi) ? ' is-active' : ''}${
-                isTarget(key.midi) ? ' is-target' : ''
-              }${isWrong(key.midi) ? ' is-wrong' : ''}`}
-              data-target={isTarget(key.midi) ? 'true' : undefined}
-              style={keyStyle(key.midi, key.x, key.width)}
-            >
-              {showNoteLabels ? (
-                <span className="piano-key__label" aria-hidden="true">
-                  {midiToNoteName(key.midi)}
-                </span>
-              ) : null}
-            </div>
-          ))}
-        {layout.keys
-          .filter((key) => key.isBlack)
-          .map((key) => (
-            <div
-              key={key.midi}
-              ref={registerKey(key.midi)}
-              role="button"
-              tabIndex={-1}
-              aria-label={m.piano.keyLabel({ note: midiToNoteName(key.midi) })}
-              className={`piano-key piano-key--black${isActive(key.midi) ? ' is-active' : ''}${
-                isTarget(key.midi) ? ' is-target' : ''
-              }${isWrong(key.midi) ? ' is-wrong' : ''}`}
-              data-target={isTarget(key.midi) ? 'true' : undefined}
-              style={keyStyle(key.midi, key.x, key.width)}
+        {keyFaces.map((face) => {
+          // A key the user is holding. Keys the take plays wear `data-playback`
+          // instead, set by the frame loop above; where both apply, the user's
+          // own wins — a key they hold shows the plain active colour, whichever
+          // hand the take has, as deep as they struck it.
+          const velocity = liveVelocities.get(face.midi);
+          return (
+            <PianoKey
+              key={face.midi}
+              midi={face.midi}
+              black={face.black}
+              left={face.left}
+              width={face.width}
+              ariaLabel={face.ariaLabel}
+              name={showNoteLabels && !face.black ? face.name : null}
+              active={velocity !== undefined}
+              liveShade={velocity === undefined ? undefined : keyShade(velocity, velocityShading)}
+              target={targetMidis?.has(face.midi) ?? false}
+              wrong={wrongMidis?.has(face.midi) ?? false}
+              register={registerKey}
             />
-          ))}
+          );
+        })}
       </div>
     </div>
   );
-}
+});

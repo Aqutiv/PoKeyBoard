@@ -1,6 +1,6 @@
 import { PianoControls } from './PianoControls';
 import { TakeTitle } from './TakeTitle';
-import { useState, useSyncExternalStore } from 'react';
+import { lazy, Suspense, useState, useSyncExternalStore } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
 import { useTransportState } from '@/app/hooks/useTransport';
 import { useTrainingTargets, useTrainingWrongMidis } from '@/app/hooks/useActiveMidis';
@@ -18,13 +18,21 @@ import { MetronomeControls } from '@/features/metronome/MetronomeControls';
 import { MusicScore } from '@/features/notation/MusicScore';
 import { TransportControls } from '@/features/transport/TransportControls';
 import { isBusyState } from '@/features/transport/transportMachine';
-import { WaterfallView, type KeyRange } from '@/features/waterfall/WaterfallView';
+import type { KeyRange } from '@/features/waterfall/WaterfallView';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import type { PlayView } from './playView';
 import { PlayViewSwitch } from './PlayViewSwitch';
 import { SaveStatusBadge } from './SaveStatusBadge';
+
+// Fetched when first shown: the score is the default view, and the falling
+// notes bring their own layout, painter and fingering along.
+const WaterfallView = lazy(() =>
+  import('@/features/waterfall/WaterfallView').then((module) => ({
+    default: module.WaterfallView,
+  })),
+);
 
 const subscribeLifecycle = (onStoreChange: () => void) => lifecycleService.subscribe(onStoreChange);
 const getLifecycle = () => lifecycleService.getSnapshot();
@@ -147,7 +155,14 @@ export function PlayPage() {
               {m.play.audioUnavailable}
             </p>
           ) : null}
-          {falling ? <WaterfallView range={keyboardRange} /> : <MusicScore />}
+          {falling ? (
+            // The empty stage holds the view's place while its code arrives.
+            <Suspense fallback={<div className="waterfall" />}>
+              <WaterfallView range={keyboardRange} />
+            </Suspense>
+          ) : (
+            <MusicScore />
+          )}
         </div>
         {falling ? null : soundRow}
         <div key="keyboard" className="play-layout__keyboard">

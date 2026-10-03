@@ -9,6 +9,7 @@ import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
 import { scoreSpellings, spellingName } from '@/features/notation/scoreSpelling';
 import { wheelZoomSteps, ZOOM_STEP } from '@/features/notation/scoreZoom';
 import { scrubController } from '@/features/notation/scrubController';
+import { useCoalesced } from '@/features/notation/useCoalesced';
 import { playableLoop, playFromMs } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import type { TransportState } from '@/features/transport/transportMachine';
@@ -38,6 +39,11 @@ const MAX_DPR = 2;
 
 /** How long the glow on a note a Training hold waits for takes to swell and ebb. */
 const GLOW_PERIOD_MS = 1200;
+/**
+ * How often a hold's glow is drawn: twenty times a second swells it smoothly
+ * enough, and a wait can last as long as the player likes.
+ */
+const GLOW_FRAME_MS = 50;
 
 /** The reader's ask for less motion, which holds the glow still; null where a browser cannot say. */
 function lessMotionQuery(): MediaQueryList | null {
@@ -163,17 +169,23 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     return (fromMs: number, toMs: number) =>
       barStartsBetween(map, tempo.timeSignature, fromMs, toMs);
   }, [tempo.bpm, tempo.timeSignature, tempo.changes]);
+  // Names and fingers read the whole take, so while a recording grows they
+  // follow it a few times a second rather than with every note (`useCoalesced`);
+  // a note just played falls unlabelled for that moment.
+  const recording = state === 'recording';
+  const labelledNotes = useCoalesced(notes, recording);
+  const labelledPedals = useCoalesced(pedalEvents, recording);
   // Each note's name as the score spells it, worked out only while names show.
   const keySignature = tempo.keySignature;
   const names = useMemo(() => {
     if (!showNames) return undefined;
-    const spellings = scoreSpellings(notes, { keySignature }, pedalEvents);
+    const spellings = scoreSpellings(labelledNotes, { keySignature }, labelledPedals);
     return new Map([...spellings].map(([id, spelling]) => [id, spellingName(spelling)]));
-  }, [showNames, notes, keySignature, pedalEvents]);
+  }, [showNames, labelledNotes, keySignature, labelledPedals]);
   // Each note's finger, the score's own or one worked out, only while they show.
   const fingerNumbers = useMemo(
-    () => (showFingerNumbers ? noteFingers(notes) : undefined),
-    [showFingerNumbers, notes],
+    () => (showFingerNumbers ? noteFingers(labelledNotes) : undefined),
+    [showFingerNumbers, labelledNotes],
   );
   const seconds = useSettingsStore((s) => s.waterfallSeconds);
   const setSeconds = useSettingsStore((s) => s.setWaterfallSeconds);
@@ -266,7 +278,9 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
   useEffect(() => {
     const draw = () => {
       const canvas = canvasRef.current;
-      const ctx = canvas?.getContext('2d');
+      // Opaque: every frame paints the whole stage, so nothing behind it shows,
+      // and the browser need not blend the canvas into the page.
+      const ctx = canvas?.getContext('2d', { alpha: false });
       const { width, height } = sizeRef.current;
       if (!canvas || !ctx || width <= 0 || height <= 0) return;
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
@@ -301,6 +315,8 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
     };
 
     let stopFrames: (() => void) | null = null;
+    /** What the frames are coming for: the notes moving, or only a hold's glow. */
+    let framesFor: 'motion' | 'glow' | null = null;
     let pending = 0;
     const drawSoon = () => {
       if (stopFrames || pending !== 0) return;
@@ -309,17 +325,30 @@ export function WaterfallView({ range }: { range: KeyRange | null }) {
         draw();
       });
     };
+    /** A hold's glow, drawn on the frame clock but only every `GLOW_FRAME_MS`. */
+    let glowDrawnAt = Number.NEGATIVE_INFINITY;
+    const drawGlowFrame = (now: number) => {
+      if (now - glowDrawnAt < GLOW_FRAME_MS) return;
+      glowDrawnAt = now;
+      draw();
+    };
     const sync = () => {
       // A Training hold keeps the frames coming too, for its glow to swell and
       // ebb, unless the reader asked for less motion.
-      const moving =
-        moves(transportController.getState()) ||
-        (transportController.isWaitingForTraining() && !prefersLessMotion());
-      if (moving && !stopFrames) {
-        stopFrames = subscribeFrame(draw);
-      } else if (!moving && stopFrames) {
-        stopFrames();
-        stopFrames = null;
+      const wanted = moves(transportController.getState())
+        ? 'motion'
+        : transportController.isWaitingForTraining() && !prefersLessMotion()
+          ? 'glow'
+          : null;
+      if (wanted !== framesFor) {
+        stopFrames?.();
+        stopFrames =
+          wanted === 'motion'
+            ? subscribeFrame(draw)
+            : wanted === 'glow'
+              ? subscribeFrame(drawGlowFrame)
+              : null;
+        framesFor = wanted;
       }
       // A seek, a change of speed or loop, or a run just ended: draw where it is now.
       drawSoon();

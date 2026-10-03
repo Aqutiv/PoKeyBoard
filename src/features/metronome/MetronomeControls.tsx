@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { subscribeFrame } from '@/app/frameClock';
-import { useMetronomeOn, usePlayheadMs, useTransportState } from '@/app/hooks/useTransport';
+import { useMetronomeOn, usePlayhead, useTransportState } from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { transportController } from '@/features/transport/transportController';
@@ -14,13 +13,34 @@ const TIME_SIGNATURES: readonly string[] = ['2/2', '2/4', '3/4', '3/8', '4/4', '
 const MIN_BPM = MIN_TEMPO_BPM;
 const MAX_BPM = MAX_TEMPO_BPM;
 
+/** The longest the beat dots go without a look, should the click's grid change. */
+const BEAT_RECHECK_MS = 250;
+
 /**
- * The current beat while clicks are audible, read on the frame clock; -1 when
- * silent. React renders only when the beat changes.
+ * The current beat while clicks are audible; -1 when silent. Looked at as each
+ * beat comes due, rather than every frame: a practice click left running on a
+ * stopped transport would otherwise keep the page awake sixty times a second
+ * to light a dot twice a second. React renders only when the beat changes.
  */
 function useActiveBeat(running: boolean): number {
   const subscribeBeat = useCallback(
-    (onStoreChange: () => void) => (running ? subscribeFrame(onStoreChange) : () => {}),
+    (onStoreChange: () => void) => {
+      if (!running) return () => {};
+      let timer = 0;
+      const look = () => {
+        onStoreChange();
+        const now = audioEngine.currentTime;
+        const next = transportController.metronome.nextBeatAfter(now);
+        const dueMs = next === null ? BEAT_RECHECK_MS : (next - now) * 1000 + 1;
+        timer = window.setTimeout(look, Math.max(1, Math.min(BEAT_RECHECK_MS, dueMs)));
+      };
+      look();
+      const unsubscribe = transportController.subscribeState(onStoreChange);
+      return () => {
+        window.clearTimeout(timer);
+        unsubscribe();
+      };
+    },
     [running],
   );
   return useSyncExternalStore(subscribeBeat, () => {
@@ -46,7 +66,6 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
   const tempo = useTakeStore((s) => s.take.tempo);
   const setTempo = useTakeStore((s) => s.setTempo);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
-  const playheadMs = usePlayheadMs();
   const metronomeVolume = useSettingsStore((s) => s.metronomeVolume);
   const setMetronomeVolume = useSettingsStore((s) => s.setMetronomeVolume);
   const tapTimesRef = useRef<number[]>([]);
@@ -61,10 +80,19 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
    * edits the take's tempo as a whole.
    */
   const stopped = state === 'idle' || state === 'paused';
+  // Stopped, the playhead moves only when sought; moving, all the field shows
+  // is the tempo it is in, which changes far less often than ten times a second.
+  const playheadMs = usePlayhead(useCallback((ms: number) => (stopped ? ms : 0), [stopped]));
+  const movingBpm = usePlayhead(
+    useCallback(
+      (ms: number) => (stopped ? 0 : Math.round(tempoMap.bpmAt(ms))),
+      [stopped, tempoMap],
+    ),
+  );
   const barLineMs = stopped ? barLineNearMs(tempoMap, tempo.timeSignature, playheadMs) : 0;
   const positioned = stopped && hasNotes && barLineMs > 0;
   const targetMs = positioned ? barLineMs : playheadMs;
-  const shownBpm = Math.round(tempoMap.bpmAt(targetMs));
+  const shownBpm = stopped ? Math.round(tempoMap.bpmAt(targetMs)) : movingBpm;
   const targetBar = positioned
     ? Math.round(tempoMap.beatAtMs(barLineMs) / tempo.timeSignature.numerator) + 1
     : 0;
