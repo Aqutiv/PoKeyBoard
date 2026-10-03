@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InputNoteEvent } from '@/audio/AudioEngine';
+import type { ClickGrid } from '@/audio/MetronomeEngine';
 import { createEmptyTake } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
 import type { PracticeEvent, PracticeRun } from '@/features/transport/practiceEvents';
@@ -128,6 +129,23 @@ function runToEnd(): void {
 /** The keys the take sounded, in the order they were handed to the engine. */
 function sounded(): number[] {
   return h.scheduled.map((event) => event.midi);
+}
+
+/** The grid the transport last handed the metronome, by `start`, `retime` or `setGrid`. */
+function clickGrid(): ClickGrid {
+  const last = h.clicks.filter((click) => click.grid !== undefined).at(-1);
+  if (!last) throw new Error('The metronome was given no grid');
+  return last.grid as ClickGrid;
+}
+
+/** What the transport asked of the metronome, the calls alone. */
+function metronomeCalls(): string[] {
+  return h.clicks.map((click) => click.call);
+}
+
+/** Run on until the count-in is over, a tick at a time. */
+function countIn(): void {
+  for (let step = 0; step < 1000 && transportController.isCountingIn(); step += 1) run(0.01);
 }
 
 /** Everything the practice listener has been told since the test began. */
@@ -265,6 +283,209 @@ describe('Keep time', () => {
       runId: lastRun().runId,
       reason: 'pause',
       audioTime: h.now,
+    });
+  });
+});
+
+describe('the Keep time count-in', () => {
+  beforeEach(() => {
+    // The right hand plays, so there is something to hear when it sets off.
+    useSettingsStore.getState().setPlaybackMode('playalong-left');
+  });
+
+  it.each([
+    [1, 1, 2.06],
+    [0.5, 1, 4.06],
+    [1, 2, 4.06],
+  ] as const)(
+    'counts a fresh run in ahead of its first note: at %s×, %s bar(s)',
+    (speed, countInBars, firstAt) => {
+      useTakeStore.getState().setTempo({ ...useTakeStore.getState().take.tempo, countInBars });
+      transportController.setSpeed(speed);
+      transportController.play();
+      runTo(100);
+      // The 60 ms every start leads in by, then the bars counted in.
+      expect(h.scheduled[0]).toMatchObject({ midi: 64, when: expect.closeTo(firstAt, 9) });
+    },
+  );
+
+  it('counts a bar in when the take counts none in for a recording', () => {
+    useTakeStore.getState().setTempo({ ...useTakeStore.getState().take.tempo, countInBars: 0 });
+    transportController.play();
+    runTo(100);
+    expect(h.scheduled[0]!.when).toBeCloseTo(2.06, 9);
+  });
+
+  it('holds the playhead where the run starts until the count-in is over, and says so', () => {
+    transportController.seek(500);
+    transportController.play();
+    expect(transportController.isCountingIn()).toBe(true);
+    run(1.5);
+    expect(transportController.getPlayheadMs()).toBe(500);
+    expect(transportController.getPassStartMs()).toBe(500);
+    const notified = vi.fn();
+    const unsubscribe = transportController.subscribeState(notified);
+    countIn();
+    unsubscribe();
+    // Over on the first tick to find the clock past the run's start, and told.
+    expect(h.now).toBeGreaterThanOrEqual(2.06);
+    expect(h.now).toBeLessThan(2.06 + 0.03);
+    expect(notified).toHaveBeenCalled();
+    run(0.1);
+    expect(transportController.getPlayheadMs()).toBeGreaterThan(500);
+  });
+
+  it('clicks the count-in, and nothing from where the run starts with the metronome off', () => {
+    transportController.setSpeed(0.5);
+    transportController.play();
+    expect(metronomeCalls()).toEqual(['start']);
+    const grid = clickGrid();
+    // A beat of the take's 500 ms at half speed is a second; four make the bar.
+    expect(grid.audioTimeAt(0)).toBeCloseTo(0.06, 9);
+    expect(grid.audioTimeAt(3)).toBeCloseTo(3.06, 9);
+    expect(grid.isAccent(0)).toBe(true);
+    expect(grid.isAccent(1)).toBe(false);
+    expect(grid.audioTimeAt(4)).toBe(Number.POSITIVE_INFINITY);
+    countIn();
+    // The clicks already queued still sound; none are queued past the count-in.
+    expect(metronomeCalls()).toEqual(['start', 'finish']);
+  });
+
+  it('clicks on in the take’s own beat from where the run starts with the metronome on', () => {
+    transportController.setMetronomeOn(true);
+    // From halfway through a beat: the take's next beat comes 250 ms after it.
+    transportController.seek(250);
+    h.clicks = [];
+    transportController.play();
+    expect(metronomeCalls()).toEqual(['start']);
+    const grid = clickGrid();
+    expect(grid.audioTimeAt(3)).toBeCloseTo(1.56, 9);
+    expect(grid.audioTimeAt(4)).toBeCloseTo(2.06 + 0.25, 9);
+    expect(grid.audioTimeAt(5)).toBeCloseTo(2.06 + 0.75, 9);
+    expect(grid.indexAt(2.06 + 0.25)).toBeCloseTo(4, 9);
+    countIn();
+    // Handed over to the take's own grid, which goes on as that one did.
+    expect(metronomeCalls()).toEqual(['start', 'setGrid']);
+    expect(clickGrid().audioTimeAt(1)).toBeCloseTo(2.06 + 0.25, 9);
+  });
+
+  it('clicks the run’s first beat, where it starts on one, with the metronome on', () => {
+    transportController.setMetronomeOn(true);
+    // The bar's second beat.
+    transportController.seek(500);
+    h.clicks = [];
+    transportController.play();
+    const grid = clickGrid();
+    // The count-in's bar, its downbeat accented…
+    expect(grid.audioTimeAt(0)).toBeCloseTo(0.06, 9);
+    expect(grid.isAccent(0)).toBe(true);
+    // …then the take's second beat as the run sets off, as the take accents it.
+    expect(grid.audioTimeAt(4)).toBeCloseTo(2.06, 9);
+    expect(grid.isAccent(4)).toBe(false);
+    expect(grid.beatInBar(4)).toBe(1);
+  });
+
+  it('keeps counting in when the metronome is switched, and goes by the switch after', () => {
+    transportController.play();
+    run(0.5);
+    h.clicks = [];
+    transportController.setMetronomeOn(true);
+    // Not started again: the clicks to come gain the take's beat after the count-in.
+    expect(metronomeCalls()).toEqual(['retime']);
+    expect(clickGrid().audioTimeAt(4)).toBeCloseTo(2.06, 9);
+    transportController.refreshMetronomeConfig();
+    expect(metronomeCalls()).toEqual(['retime']);
+    transportController.setMetronomeOn(false);
+    expect(metronomeCalls()).toEqual(['retime', 'retime']);
+    expect(clickGrid().audioTimeAt(4)).toBe(Number.POSITIVE_INFINITY);
+    countIn();
+    expect(metronomeCalls()).toEqual(['retime', 'retime', 'finish']);
+  });
+
+  it('counts the clicks in, and the take’s beat after, for a run with nothing to sound', () => {
+    useSettingsStore.getState().setPlaybackMode('playalong-both');
+    transportController.play();
+    expect(transportController.isMetronomeOn()).toBe(true);
+    expect(clickGrid().audioTimeAt(3)).toBeCloseTo(1.56, 9);
+    expect(clickGrid().audioTimeAt(4)).toBeCloseTo(2.06, 9);
+    countIn();
+    expect(metronomeCalls().at(-1)).toBe('setGrid');
+  });
+
+  it('counts in only a fresh run, and never between the passes of a loop', () => {
+    transportController.setLoop({ startMs: 0, endMs: 1000 });
+    transportController.play();
+    countIn();
+    run(3);
+    expect(metronomeCalls()).toEqual(['start', 'finish']);
+    expect(transportController.isCountingIn()).toBe(false);
+    // The right hand's two notes a pass, half a second apart, pass after pass.
+    const times = h.scheduled.map((event) => event.when);
+    expect(times.length).toBeGreaterThanOrEqual(6);
+    times.forEach((when, i) => expect(when).toBeCloseTo(2.06 + 0.5 * i, 9));
+  });
+
+  it('pauses during the count-in where the run starts', () => {
+    transportController.seek(500);
+    transportController.play();
+    run(1);
+    transportController.pause();
+    expect(transportController.getState()).toBe('paused');
+    expect(transportController.getPlayheadMs()).toBe(500);
+    expect(transportController.isCountingIn()).toBe(false);
+    expect(metronomeCalls().at(-1)).toBe('stop');
+    expect(told()).toEqual(['run-start playAlong left', 'run-end pause']);
+  });
+
+  it('counts in again, from the run’s start, at a speed chosen during the count-in', () => {
+    transportController.seek(500);
+    transportController.play();
+    run(0.5);
+    transportController.setSpeed(0.5);
+    expect(told()).toEqual([
+      'run-start playAlong left',
+      'run-end restart',
+      'run-start playAlong left',
+    ]);
+    expect(lastRun()).toMatchObject({
+      fromMs: 500,
+      speed: 0.5,
+      countInMs: 4000,
+      anchorAudioTime: expect.closeTo(h.now + 0.06 + 4, 9),
+    });
+    expect(transportController.getState()).toBe('playing');
+    expect(transportController.isCountingIn()).toBe(true);
+    expect(transportController.getPlayheadMs()).toBe(500);
+  });
+
+  it('changes speed as ever once the count-in is over, and tells of it', () => {
+    transportController.play();
+    runTo(600);
+    transportController.setSpeed(0.5);
+    expect(heard.at(-1)).toEqual({
+      type: 'speed',
+      runId: lastRun().runId,
+      speed: 0.5,
+      audioTime: h.now,
+    });
+    expect(told()).toEqual(['run-start playAlong left', 'speed']);
+    expect(transportController.getState()).toBe('playing');
+  });
+
+  it('tells what a Keep-time run starts with: its count-in, and where the music sets off', () => {
+    h.now = 1;
+    transportController.play();
+    expect(lastRun()).toMatchObject({
+      style: 'playAlong',
+      hand: 'left',
+      fromMs: 0,
+      speed: 1,
+      countInMs: 2000,
+      anchorAudioTime: expect.closeTo(1 + 0.06 + 2, 9),
+      asked: [
+        { id: 'l0', midi: 48, startMs: 0 },
+        { id: 'l1', midi: 43, startMs: 1000 },
+      ],
     });
   });
 });

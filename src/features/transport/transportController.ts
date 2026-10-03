@@ -21,6 +21,7 @@ import {
   type NoteEvent,
   type PedalEvent,
   type PlaybackLoop,
+  type TempoSettings,
 } from '@/domain/takeTypes';
 import { countInMsAt, createTakeTempoMap } from '@/domain/tempoMap';
 import {
@@ -35,7 +36,13 @@ import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { newId } from '@/utils/ids';
 import { beatDurationMs, clamp } from '@/utils/timing';
-import { practiceHandFor, practiceStyleOf, trainingHandFor, type RecordMode } from './modes';
+import {
+  keepTimeCountInMs,
+  practiceHandFor,
+  practiceStyleOf,
+  trainingHandFor,
+  type RecordMode,
+} from './modes';
 import type { PracticeEvent, PracticeRun, RunEndReason, RunEvent } from './practiceEvents';
 import { applySustainToNotes, effectivePlaybackDurationMs } from './sustainPedal';
 import { playableLoop, playFromMs } from './practiceLoop';
@@ -76,6 +83,59 @@ interface OpenNote {
   midi: number;
   velocity: number;
   startMs: number;
+}
+
+/** A fresh Keep-time run counting the player in; see `TransportController.isCountingIn`. */
+interface PreRoll {
+  /** When the run sets off: the clock's anchor, where it reaches the run's start. */
+  readonly anchorAudioTime: number;
+  /** The count-in's steady clicks, from the first; see `clicksUntil`. */
+  readonly clicks: ClickGrid;
+}
+
+/** A click within this many beats of where one grid hands over to the next is on it. */
+const HANDOVER_TOLERANCE_BEATS = 1e-6;
+
+/**
+ * `first`'s clicks before `endAudioTime`, then `then`'s from there on, or none
+ * without it: a count-in, and the take's own beat once the run it counts in
+ * sets off. It lives here rather than beside the grids it joins, and reads
+ * them lazily, click by click as the metronome asks: a test that stands in for
+ * the metronome's module then needs nothing new of it, and its stand-in grids
+ * are never read.
+ */
+function clicksUntil(first: ClickGrid, endAudioTime: number, then: ClickGrid | null): ClickGrid {
+  /** How many of `first`'s clicks come before the end, and which of `then`'s is the first after. */
+  const split = () => ({
+    count: Math.max(0, Math.ceil(first.indexAt(endAudioTime) - HANDOVER_TOLERANCE_BEATS)),
+    from: then ? Math.ceil(then.indexAt(endAudioTime) - HANDOVER_TOLERANCE_BEATS) : 0,
+  });
+  /** The grid click `index` is on, and which of its clicks it is; null for none. */
+  const locate = (index: number): readonly [ClickGrid, number] | null => {
+    const { count, from } = split();
+    if (index < count) return [first, index];
+    return then ? [then, from + index - count] : null;
+  };
+  return {
+    audioTimeAt: (index) => {
+      const at = locate(index);
+      return at ? at[0].audioTimeAt(at[1]) : Number.POSITIVE_INFINITY;
+    },
+    isAccent: (index) => {
+      const at = locate(index);
+      return at ? at[0].isAccent(at[1]) : false;
+    },
+    beatInBar: (index) => {
+      const at = locate(index);
+      return at ? at[0].beatInBar(at[1]) : first.beatInBar(index);
+    },
+    indexAt: (audioTime) => {
+      if (!then || audioTime < endAudioTime) return first.indexAt(audioTime);
+      const { count, from } = split();
+      return count + then.indexAt(audioTime) - from;
+    },
+    numerator: first.numerator,
+  };
 }
 
 /**
@@ -128,6 +188,8 @@ export class TransportController {
    * walked: where each sits in the walk, and the audio time it starts at.
    */
   private queuedNotes: Array<{ pass: number; index: number; audioTime: number }> = [];
+  /** A fresh Keep-time run counting the player in, while it does; see `isCountingIn`. */
+  private preRoll: PreRoll | null = null;
 
   // Training playback
   private trainingGate: TrainingGate | null = null;
@@ -329,6 +391,9 @@ export class TransportController {
   /** Current playhead in take-ms. Live from the audio clock while moving. */
   getPlayheadMs(): number {
     if (this.state === 'playing' || this.state === 'recording') {
+      // A count-in holds the playhead where the run starts, while the clock
+      // runs toward it.
+      if (this.preRoll) return Math.max(this.clock.currentTakeMs(), this.runFromMs);
       return Math.max(0, this.clock.currentTakeMs());
     }
     if (this.state === 'countIn') return this.recordStartMs;
@@ -388,7 +453,13 @@ export class TransportController {
 
   setMetronomeOn(on: boolean): void {
     this.metronomeOn = on;
-    if (!on && this.state !== 'countIn') {
+    if (this.preRoll) {
+      // A count-in clicks either way: the switch says only whether the take's
+      // own beat carries on once the run sets off. The clicks still to come
+      // are placed again, so the first of the take's, where the run starts on
+      // a beat, is queued ahead to land with the music.
+      if (this.metronome.isRunning) this.metronome.retime(this.preRollGrid(this.preRoll));
+    } else if (!on && this.state !== 'countIn') {
       this.metronome.stop();
     } else if (on) {
       this.configureMetronome();
@@ -432,13 +503,21 @@ export class TransportController {
     );
   }
 
+  /**
+   * What the metronome clicks while a run counts in: the count-in, then, with
+   * the metronome on, the take's own beat from where the run sets off.
+   */
+  private preRollGrid({ clicks, anchorAudioTime }: PreRoll): ClickGrid {
+    return clicksUntil(clicks, anchorAudioTime, this.metronomeOn ? this.takeGrid() : null);
+  }
+
   /** Re-apply tempo/volume changes while running. */
   refreshMetronomeConfig(): void {
     this.configureMetronome();
     if (!this.metronome.isRunning) return;
-    // The count-in's grid is fixed once it starts; everything else re-reads
-    // the take so an edit is heard on the next click.
-    if (this.state === 'countIn') return;
+    // A count-in's grid is fixed once it starts, a recording's or a run's;
+    // everything else re-reads the take so an edit is heard on the next click.
+    if (this.state === 'countIn' || this.preRoll) return;
     if (this.state === 'playing' || this.state === 'recording') {
       this.metronome.setGrid(this.takeGrid());
     } else {
@@ -665,9 +744,24 @@ export class TransportController {
     this.playLoop = loop;
     this.runFromMs = fromMs;
     this.loopPassesBefore = 0;
-    const anchorAudioTime = audioEngine.currentTime + (resume ? RESUME_SLACK_S : START_SLACK_S);
-    this.clock.start(fromMs, anchorAudioTime, { rate: this.getSpeed(), loop });
-    if (this.metronomeOn) {
+    const rate = this.getSpeed();
+    const startAudioTime = audioEngine.currentTime + (resume ? RESUME_SLACK_S : START_SLACK_S);
+    // A fresh run that keeps time counts the player in, as a recording does:
+    // the music will not wait for them, so they come in on a beat they have
+    // heard. Only a run that waits resumes, from a hold, and a loop's passes
+    // are all one run.
+    const countInMs =
+      resume === null &&
+      !this.practiceRun &&
+      practiceStyleOf(useSettingsStore.getState().playbackMode) === 'playAlong' &&
+      fromMs < this.playDurationMs
+        ? keepTimeCountInMs(take.tempo, fromMs, rate)
+        : 0;
+    const anchorAudioTime = startAudioTime + countInMs / 1000;
+    this.clock.start(fromMs, anchorAudioTime, { rate, loop });
+    if (countInMs > 0) {
+      this.beginPreRoll(take.tempo, fromMs, rate, startAudioTime, anchorAudioTime);
+    } else if (this.metronomeOn) {
       this.configureMetronome();
       this.metronome.start(this.takeGrid());
     }
@@ -675,7 +769,7 @@ export class TransportController {
     // A practice run goes on through every hold it stops at, so a resume from
     // one is not a new run. It starts before its first hold is armed, so that
     // nothing in it can come before its start.
-    if (!this.practiceRun) this.beginPracticeRun(notes, fromMs, anchorAudioTime);
+    if (!this.practiceRun) this.beginPracticeRun(notes, fromMs, anchorAudioTime, countInMs);
     // What the player has just played at a hold is theirs, in the pass the
     // run resumes in.
     this.trainingSkips.clear();
@@ -684,6 +778,53 @@ export class TransportController {
     // not past the loop's end, or the next pass would skip the notes at its top.
     const gateFromMs = Math.min(resume?.gateFromMs ?? fromMs, loop?.endMs ?? Infinity);
     this.beginPlaybackScheduler(notes, fromMs, gateFromMs);
+  }
+
+  /**
+   * Count a fresh Keep-time run in, from `startAudioTime` until it sets off at
+   * `anchorAudioTime`: steady clicks at the tempo in force where it starts and
+   * the speed it will play. Playback is under way meanwhile, the clock running
+   * toward the run's start, while the playhead waits there (`getPlayheadMs`)
+   * for the first tick past it to hand over (`endPreRoll`).
+   */
+  private beginPreRoll(
+    tempo: TempoSettings,
+    fromMs: number,
+    rate: number,
+    startAudioTime: number,
+    anchorAudioTime: number,
+  ): void {
+    const map = createTakeTempoMap(tempo);
+    this.preRoll = {
+      anchorAudioTime,
+      clicks: constantClickGrid(
+        startAudioTime,
+        beatDurationMs(map.bpmAt(fromMs), tempo.timeSignature) / rate,
+        tempo.timeSignature.numerator,
+      ),
+    };
+    this.configureMetronome();
+    this.metronome.start(this.preRollGrid(this.preRoll));
+  }
+
+  /**
+   * The run has set off. The metronome goes by its switch from here: on, it
+   * clicks the take's own grid, which carries on from the clicks already
+   * queued; off, it lets those sound and queues no more.
+   */
+  private endPreRoll(): void {
+    this.preRoll = null;
+    if (this.metronomeOn) this.metronome.setGrid(this.takeGrid());
+    else this.metronome.finish();
+    for (const listener of this.stateListeners) listener();
+  }
+
+  /**
+   * A fresh Keep-time run is counting the player in: playing, its clock
+   * running toward where the run starts, the playhead held there.
+   */
+  isCountingIn(): boolean {
+    return this.preRoll !== null;
   }
 
   /**
@@ -717,6 +858,12 @@ export class TransportController {
     if (this.state === 'recording' && this.clock.currentTakeMs() >= MAX_TAKE_MS) {
       this.stop();
       return;
+    }
+    // A count-in is over once the audio clock passes the run's start. The tick
+    // notices, rather than a timeout of its own: in a background tab, timers
+    // are held back, and the engine's render clock still ticks.
+    if (this.preRoll && audioEngine.currentTime >= this.preRoll.anchorAudioTime) {
+      this.endPreRoll();
     }
     // Everything here is on the run's unwrapped timeline (virtual time), where
     // a loop's next pass is simply further on; see `TransportClock`.
@@ -1133,7 +1280,13 @@ export class TransportController {
   setSpeed(speed: number): void {
     const next = clampPlaybackSpeed(speed);
     useTakeStore.getState().setPlaybackSpeed(next);
-    if (this.state === 'playing') {
+    if (this.preRoll) {
+      // A count-in counts the beat the run will play to, so at a new speed the
+      // run starts again from its start, counted in afresh.
+      this.endPracticeRun('restart');
+      this.pauseInternal(this.runFromMs);
+      this.startPlayback(null);
+    } else if (this.state === 'playing') {
       this.retimeRun({ rate: next });
     } else if (this.metronome.isRunning && (this.state === 'idle' || this.state === 'paused')) {
       this.metronome.setGrid(this.practiceGrid());
@@ -1180,7 +1333,7 @@ export class TransportController {
     this.endPracticeRun('loop');
     useTakeStore.getState().setPlaybackLoop(loop);
     if (this.state === 'playing') {
-      this.pauseInternal(Math.round(this.clock.currentTakeMs()));
+      this.pauseInternal(this.playingAtMs());
       const next = playableLoop(useTakeStore.getState().take);
       if (next && (this.pausedPlayheadMs < next.startMs || this.pausedPlayheadMs >= next.endMs)) {
         this.pausedPlayheadMs = next.startMs;
@@ -1243,7 +1396,12 @@ export class TransportController {
 
   pause(): void {
     if (this.state !== 'playing') return;
-    this.pauseInternal(Math.round(this.clock.currentTakeMs()));
+    this.pauseInternal(this.playingAtMs());
+  }
+
+  /** Where playback is, to the millisecond: during a count-in, where the run will set off. */
+  private playingAtMs(): number {
+    return this.preRoll ? this.runFromMs : Math.round(this.clock.currentTakeMs());
   }
 
   /**
@@ -1270,6 +1428,7 @@ export class TransportController {
       this.endPracticeRun(reason);
       this.clearTrainingGate();
     }
+    this.preRoll = null;
     this.clearScheduler();
     this.metronome.stop();
     if (!ringOut) audioEngine.allNotesOff();
@@ -1340,6 +1499,7 @@ export class TransportController {
   /** Hard cleanup used by stop, failures, and lifecycle interruptions. */
   private stopEverything(): void {
     this.clearTrainingGate();
+    this.preRoll = null;
     this.clearScheduler();
     if (this.countInTimer !== null) {
       clearTimeout(this.countInTimer);
