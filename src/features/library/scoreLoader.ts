@@ -1,6 +1,4 @@
 import { libraryTakeId } from '@/domain/libraryTakes';
-import { musicXmlToTake } from '@/domain/musicXmlImport';
-import { extractMusicXmlText } from '@/domain/mxlContainer';
 import type { Take } from '@/domain/takeTypes';
 import { CLASSIC_SCORES, type ClassicScoreEntry } from './classicsManifest';
 import { CLASSIC_SCORE_NAMES } from './classicsNames';
@@ -69,6 +67,13 @@ export async function loadClassicTake(
     throw new Error(`Score "${entry.file}" could not be fetched: ${response.status}`);
   }
   const bytes = new Uint8Array(await response.arrayBuffer());
+  // The MusicXML reader, and fflate behind it, load with the first score
+  // opened rather than with the app. The catalog is in the entry chunk (the
+  // persistence layer restores a library take at startup), and static imports
+  // here put both in it, along with every part of fflate any lazy chunk uses —
+  // the share link's deflate among them.
+  const { musicXmlToTake } = await import('@/domain/musicXmlImport');
+  const { extractMusicXmlText } = await import('@/domain/mxlContainer');
   const take = toLibraryTake(entry, musicXmlToTake(extractMusicXmlText(bytes), entry.file));
   parsed.set(trackId, take);
   return structuredClone(take);
