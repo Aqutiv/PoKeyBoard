@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { isExportState } from '@/features/transport/transportMachine';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { useImportUiStore } from '@/state/useImportUiStore';
+import { useHashLinkIntake } from './hooks/useHashLinkIntake';
 import { useTransportState } from './hooks/useTransport';
 
 const ImportInbox = lazy(() =>
@@ -15,16 +16,17 @@ const ImportInbox = lazy(() =>
  * something to show.
  *
  * Living outside the routed view, a preview outlives a route change — the
- * browser's Back button now, and the hash change a shared link will arrive by —
- * while its modal backdrop keeps the nav out of reach.
+ * browser's Back button, and the hash change a shared link arrives by — while
+ * its modal backdrop keeps the nav out of reach. Share links come in here too
+ * (`useHashLinkIntake`): a take link as a preview, a library link as its track.
  *
  * It waits its turn. While an export is under way or an export dialog is open,
  * or a recording is counting in or running, a preview stays in the store and
- * shows once that clears: two modals never stack, an import never swaps the
- * active take out from under an export the user is watching, and no dialog
- * lands in the middle of a performance. Leaving a route stops a recording, so
- * that last case is only a file or link that finished loading after the user
- * left Takes for Play.
+ * shows once that clears, and a link waits to be opened: two modals never
+ * stack, an import never swaps the active take out from under an export the
+ * user is watching, and no dialog lands in the middle of a performance.
+ * Leaving a route stops a recording, so that last case is only a file or link
+ * that finished loading after the user left Takes for Play.
  */
 export function ImportDialogs() {
   const pending = useImportUiStore((state) => state.preview !== null || state.failure !== null);
@@ -32,10 +34,11 @@ export function ImportDialogs() {
     (state) => state.requestedTakeId !== null || state.sheetRequestedTakeId !== null,
   );
   const transport = useTransportState();
-  const busy = isExportState(transport) || transport === 'countIn' || transport === 'recording';
-  return (
-    <Suspense fallback={null}>
-      {pending && !exportDialogOpen && !busy ? <ImportInbox /> : null}
-    </Suspense>
-  );
+  const busy =
+    exportDialogOpen ||
+    isExportState(transport) ||
+    transport === 'countIn' ||
+    transport === 'recording';
+  useHashLinkIntake(busy);
+  return <Suspense fallback={null}>{pending && !busy ? <ImportInbox /> : null}</Suspense>;
 }

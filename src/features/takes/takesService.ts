@@ -17,6 +17,7 @@ import { musicXmlToTake } from '@/domain/musicXmlImport';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
 import { CURRENT_SCHEMA_VERSION, reverbRoomOf, type Take } from '@/domain/takeTypes';
+import { decodeTakeLink } from '@/domain/takeLink';
 import { transportController } from '@/features/transport/transportController';
 import { scrubController } from '@/features/notation/scrubController';
 import { pinLanguage } from '@/i18n/languagePreference';
@@ -438,6 +439,20 @@ export async function previewImportUrl(
     clearTimeout(timer);
     signal?.removeEventListener('abort', forwardAbort);
   }
+}
+
+// ------------------------------------------------- import from a share link --
+
+/**
+ * Preview the take a share link carries (`#/s/<version>.<data>`), decoded right
+ * here: nothing is fetched. It keeps the sender's take id, so opening the same
+ * link again offers to replace the copy the first one made — as importing the
+ * same file twice does — with a new copy still the default.
+ */
+export async function previewTakeLink(version: number, data: string): Promise<ImportPreview> {
+  const parsed = decodeTakeLink(version, data);
+  const collision = await takeExists(parsed.take.id);
+  return { parsed, collision, fileName: takeJsonFileName(parsed.take.title) };
 }
 
 /**
