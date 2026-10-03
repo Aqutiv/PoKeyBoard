@@ -4,7 +4,7 @@ import { takeToMidi } from '@/domain/midiExport';
 import { midiToTake } from '@/domain/midiImport';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { parseTakeJson } from '@/domain/takeSchema';
-import { MAX_NOTE_COUNT, type NoteEvent, type Take } from '@/domain/takeTypes';
+import { MAX_NOTE_COUNT, MAX_TEMPO_CHANGES, type NoteEvent, type Take } from '@/domain/takeTypes';
 import { MidiImportError } from '@/utils/errors';
 
 // ---------------------------------------------------------------------------
@@ -599,6 +599,17 @@ describe('midiToTake: tempo', () => {
     expect(take.tempo.bpm).toBe(30);
     expect(take.tempo.changes).toEqual([{ atMs: 4000, bpm: 200 }]);
     expect(take.notes[0]!.durationMs).toBe(4150);
+  });
+
+  it('takes a file of 200,000 tempo changes, keeping as many as a take holds', () => {
+    // Far more values than a function call can take as arguments, so nothing
+    // on the way may spread them into one (Math.min(...) threw a RangeError).
+    const events: Ev[] = [];
+    for (let i = 0; i < 200_000; i += 1) events.push(tempo(i * 10, i % 2 === 0 ? 100 : 120));
+    const take = midiToTake(smf(0, 480, [[...events, ...played(0, 60, 0, 480)]]), 'x.mid');
+    expect(take.notes).toHaveLength(1);
+    expect(take.tempo.bpm).toBe(100);
+    expect(take.tempo.changes).toHaveLength(MAX_TEMPO_CHANGES);
   });
 
   it('drops changes that land on one millisecond or repeat the tempo', () => {

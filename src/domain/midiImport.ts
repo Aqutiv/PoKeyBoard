@@ -604,7 +604,9 @@ export function midiToTake(bytes: Uint8Array, fileName?: string): Take {
   const bpms = segments.map((segment) => bpmOf(segment.microsecondsPerQuarter));
   const { folds } = foldsFor(bpms);
   const meterFold = folds[0] as number;
-  const gridFold = Math.min(...folds);
+  // Reduced, not Math.min(...folds): a file may hold more tempos than a call
+  // can take arguments.
+  const gridFold = folds.reduce((finest, fold) => Math.min(finest, fold), meterFold);
   const meter = importedTimeSignature(
     foldedMeter(fileMeter(smf) ?? { numerator: 4, denominator: 4 }, meterFold),
   );
