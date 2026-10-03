@@ -12,9 +12,11 @@ import {
   takeExists,
 } from '@/data/takeRepository';
 import { ensureNotLibraryTake } from '@/domain/libraryTakes';
+import { isMidiFileName, midiToTake } from '@/domain/midiImport';
 import { extractMusicXmlText, isScoreFileName } from '@/domain/mxlContainer';
 import { musicXmlToTake } from '@/domain/musicXmlImport';
 import { createEmptyTake } from '@/domain/noteEvents';
+import { hasMidiHeader } from '@/domain/smfReader';
 import { parseTakeJson, parseTakeJsonString, type ParsedTake } from '@/domain/takeSchema';
 import { CURRENT_SCHEMA_VERSION, reverbRoomOf, type Take } from '@/domain/takeTypes';
 import { transportController } from '@/features/transport/transportController';
@@ -26,6 +28,7 @@ import { useSettingsStore } from '@/state/useSettingsStore';
 import {
   AppError,
   ImportValidationError,
+  MidiImportError,
   RemoteImportCancelled,
   RemoteImportError,
   ScoreImportError,
@@ -238,20 +241,39 @@ export async function previewImportTakeText(
   return { parsed, collision, fileName };
 }
 
-/** Preview MXL/MusicXML bytes already in memory as a freshly converted take. */
+/**
+ * The error a score import fails with: a MIDI file's own, or MusicXML's, so the
+ * message names the kind of file that was picked.
+ */
+function scoreImportFailure(midi: boolean, issues: string[]): AppError {
+  return midi ? new MidiImportError(issues) : new ScoreImportError(issues);
+}
+
+/**
+ * Preview score bytes already in memory — MXL, MusicXML or MIDI — as a freshly
+ * converted take. MIDI is known by its `MThd` header, whatever the file is
+ * called, or by a `.mid` name, so a damaged MIDI file is reported as one.
+ */
 export async function previewImportScoreBytes(
   bytes: Uint8Array,
   fileName: string,
 ): Promise<ImportPreview> {
+  const midi = hasMidiHeader(bytes) || isMidiFileName(fileName);
   let parsed: ParsedTake;
   try {
-    rejectOversizedBytes(bytes.byteLength, MAX_SCORE_IMPORT_BYTES, 'The score file');
-    const take = musicXmlToTake(extractMusicXmlText(bytes), fileName);
+    rejectOversizedBytes(
+      bytes.byteLength,
+      MAX_SCORE_IMPORT_BYTES,
+      midi ? 'The MIDI file' : 'The score file',
+    );
+    const take = midi
+      ? midiToTake(bytes, fileName)
+      : musicXmlToTake(extractMusicXmlText(bytes), fileName);
     parsed = parseTakeJson(take); // defense-in-depth: the uniform import pipeline
   } catch (error) {
-    if (error instanceof ScoreImportError) throw error;
-    if (error instanceof ImportValidationError) throw new ScoreImportError(error.issues);
-    throw new ScoreImportError([error instanceof Error ? error.message : String(error)]);
+    if (error instanceof ScoreImportError || error instanceof MidiImportError) throw error;
+    if (error instanceof ImportValidationError) throw scoreImportFailure(midi, error.issues);
+    throw scoreImportFailure(midi, [error instanceof Error ? error.message : String(error)]);
   }
   const collision = await takeExists(parsed.take.id); // fresh id — effectively always false
   return { parsed, collision, fileName };
@@ -262,13 +284,14 @@ export async function previewImportFile(file: File): Promise<ImportPreview> {
   return previewImportTakeText(await file.text(), file.name);
 }
 
-/** Preview an MXL/MusicXML score file as a freshly converted take. */
+/** Preview an MXL, MusicXML or MIDI file as a freshly converted take. */
 export async function previewImportScoreFile(file: File): Promise<ImportPreview> {
+  const midi = isMidiFileName(file.name);
   try {
     // Cheap early-out so an oversized pick is never buffered into memory.
-    rejectOversizedFile(file, MAX_SCORE_IMPORT_BYTES, 'The score file');
+    rejectOversizedFile(file, MAX_SCORE_IMPORT_BYTES, midi ? 'The MIDI file' : 'The score file');
   } catch (error) {
-    if (error instanceof ImportValidationError) throw new ScoreImportError(error.issues);
+    if (error instanceof ImportValidationError) throw scoreImportFailure(midi, error.issues);
     throw error;
   }
   return previewImportScoreBytes(new Uint8Array(await file.arrayBuffer()), file.name);
@@ -286,6 +309,8 @@ function kindFromContentType(header: string | null): RemoteImportKind | null {
   if (type === 'application/json' || type === 'text/json') return 'take';
   if (type === 'application/xml' || type === 'text/xml' || type.endsWith('+xml')) return 'score';
   if (type.startsWith('application/vnd.recordare.musicxml')) return 'score';
+  // The registered type, and the two older names servers still send.
+  if (type === 'audio/midi' || type === 'audio/x-midi' || type === 'audio/mid') return 'score';
   return null;
 }
 
@@ -294,6 +319,7 @@ function kindFromBytes(bytes: Uint8Array): RemoteImportKind | null {
   if (bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 0x03 && bytes[3] === 0x04) {
     return 'score'; // MXL is a zip
   }
+  if (hasMidiHeader(bytes)) return 'score'; // a Standard MIDI File
   const skippable = new Set([0x20, 0x09, 0x0a, 0x0d, 0xef, 0xbb, 0xbf]); // space, tabs, EOLs, BOM
   for (const byte of bytes.subarray(0, 64)) {
     if (skippable.has(byte)) continue;
@@ -417,7 +443,8 @@ export async function previewImportUrl(
     kind ??= kindFromBytes(bytes) ?? 'take'; // unknown falls through to the friendlier message
 
     if (kind === 'score') {
-      return await previewImportScoreBytes(bytes, fileName === '' ? 'score.musicxml' : fileName);
+      const fallbackName = hasMidiHeader(bytes) ? 'score.mid' : 'score.musicxml';
+      return await previewImportScoreBytes(bytes, fileName === '' ? fallbackName : fileName);
     }
     rejectOversizedBytes(bytes.byteLength, MAX_TAKE_IMPORT_BYTES, 'The take file');
     return await previewImportTakeText(

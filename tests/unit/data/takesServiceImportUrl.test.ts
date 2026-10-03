@@ -14,6 +14,28 @@ const SCORE_XML =
   '<note><pitch><step>E</step><octave>4</octave></pitch><duration>1</duration></note>' +
   '</measure></part></score-partwise>';
 
+/**
+ * A type 0 MIDI file named "Linked Melody": two quarter notes at ♩=120,
+ * written byte by byte so the test does not lean on the exporter.
+ */
+function midiBytes(): Uint8Array {
+  const title = [...new TextEncoder().encode('Linked Melody')];
+  const events = [
+    [0x00, 0xff, 0x03, title.length, ...title],
+    [0x00, 0x90, 60, 100],
+    [0x83, 0x60, 0x80, 60, 0], // 480 ticks later
+    [0x00, 0x90, 64, 100],
+    [0x83, 0x60, 0x80, 64, 0],
+    [0x00, 0xff, 0x2f, 0x00],
+  ].flat();
+  const n = events.length;
+  return Uint8Array.from([
+    ...[0x4d, 0x54, 0x68, 0x64, 0, 0, 0, 6, 0, 0, 0, 1, 0x01, 0xe0], // MThd, type 0, 480
+    ...[0x4d, 0x54, 0x72, 0x6b, (n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff],
+    ...events,
+  ]);
+}
+
 function takeJson(): string {
   return JSON.stringify({
     schemaVersion: 1,
@@ -116,6 +138,70 @@ afterEach(() => {
   vi.doUnmock('@/features/transport/transportController');
   vi.doUnmock('@/features/notation/scrubController');
   vi.resetModules();
+});
+
+describe('MIDI files', () => {
+  it('imports a MIDI file by its .mid link', async () => {
+    const { previewImportUrl } = await loadService();
+    fetchMock.mockResolvedValue(
+      streamingResponse(midiBytes(), { headers: { 'content-type': 'application/octet-stream' } }),
+    );
+
+    const preview = await previewImportUrl('https://x.test/files/melody.mid');
+    expect(preview.parsed.take.notes.map((note) => note.midi)).toEqual([60, 64]);
+    expect(preview.parsed.take.title).toBe('Linked Melody');
+    expect(preview.parsed.repairs).toEqual([]);
+  });
+
+  it('knows a MIDI file by its Content-Type', async () => {
+    const { previewImportUrl } = await loadService();
+    for (const type of ['audio/midi', 'audio/x-midi', 'audio/mid']) {
+      fetchMock.mockResolvedValue(
+        streamingResponse(midiBytes(), { headers: { 'content-type': type } }),
+      );
+      const preview = await previewImportUrl('https://x.test/download?id=7');
+      expect(preview.parsed.take.notes).toHaveLength(2);
+    }
+  });
+
+  it('knows a MIDI file by its MThd header alone', async () => {
+    const { previewImportUrl } = await loadService();
+    fetchMock.mockResolvedValue(
+      streamingResponse(midiBytes(), { headers: { 'content-type': 'text/plain' } }),
+    );
+
+    // No extension and a useless Content-Type: only the byte sniff saves this.
+    const preview = await previewImportUrl('https://x.test/download');
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('reads MIDI bytes as MIDI whatever the file is called', async () => {
+    const { previewImportScoreBytes } = await loadService();
+    const preview = await previewImportScoreBytes(midiBytes(), 'misnamed.xml');
+    expect(preview.parsed.take.notes).toHaveLength(2);
+  });
+
+  it('reports a damaged .mid file as a MIDI problem, not a MusicXML one', async () => {
+    const { previewImportScoreBytes, previewImportScoreFile, MidiImportError } =
+      await loadService();
+    await expect(
+      previewImportScoreBytes(new TextEncoder().encode('not midi'), 'song.mid'),
+    ).rejects.toBeInstanceOf(MidiImportError);
+    const truncated = midiBytes().subarray(0, 30);
+    await expect(previewImportScoreBytes(truncated, 'song.MIDI')).rejects.toBeInstanceOf(
+      MidiImportError,
+    );
+    const huge = new File([new Uint8Array(8)], 'huge.mid');
+    Object.defineProperty(huge, 'size', { value: 60 * 1024 * 1024 });
+    await expect(previewImportScoreFile(huge)).rejects.toBeInstanceOf(MidiImportError);
+  });
+
+  it('still reports a damaged MusicXML file as a MusicXML problem', async () => {
+    const { previewImportScoreBytes, ScoreImportError } = await loadService();
+    await expect(
+      previewImportScoreBytes(new TextEncoder().encode('<score-partwise'), 'song.musicxml'),
+    ).rejects.toBeInstanceOf(ScoreImportError);
+  });
 });
 
 async function expectRemoteFailure(promise: Promise<ImportPreview>, ctor: unknown, kind: string) {

@@ -26,6 +26,11 @@ import {
  * that never had them.
  */
 
+/** File names a MIDI file goes by. */
+export function isMidiFileName(name: string): boolean {
+  return /\.midi?$/i.test(name);
+}
+
 /** General MIDI keeps channel 10 (9 counted from zero) for drums. */
 const DRUM_CHANNEL = 9;
 const SUSTAIN_CONTROLLER = 64;

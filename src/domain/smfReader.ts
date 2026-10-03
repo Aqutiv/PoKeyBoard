@@ -165,9 +165,14 @@ function readTrack(bytes: Uint8Array, start: number, end: number, index: number)
   return { events, endTick: tick };
 }
 
+/** Whether bytes start the way every Standard MIDI File does, with `MThd`. */
+export function hasMidiHeader(bytes: Uint8Array): boolean {
+  return bytes[0] === 0x4d && bytes[1] === 0x54 && bytes[2] === 0x68 && bytes[3] === 0x64;
+}
+
 /** Read a Standard MIDI File's bytes. Throws `MidiImportError`. */
 export function readSmf(bytes: Uint8Array): SmfFile {
-  if (bytes.length < 14 || tagAt(bytes, 0) !== 'MThd') {
+  if (bytes.length < 14 || !hasMidiHeader(bytes)) {
     throw invalid('The file does not start with a MIDI header.');
   }
   const headerLength = u32At(bytes, 4);
