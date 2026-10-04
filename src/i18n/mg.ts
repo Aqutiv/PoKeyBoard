@@ -165,10 +165,10 @@ export const mg: Messages = {
       `Vokatry ny fanazaran-tena: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
     best: ({ percent, speed }) =>
       `Tsara indrindra: ${percent}%${speed === undefined ? '' : ` (amin’ny ${speed}%)`}`,
-    last: ({ percent, speed }) =>
-      `Farany: ${percent}%${speed === undefined ? '' : ` (amin’ny ${speed}%)`}`,
     newBest: 'Tsara indrindra vaovao',
-    summaryRecord: ({ facts, newBest }) => `${newBest ? 'Tsara indrindra vaovao! ' : ''}${facts}.`,
+    newBestSummary: 'Tsara indrindra vaovao!',
+    bestSummary: ({ percent, speed }) =>
+      `Ny tsara indrindra: ${percent}%${speed === undefined ? '' : ` amin’ny hafainganana ${speed}%`}.`,
     handLeft: 'Tanana havia',
     handRight: 'Tanana havanana',
     handBoth: 'Tanana roa',

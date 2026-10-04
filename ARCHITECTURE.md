@@ -324,7 +324,9 @@ to end. The run must be on a Library track (`libraryTrackSummary`) whose notes
 and length are the catalog's, and that track must still be open, as it was, when
 the run ends. A run that disagrees with the catalog is on notes the list does
 not describe, a classics manifest out of date with its scores, and is reported
-with a warning; any other is simply not kept.
+with a warning; any other is simply not kept. Nor is a run that leaves no card:
+one spoiled by its take changing under it, while it ran or while a Keep-time run
+listened on for its last notes, or one too short to tell.
 
 A result keeps its headline share, the slowest speed and how many notes it
 counted: waiting, the steps right first time; keeping time, the share on time
@@ -332,24 +334,27 @@ and the notes played of the notes asked and the wrong ones (`accuracy`). Waiting
 the share right first time ranks results, then the speed; keeping time, the
 share on time, then the notes played, then the speed (`isBetter`). A faster run
 has to be as right to beat a slower one, so a slow perfect run stays the best;
-the card says each result's speed, so the trade is never hidden. Each result
-carries its track's fingerprint, the catalog's note count and length: once a
-track changes, that way of practising it starts afresh, and the Library shows
-none of its old results. A run is only a new best when it beats a best of the
-track as it stands; a first result is the best, but not a new one.
+the card says the best's speed beside it, so the trade is never hidden. Each
+result carries its track's fingerprint, the catalog's note count and length:
+once a track changes, that way of practising it starts afresh, and the Library
+shows none of its old results. A run is only a new best when it beats a best of
+the track as it stands; a first result is the best, but not a new one.
 
 The practice session keeps a complete run as it ends, after showing its card:
 `recordPracticeScore` reads, merges and writes the record in one Dexie
 transaction, since `setMetadata` is a blind put and two results kept at once
 would each write over the other. In the background, never calling the
 transport, its errors logged; the track's best and last are added to the result
-(`attachRecord`) only while it is still the one shown. The card ends its line of
-facts with them, Best and Last at their speeds on a desktop, Best alone on a
-phone, and a badge by the headline for a new best; the status adds them in a
-span of their own, after what it has said, so a screen reader hears only the
-addition. The Library reads the record once as it opens and shows, beside each
-title, the best in the way practised most recently (`chipFor`), its words in
-full as the row's `aria-describedby`, the row's name left as it was.
+(`attachRecord`) only while it is still the one shown. The last is the run the
+card already shows, so the card never repeats it: a run that beat an earlier
+best gets a badge by the headline, one that fell short of the best or only
+matched it ends its line of facts with that best (at its speed on a desktop,
+alone on a phone), and a first result, the best there is, shows neither
+(`isOwnBest`). The status adds the same in a span of its own, after what it has
+said, so a screen reader hears only the addition. The Library reads the record
+once as it opens and shows, beside each title, the best in the way practised
+most recently, by each way's last (`chipFor`), its words in full as the row's
+`aria-describedby`, the row's name left as it was.
 
 The record is one metadata row (`practiceResults`): device-local, like Learn
 progress, and in no backup. It is parsed in layers, the envelope, each track,

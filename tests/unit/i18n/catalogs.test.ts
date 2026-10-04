@@ -110,22 +110,21 @@ describe('i18n catalogs', () => {
     }
   });
 
-  it('best and last results, and the Library’s chip, interpolate their shares, speeds and hands', () => {
+  it('best results, and the Library’s chip, interpolate their shares, speeds and hands', () => {
     for (const lang of SUPPORTED_LANGUAGES) {
       const m = catalogs[lang];
-      for (const fact of [m.practice.best, m.practice.last]) {
-        expect(fact({ percent: 92 }), lang).toContain('92');
-        // The speed only when it is given: the take's own goes unsaid.
-        expect(fact({ percent: 100, speed: 60 }), lang).toMatch(/100\D+60/);
-        expect(fact({ percent: 100 }), lang).not.toContain('60');
+      // The best on the card, and as a screen reader hears it: the speed only
+      // when it is given, the take's own going unsaid.
+      for (const best of [m.practice.best, m.practice.bestSummary]) {
+        expect(best({ percent: 92 }), lang).toContain('92');
+        expect(best({ percent: 100, speed: 60 }), lang).toMatch(/100\D+60/);
+        expect(best({ percent: 100 }), lang).not.toContain('60');
       }
-      expect(m.practice.best({ percent: 92 }), lang).not.toBe(m.practice.last({ percent: 92 }));
-      expect(m.practice.newBest, lang).not.toBe('');
-      expect(m.practice.summaryRecord({ facts: 'B, L', newBest: false }), lang).toContain('B, L');
-      expect(m.practice.summaryRecord({ facts: 'B, L', newBest: true }), lang).toContain('B, L');
-      expect(m.practice.summaryRecord({ facts: 'B, L', newBest: true }), lang).not.toBe(
-        m.practice.summaryRecord({ facts: 'B, L', newBest: false }),
+      expect(m.practice.bestSummary({ percent: 92 }), lang).not.toBe(
+        m.practice.best({ percent: 92 }),
       );
+      expect(m.practice.newBest, lang).not.toBe('');
+      expect(m.practice.newBestSummary, lang).toContain(m.practice.newBest);
 
       const hands = [
         m.practice.handLeft,

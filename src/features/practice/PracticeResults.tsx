@@ -10,7 +10,12 @@ import { usePracticeStore, type PracticeResult } from '@/state/usePracticeStore'
 import { useTakeStore } from '@/state/useTakeStore';
 import { TooltipButton } from '@/ui/TooltipButton';
 import type { KeepTimeReport } from './playAlongSession';
-import { headlinePercent, type PracticeScore, type ResultRecord } from './practiceRecords';
+import {
+  headlinePercent,
+  isOwnBest,
+  type PracticeScore,
+  type ResultRecord,
+} from './practiceRecords';
 import type { BarsCell, ResultCell } from './resultCells';
 import type { WaitReport } from './trainingReport';
 import './practice.css';
@@ -139,48 +144,44 @@ function toldOf(m: Messages, result: PracticeResult): Told {
   return result.style === 'wait' ? toldOfWait(m, result.wait) : toldOfKeepTime(m, result.keepTime);
 }
 
-/** What the card says of the track's best and last, once the run is kept among them. */
+/** What the card says of how the run stands against the track's best, once that is known. */
 interface ToldRecord {
+  /** The run beat an earlier best: a badge by the headline says so. */
   newBest: boolean;
-  /** Best and Last, each at its speed, for a desktop. */
+  /** The best to measure the run against, at its speed, for a desktop. */
   full: Fact[];
-  /** What a phone has room for. */
+  /** The same, without its speed, for a phone's line. */
   short: Fact[];
-  /** What a screen reader hears of them, once they are known, after the result. */
-  summary: string;
+  /** What a screen reader hears of it, after the result; nothing, for a first result. */
+  summary: string | null;
 }
 
-/** The speed a best or last was played at, when it was not the take's own. */
+/** The speed a best was played at, when it was not the take's own. */
 function scoreSpeed(score: PracticeScore): number | undefined {
   const speed = Math.round(score.speed * 100);
   return speed === 100 ? undefined : speed;
 }
 
 /**
- * The track's best and last in the way just practised, each by the headline
- * share of its style, right first time or on time, and the speed it was
- * played at. A desktop says both; a phone keeps to the best, without its
- * speed, and to the badge alone for a new best, which is this very run.
+ * How the run stands against the track's best in the way just practised. The
+ * card shows the run itself already, so it says only what the run alone does
+ * not: that it beat an earlier best, with a badge; or else the best it fell
+ * short of or only matched, by the headline share of its style (right first
+ * time, or on time) and, on a desktop, the speed it was played at. A first
+ * result is the best there is, and has nothing to be measured against.
  */
 function toldOfRecord(m: Messages, style: PracticeStyle, record: ResultRecord): ToldRecord {
-  const best = m.practice.best({
-    percent: headlinePercent(record.best, style),
-    speed: scoreSpeed(record.best),
-  });
-  const last = m.practice.last({
-    percent: headlinePercent(record.last, style),
-    speed: scoreSpeed(record.last),
-  });
+  if (record.newBest) {
+    return { newBest: true, full: [], short: [], summary: m.practice.newBestSummary };
+  }
+  if (isOwnBest(record)) return { newBest: false, full: [], short: [], summary: null };
+  const percent = headlinePercent(record.best, style);
+  const speed = scoreSpeed(record.best);
   return {
-    newBest: record.newBest,
-    full: [
-      ['best', best],
-      ['last', last],
-    ],
-    short: record.newBest
-      ? []
-      : [['best', m.practice.best({ percent: headlinePercent(record.best, style) })]],
-    summary: m.practice.summaryRecord({ facts: [best, last].join(', '), newBest: record.newBest }),
+    newBest: false,
+    full: [['best', m.practice.best({ percent, speed })]],
+    short: [['best', m.practice.best({ percent })]],
+    summary: m.practice.bestSummary({ percent, speed }),
   };
 }
 
@@ -279,10 +280,11 @@ function ResultCells({ cells, names }: { cells: readonly ResultCell[]; names: Ce
  *
  * A desktop has room for every fact on one line; a phone keeps to the few
  * that matter most; a short landscape screen gives the card one line and no
- * cells. A run through the whole of a Library track adds the track's best and
- * last to the line, once they are known, and a badge by the headline for a
- * new best: the last facts on it, so a phone's line that has no room for them
- * wraps before them, and the cells keep their row.
+ * cells. A run through the whole of a Library track adds how it stands
+ * against the track's best, once that is known: a badge by the headline for a
+ * new best, or the best it did not beat as the last fact on the line, so a
+ * phone's line with no room for it wraps before it, and the cells keep their
+ * row.
  */
 export function PracticeResults() {
   const m = useMessages();
@@ -311,17 +313,17 @@ export function PracticeResults() {
           one sentence, while the card is there. It also carries, while a
           Keep-time run lasts, the moment on the page's clock a press lands
           on the run's start, for the end-to-end tests to play in time from:
-          a fact about the running transport, as `data-piano-ready` is. The
-          track's best and last come a moment after the result, and are added
-          after it, leaving what was said as it was, so a reader hears only
-          the addition. */}
+          a fact about the running transport, as `data-piano-ready` is. How
+          the run stands against the track's best comes a moment after the
+          result, and is added after it, leaving what was said as it was, so
+          a reader hears only the addition. */}
       <p
         role="status"
         className="visually-hidden"
         data-keep-time-origin-ms={pressOriginMs === undefined ? undefined : String(pressOriginMs)}
       >
         {told ? told.summary : ''}
-        {told && record ? <span>{` ${record.summary}`}</span> : null}
+        {told && record?.summary ? <span>{` ${record.summary}`}</span> : null}
       </p>
       {told && !recording ? (
         <div className="practice-results" role="group" aria-label={m.practice.resultsLabel}>

@@ -30,7 +30,7 @@
 }
 
 /* A new best, by the headline: highlighted, as the draft badge on Takes is.
-   The track's best and last themselves are facts like the others. */
+   A best the run did not beat is a fact like the others. */
 .practice-results__new-best {
   display: inline-block;
   padding: 1px 7px;

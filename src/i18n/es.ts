@@ -159,10 +159,10 @@ export const es: Messages = {
       `Resultados de la práctica: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
     best: ({ percent, speed }) =>
       `Mejor: ${percent} %${speed === undefined ? '' : ` (al ${speed} %)`}`,
-    last: ({ percent, speed }) =>
-      `Último: ${percent} %${speed === undefined ? '' : ` (al ${speed} %)`}`,
     newBest: 'Nuevo récord',
-    summaryRecord: ({ facts, newBest }) => `${newBest ? '¡Nuevo récord! ' : ''}${facts}.`,
+    newBestSummary: '¡Nuevo récord!',
+    bestSummary: ({ percent, speed }) =>
+      `Tu mejor resultado: ${percent} %${speed === undefined ? '' : ` al ${speed} % de velocidad`}.`,
     handLeft: 'Mano izquierda',
     handRight: 'Mano derecha',
     handBoth: 'Ambas manos',

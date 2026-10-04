@@ -164,10 +164,10 @@ export const fr: Messages = {
       `Résultats de l’entraînement : ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
     best: ({ percent, speed }) =>
       `Record : ${percent} %${speed === undefined ? '' : ` (à ${speed} %)`}`,
-    last: ({ percent, speed }) =>
-      `Dernier : ${percent} %${speed === undefined ? '' : ` (à ${speed} %)`}`,
     newBest: 'Nouveau record',
-    summaryRecord: ({ facts, newBest }) => `${newBest ? 'Nouveau record ! ' : ''}${facts}.`,
+    newBestSummary: 'Nouveau record !',
+    bestSummary: ({ percent, speed }) =>
+      `Votre record : ${percent} %${speed === undefined ? '' : ` à ${speed} % de la vitesse`}.`,
     handLeft: 'Main gauche',
     handRight: 'Main droite',
     handBoth: 'Les deux mains',

@@ -160,9 +160,10 @@ export const en: Messages = {
     summaryKeepTime: ({ facts, remarks }) =>
       `Practice results: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
     best: ({ percent, speed }) => `Best ${percent}%${speed === undefined ? '' : ` (at ${speed}%)`}`,
-    last: ({ percent, speed }) => `Last ${percent}%${speed === undefined ? '' : ` (at ${speed}%)`}`,
     newBest: 'New best',
-    summaryRecord: ({ facts, newBest }) => `${newBest ? 'New best! ' : ''}${facts}.`,
+    newBestSummary: 'New best!',
+    bestSummary: ({ percent, speed }) =>
+      `Your best: ${percent}%${speed === undefined ? '' : ` at ${speed}% speed`}.`,
     handLeft: 'Left hand',
     handRight: 'Right hand',
     handBoth: 'Both hands',

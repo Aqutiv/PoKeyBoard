@@ -321,20 +321,17 @@ export interface Messages {
      */
     summaryKeepTime: (p: { facts: string; remarks: readonly string[] }) => string;
     /**
-     * A Library track's best result in the way just practised, and its last
-     * (the run just ended), once the run is kept among them: the headline
-     * share, then the slowest speed the result was played at, `speed` given
-     * only when it was not the take's own.
+     * A Library track's best result in the way just practised, beside a run
+     * that did not set it: the headline share, then the slowest speed the best
+     * was played at, `speed` given only when it was not the take's own.
      */
     best: (p: { percent: number; speed?: number }) => string;
-    last: (p: { percent: number; speed?: number }) => string;
     /** The badge on a run that beat the track's best. */
     newBest: string;
-    /**
-     * What a screen reader hears once the best and last are known, after the
-     * result: `facts` comes listed with commas.
-     */
-    summaryRecord: (p: { facts: string; newBest: boolean }) => string;
+    /** What a screen reader hears, after the result, of a run that beat the track's best… */
+    newBestSummary: string;
+    /** …and of one that did not: the best, `speed` as for `best`. */
+    bestSummary: (p: { percent: number; speed?: number }) => string;
     /** A way of practising a track, on its Library chip: the hand, waiting for the player… */
     handLeft: string;
     handRight: string;
