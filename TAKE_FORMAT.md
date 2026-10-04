@@ -115,7 +115,7 @@ A Standard MIDI File (`.mid`, `.midi`) comes in through the same pickers, drops 
 
 ## Backup files
 
-`PoKeyBoard Backup - YYYY-MM-DD.json`: `{ kind: "pokeyboard-backup", schemaVersion, createdAt, takes: Take[], settings: {…} }`. Restore validates each take through the same pipeline (bad entries are skipped and counted) and merges with fresh ids on collision. Backups never include the piano sample cache or rendered MP3s.
+`PoKeyBoard Backup - YYYY-MM-DD.json`: `{ kind: "pokeyboard-backup", schemaVersion, createdAt, takes: Take[], settings: {…} }`. Restore validates each take through the same pipeline (bad entries are skipped and counted) and merges with fresh ids on collision. Backups never include the piano sample cache or rendered MP3s, nor anything kept in the `metadata` table: Learn progress and each Library track's best practice results stay on the device.
 
 ## Share links
 

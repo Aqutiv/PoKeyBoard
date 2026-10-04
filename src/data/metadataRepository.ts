@@ -15,3 +15,5 @@ export const META_PERSIST_REQUESTED = 'persistentStorageRequested';
 export const META_LANGUAGE_EXPLICIT = 'languageExplicitlyChosen';
 /** How far the user has got through the Learn chapters; see learnProgressRepository. */
 export const META_LEARN_PROGRESS = 'learnProgress';
+/** Each Library track's best and last practice results; see practiceResultsRepository. */
+export const META_PRACTICE_RESULTS = 'practiceResults';

@@ -162,6 +162,23 @@ export const fr: Messages = {
     passCellKeepTime: ({ pass, good, total }) => `Tour ${pass} : ${good} sur ${total} à temps`,
     summaryKeepTime: ({ facts, remarks }) =>
       `Résultats de l’entraînement : ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
+    best: ({ percent, speed }) =>
+      `Record : ${percent} %${speed === undefined ? '' : ` (à ${speed} %)`}`,
+    newBest: 'Nouveau record',
+    newBestSummary: 'Nouveau record !',
+    bestSummary: ({ percent, speed }) =>
+      `Votre record : ${percent} %${speed === undefined ? '' : ` à ${speed} % de la vitesse`}.`,
+    handLeft: 'Main gauche',
+    handRight: 'Main droite',
+    handBoth: 'Les deux mains',
+    handLeftInTime: 'Main gauche à temps',
+    handRightInTime: 'Main droite à temps',
+    handBothInTime: 'Les deux mains à temps',
+    chip: ({ hand, percent }) => `${hand} · ${percent} %`,
+    chipDetail: ({ hand, keepTime, percent }) =>
+      `Record ${
+        hand === 'both' ? 'aux deux mains' : hand === 'right' ? 'main droite' : 'main gauche'
+      }, ${keepTime ? 'en gardant le tempo' : 'en attendant vos notes'} : ${percent} %`,
   },
   metronome: {
     groupLabel: 'Métronome',

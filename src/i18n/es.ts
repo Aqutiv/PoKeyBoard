@@ -157,6 +157,23 @@ export const es: Messages = {
     passCellKeepTime: ({ pass, good, total }) => `Vuelta ${pass}: ${good} de ${total} a tiempo`,
     summaryKeepTime: ({ facts, remarks }) =>
       `Resultados de la práctica: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
+    best: ({ percent, speed }) =>
+      `Mejor: ${percent} %${speed === undefined ? '' : ` (al ${speed} %)`}`,
+    newBest: 'Nuevo récord',
+    newBestSummary: '¡Nuevo récord!',
+    bestSummary: ({ percent, speed }) =>
+      `Tu mejor resultado: ${percent} %${speed === undefined ? '' : ` al ${speed} % de velocidad`}.`,
+    handLeft: 'Mano izquierda',
+    handRight: 'Mano derecha',
+    handBoth: 'Ambas manos',
+    handLeftInTime: 'Mano izquierda a tiempo',
+    handRightInTime: 'Mano derecha a tiempo',
+    handBothInTime: 'Ambas manos a tiempo',
+    chip: ({ hand, percent }) => `${hand} · ${percent} %`,
+    chipDetail: ({ hand, keepTime, percent }) =>
+      `Mejor resultado con ${
+        hand === 'both' ? 'ambas manos' : hand === 'right' ? 'la mano derecha' : 'la mano izquierda'
+      }, ${keepTime ? 'manteniendo el tempo' : 'esperando tus notas'}: ${percent} %`,
   },
   metronome: {
     groupLabel: 'Metrónomo',

@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import type { NoteEvent, TempoSettings } from '@/domain/takeTypes';
 import type { TrainingHand } from '@/domain/trainingGate';
 import type { KeepTimeReport } from '@/features/practice/playAlongSession';
+import type { ResultRecord } from '@/features/practice/practiceRecords';
 import { sameBarGrid } from '@/features/practice/resultCells';
 import type { WaitReport } from '@/features/practice/trainingReport';
 import type { PracticeStyle } from '@/features/transport/modes';
@@ -20,6 +21,12 @@ interface PracticeResultBase {
   reason: RunEndReason;
   /** The tempo the run was scored on, whose bars the card's sections are. */
   tempo: TempoSettings;
+  /**
+   * For a run through the whole of a Library track, the track's best and last
+   * in the way it was practised, the run's own the last: added a moment after
+   * the result itself, once the run is kept among them on the device.
+   */
+  record?: ResultRecord;
 }
 
 /** How a "wait for me" run went. */
@@ -69,6 +76,8 @@ export interface PracticeState {
   runEnded(runId: number): void;
   /** Ignored for any run but the newest started, which has overtaken it. */
   show(result: PracticeResult): void;
+  /** Add the track's best and last to run `runId`'s result, while it is the one shown. */
+  attachRecord(runId: number, record: ResultRecord): void;
   dismiss(): void;
   /**
    * Put away a result for any take but this one, the take now open, or for
@@ -101,6 +110,10 @@ export const usePracticeStore = create<PracticeState>()((set) => ({
   show: (result) =>
     set((state) =>
       state.latestRunId === null || state.latestRunId === result.runId ? { result } : state,
+    ),
+  attachRecord: (runId, record) =>
+    set((state) =>
+      state.result?.runId === runId ? { result: { ...state.result, record } } : state,
     ),
   dismiss: () => set({ result: null }),
   keepOnlyTake: (take) =>

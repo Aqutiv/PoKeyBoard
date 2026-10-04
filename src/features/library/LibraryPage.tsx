@@ -1,6 +1,15 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
+import { loadPracticeRecords, subscribePracticeRecords } from '@/data/practiceResultsRepository';
+import {
+  chipFor,
+  headlinePercent,
+  practiceModeOf,
+  type PracticeChip,
+  type PracticeRecords,
+} from '@/features/practice/practiceRecords';
 import { useMessages } from '@/i18n/i18nContext';
+import type { Messages } from '@/i18n/types';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { SegmentedSwitch } from '@/ui/SegmentedSwitch';
@@ -15,6 +24,28 @@ import {
   rememberLibraryQuery,
 } from './scrollMemory';
 import './library.css';
+
+/**
+ * A track's chip in words: on it, the way it was practised and its best's
+ * headline share, "Right hand · 92%"; and in full, for a screen reader, which
+ * hears it as the row's description.
+ */
+function chipWords(m: Messages, { mode, best }: PracticeChip): { label: string; detail: string } {
+  const { style, hand } = practiceModeOf(mode);
+  const percent = headlinePercent(best, style);
+  const hands =
+    style === 'wait'
+      ? { left: m.practice.handLeft, right: m.practice.handRight, both: m.practice.handBoth }
+      : {
+          left: m.practice.handLeftInTime,
+          right: m.practice.handRightInTime,
+          both: m.practice.handBothInTime,
+        };
+  return {
+    label: m.practice.chip({ hand: hands[hand], percent }),
+    detail: m.practice.chipDetail({ hand, keepTime: style === 'playAlong', percent }),
+  };
+}
 
 /** Curated built-in tracks: open one on Play to listen, learn, or record over. */
 export function LibraryPage() {
@@ -79,6 +110,35 @@ export function LibraryPage() {
     if (groups.current) groups.current.scrollTop = 0;
     filterInput.current?.focus();
   };
+
+  // Each track's best, read as the page opens, and again whenever it is
+  // written while the page is open: a Keep-time run's result is kept a moment
+  // after the run ends, once its last notes are judged, which can be after the
+  // page has read. Only the practice session writes them; the page only reads.
+  const [records, setRecords] = useState<PracticeRecords | null>(null);
+  const chipId = useId();
+  useEffect(() => {
+    let cancelled = false;
+    let written = false;
+    const unsubscribe = subscribePracticeRecords((latest) => {
+      written = true;
+      setRecords(latest);
+    });
+    void loadPracticeRecords()
+      // A list without its chips beats a list that never renders.
+      .catch((error: unknown) => {
+        console.error('Loading practice results failed:', error);
+        return null;
+      })
+      .then((loaded) => {
+        // Anything written since is newer than what this read found.
+        if (!cancelled && !written) setRecords(loaded);
+      });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
+  }, []);
 
   // A download outlives the page if the user navigates away mid-open. Abort it
   // on unmount: a score that arrives late must not activate itself and pull the
@@ -180,16 +240,30 @@ export function LibraryPage() {
               {section.tracks.map((track) => {
                 const isActive = track.takeId === activeTakeId;
                 const isOpening = track.trackId === openingId;
+                const chip = records ? chipFor(records.tracks[track.takeId], track) : null;
+                const words = chip ? chipWords(m, chip) : null;
+                const detailId = `${chipId}${track.trackId}`;
                 return (
                   <li key={track.trackId} className={`library-item${isActive ? ' is-active' : ''}`}>
+                    {/* Named as ever, the chip's words its description: a name
+                        that changed with every best would be no name to find
+                        the track by. */}
                     <button
                       type="button"
                       className="library-item__main"
                       aria-label={m.library.openLabel({ title: track.title })}
+                      aria-describedby={words ? detailId : undefined}
                       aria-current={isActive ? 'true' : undefined}
                       onClick={() => open(track.trackId)}
                     >
-                      <span className="library-item__title">{track.title}</span>
+                      <span className="library-item__heading">
+                        <span className="library-item__title">{track.title}</span>
+                        {words ? (
+                          <span className="library-item__best" aria-hidden="true">
+                            {words.label}
+                          </span>
+                        ) : null}
+                      </span>
                       <span className="library-item__byline">
                         {m.library.byline({ composer: track.composer })}
                       </span>
@@ -205,6 +279,11 @@ export function LibraryPage() {
                       {track.descriptionKey ? (
                         <span className="library-item__description">
                           {m.library.descriptions[track.descriptionKey]}
+                        </span>
+                      ) : null}
+                      {words ? (
+                        <span id={detailId} className="visually-hidden">
+                          {words.detail}
                         </span>
                       ) : null}
                     </button>

@@ -320,6 +320,37 @@ export interface Messages {
      * sentence of its own.
      */
     summaryKeepTime: (p: { facts: string; remarks: readonly string[] }) => string;
+    /**
+     * A Library track's best result in the way just practised, beside a run
+     * that did not set it: the headline share, then the slowest speed the best
+     * was played at, `speed` given only when it was not the take's own.
+     */
+    best: (p: { percent: number; speed?: number }) => string;
+    /** The badge on a run that beat the track's best. */
+    newBest: string;
+    /** What a screen reader hears, after the result, of a run that beat the track's best… */
+    newBestSummary: string;
+    /** …and of one that did not: the best, `speed` as for `best`. */
+    bestSummary: (p: { percent: number; speed?: number }) => string;
+    /** A way of practising a track, on its Library chip: the hand, waiting for the player… */
+    handLeft: string;
+    handRight: string;
+    handBoth: string;
+    /** …and the hand, keeping time. */
+    handLeftInTime: string;
+    handRightInTime: string;
+    handBothInTime: string;
+    /**
+     * A Library track's chip: its best in the way practised most recently,
+     * `hand` one of the ways above.
+     */
+    chip: (p: { hand: string; percent: number }) => string;
+    /** The chip in words, for a screen reader: the hand, and whether the music kept time. */
+    chipDetail: (p: {
+      hand: 'left' | 'right' | 'both';
+      keepTime: boolean;
+      percent: number;
+    }) => string;
   };
   metronome: {
     groupLabel: string;

@@ -4,6 +4,16 @@ import { keepTimeResult, TEMPO, waitResult } from '../practice/practiceFixtures'
 
 const store = () => usePracticeStore.getState();
 
+/** Eight of ten right first time, the track's best and its last both. */
+const SCORE = {
+  at: '2026-10-04T10:00:00.000Z',
+  accuracy: 0.8,
+  speed: 1,
+  notes: 10,
+  fingerprint: '16:16000',
+  content: 'c0ffee00',
+};
+
 beforeEach(() => {
   usePracticeStore.setState({ result: null, live: null, latestRunId: null });
 });
@@ -76,6 +86,29 @@ describe('the practice results store', () => {
     expect(store().result).not.toBeNull();
     store().dismiss();
     expect(store().result).toBeNull();
+  });
+
+  it('adds the track’s best and last to the result shown, once they are kept', () => {
+    const record = { best: SCORE, last: SCORE, newBest: false };
+    store().runStarted(1, 'take', 'wait');
+    store().show(waitResult({ runId: 1 }));
+    store().runEnded(1);
+    store().attachRecord(1, record);
+    expect(store().result).toEqual(waitResult({ runId: 1, record }));
+  });
+
+  it('adds a best and last to no result but the run’s own', () => {
+    const record = { best: SCORE, last: SCORE, newBest: true };
+    // Nothing shown: dismissed before the record was kept.
+    store().attachRecord(1, record);
+    expect(store().result).toBeNull();
+
+    // A newer run's result, or no result at all, is left as it is.
+    store().runStarted(2, 'take', 'playAlong');
+    const result = keepTimeResult({ runId: 2 });
+    store().show(result);
+    store().attachRecord(1, record);
+    expect(store().result).toBe(result);
   });
 
   it('keeps a result only while its take is the one open', () => {

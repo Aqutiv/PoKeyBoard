@@ -29,6 +29,23 @@
   white-space: nowrap;
 }
 
+/* A new best, by the headline: highlighted, as the draft badge on Takes is.
+   A best the run did not beat is a fact like the others. */
+.practice-results__new-best {
+  display: inline-block;
+  padding: 1px 7px;
+  background: var(--accent);
+  border-radius: 999px;
+  color: var(--accent-contrast);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
 /* Wide enough for a few cells before it wraps to a line of its own, and
    scrolled sideways past that: a long run makes many sections, and the card
    must not take the score's height for them. */
