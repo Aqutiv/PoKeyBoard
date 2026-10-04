@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InputNoteEvent } from '@/audio/AudioEngine';
 import { END_GRACE_MS, type PlayAlongDeps } from '@/features/practice/playAlongSession';
-import { createPracticeSession } from '@/features/practice/practiceSession';
+import type {
+  PracticeModeKey,
+  PracticeScore,
+  ResultRecord,
+} from '@/features/practice/practiceRecords';
+import {
+  createPracticeSession,
+  type PracticeRecordDeps,
+} from '@/features/practice/practiceSession';
 import type { PracticeEvent, PracticeRun, RunEndReason } from '@/features/transport/practiceEvents';
 import { usePracticeStore } from '@/state/usePracticeStore';
 import { practiceRun } from './practiceFixtures';
@@ -41,6 +49,35 @@ const playAlong: PlayAlongDeps = {
   flashWrongKey: (midi) => flashed.push(midi),
 };
 
+/** A score kept, as the session handed it over. */
+interface Kept {
+  takeId: string;
+  mode: PracticeModeKey;
+  score: PracticeScore;
+}
+
+/**
+ * The take open, the catalog's tracks and the results kept, as the session
+ * sees them. `keep` answers at once, the score its own best and last, unless
+ * a test hands it something else to answer.
+ */
+const library = {
+  open: { id: 'take', noteCount: 16, durationMs: 16000 },
+  summaries: new Map<string, { noteCount: number; durationMs: number }>(),
+  kept: [] as Kept[],
+  answer: null as ((kept: Kept) => Promise<ResultRecord>) | null,
+};
+
+const records: PracticeRecordDeps = {
+  openTake: () => library.open,
+  trackSummary: (takeId) => library.summaries.get(takeId),
+  keep: (takeId, mode, score) => {
+    const kept = { takeId, mode, score };
+    library.kept.push(kept);
+    return library.answer?.(kept) ?? Promise.resolve({ best: score, last: score, newBest: false });
+  },
+};
+
 const start = (run: PracticeRun) => practice.send({ runId: run.runId, type: 'run-start', run });
 const step = (runId: number, atMs: number) =>
   practice.send({ runId, type: 'step', atMs, midis: [60] });
@@ -61,11 +98,16 @@ beforeEach(() => {
   clocks.audio = 10;
   clocks.page = 5000;
   flashed = [];
+  library.open = { id: 'take', noteCount: 16, durationMs: 16000 };
+  library.summaries.clear();
+  library.kept = [];
+  library.answer = null;
   session = createPracticeSession({
     subscribePractice: practice.subscribe,
     subscribeTakeId: takeIds.subscribe,
     store: usePracticeStore.getState(),
     playAlong,
+    records,
   });
 });
 
@@ -286,5 +328,165 @@ describe('the practice session, keeping time', () => {
     expect(keys.size).toBe(0);
     vi.advanceTimersByTime(END_GRACE_MS);
     expect(store().result).toBeNull();
+  });
+});
+
+const ODE = 'library:ode-to-joy-first-steps';
+
+/** A run through the whole of the Library's Ode to Joy, its first note at the top. */
+function odeRun(runId: number, overrides: Partial<PracticeRun> = {}): PracticeRun {
+  return practiceRun({
+    runId,
+    takeId: ODE,
+    asked: [{ id: 'e', midi: E4, startMs: 0 }],
+    ...overrides,
+  });
+}
+
+/** A "wait for me" run through the Ode of two steps, ended for `reason`. */
+function playOde(
+  runId: number,
+  overrides: Partial<PracticeRun> = {},
+  reason: RunEndReason = 'end',
+) {
+  start(odeRun(runId, overrides));
+  step(runId, 0);
+  step(runId, 500);
+  end(runId, reason);
+}
+
+describe('the practice session, keeping a run through a Library track', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ now: new Date('2026-10-04T10:00:00.000Z') });
+    // Sixteen notes over sixteen seconds, as the catalog and the take have it.
+    library.summaries.set(ODE, { noteCount: 16, durationMs: 16000 });
+    library.open = { id: ODE, noteCount: 16, durationMs: 16000 };
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it('keeps a "wait for me" run from the first note to the end, and adds its best and last', async () => {
+    playOde(3, { hand: 'left', speed: 0.6 });
+    const score: PracticeScore = {
+      at: '2026-10-04T10:00:00.000Z',
+      accuracy: 1,
+      speed: 0.6,
+      notes: 2,
+      fingerprint: '16:16000',
+    };
+    expect(library.kept).toEqual([{ takeId: ODE, mode: 'wait:left', score }]);
+    // Shown at once; its best and last a moment later, once kept.
+    expect(store().result).toMatchObject({ runId: 3, wait: { steps: 2 } });
+    expect(store().result?.record).toBeUndefined();
+    await vi.waitFor(() =>
+      expect(store().result?.record).toEqual({ best: score, last: score, newBest: false }),
+    );
+  });
+
+  it('keeps a Keep-time run as of the moment it ended, once its last notes are in', async () => {
+    start(keepTimeRun(5, { takeId: ODE }));
+    press(C4, 12);
+    press(D4, 12.52);
+    endPlayAlong(5, 'end', 13.05);
+    press(E4, 13.15);
+    expect(library.kept).toEqual([]);
+
+    vi.advanceTimersByTime(END_GRACE_MS);
+    expect(library.kept).toEqual([
+      {
+        takeId: ODE,
+        mode: 'along:right',
+        score: {
+          at: '2026-10-04T10:00:00.000Z',
+          accuracy: 1,
+          onTime: 2 / 3,
+          speed: 1,
+          notes: 3,
+          fingerprint: '16:16000',
+        },
+      },
+    ]);
+    await vi.waitFor(() => expect(store().result?.record?.last.onTime).toBe(2 / 3));
+  });
+
+  it('keeps no run round a loop, started past the first note, or paused', () => {
+    playOde(1, { loop: { startMs: 0, endMs: 8000 } });
+    playOde(2, { fromMs: 500 });
+    playOde(3, {}, 'pause');
+    expect(library.kept).toEqual([]);
+    // Each still says how it went.
+    expect(store().result).toMatchObject({ runId: 3, reason: 'pause' });
+  });
+
+  it('keeps no run on a take of the user’s', () => {
+    library.open = { id: 'take', noteCount: 16, durationMs: 16000 };
+    playOde(1, { takeId: 'take' });
+    expect(library.kept).toEqual([]);
+    expect(store().result?.runId).toBe(1);
+  });
+
+  it('keeps no run on a track that disagrees with the catalog, and says so', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    // A classics manifest out of date with its scores.
+    library.summaries.set(ODE, { noteCount: 17, durationMs: 16000 });
+    playOde(1);
+    expect(library.kept).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0]?.join(' ')).toContain(ODE);
+  });
+
+  it('keeps no run whose take was swapped or changed before it ended', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    start(odeRun(1));
+    step(1, 0);
+    step(1, 500);
+    library.open = { id: 'library:fur-elise', noteCount: 16, durationMs: 16000 };
+    end(1);
+
+    library.open = { id: ODE, noteCount: 16, durationMs: 16000 };
+    start(odeRun(2));
+    step(2, 0);
+    step(2, 500);
+    library.open = { id: ODE, noteCount: 15, durationMs: 16000 };
+    end(2);
+    expect(library.kept).toEqual([]);
+    expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('adds a best and last only to the result they belong to', async () => {
+    const answers: ((record: ResultRecord) => void)[] = [];
+    library.answer = () => new Promise((resolve) => answers.push(resolve));
+    playOde(1);
+    usePracticeStore.getState().dismiss();
+    playOde(2);
+    const [first, second] = library.kept;
+    // The second run's own result is shown when its best arrives: the first,
+    // dismissed, has none to add to.
+    answers[0]?.({ best: first!.score, last: first!.score, newBest: false });
+    answers[1]?.({ best: second!.score, last: second!.score, newBest: true });
+    await vi.waitFor(() => expect(store().result?.record?.newBest).toBe(true));
+    expect(store().result?.runId).toBe(2);
+
+    // A best that arrives once the next run has started is added nowhere.
+    playOde(3);
+    start(odeRun(4));
+    const third = library.kept[2]!;
+    answers[2]?.({ best: third.score, last: third.score, newBest: true });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(store().result).toBeNull();
+    expect(store().live?.runId).toBe(4);
+  });
+
+  it('says why a result could not be kept, and shows it without a best', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    library.answer = () => Promise.reject(new Error('QuotaExceededError'));
+    playOde(1);
+    await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(1));
+    expect(store().result).toMatchObject({ runId: 1 });
+    expect(store().result?.record).toBeUndefined();
   });
 });
