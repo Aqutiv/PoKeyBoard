@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { audioEngine } from '@/audio/AudioEngine';
 import { persistenceService } from '@/data/persistence';
+import { practiceSession } from '@/features/practice/practiceSession';
 import { I18nProvider } from '@/i18n/I18nProvider';
 import { lifecycleService } from './lifecycle';
 import { RouterProvider } from './router';
@@ -21,6 +22,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
       if (mounted) setRestored(true);
     });
     lifecycleService.init();
+    practiceSession.init();
     themeController.init();
 
     const unlock = () => {

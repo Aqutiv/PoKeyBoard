@@ -57,6 +57,11 @@ src/
     transport/  transportMachine (pure), transportClock, transportController,
                 practiceEvents (what a practice run reports), sustainPedal,
                 modes, TransportControls, ModeMenu
+    practice/   trainingReport (pure: a "wait for me" run's events read into
+                its report), resultCells (pure: a run told in four-bar
+                sections or passes round a loop, each graded),
+                practiceSession (results collected outside React),
+                PracticeResults (the card under the transport)
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportInbox (the import preview and
                 its failure alert, over any route), ImportTakeDialog,
@@ -80,7 +85,8 @@ src/
                 SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
-  state/        zustand stores: take, settings, export-ui, import-ui
+  state/        zustand stores: take, settings, export-ui, import-ui, practice
+                results
   app/          hash router, providers (service wiring), lifecycle, hooks,
                 ImportDialogs (the shell's import inbox), hashLinks and
                 hooks/useHashLinkIntake (share links in the address bar)
@@ -166,6 +172,46 @@ skipped by Play; `step`, for a hold whose keys all came early, so playback never
 stopped; `speed`; and `run-end`. Listeners are told synchronously, from inside
 the command, and one that throws is reported and passed over: nothing a listener
 does can stop the transport finishing what it started.
+
+### Practice results
+
+A card under the transport says how the last run went (`features/practice`). The
+results are collected outside React: `practiceSession`, started with the other
+services, buffers the run under way's events from `subscribePractice` and, as
+the run ends, reads a "wait for me" run into its report (`trainingReport`) and
+hands it to `usePracticeStore`. So a card mounted twice under StrictMode, or not
+at all on another route, reads nothing twice and misses nothing. The listener
+only writes the store and never calls the transport back. A run of fewer than
+two steps leaves no card. The next run puts the card away, a Keep-time run
+included, though it leaves no card of its own yet, as do Dismiss and opening
+another take; a result for a run since overtaken is dropped. So does anything
+that makes the result describe a take that is no longer there: a new tempo, time
+signature or tempo change, which moves the bars its sections name (compared by
+value, so a count-in keeps it), and new notes, from a recording pass, a clear or
+an undo. The same edits made while a run is under way, a tempo set at a hold or
+an Undo pass, leave it no card at all. While a recording counts in or runs, the
+card stands aside.
+
+A step is right first time when no wrong key was pressed at it and Play did not
+let it through, so every step played early is. The card adds the wrong keys
+pressed at holds, the holds let through, those the player took more than two
+seconds over, the steps played without the music stopping, and the slowest
+speed. A hold still open when the run ended counts neither way. A desktop has
+room for every fact on one line, a phone keeps to the mistakes, and short
+landscape keeps the card to one line. It is not a dialog, since an
+`aria-modal` would stand the computer keyboard and MIDI down. A status kept
+mounted beside it tells a screen reader each result in one sentence.
+
+Then the run part by part (`resultCells`, built for a run kept in time to
+reuse). A run through the take is told in sections of four of its bars, by the
+tempo map's own bar lines: 1–4, 5–8 and so on, so a run started in bar 6 opens
+on 5–8 and the last section ends with the take. A run round a loop is told in
+passes, the latest eight, a new one wherever a step is no more than a chord
+after the last, since a hold's next step is always looked for past the chord.
+Each cell is graded good from 90% right and fair from 60%, and shows its share
+rounded down, never counts, which would read as a time signature. A section's
+cell is a button: tapped, it loops those bars (`loopBetween`) and parks the
+playhead at their start.
 
 ## Keep time
 

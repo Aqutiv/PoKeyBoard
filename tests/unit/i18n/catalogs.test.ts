@@ -40,6 +40,35 @@ describe('i18n catalogs', () => {
       expect(m.metronome.on({ bpm: 128 })).toContain('128');
     }
   });
+
+  it('practice results interpolate their counts, bars and passes', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const m = catalogs[lang];
+      expect(m.practice.rightFirstTime({ good: 8, total: 10 }), lang).toMatch(/8\D+10/);
+      expect(m.practice.accuracy({ percent: 80 }), lang).toContain('80');
+      for (const count of [1, 3]) {
+        expect(m.practice.wrongKeys({ count }), lang).toContain(String(count));
+        expect(m.practice.wrongKeysShort({ count }), lang).toContain(String(count));
+        expect(m.practice.letThrough({ count }), lang).toContain(String(count));
+        expect(m.practice.letThroughShort({ count }), lang).toContain(String(count));
+        expect(m.practice.slowHolds({ count }), lang).toContain(String(count));
+        expect(m.practice.inFlow({ count }), lang).toContain(String(count));
+      }
+      expect(m.practice.atSpeed({ percent: 60 }), lang).toContain('60');
+      expect(m.practice.cellShare({ percent: 75 }), lang).toMatch(/^75\s?%$/);
+      expect(m.practice.sectionCell({ from: 5, to: 8, good: 3, total: 4 }), lang).toMatch(
+        /5–8\D+3\D+4/,
+      );
+      expect(m.practice.sectionCell({ from: 9, to: 9, good: 1, total: 1 }), lang).not.toContain(
+        '–',
+      );
+      expect(m.practice.loopSection({ bars: 1 }), lang).not.toBe(
+        m.practice.loopSection({ bars: 4 }),
+      );
+      expect(m.practice.passCell({ pass: 6, good: 3, total: 4 }), lang).toMatch(/6\D+3\D+4/);
+      expect(m.practice.summaryWait({ facts: '8 / 10' }), lang).toContain('8 / 10');
+    }
+  });
 });
 
 describe('language setting persistence', () => {
