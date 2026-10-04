@@ -97,4 +97,13 @@ describe('the practice results store', () => {
     store().keepOnlyTake({ id: 'take', tempo: { ...TEMPO, bpm: 90 } });
     expect(store().result).toBeNull();
   });
+
+  it('puts a Keep-time result away when its bars move, as any result', () => {
+    store().show(keepTimeResult({ takeId: 'take' }));
+    store().keepOnlyTake({ id: 'take', tempo: { ...TEMPO, countInBars: 2 } });
+    expect(store().result).not.toBeNull();
+
+    store().keepOnlyTake({ id: 'take', tempo: { ...TEMPO, bpm: 90 } });
+    expect(store().result).toBeNull();
+  });
 });

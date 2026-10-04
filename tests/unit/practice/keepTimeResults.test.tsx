@@ -61,6 +61,14 @@ const card = () => screen.queryByRole('group');
 const facts = () => card()?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim();
 const show = (result = keepTimeResult()) => act(() => usePracticeStore.getState().show(result));
 
+/** Move the transport to `state`, telling everything that listens. */
+function become(state: string): void {
+  act(() => {
+    transport.state = state;
+    for (const listener of [...transport.listeners]) listener();
+  });
+}
+
 /** Every note late by much the same, about 95 ms. */
 const STEADILY_LATE = keepTimeResult({
   keepTime: keepTimeReport({
@@ -250,5 +258,38 @@ describe('the results card for a run kept in time', () => {
     expect(screen.getByRole('status')).not.toHaveAttribute('data-keep-time-origin-ms');
     act(() => usePracticeStore.getState().runStarted(3, 'take', 'wait'));
     expect(screen.getByRole('status')).not.toHaveAttribute('data-keep-time-origin-ms');
+  });
+
+  it('stands aside while a recording counts in and runs, as any card does', () => {
+    renderCard();
+    show();
+    const said = screen.getByRole('status').textContent;
+    for (const state of ['countIn', 'recording']) {
+      become(state);
+      expect(card()).toBeNull();
+      // Nothing is said again if the pass records nothing and the card comes back.
+      expect(screen.getByRole('status').textContent).toBe(said);
+    }
+    become('paused');
+    expect(card()).not.toBeNull();
+  });
+
+  it('stops the music first when a section is tapped while it plays', () => {
+    // A Keep-time run ended on another page leaves the take playing whole.
+    useTakeStore.getState().setTake(
+      createEmptyTake({
+        notes: [{ id: 'n', midi: 60, startMs: 0, durationMs: 20000, velocity: 0.6 }],
+        durationMs: 20000,
+      }),
+    );
+    transport.state = 'playing';
+    renderCard();
+    show();
+    fireEvent.click(screen.getByRole('button', { name: /^Bars 1–4/ }));
+    expect(transport.calls).toEqual([
+      ['pause'],
+      ['setLoop', { startMs: 0, endMs: 8000 }],
+      ['seek', 0],
+    ]);
   });
 });
