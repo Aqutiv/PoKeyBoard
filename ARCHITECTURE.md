@@ -178,13 +178,14 @@ does can stop the transport finishing what it started.
 A card under the transport says how the last run went (`features/practice`). The
 results are collected outside React: `practiceSession`, started with the other
 services, buffers the run under way's events from `subscribePractice` and, as
-the run ends, reads a "wait for me" run into its report (`trainingReport`) and
-hands it to `usePracticeStore`. So a card mounted twice under StrictMode, or not
-at all on another route, reads nothing twice and misses nothing. The listener
-only writes the store and never calls the transport back. A run of fewer than
-two steps leaves no card. The next run puts the card away, a Keep-time run
-included, though it leaves no card of its own yet, as do Dismiss and opening
-another take; a result for a run since overtaken is dropped. So does anything
+the run ends, reads a "wait for me" run into its report (`trainingReport`), or a
+Keep-time run into its own (see Keep-time results), and hands it to
+`usePracticeStore`. So a card mounted twice under StrictMode, or not at all on
+another route, reads nothing twice and misses nothing. The listener only writes
+the store and never calls the transport back. A run of fewer than two steps, or
+two notes kept in time, leaves no card. The next run puts the card away,
+whichever way it is practised, as do Dismiss and opening another take; a result
+for a run since overtaken is dropped. So does anything
 that makes the result describe a take that is no longer there: a new tempo, time
 signature or tempo change, which moves the bars its sections name (compared by
 value, so a count-in keeps it), and new notes, from a recording pass, a clear or
@@ -230,7 +231,8 @@ Play under a Keep-time mode starts a practice run as a training mode does, with
 lists the notes it asks for, with any hidden copy struck on the same key at the
 same moment, and the scheduler skips those ids beside the silent notes. A hidden
 trill beside a written note still sounds: nothing on the page asks the player
-for it. There is no gate and no input listener. The muting ends with the run, so
+for it. There is no gate, and the transport listens to no key: judging what the
+player plays is the practice session's (below). The muting ends with the run, so
 playback that carries on without it, after a change of page say, plays the take
 whole, as a run that waits leaves its holds behind.
 
@@ -260,6 +262,55 @@ sound nothing (both hands, or the hand of a piece written for one) turns the
 metronome on at its start, visibly, for the player to turn off: without it,
 nothing would keep the beat. It goes off again when that run ends, unless the
 player has touched its switch in the meantime, which makes the choice theirs.
+
+### Keep-time results
+
+A Keep-time run is judged by the keys pressed while it plays, which the practice
+session listens to from its start to its end (`playAlongSession`), outside React
+like every result. When each note falls due is read from the run's events, not
+from the transport's clock (`runTimeline`): the run reaches `fromMs` at its
+anchor, past the count-in, at its speed, and each `speed` event starts a stretch
+at the new speed from wherever the run had got to. The clock starts its
+unwrapped timeline again from the playhead at every change of speed, so it can
+no longer place a note before the change, and the last notes are judged after it
+has stopped. The run's timeline is unwrapped as the clock's virtual time is:
+round a loop, each pass is a loop's length further on, and the notes asked for
+(`dueNotes`) come pass by pass, a unison, or a key struck again within a chord's
+width, asked for once.
+
+A press is placed at the music the player heard: the engine stamps it on the
+audio clock, and the output's latency (`getOutputLatencyMs`, read once as the
+run starts) is taken off, so a player in time through Bluetooth headphones is in
+time. Each note's window reaches 200 ms either side in real time at any speed,
+or halfway to the next or last strike of its key, so a repeated note or a trill
+keeps each press to its own (`playAlongScorer`). The nearest press in a window
+plays the note, on time within 60 ms and early or late beyond; another press in
+it is a second strike, counted neither way. A press in no window is a wrong
+note, and flashes on the keys as it is played (`flashWrongKey`), worked out from
+the notes asked for and the timeline rather than from what has been scheduled.
+A press while the run counts in, before its anchor, is kept only if it plays a
+note early, the first falling due as the run sets off, and is otherwise nothing:
+not flashed, and never a wrong note, though that note's window opens in the
+count-in. Nor does a press before the first note's window count. Accuracy
+weighs the wrong notes against the notes played, so playing every key at once
+does not pay. Off the beat by more than 30 ms on average over six notes, the
+player rushes or drags; late by more than 90 ms in the middle, within 40 ms
+of each other, over eight, the lateness is steadier than a player's, and the
+card says the sound may be reaching them late.
+
+A run played to its end listens on for 230 ms past the latency, for its last
+notes played late. A run stopped short is judged at once, and a note whose
+window was still open, with nothing played in it yet, is left out. The result
+carries the tempo it was scored on, and is put away, or never shown, for the
+same changes to the take as any run's (above), one made while the run listens
+on for its last notes included. The cells show each section's
+share on time, or each pass's round a loop, the notes told apart by the pass
+they came in (`passCells`), since notes kept in time share moments; a section
+tapped loops as any does, music still playing paused first. While the run lasts,
+the card's status carries `data-keep-time-origin-ms`, the moment on the page's
+clock a press lands on the run's start, rendered from the store for the
+end-to-end tests to play in time from, as Learn's runner publishes
+`data-click-origin-ms`.
 
 ## Choosing a piano
 

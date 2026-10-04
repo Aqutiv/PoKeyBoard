@@ -1,7 +1,8 @@
 import type { TempoSettings } from '@/domain/takeTypes';
+import type { KeepTimeReport } from '@/features/practice/playAlongSession';
 import type { WaitReport } from '@/features/practice/trainingReport';
 import type { PracticeRun } from '@/features/transport/practiceEvents';
-import type { WaitResult } from '@/state/usePracticeStore';
+import type { KeepTimeResult, WaitResult } from '@/state/usePracticeStore';
 
 /** 120 bpm in 4/4, as a new take starts: a bar every two seconds. */
 export const TEMPO: TempoSettings = {
@@ -69,6 +70,56 @@ export function waitResult(overrides: Partial<WaitResult> = {}): WaitResult {
     reason: 'end',
     tempo: TEMPO,
     wait: waitReport(),
+    ...overrides,
+  };
+}
+
+/**
+ * Twenty-eight notes kept in time, eighteen of them on time and four missed,
+ * with two wrong notes besides, all in the take's first four bars; played
+ * 35 ms early on average.
+ */
+export function keepTimeReport(overrides: Partial<KeepTimeReport> = {}): KeepTimeReport {
+  return {
+    notes: 28,
+    hits: 24,
+    onTime: 18,
+    early: 3,
+    late: 3,
+    missed: 4,
+    wrong: 2,
+    accuracy: 24 / 30,
+    onTimeShare: 18 / 28,
+    meanOffsetMs: -35,
+    tendency: 'rushing',
+    consistentlyLate: false,
+    slowestSpeed: 1,
+    cells: [
+      {
+        kind: 'bars',
+        fromBar: 1,
+        toBar: 4,
+        startMs: 0,
+        endMs: 8000,
+        good: 18,
+        total: 28,
+        grade: 'fair',
+      },
+    ],
+    ...overrides,
+  };
+}
+
+export function keepTimeResult(overrides: Partial<KeepTimeResult> = {}): KeepTimeResult {
+  return {
+    runId: 1,
+    takeId: 'take',
+    style: 'playAlong',
+    hand: 'right',
+    slowestSpeed: 1,
+    reason: 'end',
+    tempo: TEMPO,
+    keepTime: keepTimeReport(),
     ...overrides,
   };
 }

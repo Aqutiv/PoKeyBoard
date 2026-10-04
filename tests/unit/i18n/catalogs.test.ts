@@ -69,6 +69,46 @@ describe('i18n catalogs', () => {
       expect(m.practice.summaryWait({ facts: '8 / 10' }), lang).toContain('8 / 10');
     }
   });
+
+  it('Keep-time results interpolate their counts, offsets, bars and passes', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const m = catalogs[lang];
+      expect(m.practice.onTime({ good: 18, total: 28 }), lang).toMatch(/18\D+28/);
+      for (const count of [1, 3]) {
+        expect(m.practice.hit({ count }), lang).toContain(String(count));
+        expect(m.practice.early({ count }), lang).toContain(String(count));
+        expect(m.practice.late({ count }), lang).toContain(String(count));
+        expect(m.practice.missed({ count }), lang).toContain(String(count));
+        expect(m.practice.wrongNotes({ count }), lang).toContain(String(count));
+      }
+      // Early and late are told apart, in full and on a phone.
+      expect(m.practice.early({ count: 3 }), lang).not.toBe(m.practice.late({ count: 3 }));
+      expect(m.practice.rushing({ ms: 35 }), lang).toContain('35');
+      expect(m.practice.dragging({ ms: 35 }), lang).toContain('35');
+      expect(m.practice.rushing({ ms: 35 }), lang).not.toBe(m.practice.dragging({ ms: 35 }));
+      expect(m.practice.rushingShort, lang).not.toBe(m.practice.draggingShort);
+      expect(m.practice.consistentlyLate, lang).toContain('Bluetooth');
+      expect(m.practice.sectionCellKeepTime({ from: 5, to: 8, good: 3, total: 4 }), lang).toMatch(
+        /5–8\D+3\D+4/,
+      );
+      expect(
+        m.practice.sectionCellKeepTime({ from: 9, to: 9, good: 1, total: 1 }),
+        lang,
+      ).not.toContain('–');
+      expect(m.practice.passCellKeepTime({ pass: 6, good: 3, total: 4 }), lang).toMatch(
+        /6\D+3\D+4/,
+      );
+      const summary = m.practice.summaryKeepTime({
+        facts: '18 / 28',
+        remarks: ['Fast', 'Bluetooth'],
+      });
+      expect(summary, lang).toMatch(/18 \/ 28.*Fast.*Bluetooth/);
+      // With nothing to remark on, the sentence ends with the facts.
+      expect(m.practice.summaryKeepTime({ facts: '18 / 28', remarks: [] }), lang).toMatch(
+        /18 \/ 28\.$/,
+      );
+    }
+  });
 });
 
 describe('language setting persistence', () => {

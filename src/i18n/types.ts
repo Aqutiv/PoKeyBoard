@@ -287,6 +287,39 @@ export interface Messages {
     passCell: (p: { pass: number; good: number; total: number }) => string;
     /** What a screen reader hears when a result arrives: `facts` comes listed with commas. */
     summaryWait: (p: { facts: string }) => string;
+    /** A Keep-time run's headline: the notes played on time, of all it asked for. */
+    onTime: (p: { good: number; total: number }) => string;
+    /** Notes played in their window, on time or not. */
+    hit: (p: { count: number }) => string;
+    /** Notes played in their window, before or after their moment. */
+    early: (p: { count: number }) => string;
+    late: (p: { count: number }) => string;
+    /** Notes not played at all. */
+    missed: (p: { count: number }) => string;
+    /** Keys pressed with no note of theirs near. */
+    wrongNotes: (p: { count: number }) => string;
+    /** Which way the player pulls the beat, by `ms` on average; a sentence of its own. */
+    rushing: (p: { ms: number }) => string;
+    dragging: (p: { ms: number }) => string;
+    /** `rushing` and `dragging` on a phone's line. */
+    rushingShort: string;
+    draggingShort: string;
+    /**
+     * After `dragging`, when every note was late by much the same: more likely
+     * the sound reaching the player late, through Bluetooth say, than the player.
+     */
+    consistentlyLate: string;
+    /** `consistentlyLate` on a phone's line. */
+    consistentlyLateShort: string;
+    /** A section's cell in a Keep-time run, as `sectionCell` is in one that waits. */
+    sectionCellKeepTime: (p: { from: number; to: number; good: number; total: number }) => string;
+    passCellKeepTime: (p: { pass: number; good: number; total: number }) => string;
+    /**
+     * What a screen reader hears when a Keep-time result arrives: `facts`
+     * listed with commas, then each of `remarks` (the player's timing) as a
+     * sentence of its own.
+     */
+    summaryKeepTime: (p: { facts: string; remarks: readonly string[] }) => string;
   };
   metronome: {
     groupLabel: string;

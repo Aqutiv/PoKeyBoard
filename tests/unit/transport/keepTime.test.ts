@@ -682,3 +682,25 @@ describe('the metronome a Keep-time run turns on', () => {
     expect(transportController.isMetronomeOn()).toBe(false);
   });
 });
+
+describe('a wrong key in Keep time', () => {
+  it('lights as a hold’s wrong key does, and goes out when its flash runs out', () => {
+    transportController.play();
+    runTo(600);
+    const notified = vi.fn();
+    const unsubscribe = transportController.subscribeState(notified);
+    transportController.flashWrongKey(70);
+    expect(transportController.getTrainingWrongMidis()).toEqual(new Set([70]));
+    expect(notified).toHaveBeenCalled();
+    // The music never waits for it.
+    expect(transportController.getState()).toBe('playing');
+    expect(transportController.isWaitingForTraining()).toBe(false);
+
+    notified.mockClear();
+    vi.advanceTimersByTime(300);
+    // Told as it runs out, so nothing has to poll for it.
+    expect(notified).toHaveBeenCalled();
+    expect(transportController.getTrainingWrongMidis().size).toBe(0);
+    unsubscribe();
+  });
+});
