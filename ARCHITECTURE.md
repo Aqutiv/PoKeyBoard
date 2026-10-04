@@ -184,7 +184,11 @@ not at all on another route, reads nothing twice and misses nothing. The
 listener only writes the store and never calls the transport back. A run of
 fewer than two steps leaves no card. The next run puts the card away, a run
 played along included, as do Dismiss and opening another take; a result for a
-run since overtaken is dropped.
+run since overtaken is dropped. So does anything that makes the result describe
+a take that is no longer there: a new tempo, time signature or tempo change,
+which moves the bars its sections name (compared by value, so a count-in keeps
+it), and new notes, from a recording pass, a clear or an undo. While a recording
+counts in or runs, the card stands aside.
 
 A step is right first time when no wrong key was pressed at it and Play did not
 let it through, so every step played early is. The card adds the wrong keys

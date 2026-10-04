@@ -1,5 +1,6 @@
 import { Fragment, useId } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
+import { useTransportState } from '@/app/hooks/useTransport';
 import { loopBetween } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import { useMessages } from '@/i18n/i18nContext';
@@ -162,6 +163,11 @@ export function PracticeResults() {
   const m = useMessages();
   const result = usePracticeStore((s) => s.result);
   const live = usePracticeStore((s) => s.live !== null);
+  // A recording pass changes the take, and the card is about the take before
+  // it, so it stands aside until the pass is over (and the session puts it
+  // away for good once the pass has written notes).
+  const transportState = useTransportState();
+  const recording = transportState === 'countIn' || transportState === 'recording';
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const compactLandscape = useMediaQuery(COMPACT_LANDSCAPE_QUERY);
   const shown = live ? null : result;
@@ -175,7 +181,7 @@ export function PracticeResults() {
       <p role="status" className="visually-hidden">
         {shown ? summaryOf(m, shown) : ''}
       </p>
-      {wait ? (
+      {wait && !recording ? (
         <div className="practice-results" role="group" aria-label={m.practice.resultsLabel}>
           <p className="practice-results__facts">
             <strong>{headline(m, wait)}</strong>

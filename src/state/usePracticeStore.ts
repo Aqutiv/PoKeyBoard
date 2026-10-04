@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 // Types, and one pure comparison: the results are collected outside React,
 // by the practice session, which is what reads the transport's events.
-import type { TempoSettings } from '@/domain/takeTypes';
+import type { NoteEvent, TempoSettings } from '@/domain/takeTypes';
 import type { TrainingHand } from '@/domain/trainingGate';
 import { sameBarGrid } from '@/features/practice/resultCells';
 import type { WaitReport } from '@/features/practice/trainingReport';
@@ -34,6 +34,7 @@ export type PracticeResult = WaitResult;
 export interface OpenTake {
   id: string;
   tempo: TempoSettings;
+  notes: readonly NoteEvent[];
 }
 
 /** The run under way. */
@@ -62,7 +63,7 @@ export interface PracticeState {
    * where it was but moves the bar lines, so the sections the card names, and
    * the steps counted in them, are bars that are no longer there.
    */
-  keepOnlyTake(take: OpenTake): void;
+  keepOnlyTake(take: Pick<OpenTake, 'id' | 'tempo'>): void;
 }
 
 /**

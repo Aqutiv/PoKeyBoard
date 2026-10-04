@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { TempoSettings } from '@/domain/takeTypes';
+import type { NoteEvent, TempoSettings } from '@/domain/takeTypes';
 import { createPracticeSession } from '@/features/practice/practiceSession';
 import type { PracticeEvent, PracticeRun, RunEndReason } from '@/features/transport/practiceEvents';
 import { usePracticeStore } from '@/state/usePracticeStore';
@@ -23,8 +23,25 @@ function channel<T>() {
 }
 
 const practice = channel<PracticeEvent>();
-const takes = channel<{ id: string; tempo: TempoSettings }>();
 let session: { dispose(): void } | null = null;
+
+/** The take open, as the session hears it. */
+type OpenTake = { id: string; tempo: TempoSettings; notes: readonly NoteEvent[] };
+
+const NOTES: readonly NoteEvent[] = [
+  { id: 'n1', midi: 60, startMs: 0, durationMs: 400, velocity: 0.7 },
+  { id: 'n2', midi: 64, startMs: 500, durationMs: 400, velocity: 0.7 },
+];
+
+const takeListeners = new Set<(take: OpenTake, previous: OpenTake) => void>();
+let open: OpenTake;
+
+/** Edit the open take as the take store does, telling the session what it was before. */
+function editTake(changes: Partial<OpenTake>): void {
+  const previous = open;
+  open = { ...open, ...changes };
+  for (const listener of [...takeListeners]) listener(open, previous);
+}
 
 const start = (run: PracticeRun) => practice.send({ runId: run.runId, type: 'run-start', run });
 const step = (runId: number, atMs: number) =>
@@ -43,9 +60,13 @@ const store = () => usePracticeStore.getState();
 
 beforeEach(() => {
   usePracticeStore.setState({ result: null, live: null, latestRunId: null });
+  open = { id: 'take', tempo: TEMPO, notes: NOTES };
   session = createPracticeSession({
     subscribePractice: practice.subscribe,
-    subscribeTake: takes.subscribe,
+    subscribeTake: (listener) => {
+      takeListeners.add(listener);
+      return () => void takeListeners.delete(listener);
+    },
     store: usePracticeStore.getState(),
   });
 });
@@ -94,46 +115,58 @@ describe('the practice session', () => {
   });
 
   it('puts the card away when another take is opened', () => {
-    playRun(1, 2, { takeId: 'scale' });
-    takes.send({ id: 'scale', tempo: TEMPO });
+    playRun(1, 2);
+    editTake({});
     expect(store().result).not.toBeNull();
 
-    takes.send({ id: 'etude', tempo: TEMPO });
+    editTake({ id: 'etude', notes: [] });
     expect(store().result).toBeNull();
+  });
+
+  // A recording pass, a clear or an undo writes the take new notes: counts
+  // made of the old ones no longer describe it.
+  it('puts the card away when the take is given new notes', () => {
+    playRun(1, 2);
+    editTake({
+      notes: [...NOTES, { id: 'n3', midi: 67, startMs: 1000, durationMs: 400, velocity: 0.7 }],
+    });
+    expect(store().result).toBeNull();
+  });
+
+  it('keeps the card through an edit that leaves the notes alone', () => {
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, countInBars: 0 } });
+    expect(store().result).not.toBeNull();
   });
 
   // The notes stay where they are when the tempo changes, but the bar lines
   // move: the card's sections, and the steps counted in them, are bars that
   // are no longer there.
   it('puts the card away when a new tempo moves the bars it was scored on', () => {
-    playRun(1, 2, { takeId: 'scale' });
-    takes.send({ id: 'scale', tempo: { ...TEMPO, bpm: 100 } });
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, bpm: 100 } });
     expect(store().result).toBeNull();
   });
 
   it('puts the card away when a new time signature moves its bars', () => {
-    playRun(1, 2, { takeId: 'scale' });
-    takes.send({
-      id: 'scale',
-      tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } },
-    });
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } } });
     expect(store().result).toBeNull();
   });
 
   it('puts the card away when a tempo change is marked partway through', () => {
-    playRun(1, 2, { takeId: 'scale' });
-    takes.send({ id: 'scale', tempo: { ...TEMPO, changes: [{ atMs: 4000, bpm: 90 }] } });
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, changes: [{ atMs: 4000, bpm: 90 }] } });
     expect(store().result).toBeNull();
   });
 
   it('keeps the card through a change of count-in, or a tempo rebuilt the same', () => {
-    playRun(1, 2, { takeId: 'scale' });
-    takes.send({ id: 'scale', tempo: { ...TEMPO, countInBars: 0 } });
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, countInBars: 0 } });
     expect(store().result).not.toBeNull();
 
     // Every value the same, in objects of its own, and a key signature set.
-    takes.send({
-      id: 'scale',
+    editTake({
       tempo: {
         bpm: 120,
         timeSignature: { numerator: 4, denominator: 4 },
@@ -177,11 +210,11 @@ describe('the practice session', () => {
 
   it('stops listening once disposed', () => {
     expect(practice.size).toBe(1);
-    expect(takes.size).toBe(1);
+    expect(takeListeners.size).toBe(1);
     session?.dispose();
     session = null;
     expect(practice.size).toBe(0);
-    expect(takes.size).toBe(0);
+    expect(takeListeners.size).toBe(0);
     playRun(1, 2);
     expect(store().result).toBeNull();
   });

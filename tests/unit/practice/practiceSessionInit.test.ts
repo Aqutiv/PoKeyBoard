@@ -61,6 +61,25 @@ describe('the app’s practice session', () => {
     expect(usePracticeStore.getState().result).toBeNull();
   });
 
+  it('puts a result away when a recording gives its take new notes, but not for a rename', () => {
+    practiceSession.init();
+    playRun(4);
+    useTakeStore.getState().setTitle('Scales');
+    useTakeStore
+      .getState()
+      .setInstrumentSettings({ ...useTakeStore.getState().take.instrument, masterVolume: 0.5 });
+    expect(usePracticeStore.getState().result?.runId).toBe(4);
+
+    useTakeStore
+      .getState()
+      .appendRecordedNotes(
+        [{ id: 'r1', midi: 60, startMs: 0, durationMs: 300, velocity: 0.7 }],
+        [],
+        ['r1'],
+      );
+    expect(usePracticeStore.getState().result).toBeNull();
+  });
+
   it('keeps a result through edits to its take, and puts it away when another opens', () => {
     practiceSession.init();
     playRun(2);

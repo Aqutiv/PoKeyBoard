@@ -11,10 +11,18 @@ import { useTakeStore } from '@/state/useTakeStore';
 import { waitReport, waitResult } from './practiceFixtures';
 
 /** What the card asked of the transport, in order, and the state it found it in. */
-const transport = vi.hoisted(() => ({ calls: [] as unknown[][], state: 'paused' }));
+const transport = vi.hoisted(() => ({
+  calls: [] as unknown[][],
+  state: 'paused',
+  listeners: new Set<() => void>(),
+}));
 vi.mock('@/features/transport/transportController', () => ({
   transportController: {
     getState: () => transport.state,
+    subscribeState: (listener: () => void) => {
+      transport.listeners.add(listener);
+      return () => transport.listeners.delete(listener);
+    },
     pause: () => transport.calls.push(['pause']),
     setLoop: (loop: unknown) => transport.calls.push(['setLoop', loop]),
     seek: (ms: number) => transport.calls.push(['seek', ms]),
@@ -52,6 +60,14 @@ function spoken(element: Element): string {
 const card = () => screen.queryByRole('group');
 const facts = () => card()?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim();
 const show = (result = waitResult()) => act(() => usePracticeStore.getState().show(result));
+
+/** Move the transport to `state`, telling everything that listens. */
+function become(state: string): void {
+  act(() => {
+    transport.state = state;
+    for (const listener of [...transport.listeners]) listener();
+  });
+}
 
 const SUMMARY =
   'Practice results: 8 of 10 right first time (80%), 2 wrong keys, 1 let through, ' +
@@ -290,6 +306,22 @@ describe('the practice results card', () => {
     expect(card()).not.toBeNull();
     expect(document.querySelector('[aria-modal]')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('stands aside while a recording counts in and runs', () => {
+    renderCard();
+    show();
+    const said = screen.getByRole('status').textContent;
+    for (const state of ['countIn', 'recording']) {
+      become(state);
+      // The pass changes the take: the card is about the take before it.
+      expect(card()).toBeNull();
+      // The status stays where it is, so nothing is said again if the pass
+      // records nothing and the card comes back.
+      expect(screen.getByRole('status').textContent).toBe(said);
+    }
+    become('paused');
+    expect(card()).not.toBeNull();
   });
 
   it('shows nothing while a run is under way, or with no result', () => {

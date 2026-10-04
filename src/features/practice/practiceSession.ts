@@ -13,9 +13,9 @@ export const MIN_RESULT_STEPS = 2;
 export interface PracticeSessionDeps {
   /** The transport's practice runs, as they happen. */
   subscribePractice(listener: (event: PracticeEvent) => void): () => void;
-  /** Hears the open take change to another, or its tempo change. */
-  subscribeTake(listener: (take: OpenTake) => void): () => void;
-  store: Pick<PracticeState, 'runStarted' | 'runEnded' | 'show' | 'keepOnlyTake'>;
+  /** Hears the open take change: another take, a new tempo, or new notes. */
+  subscribeTake(listener: (take: OpenTake, previous: OpenTake) => void): () => void;
+  store: Pick<PracticeState, 'runStarted' | 'runEnded' | 'show' | 'keepOnlyTake' | 'dismiss'>;
 }
 
 export interface PracticeSession {
@@ -72,9 +72,14 @@ export function createPracticeSession({
   };
 
   const unsubscribePractice = subscribePractice(onEvent);
-  // A result is about the take it was played on, in the bars it was scored
-  // on: opening another take puts it away, and so does a tempo that moves them.
-  const unsubscribeTake = subscribeTake((take) => store.keepOnlyTake(take));
+  // A result is about the take it was played on, as it was: opening another
+  // take puts it away, and so does a tempo that moves its bars. A recording
+  // pass, a clear or an undo writes the take new notes, and counts made of the
+  // old ones no longer describe it.
+  const unsubscribeTake = subscribeTake((take, previous) => {
+    store.keepOnlyTake(take);
+    if (take.notes !== previous.notes) store.dismiss();
+  });
   return {
     dispose() {
       unsubscribePractice();
@@ -99,12 +104,12 @@ export const practiceSession = {
   init(): void {
     started ??= createPracticeSession({
       subscribePractice: (listener) => transportController.subscribePractice(listener),
-      // Another take, or a new tempo on this one. A rename or a note edited
-      // keeps both, and is never heard.
+      // Another take, a new tempo, or new notes. A rename, a level or the
+      // playhead leaves all three as they were, and is never heard.
       subscribeTake: (listener) =>
-        useTakeStore.subscribe((state, previous) => {
-          if (state.take.id !== previous.take.id || state.take.tempo !== previous.take.tempo) {
-            listener(state.take);
+        useTakeStore.subscribe(({ take }, { take: before }) => {
+          if (take.id !== before.id || take.tempo !== before.tempo || take.notes !== before.notes) {
+            listener(take, before);
           }
         }),
       store: usePracticeStore.getState(),
