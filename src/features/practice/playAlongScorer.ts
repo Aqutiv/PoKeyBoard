@@ -101,6 +101,12 @@ export interface ScoreOptions {
   /** See `ON_TIME_MS`. */
   onTimeMs?: number;
   /**
+   * When the music set off, past any count-in. A press before it plays
+   * nothing yet: it counts where it lands in a note's window, an early first
+   * note, and is not a wrong note anywhere else.
+   */
+  startAudioTime?: number;
+  /**
    * When the music stopped. A press after it plays nothing new: it counts
    * where it lands in a note's window, late for the last notes, and is not a
    * wrong note anywhere else.
@@ -128,6 +134,7 @@ export function scorePlayAlong(
   {
     matchMs = MATCH_MS,
     onTimeMs = ON_TIME_MS,
+    startAudioTime = Number.NEGATIVE_INFINITY,
     endAudioTime = Number.POSITIVE_INFINITY,
     heardUntil = Number.POSITIVE_INFINITY,
   }: ScoreOptions = {},
@@ -157,7 +164,8 @@ export function scorePlayAlong(
     if (press.audioTime > heardUntil) continue;
     const note = nearestNote(byKey.get(press.midi) ?? [], press.audioTime);
     if (!note || !withinReach(press.audioTime, note.dueAudioTime, matchMs)) {
-      if (press.audioTime <= endAudioTime) wrong += 1;
+      // Only while the music plays: one counting in, or done, asks for nothing.
+      if (press.audioTime >= startAudioTime && press.audioTime <= endAudioTime) wrong += 1;
       continue;
     }
     const offset = press.audioTime - note.dueAudioTime;

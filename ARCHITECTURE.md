@@ -288,10 +288,13 @@ plays the note, on time within 60 ms and early or late beyond; another press in
 it is a second strike, counted neither way. A press in no window is a wrong
 note, and flashes on the keys as it is played (`flashWrongKey`), worked out from
 the notes asked for and the timeline rather than from what has been scheduled.
-Presses before the first note's window, the run counting in, count for nothing.
-Accuracy weighs the wrong notes against the notes played, so playing every key
-at once does not pay. Off the beat by more than 30 ms on average over six notes,
-the player rushes or drags; late by more than 90 ms in the middle, within 40 ms
+A press while the run counts in, before its anchor, is kept only if it plays a
+note early, the first falling due as the run sets off, and is otherwise nothing:
+not flashed, and never a wrong note, though that note's window opens in the
+count-in. Nor does a press before the first note's window count. Accuracy
+weighs the wrong notes against the notes played, so playing every key at once
+does not pay. Off the beat by more than 30 ms on average over six notes, the
+player rushes or drags; late by more than 90 ms in the middle, within 40 ms
 of each other, over eight, the lateness is steadier than a player's, and the
 card says the sound may be reaching them late.
 

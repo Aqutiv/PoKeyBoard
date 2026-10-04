@@ -295,3 +295,23 @@ describe('the end of a run kept in time', () => {
     expect(score).toMatchObject({ notes: 1, hits: 1, wrong: 0 });
   });
 });
+
+describe('the start of a run kept in time', () => {
+  it('counts a press before the music set off only where it plays a note', () => {
+    // Counted in until 10, when C4 falls due.
+    const score = scorePlayAlong(
+      SCALE,
+      [
+        // In the count-in, with nothing of its key near…
+        press(B4, 9.85),
+        // …and C4 early, in its window.
+        press(C4, 9.9),
+        // Once the music is going, a key asked for nowhere near is wrong.
+        press(B4, 10.05),
+      ],
+      { startAudioTime: 10 },
+    );
+    expect(score.outcomes[0]).toMatchObject({ verdict: 'early', offsetMs: -100 });
+    expect(score.wrong).toBe(1);
+  });
+});
