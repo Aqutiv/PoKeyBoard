@@ -174,10 +174,12 @@ export function PracticeResults() {
           <p className="practice-results__facts">
             <strong>{headline(m, wait)}</strong>
             {desktop ? ` ${accuracy(m, wait)}` : null}
+            {/* Where the line wraps, it wraps between facts, after a dot:
+                never inside one, and never leaving a dot to start a line. */}
             {facts.map(([key, text]) => (
               <Fragment key={key}>
-                <span aria-hidden="true"> · </span>
-                {text}
+                <span aria-hidden="true">{'\u00a0· '}</span>
+                <span className="practice-results__fact">{text}</span>
               </Fragment>
             ))}
           </p>
