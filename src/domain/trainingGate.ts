@@ -63,6 +63,31 @@ export function askedNotes(notes: readonly NoteEvent[], hand: TrainingHand): Ask
 }
 
 /**
+ * The notes a run keeping time leaves to the player, by id: every one it asks
+ * the hand for, and any hidden copy of one of them, struck on the same key at
+ * the same moment — the strike the player makes, as a hold's `noteIds` gathers
+ * it. Playback sounds everything else, a hidden trill beside a written note
+ * among it: nothing on the page asks the player for that.
+ */
+export function playAlongMutedIds(
+  notes: readonly NoteEvent[],
+  hand: TrainingHand,
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  /** Each key asked for, at the moment it is asked for: `midi@startMs`. */
+  const strikes = new Set<string>();
+  for (const note of notes) {
+    if (!asksFor(note, hand)) continue;
+    ids.add(note.id);
+    strikes.add(`${note.midi}@${note.startMs}`);
+  }
+  for (const note of notes) {
+    if (isHiddenNote(note) && strikes.has(`${note.midi}@${note.startMs}`)) ids.add(note.id);
+  }
+  return ids;
+}
+
+/**
  * The next place training playback should stop, or null if the hand has
  * nothing left to play. `fromMs` is inclusive: a note starting exactly there
  * gates, which is what a seek onto a chord should do. Callers resuming from a

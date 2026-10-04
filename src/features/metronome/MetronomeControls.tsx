@@ -1,5 +1,10 @@
 import { useCallback, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import { useMetronomeOn, usePlayhead, useTransportState } from '@/app/hooks/useTransport';
+import {
+  useCountingIn,
+  useMetronomeOn,
+  usePlayhead,
+  useTransportState,
+} from '@/app/hooks/useTransport';
 import { audioEngine } from '@/audio/AudioEngine';
 import { useMessages } from '@/i18n/i18nContext';
 import { transportController } from '@/features/transport/transportController';
@@ -63,6 +68,7 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
   const m = useMessages();
   const metronomeOn = useMetronomeOn();
   const state = useTransportState();
+  const runCountingIn = useCountingIn();
   const tempo = useTakeStore((s) => s.take.tempo);
   const setTempo = useTakeStore((s) => s.setTempo);
   const hasNotes = useTakeStore((s) => s.take.notes.length > 0);
@@ -108,7 +114,8 @@ export function MetronomeControls({ compact = false }: MetronomeControlsProps) {
     setBpmText(String(shownBpm));
   }
 
-  const clicksAudible = metronomeOn || state === 'countIn';
+  // A count-in clicks with the metronome off, a recording's or a Keep-time run's.
+  const clicksAudible = metronomeOn || state === 'countIn' || runCountingIn;
   const activeBeat = useActiveBeat(clicksAudible);
 
   const applyBpm = useCallback(

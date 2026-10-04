@@ -683,6 +683,22 @@ describe('WaterfallView', () => {
       expect(lastPainted().scene.bars.find((bar) => bar.note.midi === 60)?.bottom).toBe(250);
       become('idle');
     });
+
+    it('falls the notes in toward a Keep-time run’s start while it counts in', () => {
+      vi.spyOn(transportController.clock, 'currentTakeMs').mockReturnValue(-500);
+      // The playhead stands at the run's start meanwhile; the notes do not.
+      vi.spyOn(transportController, 'getPlayheadMs').mockReturnValue(0);
+      const countingIn = vi.spyOn(transportController, 'isCountingIn').mockReturnValue(true);
+      show();
+      become('playing');
+      frame();
+      expect(lastPainted().scene.bars.find((bar) => bar.note.midi === 60)?.bottom).toBe(250);
+      // Set off: the notes go by the playhead again.
+      countingIn.mockReturnValue(false);
+      frame();
+      expect(lastPainted().scene.bars.find((bar) => bar.note.midi === 60)?.bottom).toBe(300);
+      become('idle');
+    });
   });
 
   it('names the canvas by its notes, and says what to do when there are none', () => {

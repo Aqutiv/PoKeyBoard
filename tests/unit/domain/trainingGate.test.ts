@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
-import { askedNotes, asksFor, CHORD_WINDOW_MS, nextTrainingGate } from '@/domain/trainingGate';
+import {
+  askedNotes,
+  asksFor,
+  CHORD_WINDOW_MS,
+  nextTrainingGate,
+  playAlongMutedIds,
+} from '@/domain/trainingGate';
 
 function note(
   id: string,
@@ -142,5 +148,41 @@ describe('askedNotes', () => {
       note('next', 65, 200, 'treble'),
     ]);
     expect(askedNotes(take, 'right').map((asked) => asked.id)).toEqual(['silent', 'next']);
+  });
+});
+
+describe('playAlongMutedIds', () => {
+  it('leaves the hand’s notes to the player, and the other hand’s to playback', () => {
+    expect(playAlongMutedIds(TAKE, 'right')).toEqual(new Set(['r1', 'r2', 'r3']));
+    expect(playAlongMutedIds(TAKE, 'left')).toEqual(new Set(['l1', 'l2']));
+    expect(playAlongMutedIds(TAKE, 'both')).toEqual(new Set(['l1', 'r1', 'r2', 'r3', 'l2']));
+    expect(playAlongMutedIds([], 'both')).toEqual(new Set());
+  });
+
+  it('plays a trill the score hides, but not a hidden copy of a note the player strikes', () => {
+    const hide = (n: NoteEvent): NoteEvent => ({ ...n, hidden: true });
+    const take = sortNotes([
+      // A written trill note, and the trill a hidden voice plays for it.
+      note('written', 77, 500, 'treble'),
+      hide(note('g1', 79, 500, 'treble')),
+      hide(note('f1', 77, 562, 'treble')),
+      // A note one voice completes with another's: the same key at the same
+      // moment, hidden, and in the other staff.
+      note('held', 65, 1000, 'treble'),
+      hide(note('copy', 65, 1000, 'bass')),
+      // The same key a moment later is a strike of its own.
+      hide(note('later', 65, 1030, 'treble')),
+    ]);
+    expect(playAlongMutedIds(take, 'right')).toEqual(new Set(['written', 'held', 'copy']));
+    // The other hand has nothing written, so nothing of it is left out.
+    expect(playAlongMutedIds(take, 'left')).toEqual(new Set());
+  });
+
+  it('counts a note written but not played among the player’s', () => {
+    const take = sortNotes([
+      { ...note('silent', 64, 0, 'treble'), velocity: 0 },
+      note('next', 65, 200, 'treble'),
+    ]);
+    expect(playAlongMutedIds(take, 'right')).toEqual(new Set(['silent', 'next']));
   });
 });
