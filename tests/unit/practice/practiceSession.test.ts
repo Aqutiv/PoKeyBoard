@@ -410,4 +410,60 @@ describe('the practice session, keeping time', () => {
     vi.advanceTimersByTime(END_GRACE_MS);
     expect(store().result).toBeNull();
   });
+
+  // A Keep-time run is held to the same rules as one that waits: its result
+  // describes the take as it was, in the bars it was scored on.
+  it('has no card for a Keep-time run whose bars a new tempo moved under it', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    editTake({ tempo: { ...TEMPO, bpm: 100 } });
+    endPlayAlong(5, 'pause', 13.3);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+    expect(keys.size).toBe(0);
+  });
+
+  it('has no card for a Keep-time run whose take was given new notes under it', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    editTake({ notes: NOTES.slice(0, 1) });
+    endPlayAlong(5, 'pause', 13.3);
+    expect(store().result).toBeNull();
+  });
+
+  it('has no card for a Keep-time run whose bars moved while it waited for its last notes', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    endPlayAlong(5, 'end', 13.05);
+    // Within the grace for late notes, before there is a result to put away.
+    editTake({ tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } } });
+    vi.advanceTimersByTime(END_GRACE_MS);
+    expect(store().result).toBeNull();
+  });
+
+  it('still has a card for a Keep-time run whose count-in changed while it waited', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    endPlayAlong(5, 'end', 13.05);
+    editTake({ tempo: { ...TEMPO, countInBars: 2 } });
+    vi.advanceTimersByTime(END_GRACE_MS);
+    expect(store().result?.runId).toBe(5);
+  });
+
+  it('puts a Keep-time card away when a new tempo moves the bars it was scored on', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    endPlayAlong(5, 'pause', 13.3);
+    expect(store().result).toMatchObject({ style: 'playAlong', tempo: TEMPO });
+    editTake({ tempo: { ...TEMPO, countInBars: 0 } });
+    expect(store().result).not.toBeNull();
+
+    editTake({ tempo: { ...TEMPO, bpm: 90 } });
+    expect(store().result).toBeNull();
+  });
 });

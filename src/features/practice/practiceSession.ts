@@ -122,17 +122,20 @@ export function createPracticeSession({
   // take puts it away, and so does a tempo that moves its bars. A recording
   // pass, a clear or an undo writes the take new notes, and counts made of the
   // old ones no longer describe it. The same edits made while a run is under
-  // way, a tempo at a hold or an Undo pass, spoil the result it would have.
+  // way, a tempo at a hold or an Undo pass, spoil the result it would have, as
+  // they do a Keep-time run's still waiting on its last notes: it has no result
+  // yet for the store to put away.
   const unsubscribeTake = subscribeTake((take, previous) => {
     store.keepOnlyTake(take);
     if (take.notes !== previous.notes) store.dismiss();
-    if (
-      current &&
-      (take.id !== current.run.takeId ||
+    for (const reading of current ? [current, ...finishing] : finishing) {
+      if (
+        take.id !== reading.run.takeId ||
         take.notes !== previous.notes ||
-        !sameBarGrid(current.run.tempo, take.tempo))
-    ) {
-      current.spoiled = true;
+        !sameBarGrid(reading.run.tempo, take.tempo)
+      ) {
+        reading.spoiled = true;
+      }
     }
   });
   return {

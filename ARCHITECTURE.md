@@ -299,7 +299,8 @@ A run played to its end listens on for 230 ms past the latency, for its last
 notes played late. A run stopped short is judged at once, and a note whose
 window was still open, with nothing played in it yet, is left out. The result
 carries the tempo it was scored on, and is put away, or never shown, for the
-same changes to the take as any run's (above). The cells show each section's
+same changes to the take as any run's (above), one made while the run listens
+on for its last notes included. The cells show each section's
 share on time, or each pass's round a loop, the notes told apart by the pass
 they came in (`passCells`), since notes kept in time share moments; a section
 tapped loops as any does, music still playing paused first. While the run lasts,
