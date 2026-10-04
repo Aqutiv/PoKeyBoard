@@ -349,7 +349,7 @@ test.describe('Keep time results', () => {
 test.describe('Keep time results on a narrow phone', () => {
   test.use({ viewport: { width: 320, height: 568 } });
 
-  test('keep to two lines, with nothing cut off', async ({ page }) => {
+  test('stay compact, with nothing cut off', async ({ page }) => {
     await gotoAppReady(page);
     await importTake(page, EIGHT_NOTES);
     const modes = transport(page).getByRole('button', { name: 'Modes' });
@@ -364,7 +364,11 @@ test.describe('Keep time results on a narrow phone', () => {
 
     const results = resultsCard(page);
     await expect(results).toBeVisible({ timeout: 15_000 });
-    await expect(results.locator('p')).toHaveText(/ of 8 on time · \d hit · You drag\b/);
+    // `\s`: the space before each dot is a no-break one, holding it to the fact before.
+    await expect(results.locator('p')).toHaveText(/ of 8 on time\s·\s\d hit\s·\sYou drag\b/);
+    // Read off what is drawn, as the card's own narrow-phone check does, so it
+    // holds in any font: nothing cut off, the headline whole, and no more than
+    // three rows, the facts' lines and the cells' row with the close button.
     const layout = await results.evaluate((element) => {
       const box = element.getBoundingClientRect();
       const cut = [...element.querySelectorAll('*')]
@@ -379,17 +383,41 @@ test.describe('Keep time results on a narrow phone', () => {
         )
         .map(({ child }) => child.getAttribute('aria-label') ?? child.className);
       const facts = element.querySelector('p') as HTMLElement;
-      const lineHeight = parseFloat(getComputedStyle(facts).lineHeight);
+      // The card's rows: each line of the facts, and the cells and the close
+      // button beside them, merged where they share a line's height.
+      const text = document.createRange();
+      text.selectNodeContents(facts);
+      const spans = [
+        ...text.getClientRects(),
+        ...[...element.children]
+          .filter((child) => child !== facts)
+          .map((child) => child.getBoundingClientRect()),
+      ]
+        .filter((rect) => rect.height > 0)
+        .map((rect) => [rect.top, rect.bottom] as const)
+        .sort((a, b) => a[0] - b[0]);
+      let rows = 0;
+      let rowBottom = -Infinity;
+      for (const [top, bottom] of spans) {
+        if (top >= rowBottom - 1) {
+          rows += 1;
+          rowBottom = bottom;
+        } else {
+          rowBottom = Math.max(rowBottom, bottom);
+        }
+      }
       return {
         cut,
-        factsLines: Math.round(facts.getBoundingClientRect().height / lineHeight),
         factsOverflow: facts.scrollWidth > facts.clientWidth,
+        headlineLines: (facts.querySelector('strong') as HTMLElement).getClientRects().length,
+        rows,
         right: box.right,
       };
     });
     expect(layout.cut).toEqual([]);
     expect(layout.factsOverflow).toBe(false);
-    expect(layout.factsLines).toBeLessThanOrEqual(2);
     expect(layout.right).toBeLessThanOrEqual(320);
+    expect(layout.headlineLines).toBe(1);
+    expect(layout.rows).toBeLessThanOrEqual(3);
   });
 });
