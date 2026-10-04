@@ -504,6 +504,33 @@ describe('the Keep time count-in', () => {
     expect(transportController.getPlayheadMs()).toBe(500);
   });
 
+  it('carries the count-in on when the speed already chosen is chosen again', () => {
+    transportController.setSpeed(0.5);
+    transportController.play();
+    run(0.5);
+    h.clicks = [];
+    transportController.setSpeed(0.5);
+    expect(told()).toEqual(['run-start playAlong left']);
+    expect(transportController.isCountingIn()).toBe(true);
+    expect(metronomeCalls()).toEqual([]);
+    // It sets off where it was always going to: a bar at half speed after Play.
+    runTo(100);
+    expect(h.scheduled[0]).toMatchObject({ midi: 64, when: expect.closeTo(4.06, 9) });
+  });
+
+  it('tells nothing of the speed already chosen being chosen again while playing', () => {
+    transportController.play();
+    runTo(600);
+    const before = heard.length;
+    const notified = vi.fn();
+    const unsubscribe = transportController.subscribeState(notified);
+    transportController.setSpeed(1);
+    unsubscribe();
+    expect(told().slice(before)).toEqual([]);
+    expect(notified).not.toHaveBeenCalled();
+    expect(transportController.getState()).toBe('playing');
+  });
+
   it('changes speed as ever once the count-in is over, and tells of it', () => {
     transportController.play();
     runTo(600);

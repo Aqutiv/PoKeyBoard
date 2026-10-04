@@ -1321,6 +1321,9 @@ export class TransportController {
    */
   setSpeed(speed: number): void {
     const next = clampPlaybackSpeed(speed);
+    // The speed already in force, chosen again, changes nothing, and must not
+    // look like a change: during a count-in, that would start the run again.
+    if (next === this.getSpeed()) return;
     useTakeStore.getState().setPlaybackSpeed(next);
     if (this.preRoll) {
       // A count-in counts the beat the run will play to, so at a new speed the
