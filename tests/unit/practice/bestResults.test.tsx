@@ -9,8 +9,15 @@ import type { Messages, SupportedLanguage } from '@/i18n/types';
 import { usePracticeStore, type PracticeResult } from '@/state/usePracticeStore';
 import { keepTimeReport, keepTimeResult, waitReport, waitResult } from './practiceFixtures';
 
+// The card reads the transport's state, to stand aside while a recording runs.
 vi.mock('@/features/transport/transportController', () => ({
-  transportController: { setLoop: vi.fn(), seek: vi.fn() },
+  transportController: {
+    getState: () => 'paused',
+    subscribeState: () => () => {},
+    pause: vi.fn(),
+    setLoop: vi.fn(),
+    seek: vi.fn(),
+  },
 }));
 
 type Screen = 'desktop' | 'phone' | 'short landscape';

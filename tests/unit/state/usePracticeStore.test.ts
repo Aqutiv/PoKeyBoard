@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { usePracticeStore } from '@/state/usePracticeStore';
-import { keepTimeResult, waitResult } from '../practice/practiceFixtures';
+import { keepTimeResult, TEMPO, waitResult } from '../practice/practiceFixtures';
 
 const store = () => usePracticeStore.getState();
 
@@ -113,10 +113,29 @@ describe('the practice results store', () => {
   it('keeps a result only while its take is the one open', () => {
     const result = waitResult({ takeId: 'take' });
     store().show(result);
-    store().keepOnlyTake('take');
+    store().keepOnlyTake({ id: 'take', tempo: TEMPO });
     expect(store().result).toBe(result);
 
-    store().keepOnlyTake('another');
+    store().keepOnlyTake({ id: 'another', tempo: TEMPO });
+    expect(store().result).toBeNull();
+  });
+
+  it('keeps a result only while its take keeps the bars it was scored on', () => {
+    store().show(waitResult({ takeId: 'take' }));
+    // The same values in a tempo built afresh, and a count-in, keep the bars.
+    store().keepOnlyTake({ id: 'take', tempo: { ...TEMPO, countInBars: 0, changes: [] } });
+    expect(store().result).not.toBeNull();
+
+    store().keepOnlyTake({ id: 'take', tempo: { ...TEMPO, bpm: 90 } });
+    expect(store().result).toBeNull();
+  });
+
+  it('puts a Keep-time result away when its bars move, as any result', () => {
+    store().show(keepTimeResult({ takeId: 'take' }));
+    store().keepOnlyTake({ id: 'take', tempo: { ...TEMPO, countInBars: 2 } });
+    expect(store().result).not.toBeNull();
+
+    store().keepOnlyTake({ id: 'take', tempo: { ...TEMPO, bpm: 90 } });
     expect(store().result).toBeNull();
   });
 });

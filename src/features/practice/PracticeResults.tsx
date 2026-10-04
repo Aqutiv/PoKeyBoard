@@ -1,5 +1,6 @@
 import { Fragment, useId } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
+import { useTransportState } from '@/app/hooks/useTransport';
 import type { PracticeStyle } from '@/features/transport/modes';
 import { loopBetween } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
@@ -183,10 +184,16 @@ function toldOfRecord(m: Messages, style: PracticeStyle, record: ResultRecord): 
   };
 }
 
-/** Loop a section's bars and stand at their start, ready to play them again. */
+/**
+ * Loop a section's bars and stand at their start, ready to play them again.
+ * Music still playing is paused first: a run ended by choosing plain playback
+ * leaves the take playing under the card, a loop set mid-playback restarts it
+ * from where it is, and a seek is ignored while it plays.
+ */
 function loopSection(cell: BarsCell): void {
   const loop = loopBetween(useTakeStore.getState().take, cell.startMs, cell.endMs);
   if (!loop) return;
+  if (transportController.getState() === 'playing') transportController.pause();
   transportController.setLoop(loop);
   transportController.seek(loop.startMs);
 }
@@ -283,6 +290,11 @@ export function PracticeResults() {
   const live = usePracticeStore((s) => s.live !== null);
   // Where a Keep-time run's presses land, while one is under way.
   const pressOriginMs = usePracticeStore((s) => s.live?.pressOriginMs);
+  // A recording pass changes the take, and the card is about the take before
+  // it, so it stands aside until the pass is over (and the session puts it
+  // away for good once the pass has written notes).
+  const transportState = useTransportState();
+  const recording = transportState === 'countIn' || transportState === 'recording';
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const compactLandscape = useMediaQuery(COMPACT_LANDSCAPE_QUERY);
   const shown = live ? null : result;
@@ -311,7 +323,7 @@ export function PracticeResults() {
         {told ? told.summary : ''}
         {told && record ? <span>{` ${record.summary}`}</span> : null}
       </p>
-      {told ? (
+      {told && !recording ? (
         <div className="practice-results" role="group" aria-label={m.practice.resultsLabel}>
           <p className="practice-results__facts">
             <strong>{told.headline}</strong>
@@ -322,9 +334,11 @@ export function PracticeResults() {
                 <span className="practice-results__new-best">{m.practice.newBest}</span>
               </>
             ) : null}
+            {/* Where the line wraps, it wraps between facts, after a dot:
+                never inside one, and never leaving a dot to start a line. */}
             {facts.map(([key, text]) => (
               <Fragment key={key}>
-                <span aria-hidden="true"> · </span>
+                <span aria-hidden="true">{'\u00a0· '}</span>
                 <span className="practice-results__fact">{text}</span>
               </Fragment>
             ))}

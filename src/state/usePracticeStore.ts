@@ -1,9 +1,11 @@
 import { create } from 'zustand';
-// Types only: the results are collected outside React, by the practice
-// session, which is what reads the transport's events.
+// Types, and one pure comparison: the results are collected outside React,
+// by the practice session, which is what reads the transport's events.
+import type { NoteEvent, TempoSettings } from '@/domain/takeTypes';
 import type { TrainingHand } from '@/domain/trainingGate';
 import type { KeepTimeReport } from '@/features/practice/playAlongSession';
 import type { ResultRecord } from '@/features/practice/practiceRecords';
+import { sameBarGrid } from '@/features/practice/resultCells';
 import type { WaitReport } from '@/features/practice/trainingReport';
 import type { PracticeStyle } from '@/features/transport/modes';
 import type { RunEndReason } from '@/features/transport/practiceEvents';
@@ -17,6 +19,8 @@ interface PracticeResultBase {
   /** The slowest the run went: the speed it started at, or one it was turned down to. */
   slowestSpeed: number;
   reason: RunEndReason;
+  /** The tempo the run was scored on, whose bars the card's sections are. */
+  tempo: TempoSettings;
   /**
    * For a run through the whole of a Library track, the track's best and last
    * in the way it was practised, the run's own the last: added a moment after
@@ -39,6 +43,13 @@ export interface KeepTimeResult extends PracticeResultBase {
 
 /** A finished run's result. Each style of practice brings a report of its own. */
 export type PracticeResult = WaitResult | KeepTimeResult;
+
+/** The take open, as far as a result needs to know it. */
+export interface OpenTake {
+  id: string;
+  tempo: TempoSettings;
+  notes: readonly NoteEvent[];
+}
 
 /** The run under way. */
 export interface LiveRun {
@@ -68,8 +79,13 @@ export interface PracticeState {
   /** Add the track's best and last to run `runId`'s result, while it is the one shown. */
   attachRecord(runId: number, record: ResultRecord): void;
   dismiss(): void;
-  /** Put away a result for any take but this one, the take now open. */
-  keepOnlyTake(takeId: string): void;
+  /**
+   * Put away a result for any take but this one, the take now open, or for
+   * bars it no longer has. A new tempo or time signature leaves every note
+   * where it was but moves the bar lines, so the sections the card names, and
+   * the steps counted in them, are bars that are no longer there.
+   */
+  keepOnlyTake(take: Pick<OpenTake, 'id' | 'tempo'>): void;
 }
 
 /**
@@ -100,6 +116,11 @@ export const usePracticeStore = create<PracticeState>()((set) => ({
       state.result?.runId === runId ? { result: { ...state.result, record } } : state,
     ),
   dismiss: () => set({ result: null }),
-  keepOnlyTake: (takeId) =>
-    set((state) => (state.result && state.result.takeId !== takeId ? { result: null } : state)),
+  keepOnlyTake: (take) =>
+    set((state) =>
+      state.result &&
+      (state.result.takeId !== take.id || !sameBarGrid(state.result.tempo, take.tempo))
+        ? { result: null }
+        : state,
+    ),
 }));

@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InputNoteEvent } from '@/audio/AudioEngine';
+import type { NoteEvent, TempoSettings } from '@/domain/takeTypes';
 import { END_GRACE_MS, type PlayAlongDeps } from '@/features/practice/playAlongSession';
 import type {
   PracticeModeKey,
@@ -12,7 +13,7 @@ import {
 } from '@/features/practice/practiceSession';
 import type { PracticeEvent, PracticeRun, RunEndReason } from '@/features/transport/practiceEvents';
 import { usePracticeStore } from '@/state/usePracticeStore';
-import { practiceRun } from './practiceFixtures';
+import { practiceRun, TEMPO } from './practiceFixtures';
 
 /** A stand-in for a subscription: what was subscribed, and a way to send to it. */
 function channel<T>() {
@@ -32,9 +33,26 @@ function channel<T>() {
 }
 
 const practice = channel<PracticeEvent>();
-const takeIds = channel<string>();
 const keys = channel<InputNoteEvent>();
 let session: { dispose(): void } | null = null;
+
+/** The take open, as the session hears it. */
+type OpenTake = { id: string; tempo: TempoSettings; notes: readonly NoteEvent[] };
+
+const NOTES: readonly NoteEvent[] = [
+  { id: 'n1', midi: 60, startMs: 0, durationMs: 400, velocity: 0.7 },
+  { id: 'n2', midi: 64, startMs: 500, durationMs: 400, velocity: 0.7 },
+];
+
+const takeListeners = new Set<(take: OpenTake, previous: OpenTake) => void>();
+let open: OpenTake;
+
+/** Edit the open take as the take store does, telling the session what it was before. */
+function editTake(changes: Partial<OpenTake>): void {
+  const previous = open;
+  open = { ...open, ...changes };
+  for (const listener of [...takeListeners]) listener(open, previous);
+}
 
 /** The audio clock and the page's, as a Keep-time run reads them, and the keys it flashes. */
 const clocks = { audio: 10, page: 5000 };
@@ -95,6 +113,7 @@ const store = () => usePracticeStore.getState();
 
 beforeEach(() => {
   usePracticeStore.setState({ result: null, live: null, latestRunId: null });
+  open = { id: 'take', tempo: TEMPO, notes: NOTES };
   clocks.audio = 10;
   clocks.page = 5000;
   flashed = [];
@@ -104,7 +123,10 @@ beforeEach(() => {
   library.answer = null;
   session = createPracticeSession({
     subscribePractice: practice.subscribe,
-    subscribeTakeId: takeIds.subscribe,
+    subscribeTake: (listener) => {
+      takeListeners.add(listener);
+      return () => void takeListeners.delete(listener);
+    },
     store: usePracticeStore.getState(),
     playAlong,
     records,
@@ -155,12 +177,113 @@ describe('the practice session', () => {
   });
 
   it('puts the card away when another take is opened', () => {
-    playRun(1, 2, { takeId: 'scale' });
-    takeIds.send('scale');
+    playRun(1, 2);
+    editTake({});
     expect(store().result).not.toBeNull();
 
-    takeIds.send('etude');
+    editTake({ id: 'etude', notes: [] });
     expect(store().result).toBeNull();
+  });
+
+  // A recording pass, a clear or an undo writes the take new notes: counts
+  // made of the old ones no longer describe it.
+  it('puts the card away when the take is given new notes', () => {
+    playRun(1, 2);
+    editTake({
+      notes: [...NOTES, { id: 'n3', midi: 67, startMs: 1000, durationMs: 400, velocity: 0.7 }],
+    });
+    expect(store().result).toBeNull();
+  });
+
+  it('keeps the card through an edit that leaves the notes alone', () => {
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, countInBars: 0 } });
+    expect(store().result).not.toBeNull();
+  });
+
+  // The same edits made while a run is under way, before it has a result:
+  // the run was asked on bars, or notes, the take no longer has.
+  it('has no card for a run whose bars a new tempo moved under it', () => {
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    step(1, 500);
+    editTake({ tempo: { ...TEMPO, bpm: 100 } });
+    end(1);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+
+    // The next run is asked on the bars as they are now.
+    playRun(2, 2, { tempo: { ...TEMPO, bpm: 100 } });
+    expect(store().result?.runId).toBe(2);
+  });
+
+  it('has no card for a run whose bars a new time signature moved under it', () => {
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    editTake({ tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } } });
+    step(1, 500);
+    end(1);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+  });
+
+  it('still has a card for a run whose count-in changed under it', () => {
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    editTake({ tempo: { ...TEMPO, countInBars: 2 } });
+    step(1, 500);
+    end(1);
+    expect(store().result?.runId).toBe(1);
+  });
+
+  it('has no card for a run whose take was given new notes under it', () => {
+    // An Undo pass at a hold, say.
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    step(1, 500);
+    editTake({ notes: NOTES.slice(0, 1) });
+    end(1);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+  });
+
+  // The notes stay where they are when the tempo changes, but the bar lines
+  // move: the card's sections, and the steps counted in them, are bars that
+  // are no longer there.
+  it('puts the card away when a new tempo moves the bars it was scored on', () => {
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, bpm: 100 } });
+    expect(store().result).toBeNull();
+  });
+
+  it('puts the card away when a new time signature moves its bars', () => {
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } } });
+    expect(store().result).toBeNull();
+  });
+
+  it('puts the card away when a tempo change is marked partway through', () => {
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, changes: [{ atMs: 4000, bpm: 90 }] } });
+    expect(store().result).toBeNull();
+  });
+
+  it('keeps the card through a change of count-in, or a tempo rebuilt the same', () => {
+    playRun(1, 2);
+    editTake({ tempo: { ...TEMPO, countInBars: 0 } });
+    expect(store().result).not.toBeNull();
+
+    // Every value the same, in objects of its own, and a key signature set.
+    editTake({
+      tempo: {
+        bpm: 120,
+        timeSignature: { numerator: 4, denominator: 4 },
+        countInBars: 1,
+        changes: [],
+        keySignature: 2,
+      },
+    });
+    expect(store().result).not.toBeNull();
   });
 
   it('ignores events from a run no longer under way', () => {
@@ -194,11 +317,11 @@ describe('the practice session', () => {
 
   it('stops listening once disposed', () => {
     expect(practice.size).toBe(1);
-    expect(takeIds.size).toBe(1);
+    expect(takeListeners.size).toBe(1);
     session?.dispose();
     session = null;
     expect(practice.size).toBe(0);
-    expect(takeIds.size).toBe(0);
+    expect(takeListeners.size).toBe(0);
     playRun(1, 2);
     expect(store().result).toBeNull();
   });
@@ -327,6 +450,62 @@ describe('the practice session, keeping time', () => {
     session = null;
     expect(keys.size).toBe(0);
     vi.advanceTimersByTime(END_GRACE_MS);
+    expect(store().result).toBeNull();
+  });
+
+  // A Keep-time run is held to the same rules as one that waits: its result
+  // describes the take as it was, in the bars it was scored on.
+  it('has no card for a Keep-time run whose bars a new tempo moved under it', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    editTake({ tempo: { ...TEMPO, bpm: 100 } });
+    endPlayAlong(5, 'pause', 13.3);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+    expect(keys.size).toBe(0);
+  });
+
+  it('has no card for a Keep-time run whose take was given new notes under it', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    editTake({ notes: NOTES.slice(0, 1) });
+    endPlayAlong(5, 'pause', 13.3);
+    expect(store().result).toBeNull();
+  });
+
+  it('has no card for a Keep-time run whose bars moved while it waited for its last notes', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    endPlayAlong(5, 'end', 13.05);
+    // Within the grace for late notes, before there is a result to put away.
+    editTake({ tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } } });
+    vi.advanceTimersByTime(END_GRACE_MS);
+    expect(store().result).toBeNull();
+  });
+
+  it('still has a card for a Keep-time run whose count-in changed while it waited', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    endPlayAlong(5, 'end', 13.05);
+    editTake({ tempo: { ...TEMPO, countInBars: 2 } });
+    vi.advanceTimersByTime(END_GRACE_MS);
+    expect(store().result?.runId).toBe(5);
+  });
+
+  it('puts a Keep-time card away when a new tempo moves the bars it was scored on', () => {
+    start(keepTimeRun(5));
+    press(C4, 12);
+    press(D4, 12.5);
+    endPlayAlong(5, 'pause', 13.3);
+    expect(store().result).toMatchObject({ style: 'playAlong', tempo: TEMPO });
+    editTake({ tempo: { ...TEMPO, countInBars: 0 } });
+    expect(store().result).not.toBeNull();
+
+    editTake({ tempo: { ...TEMPO, bpm: 90 } });
     expect(store().result).toBeNull();
   });
 });

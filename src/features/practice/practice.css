@@ -25,10 +25,6 @@
   font-weight: 600;
 }
 
-/* Where the facts take two lines, a phone's in some languages, they break
-   between facts, never inside one: "Latence audio ?" stays whole, and its
-   question mark with it. */
-.practice-results__facts strong,
 .practice-results__fact {
   white-space: nowrap;
 }
@@ -151,12 +147,23 @@ button.practice-cell:active {
   height: 18px;
 }
 
-/* Portrait phones: a smaller size keeps the facts to one line at 320px wide,
-   and the cells and the close button to the next. Keep the query in sync
-   with src/index.css and the other feature sheets. */
+/* Portrait phones: a smaller size keeps the facts to one line, and the cells
+   and the close button to the next. Keep the query in sync with src/index.css
+   and the other feature sheets. */
 @media (orientation: portrait) and (max-width: 600px) {
   .practice-results {
     font-size: 12px;
+  }
+}
+
+/* The narrowest phones, 320px and a little more, have about 290px for the
+   facts. That holds the English line in Segoe UI or Roboto at 12px, but not
+   in a wider font such as DejaVu Sans, which Linux uses for system-ui (300px).
+   A size smaller still keeps it to one line (275px there). A longer line, in
+   another language or with bigger counts, wraps rather than being cut. */
+@media (max-width: 359px) {
+  .practice-results__facts {
+    font-size: 11px;
   }
 }
 

@@ -1,7 +1,15 @@
+import type { TempoSettings } from '@/domain/takeTypes';
 import type { KeepTimeReport } from '@/features/practice/playAlongSession';
 import type { WaitReport } from '@/features/practice/trainingReport';
 import type { PracticeRun } from '@/features/transport/practiceEvents';
 import type { KeepTimeResult, WaitResult } from '@/state/usePracticeStore';
+
+/** 120 bpm in 4/4, as a new take starts: a bar every two seconds. */
+export const TEMPO: TempoSettings = {
+  bpm: 120,
+  timeSignature: { numerator: 4, denominator: 4 },
+  countInBars: 1,
+};
 
 /** A "wait for me" run through a take of eight bars at 120 bpm (a bar every two seconds). */
 export function practiceRun(overrides: Partial<PracticeRun> = {}): PracticeRun {
@@ -16,7 +24,7 @@ export function practiceRun(overrides: Partial<PracticeRun> = {}): PracticeRun {
     anchorAudioTime: 10,
     countInMs: 0,
     durationMs: 16000,
-    tempo: { bpm: 120, timeSignature: { numerator: 4, denominator: 4 }, countInBars: 1 },
+    tempo: TEMPO,
     asked: [],
     noteCount: 16,
     takeDurationMs: 16000,
@@ -60,6 +68,7 @@ export function waitResult(overrides: Partial<WaitResult> = {}): WaitResult {
     hand: 'right',
     slowestSpeed: 1,
     reason: 'end',
+    tempo: TEMPO,
     wait: waitReport(),
     ...overrides,
   };
@@ -109,6 +118,7 @@ export function keepTimeResult(overrides: Partial<KeepTimeResult> = {}): KeepTim
     hand: 'right',
     slowestSpeed: 1,
     reason: 'end',
+    tempo: TEMPO,
     keepTime: keepTimeReport(),
     ...overrides,
   };

@@ -10,12 +10,22 @@ import { usePracticeStore } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { waitReport, waitResult } from './practiceFixtures';
 
-const setLoop = vi.fn();
-const seek = vi.fn();
+/** What the card asked of the transport, in order, and the state it found it in. */
+const transport = vi.hoisted(() => ({
+  calls: [] as unknown[][],
+  state: 'paused',
+  listeners: new Set<() => void>(),
+}));
 vi.mock('@/features/transport/transportController', () => ({
   transportController: {
-    setLoop: (loop: unknown) => setLoop(loop),
-    seek: (ms: number) => seek(ms),
+    getState: () => transport.state,
+    subscribeState: (listener: () => void) => {
+      transport.listeners.add(listener);
+      return () => transport.listeners.delete(listener);
+    },
+    pause: () => transport.calls.push(['pause']),
+    setLoop: (loop: unknown) => transport.calls.push(['setLoop', loop]),
+    seek: (ms: number) => transport.calls.push(['seek', ms]),
   },
 }));
 
@@ -51,6 +61,14 @@ const card = () => screen.queryByRole('group');
 const facts = () => card()?.querySelector('p')?.textContent?.replace(/\s+/g, ' ').trim();
 const show = (result = waitResult()) => act(() => usePracticeStore.getState().show(result));
 
+/** Move the transport to `state`, telling everything that listens. */
+function become(state: string): void {
+  act(() => {
+    transport.state = state;
+    for (const listener of [...transport.listeners]) listener();
+  });
+}
+
 const SUMMARY =
   'Practice results: 8 of 10 right first time (80%), 2 wrong keys, 1 let through, ' +
   '2 waits over 2 s, 6 without stopping, at 60% speed.';
@@ -60,8 +78,8 @@ const SLOWED = waitResult({ slowestSpeed: 0.6, wait: waitReport({ slowestSpeed: 
 
 beforeEach(() => {
   usePracticeStore.setState({ result: null, live: null, latestRunId: null });
-  setLoop.mockClear();
-  seek.mockClear();
+  transport.calls = [];
+  transport.state = 'paused';
   onScreen('desktop');
 });
 
@@ -203,7 +221,8 @@ describe('the practice results card', () => {
     expect(within(list).queryByRole('button')).toBeNull();
   });
 
-  it('loops the bars of a section tapped, and goes to their start', () => {
+  /** Show a card whose one section is bars 5–8 of a ten-bar take, and tap it. */
+  function tapBarsFiveToEight(): void {
     // 120 bpm in 4/4, a bar every two seconds; ten bars long.
     useTakeStore.getState().setTake(
       createEmptyTake({
@@ -231,8 +250,27 @@ describe('the practice results card', () => {
       }),
     );
     fireEvent.click(screen.getByRole('button', { name: /^Bars 5–8/ }));
-    expect(setLoop).toHaveBeenCalledWith({ startMs: 8000, endMs: 16000 });
-    expect(seek).toHaveBeenCalledWith(8000);
+  }
+
+  it('loops the bars of a section tapped, and goes to their start', () => {
+    tapBarsFiveToEight();
+    expect(transport.calls).toEqual([
+      ['setLoop', { startMs: 8000, endMs: 16000 }],
+      ['seek', 8000],
+    ]);
+  });
+
+  it('stops the music first when it is still playing, so the start can be gone to', () => {
+    // A run ended by choosing plain playback leaves the take playing under
+    // the card. Looping restarts playback where it is, and a seek is ignored
+    // while it plays: paused first, the player stands at the section's start.
+    transport.state = 'playing';
+    tapBarsFiveToEight();
+    expect(transport.calls).toEqual([
+      ['pause'],
+      ['setLoop', { startMs: 8000, endMs: 16000 }],
+      ['seek', 8000],
+    ]);
   });
 
   it('says the result once to a screen reader, from a status it keeps', () => {
@@ -268,6 +306,22 @@ describe('the practice results card', () => {
     expect(card()).not.toBeNull();
     expect(document.querySelector('[aria-modal]')).toBeNull();
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('stands aside while a recording counts in and runs', () => {
+    renderCard();
+    show();
+    const said = screen.getByRole('status').textContent;
+    for (const state of ['countIn', 'recording']) {
+      become(state);
+      // The pass changes the take: the card is about the take before it.
+      expect(card()).toBeNull();
+      // The status stays where it is, so nothing is said again if the pass
+      // records nothing and the card comes back.
+      expect(screen.getByRole('status').textContent).toBe(said);
+    }
+    become('paused');
+    expect(card()).not.toBeNull();
   });
 
   it('shows nothing while a run is under way, or with no result', () => {

@@ -63,6 +63,27 @@ export const BARS_PER_SECTION = 4;
  */
 export const MAX_PASS_CELLS = 8;
 
+/**
+ * Whether two tempos put a take's bar lines in the same places: the same
+ * tempo, time signature and tempo changes, compared by value, so a tempo
+ * built afresh from the same values keeps them. A count-in or a key leaves
+ * the bars alone. Changes absent or empty both mean one tempo throughout.
+ */
+export function sameBarGrid(a: TempoMapInput, b: TempoMapInput): boolean {
+  const changesA = a.changes ?? [];
+  const changesB = b.changes ?? [];
+  return (
+    a.bpm === b.bpm &&
+    a.timeSignature.numerator === b.timeSignature.numerator &&
+    a.timeSignature.denominator === b.timeSignature.denominator &&
+    changesA.length === changesB.length &&
+    changesA.every(
+      (change, index) =>
+        change.atMs === changesB[index]?.atMs && change.bpm === changesB[index]?.bpm,
+    )
+  );
+}
+
 /** Good from 90%, fair from 60%. Counted in whole numbers, so 9 in 10 is exactly good. */
 export function gradeOf(good: number, total: number): Grade {
   if (good * 10 >= total * 9) return 'good';
