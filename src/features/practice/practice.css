@@ -25,6 +25,14 @@
   font-weight: 600;
 }
 
+/* Where the facts take two lines, a phone's in some languages, they break
+   between facts, never inside one: "Latence audio ?" stays whole, and its
+   question mark with it. */
+.practice-results__facts strong,
+.practice-results__fact {
+  white-space: nowrap;
+}
+
 /* Wide enough for a few cells before it wraps to a line of its own, and
    scrolled sideways past that: a long run makes many sections, and the card
    must not take the score's height for them. */

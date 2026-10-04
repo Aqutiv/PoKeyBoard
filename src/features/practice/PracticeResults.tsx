@@ -261,7 +261,7 @@ export function PracticeResults() {
             {facts.map(([key, text]) => (
               <Fragment key={key}>
                 <span aria-hidden="true"> · </span>
-                {text}
+                <span className="practice-results__fact">{text}</span>
               </Fragment>
             ))}
           </p>
