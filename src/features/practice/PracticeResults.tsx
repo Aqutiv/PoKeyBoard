@@ -62,10 +62,16 @@ function summaryOf(m: Messages, result: PracticeResult): string {
   return m.practice.summaryWait({ facts: facts.join(', ') });
 }
 
-/** Loop a section's bars and stand at their start, ready to play them again. */
+/**
+ * Loop a section's bars and stand at their start, ready to play them again.
+ * Music still playing is paused first: a run ended by choosing plain playback
+ * leaves the take playing under the card, a loop set mid-playback restarts it
+ * from where it is, and a seek is ignored while it plays.
+ */
 function loopSection(cell: BarsCell): void {
   const loop = loopBetween(useTakeStore.getState().take, cell.startMs, cell.endMs);
   if (!loop) return;
+  if (transportController.getState() === 'playing') transportController.pause();
   transportController.setLoop(loop);
   transportController.seek(loop.startMs);
 }

@@ -10,12 +10,14 @@ import { usePracticeStore } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { waitReport, waitResult } from './practiceFixtures';
 
-const setLoop = vi.fn();
-const seek = vi.fn();
+/** What the card asked of the transport, in order, and the state it found it in. */
+const transport = vi.hoisted(() => ({ calls: [] as unknown[][], state: 'paused' }));
 vi.mock('@/features/transport/transportController', () => ({
   transportController: {
-    setLoop: (loop: unknown) => setLoop(loop),
-    seek: (ms: number) => seek(ms),
+    getState: () => transport.state,
+    pause: () => transport.calls.push(['pause']),
+    setLoop: (loop: unknown) => transport.calls.push(['setLoop', loop]),
+    seek: (ms: number) => transport.calls.push(['seek', ms]),
   },
 }));
 
@@ -60,8 +62,8 @@ const SLOWED = waitResult({ slowestSpeed: 0.6, wait: waitReport({ slowestSpeed: 
 
 beforeEach(() => {
   usePracticeStore.setState({ result: null, live: null, latestRunId: null });
-  setLoop.mockClear();
-  seek.mockClear();
+  transport.calls = [];
+  transport.state = 'paused';
   onScreen('desktop');
 });
 
@@ -203,7 +205,8 @@ describe('the practice results card', () => {
     expect(within(list).queryByRole('button')).toBeNull();
   });
 
-  it('loops the bars of a section tapped, and goes to their start', () => {
+  /** Show a card whose one section is bars 5–8 of a ten-bar take, and tap it. */
+  function tapBarsFiveToEight(): void {
     // 120 bpm in 4/4, a bar every two seconds; ten bars long.
     useTakeStore.getState().setTake(
       createEmptyTake({
@@ -231,8 +234,27 @@ describe('the practice results card', () => {
       }),
     );
     fireEvent.click(screen.getByRole('button', { name: /^Bars 5–8/ }));
-    expect(setLoop).toHaveBeenCalledWith({ startMs: 8000, endMs: 16000 });
-    expect(seek).toHaveBeenCalledWith(8000);
+  }
+
+  it('loops the bars of a section tapped, and goes to their start', () => {
+    tapBarsFiveToEight();
+    expect(transport.calls).toEqual([
+      ['setLoop', { startMs: 8000, endMs: 16000 }],
+      ['seek', 8000],
+    ]);
+  });
+
+  it('stops the music first when it is still playing, so the start can be gone to', () => {
+    // A run ended by choosing plain playback leaves the take playing under
+    // the card. Looping restarts playback where it is, and a seek is ignored
+    // while it plays: paused first, the player stands at the section's start.
+    transport.state = 'playing';
+    tapBarsFiveToEight();
+    expect(transport.calls).toEqual([
+      ['pause'],
+      ['setLoop', { startMs: 8000, endMs: 16000 }],
+      ['seek', 8000],
+    ]);
   });
 
   it('says the result once to a screen reader, from a status it keeps', () => {
