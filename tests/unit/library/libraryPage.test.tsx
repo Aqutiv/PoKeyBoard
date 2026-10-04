@@ -2,6 +2,7 @@ import { cleanup, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/data/db';
 import { META_PRACTICE_RESULTS, setMetadata } from '@/data/metadataRepository';
+import { recordPracticeScore } from '@/data/practiceResultsRepository';
 import { libraryTrackSummary } from '@/features/library/catalog';
 import { LibraryPage } from '@/features/library/LibraryPage';
 import type { PracticeScore } from '@/features/practice/practiceRecords';
@@ -119,5 +120,25 @@ describe('the Library’s practice chip', () => {
     await within(row('Evening Tide')).findByText('Left hand · 92%');
     expect(row('A Beautiful Day')).not.toHaveAttribute('aria-describedby');
     expect(row('A Beautiful Day').querySelector('.library-item__best')).toBeNull();
+  });
+
+  it('shows a result kept while it is open, after its first read', async () => {
+    await setMetadata(META_PRACTICE_RESULTS, {
+      v: 1,
+      tracks: { [TIDE]: { 'wait:right': { best: score(TIDE), last: score(TIDE) } } },
+    });
+    renderPage();
+    // Read once the page opened…
+    await within(row('Evening Tide')).findByText('Right hand · 92%');
+    expect(row('A Beautiful Day')).not.toHaveAttribute('aria-describedby');
+
+    // …and a Keep-time run's result lands a moment later, its last notes in.
+    await recordPracticeScore(DAY, 'along:both', score(DAY, { accuracy: 0.8, onTime: 0.64 }));
+    expect(
+      await within(row('A Beautiful Day')).findByText('Both hands in time · 64%'),
+    ).toBeVisible();
+    expect(row('A Beautiful Day')).toHaveAccessibleDescription(
+      'Best in both hands, keeping time: 64%',
+    );
   });
 });

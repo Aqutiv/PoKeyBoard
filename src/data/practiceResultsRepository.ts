@@ -25,6 +25,30 @@ export async function loadPracticeRecords(): Promise<PracticeRecords> {
   return parsePracticeRecords(await getMetadata<unknown>(META_PRACTICE_RESULTS));
 }
 
+const listeners = new Set<(records: PracticeRecords) => void>();
+
+/**
+ * Hear the records each time they are written: a result kept, or a track's
+ * results of other notes put away. Told once the write is done, with the
+ * records as written, so a page that read them before, the Library opened
+ * while a Keep-time run's last notes were still being judged, catches up.
+ */
+export function subscribePracticeRecords(listener: (records: PracticeRecords) => void): () => void {
+  listeners.add(listener);
+  return () => void listeners.delete(listener);
+}
+
+/** Tell every listener; one that fails is reported, and keeps the write from no one. */
+function tell(records: PracticeRecords): void {
+  for (const listener of [...listeners]) {
+    try {
+      listener(records);
+    } catch (error) {
+      console.error('A practice records listener failed:', error);
+    }
+  }
+}
+
 /**
  * Keep a run's score as the last of `takeId` practised in `mode`, and as its
  * best if it is better; see `withScore`. Read, merged and written in one
@@ -36,29 +60,28 @@ export async function recordPracticeScore(
   mode: PracticeModeKey,
   score: PracticeScore,
 ): Promise<ResultRecord> {
-  return db.transaction('rw', db.metadata, async () => {
-    const { records, best, last, newBest } = withScore(
-      await loadPracticeRecords(),
-      takeId,
-      mode,
-      score,
-    );
-    await setMetadata(META_PRACTICE_RESULTS, records);
-    return { best, last, newBest };
+  const { records, best, last, newBest } = await db.transaction('rw', db.metadata, async () => {
+    const kept = withScore(await loadPracticeRecords(), takeId, mode, score);
+    await setMetadata(META_PRACTICE_RESULTS, kept.records);
+    return kept;
   });
+  tell(records);
+  return { best, last, newBest };
 }
 
 /**
  * Put away `takeId`'s results of notes other than `content`'s, a version of
  * the track since changed (`withoutOtherContent`), in one transaction as a
  * result is kept. Resolves to whether there were any: with none, nothing is
- * written.
+ * written, and nobody told.
  */
 export async function prunePracticeRecords(takeId: string, content: string): Promise<boolean> {
-  return db.transaction('rw', db.metadata, async () => {
-    const records = withoutOtherContent(await loadPracticeRecords(), takeId, content);
-    if (records === null) return false;
-    await setMetadata(META_PRACTICE_RESULTS, records);
-    return true;
+  const records = await db.transaction('rw', db.metadata, async () => {
+    const pruned = withoutOtherContent(await loadPracticeRecords(), takeId, content);
+    if (pruned !== null) await setMetadata(META_PRACTICE_RESULTS, pruned);
+    return pruned;
   });
+  if (records === null) return false;
+  tell(records);
+  return true;
 }

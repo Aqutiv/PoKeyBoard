@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from '@/app/routerContext';
-import { loadPracticeRecords } from '@/data/practiceResultsRepository';
+import { loadPracticeRecords, subscribePracticeRecords } from '@/data/practiceResultsRepository';
 import {
   chipFor,
   headlinePercent,
@@ -111,12 +111,19 @@ export function LibraryPage() {
     filterInput.current?.focus();
   };
 
-  // Each track's best, read once as the page opens. Only the practice session
-  // writes them, as a run through a track ends, and the page is not open then.
+  // Each track's best, read as the page opens, and again whenever it is
+  // written while the page is open: a Keep-time run's result is kept a moment
+  // after the run ends, once its last notes are judged, which can be after the
+  // page has read. Only the practice session writes them; the page only reads.
   const [records, setRecords] = useState<PracticeRecords | null>(null);
   const chipId = useId();
   useEffect(() => {
     let cancelled = false;
+    let written = false;
+    const unsubscribe = subscribePracticeRecords((latest) => {
+      written = true;
+      setRecords(latest);
+    });
     void loadPracticeRecords()
       // A list without its chips beats a list that never renders.
       .catch((error: unknown) => {
@@ -124,10 +131,12 @@ export function LibraryPage() {
         return null;
       })
       .then((loaded) => {
-        if (!cancelled) setRecords(loaded);
+        // Anything written since is newer than what this read found.
+        if (!cancelled && !written) setRecords(loaded);
       });
     return () => {
       cancelled = true;
+      unsubscribe();
     };
   }, []);
 

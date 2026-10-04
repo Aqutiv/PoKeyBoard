@@ -359,8 +359,11 @@ matched it ends its line of facts with that best (at its speed on a desktop,
 alone on a phone), and a first result, the best there is, shows neither
 (`isOwnBest`). The status adds the same in a span of its own, after what it has
 said, so a screen reader hears only the addition. The Library reads the record
-once as it opens and shows, beside each title, the best in the way practised
-most recently, by each way's last (`chipFor`), its words in full as the row's
+as it opens, and takes it again each time it is written while the page is open
+(`subscribePracticeRecords`, told after every write that lands): a Keep-time
+run's result is kept once its last notes are judged, which can be after the
+page has read. Beside each title it shows the best in the way practised most
+recently, by each way's last (`chipFor`), its words in full as the row's
 `aria-describedby`, the row's name left as it was.
 
 The record is one metadata row (`practiceResults`): device-local, like Learn

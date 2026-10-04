@@ -5,7 +5,9 @@ import {
   loadPracticeRecords,
   prunePracticeRecords,
   recordPracticeScore,
+  subscribePracticeRecords,
 } from '@/data/practiceResultsRepository';
+import type { PracticeRecords } from '@/features/practice/practiceRecords';
 import { saveTake } from '@/data/takeRepository';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { EMPTY_PRACTICE_RECORDS, type PracticeScore } from '@/features/practice/practiceRecords';
@@ -134,6 +136,52 @@ describe('putting away a track’s results of notes it no longer has', () => {
     expect(await prunePracticeRecords(ODE, CONTENT)).toBe(false);
     expect(await prunePracticeRecords(ELISE, CONTENT)).toBe(false);
     expect(put).not.toHaveBeenCalled();
+  });
+});
+
+describe('hearing the records change', () => {
+  it('tells each listener the records as written, a result kept or results put away', async () => {
+    const heard: PracticeRecords[] = [];
+    const stop = subscribePracticeRecords((records) => heard.push(records));
+    const stale = score({ content: OLD_CONTENT });
+    await recordPracticeScore(ODE, 'wait:right', stale);
+    expect(heard).toEqual([
+      { v: 1, tracks: { [ODE]: { 'wait:right': { best: stale, last: stale } } } },
+    ]);
+
+    await prunePracticeRecords(ODE, CONTENT);
+    expect(heard).toHaveLength(2);
+    expect(heard[1]).toEqual({ v: 1, tracks: {} });
+    expect(heard.at(-1)).toEqual(await loadPracticeRecords());
+
+    stop();
+    await recordPracticeScore(ODE, 'wait:right', score());
+    expect(heard).toHaveLength(2);
+  });
+
+  it('tells nothing when nothing is written', async () => {
+    await recordPracticeScore(ODE, 'wait:right', score());
+    const heard = vi.fn();
+    const stop = subscribePracticeRecords(heard);
+    await prunePracticeRecords(ODE, CONTENT);
+    expect(heard).not.toHaveBeenCalled();
+    stop();
+  });
+
+  it('keeps a result however a listener fails, and tells the others', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const stopFailing = subscribePracticeRecords(() => {
+      throw new Error('a listener that fails');
+    });
+    const heard = vi.fn();
+    const stop = subscribePracticeRecords(heard);
+    await expect(recordPracticeScore(ODE, 'wait:right', score())).resolves.toMatchObject({
+      newBest: false,
+    });
+    expect(heard).toHaveBeenCalledTimes(1);
+    expect(error).toHaveBeenCalledTimes(1);
+    stopFailing();
+    stop();
   });
 });
 
