@@ -68,6 +68,28 @@ describe('a Keep-time run’s timeline', () => {
     expect(runMsAt(timeline, 14)).toBeCloseTo(4000, 9);
     expect(audioTimeAt(timeline, 5000)).toBeCloseTo(15, 9);
   });
+
+  it('places a loop’s later passes where a change of speed in the middle of one puts them', () => {
+    // Round 0–1000, halved a quarter of a second into the second pass.
+    const run = practiceRun({
+      style: 'playAlong',
+      loop: { startMs: 0, endMs: 1000 },
+      anchorAudioTime: 10,
+      asked: [asked('c', 60, 0), asked('d', 62, 500)],
+    });
+    const timeline = runTimeline(run, [speed(0.5, 11.25)]);
+    expect(
+      dueNotes(run, 2600).map((note) => [note.id, note.pass, audioTimeAt(timeline, note.runMs)]),
+    ).toEqual([
+      ['c', 0, 10],
+      ['d', 0, 10.5],
+      ['c', 1, 11],
+      // A quarter of a pass left at half speed takes half a second.
+      ['d', 1, 11.75],
+      ['c', 2, 12.75],
+      ['d', 2, 13.75],
+    ]);
+  });
 });
 
 describe('the notes a Keep-time run asks for', () => {
