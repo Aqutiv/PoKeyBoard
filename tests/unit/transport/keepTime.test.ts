@@ -250,6 +250,45 @@ describe('Keep time', () => {
     expect(told()).toEqual(['run-start playAlong right', 'run-end navigation']);
   });
 
+  it('plays a note of the player’s hand already in the look-ahead once the run ends on another page', () => {
+    transportController.play();
+    // 65 at 500 is inside the 150 ms the scheduler looks ahead, passed over as the player's.
+    runTo(400);
+    expect(sounded()).toEqual([48]);
+    transportController.handleNavigation();
+    runToEnd();
+    // Once, on time: the run sets off at 2.06, and 500 ms of take later.
+    const right = h.scheduled.filter((event) => event.midi === 65);
+    expect(right).toHaveLength(1);
+    expect(right[0]!.when).toBeCloseTo(2.56, 9);
+    expect(sounded().sort((a, b) => a - b)).toEqual([43, 48, 65, 67, 69]);
+  });
+
+  it('plays the player’s note at a loop’s top once the run ends with the next pass in the look-ahead', () => {
+    transportController.setLoop({ startMs: 0, endMs: 1000 });
+    transportController.play();
+    // The look-ahead has crossed into the next pass: its 48 queued, its 64 passed over.
+    runTo(900);
+    expect(sounded()).toEqual([48, 48]);
+    transportController.handleNavigation();
+    run(0.2);
+    // The next pass's top, at 3.06, each note once.
+    expect(h.scheduled.filter((event) => event.midi === 48)).toHaveLength(2);
+    const top = h.scheduled.filter((event) => event.midi === 64);
+    expect(top).toHaveLength(1);
+    expect(top[0]!.when).toBeCloseTo(3.06, 9);
+  });
+
+  it('plays the player’s notes from the run’s start once it ends on another page during the count-in', () => {
+    transportController.play();
+    // A moment before the run sets off, its first chord in the look-ahead.
+    while (h.now < 1.95) run(0.01);
+    expect(sounded()).toEqual([48]);
+    transportController.handleNavigation();
+    expect(sounded().sort((a, b) => a - b)).toEqual([48, 64]);
+    expect(h.scheduled.every((event) => Math.abs(event.when - 2.06) < 1e-9)).toBe(true);
+  });
+
   it('turns the metronome on where nothing would sound, for the player to switch off', () => {
     useSettingsStore.getState().setPlaybackMode('playalong-both');
     transportController.play();
