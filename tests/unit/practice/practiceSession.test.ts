@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import type { TempoSettings } from '@/domain/takeTypes';
 import { createPracticeSession } from '@/features/practice/practiceSession';
 import type { PracticeEvent, PracticeRun, RunEndReason } from '@/features/transport/practiceEvents';
 import { usePracticeStore } from '@/state/usePracticeStore';
-import { practiceRun } from './practiceFixtures';
+import { practiceRun, TEMPO } from './practiceFixtures';
 
 /** A stand-in for a subscription: what was subscribed, and a way to send to it. */
 function channel<T>() {
@@ -22,7 +23,7 @@ function channel<T>() {
 }
 
 const practice = channel<PracticeEvent>();
-const takeIds = channel<string>();
+const takes = channel<{ id: string; tempo: TempoSettings }>();
 let session: { dispose(): void } | null = null;
 
 const start = (run: PracticeRun) => practice.send({ runId: run.runId, type: 'run-start', run });
@@ -44,7 +45,7 @@ beforeEach(() => {
   usePracticeStore.setState({ result: null, live: null, latestRunId: null });
   session = createPracticeSession({
     subscribePractice: practice.subscribe,
-    subscribeTakeId: takeIds.subscribe,
+    subscribeTake: takes.subscribe,
     store: usePracticeStore.getState(),
   });
 });
@@ -94,11 +95,54 @@ describe('the practice session', () => {
 
   it('puts the card away when another take is opened', () => {
     playRun(1, 2, { takeId: 'scale' });
-    takeIds.send('scale');
+    takes.send({ id: 'scale', tempo: TEMPO });
     expect(store().result).not.toBeNull();
 
-    takeIds.send('etude');
+    takes.send({ id: 'etude', tempo: TEMPO });
     expect(store().result).toBeNull();
+  });
+
+  // The notes stay where they are when the tempo changes, but the bar lines
+  // move: the card's sections, and the steps counted in them, are bars that
+  // are no longer there.
+  it('puts the card away when a new tempo moves the bars it was scored on', () => {
+    playRun(1, 2, { takeId: 'scale' });
+    takes.send({ id: 'scale', tempo: { ...TEMPO, bpm: 100 } });
+    expect(store().result).toBeNull();
+  });
+
+  it('puts the card away when a new time signature moves its bars', () => {
+    playRun(1, 2, { takeId: 'scale' });
+    takes.send({
+      id: 'scale',
+      tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } },
+    });
+    expect(store().result).toBeNull();
+  });
+
+  it('puts the card away when a tempo change is marked partway through', () => {
+    playRun(1, 2, { takeId: 'scale' });
+    takes.send({ id: 'scale', tempo: { ...TEMPO, changes: [{ atMs: 4000, bpm: 90 }] } });
+    expect(store().result).toBeNull();
+  });
+
+  it('keeps the card through a change of count-in, or a tempo rebuilt the same', () => {
+    playRun(1, 2, { takeId: 'scale' });
+    takes.send({ id: 'scale', tempo: { ...TEMPO, countInBars: 0 } });
+    expect(store().result).not.toBeNull();
+
+    // Every value the same, in objects of its own, and a key signature set.
+    takes.send({
+      id: 'scale',
+      tempo: {
+        bpm: 120,
+        timeSignature: { numerator: 4, denominator: 4 },
+        countInBars: 1,
+        changes: [],
+        keySignature: 2,
+      },
+    });
+    expect(store().result).not.toBeNull();
   });
 
   it('ignores events from a run no longer under way', () => {
@@ -133,11 +177,11 @@ describe('the practice session', () => {
 
   it('stops listening once disposed', () => {
     expect(practice.size).toBe(1);
-    expect(takeIds.size).toBe(1);
+    expect(takes.size).toBe(1);
     session?.dispose();
     session = null;
     expect(practice.size).toBe(0);
-    expect(takeIds.size).toBe(0);
+    expect(takes.size).toBe(0);
     playRun(1, 2);
     expect(store().result).toBeNull();
   });

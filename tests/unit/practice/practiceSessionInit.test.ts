@@ -50,6 +50,17 @@ describe('the app’s practice session', () => {
     });
   });
 
+  it('puts a result away when its take’s bars move, and keeps it through a count-in', () => {
+    practiceSession.init();
+    playRun(3);
+    const { setTempo } = useTakeStore.getState();
+    setTempo({ ...useTakeStore.getState().take.tempo, countInBars: 0 });
+    expect(usePracticeStore.getState().result?.runId).toBe(3);
+
+    setTempo({ ...useTakeStore.getState().take.tempo, bpm: 90 });
+    expect(usePracticeStore.getState().result).toBeNull();
+  });
+
   it('keeps a result through edits to its take, and puts it away when another opens', () => {
     practiceSession.init();
     playRun(2);

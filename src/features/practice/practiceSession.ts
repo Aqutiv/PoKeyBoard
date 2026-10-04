@@ -1,6 +1,6 @@
 import type { PracticeEvent, PracticeRun } from '@/features/transport/practiceEvents';
 import { transportController } from '@/features/transport/transportController';
-import { usePracticeStore, type PracticeState } from '@/state/usePracticeStore';
+import { usePracticeStore, type OpenTake, type PracticeState } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { reduceWaitRun } from './trainingReport';
 
@@ -13,8 +13,8 @@ export const MIN_RESULT_STEPS = 2;
 export interface PracticeSessionDeps {
   /** The transport's practice runs, as they happen. */
   subscribePractice(listener: (event: PracticeEvent) => void): () => void;
-  /** Hears the open take change to another. */
-  subscribeTakeId(listener: (takeId: string) => void): () => void;
+  /** Hears the open take change to another, or its tempo change. */
+  subscribeTake(listener: (take: OpenTake) => void): () => void;
   store: Pick<PracticeState, 'runStarted' | 'runEnded' | 'show' | 'keepOnlyTake'>;
 }
 
@@ -32,7 +32,7 @@ export interface PracticeSession {
  */
 export function createPracticeSession({
   subscribePractice,
-  subscribeTakeId,
+  subscribeTake,
   store,
 }: PracticeSessionDeps): PracticeSession {
   /** The run under way and its events so far; null between runs. */
@@ -63,6 +63,7 @@ export function createPracticeSession({
           hand: run.hand,
           slowestSpeed: wait.slowestSpeed,
           reason: event.reason,
+          tempo: run.tempo,
           wait,
         });
       }
@@ -71,12 +72,13 @@ export function createPracticeSession({
   };
 
   const unsubscribePractice = subscribePractice(onEvent);
-  // A result is about the take it was played on, so opening another puts it away.
-  const unsubscribeTakeId = subscribeTakeId((takeId) => store.keepOnlyTake(takeId));
+  // A result is about the take it was played on, in the bars it was scored
+  // on: opening another take puts it away, and so does a tempo that moves them.
+  const unsubscribeTake = subscribeTake((take) => store.keepOnlyTake(take));
   return {
     dispose() {
       unsubscribePractice();
-      unsubscribeTakeId();
+      unsubscribeTake();
       current = null;
     },
   };
@@ -97,10 +99,13 @@ export const practiceSession = {
   init(): void {
     started ??= createPracticeSession({
       subscribePractice: (listener) => transportController.subscribePractice(listener),
-      // A rename or an edit keeps the take; only another take puts a result away.
-      subscribeTakeId: (listener) =>
+      // Another take, or a new tempo on this one. A rename or a note edited
+      // keeps both, and is never heard.
+      subscribeTake: (listener) =>
         useTakeStore.subscribe((state, previous) => {
-          if (state.take.id !== previous.take.id) listener(state.take.id);
+          if (state.take.id !== previous.take.id || state.take.tempo !== previous.take.tempo) {
+            listener(state.take);
+          }
         }),
       store: usePracticeStore.getState(),
     });
