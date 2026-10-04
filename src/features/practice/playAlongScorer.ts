@@ -156,11 +156,11 @@ export function scorePlayAlong(
   for (const press of presses) {
     if (press.audioTime > heardUntil) continue;
     const note = nearestNote(byKey.get(press.midi) ?? [], press.audioTime);
-    const offset = note ? press.audioTime - note.dueAudioTime : Number.POSITIVE_INFINITY;
-    if (!note || Math.abs(toMs(offset)) > matchMs) {
+    if (!note || !withinReach(press.audioTime, note.dueAudioTime, matchMs)) {
       if (press.audioTime <= endAudioTime) wrong += 1;
       continue;
     }
+    const offset = press.audioTime - note.dueAudioTime;
     const held = closest.get(note);
     if (held === undefined || Math.abs(offset) < Math.abs(held)) closest.set(note, offset);
   }
@@ -223,6 +223,11 @@ export function scorePlayAlong(
       quantile(offsets, 0.75) - quantile(offsets, 0.25) < LATE_SPREAD_MS,
     outcomes,
   };
+}
+
+/** Whether a press at `audioTime` is near enough a note due at `dueAudioTime` to play it. */
+export function withinReach(audioTime: number, dueAudioTime: number, matchMs = MATCH_MS): boolean {
+  return Math.abs(toMs(audioTime - dueAudioTime)) <= matchMs;
 }
 
 /**
