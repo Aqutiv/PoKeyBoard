@@ -540,6 +540,7 @@ describe('the practice session, keeping a run through a Library track', () => {
     // Sixteen notes over sixteen seconds, as the catalog and the take have it.
     library.summaries.set(ODE, { noteCount: 16, durationMs: 16000 });
     library.open = { id: ODE, noteCount: 16, durationMs: 16000 };
+    open = { ...open, id: ODE };
   });
 
   afterEach(() => {
@@ -615,6 +616,24 @@ describe('the practice session, keeping a run through a Library track', () => {
     expect(library.kept).toEqual([]);
     expect(warn).toHaveBeenCalledTimes(1);
     expect(warn.mock.calls[0]?.join(' ')).toContain(ODE);
+  });
+
+  it('keeps no run its take changed under, waiting or keeping time, as it shows none', () => {
+    // A tempo set at a hold moves the bars under a run that waits…
+    start(odeRun(1));
+    step(1, 0);
+    step(1, 500);
+    editTake({ tempo: { ...TEMPO, bpm: 100 } });
+    end(1);
+    // …and an Undo pass gives a Keep-time run waiting on its last notes new ones.
+    start(keepTimeRun(2, { takeId: ODE }));
+    press(C4, 12);
+    press(D4, 12.52);
+    endPlayAlong(2, 'end', 13.05);
+    editTake({ notes: NOTES.slice(0, 1) });
+    vi.advanceTimersByTime(END_GRACE_MS);
+    expect(store().result).toBeNull();
+    expect(library.kept).toEqual([]);
   });
 
   it('keeps no run whose take was swapped or changed before it ended', () => {
