@@ -26,7 +26,7 @@ A new deploy makes the browser install a **waiting** worker; `updateManager` (wo
 
 ## Installation
 
-`beforeinstallprompt` is captured where browsers fire it (Settings → App shows an Install button; a dismissal starts a 14-day quiet period). iOS has no programmatic prompt: Settings → App shows Share → **Add to Home Screen** instructions and warns that the installed app may use a **separate storage context** — export a JSON backup before switching, and prefer the installed icon for important takes.
+`beforeinstallprompt` is captured where browsers fire it (Settings → App shows an Install button; a dismissal starts a 14-day quiet period). iOS has no programmatic prompt: Settings → App shows Share → **Add to Home Screen** instructions and warns that the installed app may use a **separate storage context** — export a JSON backup before switching, and prefer the installed icon for important takes. A backup carries the takes and settings only: Learn progress and the Library's best practice results stay behind in Safari, and the installed app starts them afresh.
 
 Desktop Chromium treats installed-app icon changes as identity updates. The
 transparent icon uses a new manifest URL so current Chromium releases can offer

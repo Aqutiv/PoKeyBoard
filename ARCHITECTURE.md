@@ -33,7 +33,9 @@ src/
                 imports share: ids, rounding, limits, title, tempo changes),
                 trainingGate (pure)
   data/         db (Dexie v1), takeRepository, settingsRepository,
-                audioCacheRepository, metadataRepository, persistence (autosave)
+                audioCacheRepository, metadataRepository,
+                practiceResultsRepository (each Library track's best and last),
+                persistence (autosave)
   features/
     keyboard/   geometry, velocityResponse (every input's velocity curve),
                 per-pointer tracker, computer keyboard, game controller, Web
@@ -60,6 +62,8 @@ src/
     practice/   trainingReport (pure: a "wait for me" run's events read into
                 its report), resultCells (pure: a run told in four-bar
                 sections or passes round a loop, each graded),
+                practiceRecords (pure: a best and a last for each Library
+                track, read entry by entry, ranked, and the Library's chip),
                 practiceSession (results collected outside React),
                 PracticeResults (the card under the transport)
     metronome/  MetronomeControls
@@ -298,6 +302,51 @@ the moment on the page's clock a press lands on the run's start, rendered from
 the store for the end-to-end tests to play in time from, as Learn's runner
 publishes `data-click-origin-ms`.
 
+## Best results
+
+Each Library track keeps a best and a last result for each way it has been
+practised through (`practiceRecords`): `wait:` or `along:` and the hand, so
+Wait for me and Keep time, and each hand, are measured apart. Only a complete
+run counts (`isCompleteRun`): from no later than its first note to the take's
+`end`, round no loop. Pausing ends a run, so a best is always one go from start
+to end. The run must be on a Library track (`libraryTrackSummary`) whose notes
+and length are the catalog's, and that track must still be open, as it was, when
+the run ends. A run that disagrees with the catalog is on notes the list does
+not describe, a classics manifest out of date with its scores, and is reported
+with a warning; any other is simply not kept.
+
+A result keeps its headline share, the slowest speed and how many notes it
+counted: waiting, the steps right first time; keeping time, the share on time
+and the notes played of the notes asked and the wrong ones (`accuracy`). Waiting,
+the share right first time ranks results, then the speed; keeping time, the
+share on time, then the notes played, then the speed (`isBetter`). A faster run
+has to be as right to beat a slower one, so a slow perfect run stays the best;
+the card says each result's speed, so the trade is never hidden. Each result
+carries its track's fingerprint, the catalog's note count and length: once a
+track changes, that way of practising it starts afresh, and the Library shows
+none of its old results. A run is only a new best when it beats a best of the
+track as it stands; a first result is the best, but not a new one.
+
+The practice session keeps a complete run as it ends, after showing its card:
+`recordPracticeScore` reads, merges and writes the record in one Dexie
+transaction, since `setMetadata` is a blind put and two results kept at once
+would each write over the other. In the background, never calling the
+transport, its errors logged; the track's best and last are added to the result
+(`attachRecord`) only while it is still the one shown. The card ends its line of
+facts with them, Best and Last at their speeds on a desktop, Best alone on a
+phone, and a badge by the headline for a new best; the status adds them in a
+span of their own, after what it has said, so a screen reader hears only the
+addition. The Library reads the record once as it opens and shows, beside each
+title, the best in the way practised most recently (`chipFor`), its words in
+full as the row's `aria-describedby`, the row's name left as it was.
+
+The record is one metadata row (`practiceResults`): device-local, like Learn
+progress, and in no backup. It is parsed in layers, the envelope, each track,
+then each entry with `safeParse`, its keys checked (a Library take id, a known
+way of practising), so a bad entry costs itself and every other is kept. Zod's
+records keyed by an enum would demand every key, and its partial records refuse
+an unknown one: either would lose the lot to one bad entry.
+
 ## Choosing a piano
 
 `audio/instruments.ts` lists the selectable pianos, each one a versioned sample
@@ -508,7 +557,9 @@ per-string English fallback. Prose in the catalog would ship every locale's text
 to every user (`i18n/index.ts` imports all four eagerly) and length-lock every
 paragraph across locales (the parity test walks arrays by index). The level
 toggle is an ordinary setting; chapter progress is a metadata row, Zod-parsed on
-read and therefore device-local rather than part of the settings backup.
+read and therefore device-local rather than part of the settings backup. Each
+Library track's best practice results are another such row, Zod-parsed entry by
+entry and in no backup either (see Best results).
 
 ## Importing
 
