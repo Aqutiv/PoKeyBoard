@@ -33,7 +33,9 @@ src/
                 imports share: ids, rounding, limits, title, tempo changes),
                 trainingGate (pure)
   data/         db (Dexie v1), takeRepository, settingsRepository,
-                audioCacheRepository, metadataRepository, persistence (autosave)
+                audioCacheRepository, metadataRepository,
+                practiceResultsRepository (each Library track's best and last),
+                persistence (autosave)
   features/
     keyboard/   geometry, velocityResponse (every input's velocity curve),
                 per-pointer tracker, computer keyboard, game controller, Web
@@ -55,7 +57,15 @@ src/
                 subset the live score and the sheet draw: generated metrics
                 and outlines, drawGlyph, engravingGlyphs — see SHEET_EXPORT.md)
     transport/  transportMachine (pure), transportClock, transportController,
-                sustainPedal, modes, TransportControls, ModeMenu
+                practiceEvents (what a practice run reports), sustainPedal,
+                modes, TransportControls, ModeMenu
+    practice/   trainingReport (pure: a "wait for me" run's events read into
+                its report), resultCells (pure: a run told in four-bar
+                sections or passes round a loop, each graded),
+                practiceRecords (pure: a best and a last for each Library
+                track, read entry by entry, ranked, and the Library's chip),
+                practiceSession (results collected outside React),
+                PracticeResults (the card under the transport)
     metronome/  MetronomeControls
     takes/      takesService, TakesPage, ImportInbox (the import preview and
                 its failure alert, over any route), ImportTakeDialog,
@@ -79,7 +89,8 @@ src/
                 SaveStatusBadge
   pwa/          service-worker (Workbox injectManifest), updateManager,
                 install, cacheNames
-  state/        zustand stores: take, settings, export-ui, import-ui
+  state/        zustand stores: take, settings, export-ui, import-ui, practice
+                results
   app/          hash router, providers (service wiring), lifecycle, hooks,
                 ImportDialogs (the shell's import inbox), hashLinks and
                 hooks/useHashLinkIntake (share links in the address bar)
@@ -143,6 +154,227 @@ a hold lets that note through, so the feature can never wedge the transport.
 
 Only plain playback gates. An overdub pass sounds its backing through the same
 scheduler and must never stop to ask for a note.
+
+A practice run is one stretch of training, kept by the controller from the
+playback that starts it to whatever ends it. Play under a training mode starts
+one from the playhead, unless nothing is left to play, and so does a training
+mode chosen mid-playback. Holds are never its boundaries: a run goes on through
+every hold and every resume from one. It ends once, and says why: the take
+played to its `end`; a `pause` or a `stop`; a `seek` or a scrub; a `loop` set or
+cleared, even at a hold; another hand or none chosen (`mode`; the same hand
+again carries the run on); `navigation` to another page, which drops the holds
+while playback plays on; an `interrupted` page, or a take swapped for another;
+a `record`; or a `failed` transport. Clearing the gate ends any run still under
+way, as a backstop.
+
+`subscribePractice` tells listeners what happens in a run, each event carrying
+its run's id (`practiceEvents.ts`): `run-start`, with what the run practises —
+the hand, where from, the speed and the loop, its clock's anchor, and every note
+it will ask for (`askedNotes`); `hold`, with when its notes fell due; `hold-key`
+for every key pressed at a hold, wanted or not; `hold-cleared`, played or
+skipped by Play; `step`, for a hold whose keys all came early, so playback never
+stopped; `speed`; and `run-end`. Listeners are told synchronously, from inside
+the command, and one that throws is reported and passed over: nothing a listener
+does can stop the transport finishing what it started.
+
+### Practice results
+
+A card under the transport says how the last run went (`features/practice`). The
+results are collected outside React: `practiceSession`, started with the other
+services, buffers the run under way's events from `subscribePractice` and, as
+the run ends, reads a "wait for me" run into its report (`trainingReport`), or a
+Keep-time run into its own (see Keep-time results), and hands it to
+`usePracticeStore`. So a card mounted twice under StrictMode, or not at all on
+another route, reads nothing twice and misses nothing. The listener only writes
+the store and never calls the transport back. A run of fewer than two steps, or
+two notes kept in time, leaves no card. The next run puts the card away,
+whichever way it is practised, as do Dismiss and opening another take; a result
+for a run since overtaken is dropped. So does anything
+that makes the result describe a take that is no longer there: a new tempo, time
+signature or tempo change, which moves the bars its sections name (compared by
+value, so a count-in keeps it), and new notes, from a recording pass, a clear or
+an undo. The same edits made while a run is under way, a tempo set at a hold or
+an Undo pass, leave it no card at all. While a recording counts in or runs, the
+card stands aside.
+
+A step is right first time when no wrong key was pressed at it and Play did not
+let it through, so every step played early is. The card adds the wrong keys
+pressed at holds, the holds let through, those the player took more than two
+seconds over, the steps played without the music stopping, and the slowest
+speed. A hold still open when the run ended counts neither way. A desktop has
+room for every fact on one line, a phone keeps to the mistakes, and short
+landscape keeps the card to one line. It is not a dialog, since an
+`aria-modal` would stand the computer keyboard and MIDI down. A status kept
+mounted beside it tells a screen reader each result in one sentence.
+
+Then the run part by part (`resultCells`, built for a run kept in time to
+reuse). A run through the take is told in sections of four of its bars, by the
+tempo map's own bar lines: 1–4, 5–8 and so on, so a run started in bar 6 opens
+on 5–8 and the last section ends with the take. A run round a loop is told in
+passes, the latest eight, a new one wherever a step is no more than a chord
+after the last, since a hold's next step is always looked for past the chord.
+Each cell is graded good from 90% right and fair from 60%, and shows its share
+rounded down, never counts, which would read as a time signature. A section's
+cell is a button: tapped, it loops those bars (`loopBetween`) and parks the
+playhead at their start.
+
+## Keep time
+
+Keep time is the other way to practise a hand: the music never waits, and the
+hand's notes are left for the player to play in time with the rest. The style
+lives in the playback mode itself (`playalong-left|right|both`, beside the
+`training-*` modes of Wait for me), not in a setting of its own, because the
+mode is what everything else already reads. A Learn hand-off sets a `training-*`
+mode, so it opens in Wait for me as its copy promises, whatever style the player
+last chose on Play. That last choice (`practiceStyle`) is only the Modes menu's
+memory, the style a hand picked from Listen starts in; the transport never reads
+it.
+
+Play under a Keep-time mode starts a practice run as a training mode does, with
+`style: 'playAlong'`, and the run is what mutes the hand. `playAlongMutedIds`
+lists the notes it asks for, with any hidden copy struck on the same key at the
+same moment, and the scheduler skips those ids beside the silent notes. A hidden
+trill beside a written note still sounds: nothing on the page asks the player
+for it. There is no gate, and the transport listens to no key: judging what the
+player plays is the practice session's (below). The muting ends with the run, so
+playback that carries on without it, after a change of page say, plays the take
+whole, as a run that waits leaves its holds behind.
+
+A fresh Keep-time run is counted in, never less than a bar
+(`keepTimeCountInMs`: the take's count-in at the tempo in force where the run
+starts, stretched by the practice speed). The music will not wait, so the player
+has to have heard the beat to come in on it. The count-in is a pre-roll inside
+`playing`, not a state of its own: the clock is anchored past it and runs toward
+the run's start, the playhead is held there (`getPlayheadMs`), `isCountingIn`
+says so, and the falling notes fall in to meet it as they do for a recording's
+count-in. Its clicks are a steady grid that stops short of the anchor, joined to
+the take's own grid when the metronome is on, so the run's first beat is queued
+ahead like any other click and lands with the music. The handover comes on the
+scheduler tick that finds the audio clock past the anchor rather than on a
+timeout, which a background tab would hold back; the metronome then clicks the
+take's grid if it is on and stops queuing if not. A loop's passes are one run,
+so only the first is counted in. A change of speed during the count-in starts
+the run again (`restart`), since the clicks count the speed it will play at;
+after it, the speed changes as it does for any run.
+
+Neither the muting nor the count-in can change under music already moving, so
+choosing another style or another hand, to or from Keep time, ends the run
+(`mode`) and pauses where playback is; at a hold, the hold is dropped rather
+than let through. The Modes menu does nothing for a choice already made, so a
+second click on it never pauses a run or lets a hold through. A run that would
+sound nothing (both hands, or the hand of a piece written for one) turns the
+metronome on at its start, visibly, for the player to turn off: without it,
+nothing would keep the beat. It goes off again when that run ends, unless the
+player has touched its switch in the meantime, which makes the choice theirs.
+
+### Keep-time results
+
+A Keep-time run is judged by the keys pressed while it plays, which the practice
+session listens to from its start to its end (`playAlongSession`), outside React
+like every result. When each note falls due is read from the run's events, not
+from the transport's clock (`runTimeline`): the run reaches `fromMs` at its
+anchor, past the count-in, at its speed, and each `speed` event starts a stretch
+at the new speed from wherever the run had got to. The clock starts its
+unwrapped timeline again from the playhead at every change of speed, so it can
+no longer place a note before the change, and the last notes are judged after it
+has stopped. The run's timeline is unwrapped as the clock's virtual time is:
+round a loop, each pass is a loop's length further on, and the notes asked for
+(`dueNotes`) come pass by pass, a unison, or a key struck again within a chord's
+width, asked for once.
+
+A press is placed at the music the player heard: the engine stamps it on the
+audio clock, and the output's latency (`getOutputLatencyMs`, read once as the
+run starts) is taken off, so a player in time through Bluetooth headphones is in
+time. Each note's window reaches 200 ms either side in real time at any speed,
+or halfway to the next or last strike of its key, so a repeated note or a trill
+keeps each press to its own (`playAlongScorer`). The nearest press in a window
+plays the note, on time within 60 ms and early or late beyond; another press in
+it is a second strike, counted neither way. A press in no window is a wrong
+note, and flashes on the keys as it is played (`flashWrongKey`), worked out from
+the notes asked for and the timeline rather than from what has been scheduled.
+A press while the run counts in, before its anchor, is kept only if it plays a
+note early, the first falling due as the run sets off, and is otherwise nothing:
+not flashed, and never a wrong note, though that note's window opens in the
+count-in. Nor does a press before the first note's window count. Accuracy
+weighs the wrong notes against the notes played, so playing every key at once
+does not pay. Off the beat by more than 30 ms on average over six notes, the
+player rushes or drags; late by more than 90 ms in the middle, within 40 ms
+of each other, over eight, the lateness is steadier than a player's, and the
+card says the sound may be reaching them late.
+
+A run played to its end listens on for 230 ms past the latency, for its last
+notes played late. A run stopped short is judged at once, and a note whose
+window was still open, with nothing played in it yet, is left out. The result
+carries the tempo it was scored on, and is put away, or never shown, for the
+same changes to the take as any run's (above), one made while the run listens
+on for its last notes included. The cells show each section's
+share on time, or each pass's round a loop, the notes told apart by the pass
+they came in (`passCells`), since notes kept in time share moments; a section
+tapped loops as any does, music still playing paused first. While the run lasts,
+the card's status carries `data-keep-time-origin-ms`, the moment on the page's
+clock a press lands on the run's start, rendered from the store for the
+end-to-end tests to play in time from, as Learn's runner publishes
+`data-click-origin-ms`.
+
+## Best results
+
+Each Library track keeps a best and a last result for each way it has been
+practised through (`practiceRecords`): `wait:` or `along:` and the hand, so
+Wait for me and Keep time, and each hand, are measured apart. Only a complete
+run counts (`isCompleteRun`): from no later than its first note to the take's
+`end`, round no loop. Pausing ends a run, so a best is always one go from start
+to end. The run must be on a Library track (`libraryTrackSummary`) whose notes
+and length are the catalog's, and that track must still be open, as it was, when
+the run ends. A run that disagrees with the catalog is on notes the list does
+not describe, a classics manifest out of date with its scores, and is reported
+with a warning; any other is simply not kept. Nor is a run that leaves no card:
+one spoiled by its take changing under it, while it ran or while a Keep-time run
+listened on for its last notes, or one too short to tell.
+
+A result keeps its headline share, the slowest speed and how many notes it
+counted: waiting, the steps right first time; keeping time, the share on time
+and the notes played of the notes asked and the wrong ones (`accuracy`). Waiting,
+the share right first time ranks results, then the speed; keeping time, the
+share on time, then the notes played, then the speed (`isBetter`). A faster run
+has to be as right to beat a slower one, so a slow perfect run stays the best;
+the card says the best's speed beside it, so the trade is never hidden. Each
+result carries its track's fingerprint, the catalog's note count and length,
+and its content, a digest of the very notes the run was played on
+(`takeContent`: FNV-1a over each note's start, key, length, hand and whether it
+is hidden, in a fixed order; tempo and velocity, which change neither what is
+asked for nor when, left out). Once either changes, that way of practising the
+track starts afresh. The Library has only the catalog's counts, and shows none
+of a track's results once its count or length changes; results of notes changed
+without either are put away the first time the track is opened, when the
+session hashes its notes (`prunePracticeRecords`, in one transaction, writing
+nothing when nothing differs). A run is only a new best when it beats a best of
+the track as it stands; a first result is the best, but not a new one.
+
+The practice session keeps a complete run as it ends, after showing its card:
+`recordPracticeScore` reads, merges and writes the record in one Dexie
+transaction, since `setMetadata` is a blind put and two results kept at once
+would each write over the other. In the background, never calling the
+transport, its errors logged; the track's best and last are added to the result
+(`attachRecord`) only while it is still the one shown. The last is the run the
+card already shows, so the card never repeats it: a run that beat an earlier
+best gets a badge by the headline, one that fell short of the best or only
+matched it ends its line of facts with that best (at its speed on a desktop,
+alone on a phone), and a first result, the best there is, shows neither
+(`isOwnBest`). The status adds the same in a span of its own, after what it has
+said, so a screen reader hears only the addition. The Library reads the record
+as it opens, and takes it again each time it is written while the page is open
+(`subscribePracticeRecords`, told after every write that lands): a Keep-time
+run's result is kept once its last notes are judged, which can be after the
+page has read. Beside each title it shows the best in the way practised most
+recently, by each way's last (`chipFor`), its words in full as the row's
+`aria-describedby`, the row's name left as it was.
+
+The record is one metadata row (`practiceResults`): device-local, like Learn
+progress, and in no backup. It is parsed in layers, the envelope, each track,
+then each entry with `safeParse`, its keys checked (a Library take id, a known
+way of practising), so a bad entry costs itself and every other is kept. Zod's
+records keyed by an enum would demand every key, and its partial records refuse
+an unknown one: either would lose the lot to one bad entry.
 
 ## Choosing a piano
 
@@ -354,7 +586,9 @@ per-string English fallback. Prose in the catalog would ship every locale's text
 to every user (`i18n/index.ts` imports all four eagerly) and length-lock every
 paragraph across locales (the parity test walks arrays by index). The level
 toggle is an ordinary setting; chapter progress is a metadata row, Zod-parsed on
-read and therefore device-local rather than part of the settings backup.
+read and therefore device-local rather than part of the settings backup. Each
+Library track's best practice results are another such row, Zod-parsed entry by
+entry and in no backup either (see Best results).
 
 ## Importing
 

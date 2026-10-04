@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { sortNotes } from '@/domain/noteEvents';
 import type { NoteEvent } from '@/domain/takeTypes';
-import { CHORD_WINDOW_MS, nextTrainingGate } from '@/domain/trainingGate';
+import {
+  askedNotes,
+  asksFor,
+  CHORD_WINDOW_MS,
+  nextTrainingGate,
+  playAlongMutedIds,
+} from '@/domain/trainingGate';
 
 function note(
   id: string,
@@ -104,5 +110,79 @@ describe('nextTrainingGate', () => {
     const recorded = sortNotes([note('a', 55, 100), note('b', 72, 200)]);
     expect(nextTrainingGate(recorded, 0, 'right')?.midis).toEqual(new Set([72]));
     expect(nextTrainingGate(recorded, 0, 'left')?.midis).toEqual(new Set([55]));
+  });
+});
+
+describe('asksFor', () => {
+  it('asks for a written note in the hand chosen, and in either for both', () => {
+    const left = note('l', 48, 0, 'bass');
+    expect(asksFor(left, 'left')).toBe(true);
+    expect(asksFor(left, 'right')).toBe(false);
+    expect(asksFor(left, 'both')).toBe(true);
+    expect(asksFor({ ...left, hidden: true }, 'both')).toBe(false);
+  });
+});
+
+describe('askedNotes', () => {
+  it('lists every note a run asks the hand for, in order', () => {
+    expect(askedNotes(TAKE, 'right')).toEqual([
+      { id: 'r1', midi: 64, startMs: 500 },
+      { id: 'r2', midi: 67, startMs: 500 + CHORD_WINDOW_MS },
+      { id: 'r3', midi: 72, startMs: 500 + CHORD_WINDOW_MS + 1 },
+    ]);
+    expect(askedNotes(TAKE, 'left').map((asked) => asked.id)).toEqual(['l1', 'l2']);
+    expect(askedNotes(TAKE, 'both').map((asked) => asked.id)).toEqual([
+      'l1',
+      'r1',
+      'r2',
+      'r3',
+      'l2',
+    ]);
+    expect(askedNotes([], 'both')).toEqual([]);
+  });
+
+  it('leaves out a note played but not written, and keeps one written but not played', () => {
+    const take = sortNotes([
+      { ...note('silent', 64, 0, 'treble'), velocity: 0 },
+      { ...note('trill', 66, 100, 'treble'), hidden: true },
+      note('next', 65, 200, 'treble'),
+    ]);
+    expect(askedNotes(take, 'right').map((asked) => asked.id)).toEqual(['silent', 'next']);
+  });
+});
+
+describe('playAlongMutedIds', () => {
+  it('leaves the hand’s notes to the player, and the other hand’s to playback', () => {
+    expect(playAlongMutedIds(TAKE, 'right')).toEqual(new Set(['r1', 'r2', 'r3']));
+    expect(playAlongMutedIds(TAKE, 'left')).toEqual(new Set(['l1', 'l2']));
+    expect(playAlongMutedIds(TAKE, 'both')).toEqual(new Set(['l1', 'r1', 'r2', 'r3', 'l2']));
+    expect(playAlongMutedIds([], 'both')).toEqual(new Set());
+  });
+
+  it('plays a trill the score hides, but not a hidden copy of a note the player strikes', () => {
+    const hide = (n: NoteEvent): NoteEvent => ({ ...n, hidden: true });
+    const take = sortNotes([
+      // A written trill note, and the trill a hidden voice plays for it.
+      note('written', 77, 500, 'treble'),
+      hide(note('g1', 79, 500, 'treble')),
+      hide(note('f1', 77, 562, 'treble')),
+      // A note one voice completes with another's: the same key at the same
+      // moment, hidden, and in the other staff.
+      note('held', 65, 1000, 'treble'),
+      hide(note('copy', 65, 1000, 'bass')),
+      // The same key a moment later is a strike of its own.
+      hide(note('later', 65, 1030, 'treble')),
+    ]);
+    expect(playAlongMutedIds(take, 'right')).toEqual(new Set(['written', 'held', 'copy']));
+    // The other hand has nothing written, so nothing of it is left out.
+    expect(playAlongMutedIds(take, 'left')).toEqual(new Set());
+  });
+
+  it('counts a note written but not played among the player’s', () => {
+    const take = sortNotes([
+      { ...note('silent', 64, 0, 'treble'), velocity: 0 },
+      note('next', 65, 200, 'treble'),
+    ]);
+    expect(playAlongMutedIds(take, 'right')).toEqual(new Set(['silent', 'next']));
   });
 });

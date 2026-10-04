@@ -34,14 +34,57 @@ export interface TrainingGate {
   noteIds: ReadonlySet<string>;
 }
 
+/** A note a training run asks the player for; see `askedNotes`. */
+export interface AskedNote {
+  id: string;
+  midi: number;
+  startMs: number;
+}
+
 /**
  * Whether a hold waits for this note: one of the chosen hand's, and written. A
  * hidden note (`isHiddenNote`) is not on the page, so nothing there tells the
  * player to play it — the trill beside a written trill note, say. Playback
  * plays it for them instead.
  */
-function asksFor(note: NoteEvent, hand: TrainingHand): boolean {
+export function asksFor(note: NoteEvent, hand: TrainingHand): boolean {
   return !isHiddenNote(note) && (hand === 'both' || noteHand(note) === hand);
+}
+
+/**
+ * Every note a run training `hand` asks the player for, in the order given:
+ * the notes its holds stop for. A note written but not played is among them,
+ * since a hold still asks for its key; a hidden one is not.
+ */
+export function askedNotes(notes: readonly NoteEvent[], hand: TrainingHand): AskedNote[] {
+  return notes
+    .filter((note) => asksFor(note, hand))
+    .map(({ id, midi, startMs }) => ({ id, midi, startMs }));
+}
+
+/**
+ * The notes a run keeping time leaves to the player, by id: every one it asks
+ * the hand for, and any hidden copy of one of them, struck on the same key at
+ * the same moment — the strike the player makes, as a hold's `noteIds` gathers
+ * it. Playback sounds everything else, a hidden trill beside a written note
+ * among it: nothing on the page asks the player for that.
+ */
+export function playAlongMutedIds(
+  notes: readonly NoteEvent[],
+  hand: TrainingHand,
+): ReadonlySet<string> {
+  const ids = new Set<string>();
+  /** Each key asked for, at the moment it is asked for: `midi@startMs`. */
+  const strikes = new Set<string>();
+  for (const note of notes) {
+    if (!asksFor(note, hand)) continue;
+    ids.add(note.id);
+    strikes.add(`${note.midi}@${note.startMs}`);
+  }
+  for (const note of notes) {
+    if (isHiddenNote(note) && strikes.has(`${note.midi}@${note.startMs}`)) ids.add(note.id);
+  }
+  return ids;
 }
 
 /**

@@ -8,6 +8,9 @@ export const fr: Messages = {
     practiceRight: 'Pratiquer droite',
     practiceBoth: 'Pratiquer les deux',
     practiceHint: 'La lecture attend vos notes.',
+    waitForMe: 'Attendre mes notes',
+    keepTime: 'Garder le tempo',
+    keepTimeHint: 'La lecture garde le tempo : jouez votre partie en même temps.',
     returnToPractice: 'Retour à la pratique',
     recording: 'Enregistrement',
     clickVolume: 'Volume du clic',
@@ -106,6 +109,7 @@ export const fr: Messages = {
     trainingLeft: 'Entraînement — main gauche',
     trainingRight: 'Entraînement — main droite',
     trainingBoth: 'Entraînement — les deux mains',
+    practiceStyle: 'Style de pratique',
     waitingForYou: 'En attente que vous jouiez les touches allumées',
     countIn: 'Décompte…',
     recording: '● Enregistrement',
@@ -117,6 +121,64 @@ export const fr: Messages = {
     loopStart: 'Boucler un passage : marquez son début',
     loopEnd: ({ from }) => `Boucle depuis ${from} : marquez sa fin`,
     loopClear: ({ from, to }) => `Arrêter la boucle ${from}–${to}`,
+  },
+  practice: {
+    resultsLabel: 'Résultats de l’entraînement',
+    dismiss: 'Ignorer les résultats',
+    rightFirstTime: ({ good, total }) =>
+      `${good} sur ${total} ${good > 1 ? 'justes' : 'juste'} du premier coup`,
+    accuracy: ({ percent }) => `(${percent} %)`,
+    wrongKeys: ({ count }) => `${count} ${count > 1 ? 'fausses touches' : 'fausse touche'}`,
+    wrongKeysShort: ({ count }) => `${count} ${count > 1 ? 'fautes' : 'faute'}`,
+    letThrough: ({ count }) => `${count} ${count > 1 ? 'laissées' : 'laissée'} passer`,
+    letThroughShort: ({ count }) => `${count} ${count > 1 ? 'sautées' : 'sautée'}`,
+    slowHolds: ({ count }) => `${count} ${count > 1 ? 'attentes' : 'attente'} de plus de 2 s`,
+    inFlow: ({ count }) => `${count} sans arrêt`,
+    atSpeed: ({ percent }) => `à ${percent} % de la vitesse`,
+    cellShare: ({ percent }) => `${percent} %`,
+    sectionsLabel: 'Mesures',
+    passesLabel: 'Tours',
+    sectionCell: ({ from, to, good, total }) =>
+      `${from === to ? `Mesure ${from}` : `Mesures ${from}–${to}`} : ${good} sur ${total} ${good > 1 ? 'justes' : 'juste'} du premier coup.`,
+    loopSection: ({ bars }) => (bars === 1 ? 'Boucler cette mesure.' : 'Boucler ces mesures.'),
+    passCell: ({ pass, good, total }) =>
+      `Tour ${pass} : ${good} sur ${total} ${good > 1 ? 'justes' : 'juste'} du premier coup`,
+    summaryWait: ({ facts }) => `Résultats de l’entraînement : ${facts}.`,
+    onTime: ({ good, total }) => `${good} sur ${total} à temps`,
+    hit: ({ count }) => `${count} ${count > 1 ? 'jouées' : 'jouée'}`,
+    early: ({ count }) => `${count} en avance`,
+    late: ({ count }) => `${count} en retard`,
+    missed: ({ count }) => `${count} ${count > 1 ? 'manquées' : 'manquée'}`,
+    wrongNotes: ({ count }) => `${count} ${count > 1 ? 'fausses notes' : 'fausse note'}`,
+    rushing: ({ ms }) => `Vous pressez un peu (environ ${ms} ms en avance)`,
+    dragging: ({ ms }) => `Vous traînez un peu (environ ${ms} ms en retard)`,
+    rushingShort: 'Vous pressez',
+    draggingShort: 'Vous traînez',
+    consistentlyLate:
+      'Toujours autant en retard : peut-être la latence de votre audio (Bluetooth ?)',
+    consistentlyLateShort: 'Latence audio ?',
+    sectionCellKeepTime: ({ from, to, good, total }) =>
+      `${from === to ? `Mesure ${from}` : `Mesures ${from}–${to}`} : ${good} sur ${total} à temps.`,
+    passCellKeepTime: ({ pass, good, total }) => `Tour ${pass} : ${good} sur ${total} à temps`,
+    summaryKeepTime: ({ facts, remarks }) =>
+      `Résultats de l’entraînement : ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
+    best: ({ percent, speed }) =>
+      `Record : ${percent} %${speed === undefined ? '' : ` (à ${speed} %)`}`,
+    newBest: 'Nouveau record',
+    newBestSummary: 'Nouveau record !',
+    bestSummary: ({ percent, speed }) =>
+      `Votre record : ${percent} %${speed === undefined ? '' : ` à ${speed} % de la vitesse`}.`,
+    handLeft: 'Main gauche',
+    handRight: 'Main droite',
+    handBoth: 'Les deux mains',
+    handLeftInTime: 'Main gauche à temps',
+    handRightInTime: 'Main droite à temps',
+    handBothInTime: 'Les deux mains à temps',
+    chip: ({ hand, percent }) => `${hand} · ${percent} %`,
+    chipDetail: ({ hand, keepTime, percent }) =>
+      `Record ${
+        hand === 'both' ? 'aux deux mains' : hand === 'right' ? 'main droite' : 'main gauche'
+      }, ${keepTime ? 'en gardant le tempo' : 'en attendant vos notes'} : ${percent} %`,
   },
   metronome: {
     groupLabel: 'Métronome',

@@ -40,6 +40,118 @@ describe('i18n catalogs', () => {
       expect(m.metronome.on({ bpm: 128 })).toContain('128');
     }
   });
+
+  it('practice results interpolate their counts, bars and passes', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const m = catalogs[lang];
+      expect(m.practice.rightFirstTime({ good: 8, total: 10 }), lang).toMatch(/8\D+10/);
+      expect(m.practice.accuracy({ percent: 80 }), lang).toContain('80');
+      for (const count of [1, 3]) {
+        expect(m.practice.wrongKeys({ count }), lang).toContain(String(count));
+        expect(m.practice.wrongKeysShort({ count }), lang).toContain(String(count));
+        expect(m.practice.letThrough({ count }), lang).toContain(String(count));
+        expect(m.practice.letThroughShort({ count }), lang).toContain(String(count));
+        expect(m.practice.slowHolds({ count }), lang).toContain(String(count));
+        expect(m.practice.inFlow({ count }), lang).toContain(String(count));
+      }
+      expect(m.practice.atSpeed({ percent: 60 }), lang).toContain('60');
+      expect(m.practice.cellShare({ percent: 75 }), lang).toMatch(/^75\s?%$/);
+      expect(m.practice.sectionCell({ from: 5, to: 8, good: 3, total: 4 }), lang).toMatch(
+        /5–8\D+3\D+4/,
+      );
+      expect(m.practice.sectionCell({ from: 9, to: 9, good: 1, total: 1 }), lang).not.toContain(
+        '–',
+      );
+      expect(m.practice.loopSection({ bars: 1 }), lang).not.toBe(
+        m.practice.loopSection({ bars: 4 }),
+      );
+      expect(m.practice.passCell({ pass: 6, good: 3, total: 4 }), lang).toMatch(/6\D+3\D+4/);
+      expect(m.practice.summaryWait({ facts: '8 / 10' }), lang).toContain('8 / 10');
+    }
+  });
+
+  it('Keep-time results interpolate their counts, offsets, bars and passes', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const m = catalogs[lang];
+      expect(m.practice.onTime({ good: 18, total: 28 }), lang).toMatch(/18\D+28/);
+      for (const count of [1, 3]) {
+        expect(m.practice.hit({ count }), lang).toContain(String(count));
+        expect(m.practice.early({ count }), lang).toContain(String(count));
+        expect(m.practice.late({ count }), lang).toContain(String(count));
+        expect(m.practice.missed({ count }), lang).toContain(String(count));
+        expect(m.practice.wrongNotes({ count }), lang).toContain(String(count));
+      }
+      // Early and late are told apart, in full and on a phone.
+      expect(m.practice.early({ count: 3 }), lang).not.toBe(m.practice.late({ count: 3 }));
+      expect(m.practice.rushing({ ms: 35 }), lang).toContain('35');
+      expect(m.practice.dragging({ ms: 35 }), lang).toContain('35');
+      expect(m.practice.rushing({ ms: 35 }), lang).not.toBe(m.practice.dragging({ ms: 35 }));
+      expect(m.practice.rushingShort, lang).not.toBe(m.practice.draggingShort);
+      expect(m.practice.consistentlyLate, lang).toContain('Bluetooth');
+      expect(m.practice.sectionCellKeepTime({ from: 5, to: 8, good: 3, total: 4 }), lang).toMatch(
+        /5–8\D+3\D+4/,
+      );
+      expect(
+        m.practice.sectionCellKeepTime({ from: 9, to: 9, good: 1, total: 1 }),
+        lang,
+      ).not.toContain('–');
+      expect(m.practice.passCellKeepTime({ pass: 6, good: 3, total: 4 }), lang).toMatch(
+        /6\D+3\D+4/,
+      );
+      const summary = m.practice.summaryKeepTime({
+        facts: '18 / 28',
+        remarks: ['Fast', 'Bluetooth'],
+      });
+      expect(summary, lang).toMatch(/18 \/ 28.*Fast.*Bluetooth/);
+      // With nothing to remark on, the sentence ends with the facts.
+      expect(m.practice.summaryKeepTime({ facts: '18 / 28', remarks: [] }), lang).toMatch(
+        /18 \/ 28\.$/,
+      );
+    }
+  });
+
+  it('best results, and the Library’s chip, interpolate their shares, speeds and hands', () => {
+    for (const lang of SUPPORTED_LANGUAGES) {
+      const m = catalogs[lang];
+      // The best on the card, and as a screen reader hears it: the speed only
+      // when it is given, the take's own going unsaid.
+      for (const best of [m.practice.best, m.practice.bestSummary]) {
+        expect(best({ percent: 92 }), lang).toContain('92');
+        expect(best({ percent: 100, speed: 60 }), lang).toMatch(/100\D+60/);
+        expect(best({ percent: 100 }), lang).not.toContain('60');
+      }
+      expect(m.practice.bestSummary({ percent: 92 }), lang).not.toBe(
+        m.practice.best({ percent: 92 }),
+      );
+      expect(m.practice.newBest, lang).not.toBe('');
+      expect(m.practice.newBestSummary, lang).toContain(m.practice.newBest);
+
+      const hands = [
+        m.practice.handLeft,
+        m.practice.handRight,
+        m.practice.handBoth,
+        m.practice.handLeftInTime,
+        m.practice.handRightInTime,
+        m.practice.handBothInTime,
+      ];
+      expect(new Set(hands).size, lang).toBe(hands.length);
+      expect(m.practice.chip({ hand: m.practice.handRight, percent: 92 }), lang).toMatch(
+        new RegExp(`^${m.practice.handRight}\\D+92`),
+      );
+      const detail = (hand: 'left' | 'right' | 'both', keepTime: boolean) =>
+        m.practice.chipDetail({ hand, keepTime, percent: 64 });
+      const details = [
+        detail('left', false),
+        detail('right', false),
+        detail('both', false),
+        detail('left', true),
+        detail('right', true),
+        detail('both', true),
+      ];
+      for (const sentence of details) expect(sentence, lang).toContain('64');
+      expect(new Set(details).size, lang).toBe(details.length);
+    }
+  });
 });
 
 describe('language setting persistence', () => {

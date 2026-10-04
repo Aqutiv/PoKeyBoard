@@ -139,6 +139,9 @@ export interface Messages {
     practiceRight: string;
     practiceBoth: string;
     practiceHint: string;
+    waitForMe: string;
+    keepTime: string;
+    keepTimeHint: string;
     returnToPractice: string;
     recording: string;
     clickVolume: string;
@@ -237,6 +240,7 @@ export interface Messages {
     trainingLeft: string;
     trainingRight: string;
     trainingBoth: string;
+    practiceStyle: string;
     waitingForYou: string;
     countIn: string;
     recording: string;
@@ -249,6 +253,104 @@ export interface Messages {
     loopStart: string;
     loopEnd: (p: { from: string }) => string;
     loopClear: (p: { from: string; to: string }) => string;
+  };
+  /** The card a practice run leaves under the transport, saying how it went. */
+  practice: {
+    resultsLabel: string;
+    dismiss: string;
+    /** The headline: the steps (a note or a chord) right first time, of all asked for. */
+    rightFirstTime: (p: { good: number; total: number }) => string;
+    /** The headline as a share, beside it where there is room. */
+    accuracy: (p: { percent: number }) => string;
+    wrongKeys: (p: { count: number }) => string;
+    /** `wrongKeys` on a phone's line. */
+    wrongKeysShort: (p: { count: number }) => string;
+    /** Holds Play let through rather than the player. */
+    letThrough: (p: { count: number }) => string;
+    /** `letThrough` on a phone's line. */
+    letThroughShort: (p: { count: number }) => string;
+    /** Holds the player took more than two seconds over. */
+    slowHolds: (p: { count: number }) => string;
+    /** Steps played before the music reached them, so it never stopped. */
+    inFlow: (p: { count: number }) => string;
+    /** The slowest speed the run went at, when below the take's own. */
+    atSpeed: (p: { percent: number }) => string;
+    /** The share of a section or a pass right first time, written on its cell. */
+    cellShare: (p: { percent: number }) => string;
+    /** Names the row of four-bar sections, and the row of passes round a loop. */
+    sectionsLabel: string;
+    passesLabel: string;
+    /** A section's cell, `from` and `to` its first and last bar (the same for one bar). */
+    sectionCell: (p: { from: number; to: number; good: number; total: number }) => string;
+    /** What tapping a section does, after `sectionCell`. */
+    loopSection: (p: { bars: number }) => string;
+    passCell: (p: { pass: number; good: number; total: number }) => string;
+    /** What a screen reader hears when a result arrives: `facts` comes listed with commas. */
+    summaryWait: (p: { facts: string }) => string;
+    /** A Keep-time run's headline: the notes played on time, of all it asked for. */
+    onTime: (p: { good: number; total: number }) => string;
+    /** Notes played in their window, on time or not. */
+    hit: (p: { count: number }) => string;
+    /** Notes played in their window, before or after their moment. */
+    early: (p: { count: number }) => string;
+    late: (p: { count: number }) => string;
+    /** Notes not played at all. */
+    missed: (p: { count: number }) => string;
+    /** Keys pressed with no note of theirs near. */
+    wrongNotes: (p: { count: number }) => string;
+    /** Which way the player pulls the beat, by `ms` on average; a sentence of its own. */
+    rushing: (p: { ms: number }) => string;
+    dragging: (p: { ms: number }) => string;
+    /** `rushing` and `dragging` on a phone's line. */
+    rushingShort: string;
+    draggingShort: string;
+    /**
+     * After `dragging`, when every note was late by much the same: more likely
+     * the sound reaching the player late, through Bluetooth say, than the player.
+     */
+    consistentlyLate: string;
+    /** `consistentlyLate` on a phone's line. */
+    consistentlyLateShort: string;
+    /** A section's cell in a Keep-time run, as `sectionCell` is in one that waits. */
+    sectionCellKeepTime: (p: { from: number; to: number; good: number; total: number }) => string;
+    passCellKeepTime: (p: { pass: number; good: number; total: number }) => string;
+    /**
+     * What a screen reader hears when a Keep-time result arrives: `facts`
+     * listed with commas, then each of `remarks` (the player's timing) as a
+     * sentence of its own.
+     */
+    summaryKeepTime: (p: { facts: string; remarks: readonly string[] }) => string;
+    /**
+     * A Library track's best result in the way just practised, beside a run
+     * that did not set it: the headline share, then the slowest speed the best
+     * was played at, `speed` given only when it was not the take's own.
+     */
+    best: (p: { percent: number; speed?: number }) => string;
+    /** The badge on a run that beat the track's best. */
+    newBest: string;
+    /** What a screen reader hears, after the result, of a run that beat the track's best… */
+    newBestSummary: string;
+    /** …and of one that did not: the best, `speed` as for `best`. */
+    bestSummary: (p: { percent: number; speed?: number }) => string;
+    /** A way of practising a track, on its Library chip: the hand, waiting for the player… */
+    handLeft: string;
+    handRight: string;
+    handBoth: string;
+    /** …and the hand, keeping time. */
+    handLeftInTime: string;
+    handRightInTime: string;
+    handBothInTime: string;
+    /**
+     * A Library track's chip: its best in the way practised most recently,
+     * `hand` one of the ways above.
+     */
+    chip: (p: { hand: string; percent: number }) => string;
+    /** The chip in words, for a screen reader: the hand, and whether the music kept time. */
+    chipDetail: (p: {
+      hand: 'left' | 'right' | 'both';
+      keepTime: boolean;
+      percent: number;
+    }) => string;
   };
   metronome: {
     groupLabel: string;

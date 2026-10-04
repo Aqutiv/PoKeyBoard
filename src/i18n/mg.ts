@@ -9,6 +9,9 @@ export const mg: Messages = {
     practiceRight: 'Hanao fanazaran-tena ankavanana',
     practiceBoth: 'Hanao fanazaran-tena roa tanana',
     practiceHint: 'Miandry ny naoty lalaovinao ny famerenana.',
+    waitForMe: 'Andraso aho',
+    keepTime: 'Tazony ny fitempo',
+    keepTimeHint: 'Mitazona ny fitempo ny famerenana: tendreo miaraka aminy ny anjaranao.',
     returnToPractice: 'Hiverina amin’ny fanazaran-tena',
     recording: 'Fandraisam-peo',
     clickVolume: 'Hamafin’ny kitika',
@@ -107,6 +110,7 @@ export const mg: Messages = {
     trainingLeft: 'Fanazaran-tena — tanana havia',
     trainingRight: 'Fanazaran-tena — tanana havanana',
     trainingBoth: 'Fanazaran-tena — tanana roa',
+    practiceStyle: 'Fomba fanazaran-tena',
     waitingForYou: 'Miandry anao hitendry ny kitendry mirehitra',
     countIn: 'Fanisana mialoha…',
     recording: '● Mandrakitra',
@@ -118,6 +122,64 @@ export const mg: Messages = {
     loopStart: 'Averimbereno andalana iray: mariho ny fiandohany',
     loopEnd: ({ from }) => `Averimbereno manomboka amin’ny ${from}: mariho ny fiafarany`,
     loopClear: ({ from, to }) => `Atsaharo ny famerimberenana ${from}–${to}`,
+  },
+  practice: {
+    resultsLabel: 'Vokatry ny fanazaran-tena',
+    dismiss: 'Esory ny vokatra',
+    rightFirstTime: ({ good, total }) => `${good} amin’ny ${total} marina avy hatrany`,
+    accuracy: ({ percent }) => `(${percent}%)`,
+    wrongKeys: ({ count }) => `kitendry ${count} diso`,
+    wrongKeysShort: ({ count }) => `diso ${count}`,
+    letThrough: ({ count }) => `naoty ${count} navela handalo`,
+    letThroughShort: ({ count }) => `navela ${count}`,
+    slowHolds: ({ count }) => `fiandrasana ${count} mihoatra ny 2 s`,
+    inFlow: ({ count }) => `naoty ${count} tsy nijanonana`,
+    atSpeed: ({ percent }) => `amin’ny hafainganana ${percent}%`,
+    cellShare: ({ percent }) => `${percent}%`,
+    sectionsLabel: 'Mizana',
+    passesLabel: 'Fihodinana',
+    sectionCell: ({ from, to, good, total }) =>
+      `Mizana ${from === to ? from : `${from}–${to}`}: ${good} amin’ny ${total} marina avy hatrany.`,
+    loopSection: ({ bars }) =>
+      bars === 1 ? 'Averimbereno ity mizana ity.' : 'Averimbereno ireo mizana ireo.',
+    passCell: ({ pass, good, total }) =>
+      `Fihodinana ${pass}: ${good} amin’ny ${total} marina avy hatrany`,
+    summaryWait: ({ facts }) => `Vokatry ny fanazaran-tena: ${facts}.`,
+    onTime: ({ good, total }) => `${good} amin’ny ${total} ara-potoana`,
+    hit: ({ count }) => `voatendry ${count}`,
+    early: ({ count }) => `aloha loatra ${count}`,
+    late: ({ count }) => `tara ${count}`,
+    missed: ({ count }) => `tsy voatendry ${count}`,
+    wrongNotes: ({ count }) => `naoty ${count} diso`,
+    rushing: ({ ms }) => `Somary maika ianao (aloha manodidina ny ${ms} ms)`,
+    dragging: ({ ms }) => `Somary miadana ianao (tara manodidina ny ${ms} ms)`,
+    rushingShort: 'Maika ianao',
+    draggingShort: 'Miadana ianao',
+    consistentlyLate: 'Tara mitovy foana: angamba ny fahatarain’ny feo (Bluetooth?)',
+    consistentlyLateShort: 'Feo tara?',
+    sectionCellKeepTime: ({ from, to, good, total }) =>
+      `Mizana ${from === to ? from : `${from}–${to}`}: ${good} amin’ny ${total} ara-potoana.`,
+    passCellKeepTime: ({ pass, good, total }) =>
+      `Fihodinana ${pass}: ${good} amin’ny ${total} ara-potoana`,
+    summaryKeepTime: ({ facts, remarks }) =>
+      `Vokatry ny fanazaran-tena: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
+    best: ({ percent, speed }) =>
+      `Tsara indrindra: ${percent}%${speed === undefined ? '' : ` (amin’ny ${speed}%)`}`,
+    newBest: 'Tsara indrindra vaovao',
+    newBestSummary: 'Tsara indrindra vaovao!',
+    bestSummary: ({ percent, speed }) =>
+      `Ny tsara indrindra: ${percent}%${speed === undefined ? '' : ` amin’ny hafainganana ${speed}%`}.`,
+    handLeft: 'Tanana havia',
+    handRight: 'Tanana havanana',
+    handBoth: 'Tanana roa',
+    handLeftInTime: 'Tanana havia ara-potoana',
+    handRightInTime: 'Tanana havanana ara-potoana',
+    handBothInTime: 'Tanana roa ara-potoana',
+    chip: ({ hand, percent }) => `${hand} · ${percent}%`,
+    chipDetail: ({ hand, keepTime, percent }) =>
+      `Tsara indrindra amin’ny ${
+        hand === 'both' ? 'tanana roa' : hand === 'right' ? 'tanana havanana' : 'tanana havia'
+      }, ${keepTime ? 'mitazona ny fitempo' : 'miandry anao'}: ${percent}%`,
   },
   metronome: {
     groupLabel: 'Metronoma',

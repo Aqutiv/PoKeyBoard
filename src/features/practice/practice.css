@@ -1,0 +1,189 @@
+/* How the last practice run went (PracticeResults): a strip under the
+   transport, not a dialog, so the keys keep playing while it is up. The facts
+   come first; the cells, and the button that puts the card away, follow on
+   the same line where there is room, and on the next where there is not. */
+.practice-results {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  padding: 3px 3px 3px 10px;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-m);
+  font-size: 13px;
+}
+
+.practice-results__facts {
+  flex: 0 1 auto;
+  margin: 0;
+  color: var(--text-dim);
+}
+
+.practice-results__facts strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.practice-results__fact {
+  white-space: nowrap;
+}
+
+/* A new best, by the headline: highlighted, as the draft badge on Takes is.
+   A best the run did not beat is a fact like the others. */
+.practice-results__new-best {
+  display: inline-block;
+  padding: 1px 7px;
+  background: var(--accent);
+  border-radius: 999px;
+  color: var(--accent-contrast);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  line-height: 1.5;
+  text-transform: uppercase;
+  vertical-align: 1px;
+  white-space: nowrap;
+}
+
+/* Wide enough for a few cells before it wraps to a line of its own, and
+   scrolled sideways past that: a long run makes many sections, and the card
+   must not take the score's height for them. */
+.practice-results__cells {
+  flex: 1 1 180px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.practice-results__caption {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.practice-results__list {
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+  margin: 0;
+  padding: 2px;
+  list-style: none;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.practice-results__list > li {
+  flex-shrink: 0;
+}
+
+/* A part of the run, in the colour of its grade. The share right is written
+   on it too, so the colour is never all there is to go on. Positioned for the
+   words a pass keeps hidden for screen readers. */
+.practice-cell {
+  --grade: var(--border-strong);
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 8px;
+  background: var(--surface-2);
+  border: 1px solid var(--grade);
+  border-radius: var(--radius-s);
+  color: var(--text);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.practice-cell--good {
+  --grade: var(--success);
+}
+
+.practice-cell--fair {
+  --grade: var(--accent-strong);
+}
+
+.practice-cell--weak {
+  --grade: var(--record);
+}
+
+@supports (color: color-mix(in oklab, red 50%, blue)) {
+  .practice-cell {
+    background: color-mix(in oklab, var(--grade) 14%, var(--surface-1));
+  }
+}
+
+.practice-cell__share {
+  font-weight: 600;
+}
+
+button.practice-cell:active {
+  background: var(--surface-3);
+}
+
+/* Mouse only, as elsewhere: on touch, :hover would stick to the cell tapped. */
+@media (hover: hover) and (pointer: fine) {
+  button.practice-cell:hover {
+    background: var(--surface-3);
+  }
+}
+
+.practice-results__dismiss {
+  flex: none;
+  margin-left: auto;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-s);
+  color: var(--text-dim);
+}
+
+.practice-results__dismiss svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Portrait phones: a smaller size keeps the facts to one line, and the cells
+   and the close button to the next. Keep the query in sync with src/index.css
+   and the other feature sheets. */
+@media (orientation: portrait) and (max-width: 600px) {
+  .practice-results {
+    font-size: 12px;
+  }
+}
+
+/* The narrowest phones, 320px and a little more, have about 290px for the
+   facts. That holds the English line in Segoe UI or Roboto at 12px, but not
+   in a wider font such as DejaVu Sans, which Linux uses for system-ui (300px).
+   A size smaller still keeps it to one line (275px there). A longer line, in
+   another language or with bigger counts, wraps rather than being cut. */
+@media (max-width: 359px) {
+  .practice-results__facts {
+    font-size: 11px;
+  }
+}
+
+/* Short landscape: one line, and no cells (PracticeResults leaves them out).
+   Keep the query in sync with COMPACT_LANDSCAPE_QUERY. */
+@media (orientation: landscape) and (max-height: 500px) {
+  .practice-results {
+    flex-wrap: nowrap;
+  }
+
+  .practice-results__facts {
+    flex: 1 1 auto;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .practice-results__dismiss {
+    width: 30px;
+    height: 30px;
+  }
+}
