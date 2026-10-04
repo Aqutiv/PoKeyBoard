@@ -1,7 +1,11 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '@/data/db';
 import { META_PRACTICE_RESULTS, setMetadata } from '@/data/metadataRepository';
-import { loadPracticeRecords, recordPracticeScore } from '@/data/practiceResultsRepository';
+import {
+  loadPracticeRecords,
+  prunePracticeRecords,
+  recordPracticeScore,
+} from '@/data/practiceResultsRepository';
 import { saveTake } from '@/data/takeRepository';
 import { createEmptyTake } from '@/domain/noteEvents';
 import { EMPTY_PRACTICE_RECORDS, type PracticeScore } from '@/features/practice/practiceRecords';
@@ -9,6 +13,10 @@ import { backupAllFile } from '@/features/takes/takesService';
 
 const ODE = 'library:ode-to-joy-first-steps';
 const ELISE = 'library:fur-elise';
+/** The track's notes as they are now, as `takeContent` digests them. */
+const CONTENT = '0badc0de';
+/** Its notes as they were in a version since changed. */
+const OLD_CONTENT = 'feedface';
 
 function score(overrides: Partial<PracticeScore> = {}): PracticeScore {
   return {
@@ -17,6 +25,7 @@ function score(overrides: Partial<PracticeScore> = {}): PracticeScore {
     speed: 1,
     notes: 28,
     fingerprint: '28:32000',
+    content: CONTENT,
     ...overrides,
   };
 }
@@ -25,6 +34,10 @@ beforeEach(async () => {
   await db.takes.clear();
   await db.settings.clear();
   await db.metadata.clear();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('practice results repository', () => {
@@ -93,6 +106,34 @@ describe('practice results repository', () => {
       v: 1,
       tracks: { [ODE]: { 'wait:right': { best: next, last: next } } },
     });
+  });
+});
+
+describe('putting away a track’s results of notes it no longer has', () => {
+  it('drops each way practised on other notes, and keeps the rest', async () => {
+    const stale = score({ content: OLD_CONTENT });
+    const current = score({ onTime: 0.5 });
+    const elise = score({ fingerprint: '640:120000', content: OLD_CONTENT });
+    await recordPracticeScore(ODE, 'wait:right', stale);
+    await recordPracticeScore(ODE, 'along:both', current);
+    await recordPracticeScore(ELISE, 'wait:left', elise);
+
+    expect(await prunePracticeRecords(ODE, CONTENT)).toBe(true);
+    expect(await loadPracticeRecords()).toEqual({
+      v: 1,
+      tracks: {
+        [ODE]: { 'along:both': { best: current, last: current } },
+        [ELISE]: { 'wait:left': { best: elise, last: elise } },
+      },
+    });
+  });
+
+  it('writes nothing for a track whose every result is of its notes, or that has none', async () => {
+    await recordPracticeScore(ODE, 'wait:right', score());
+    const put = vi.spyOn(db.metadata, 'put');
+    expect(await prunePracticeRecords(ODE, CONTENT)).toBe(false);
+    expect(await prunePracticeRecords(ELISE, CONTENT)).toBe(false);
+    expect(put).not.toHaveBeenCalled();
   });
 });
 

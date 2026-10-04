@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import type { NoteEvent } from '@/domain/takeTypes';
+import { contentHash } from '@/features/practice/contentHash';
 import {
   chipFor,
   EMPTY_PRACTICE_RECORDS,
@@ -8,7 +10,9 @@ import {
   isOwnBest,
   parsePracticeRecords,
   practiceModeKey,
+  takeContent,
   trackFingerprint,
+  withoutOtherContent,
   withScore,
   type ModeRecord,
   type PracticeRecords,
@@ -21,6 +25,8 @@ const ELISE = 'library:fur-elise';
 /** The track as the catalog has it: 28 notes over 32 seconds. */
 const SUMMARY = { noteCount: 28, durationMs: 32000 };
 const FINGERPRINT = '28:32000';
+/** The track's notes, as `takeContent` digests them. */
+const CONTENT = '0badc0de';
 
 /** A "wait for me" result: 90% right first time at the take's own speed. */
 function waitScore(overrides: Partial<PracticeScore> = {}): PracticeScore {
@@ -30,6 +36,7 @@ function waitScore(overrides: Partial<PracticeScore> = {}): PracticeScore {
     speed: 1,
     notes: 28,
     fingerprint: FINGERPRINT,
+    content: CONTENT,
     ...overrides,
   };
 }
@@ -73,8 +80,18 @@ describe('practice records as stored', () => {
 
   it('drop an entry whose best and last are of two different tracks', () => {
     const raw = records({
-      [ODE]: { 'wait:right': { best: waitScore({ fingerprint: '27:31000' }), last: waitScore() } },
+      [ODE]: {
+        'wait:right': { best: waitScore({ fingerprint: '27:31000' }), last: waitScore() },
+        'wait:left': { best: waitScore({ content: 'feedface' }), last: waitScore() },
+      },
     });
+    expect(parsePracticeRecords(raw)).toEqual(EMPTY_PRACTICE_RECORDS);
+  });
+
+  it('drop an entry that does not say which notes it was played on', () => {
+    const unsaid: Partial<PracticeScore> = waitScore();
+    delete unsaid.content;
+    const raw = { v: 1, tracks: { [ODE]: { 'wait:right': { best: unsaid, last: unsaid } } } };
     expect(parsePracticeRecords(raw)).toEqual(EMPTY_PRACTICE_RECORDS);
   });
 
@@ -178,6 +195,17 @@ describe('keeping a result', () => {
     });
   });
 
+  it('starts afresh on a track whose notes changed but not their number nor length', () => {
+    const old = waitScore({ accuracy: 1, content: 'feedface' });
+    const earlier = withScore(EMPTY_PRACTICE_RECORDS, ODE, 'wait:right', old).records;
+    const worse = waitScore({ accuracy: 0.5 });
+    expect(withScore(earlier, ODE, 'wait:right', worse)).toMatchObject({
+      best: worse,
+      last: worse,
+      newBest: false,
+    });
+  });
+
   it('keeps each way of practising, and each track, to itself', () => {
     let book = withScore(EMPTY_PRACTICE_RECORDS, ODE, 'wait:right', waitScore()).records;
     book = withScore(book, ELISE, 'wait:right', waitScore({ fingerprint: '200:60000' })).records;
@@ -193,6 +221,87 @@ describe('keeping a result', () => {
     expect(practiceModeKey('wait', 'right')).toBe('wait:right');
     expect(practiceModeKey('playAlong', 'both')).toBe('along:both');
     expect(trackFingerprint(SUMMARY)).toBe(FINGERPRINT);
+  });
+});
+
+/** A note of the right hand, as the Library builds one. */
+function note(overrides: Partial<NoteEvent> = {}): NoteEvent {
+  return { id: 'n', midi: 64, startMs: 0, durationMs: 500, velocity: 0.7, ...overrides };
+}
+
+/** The opening of a tune: E4 twice, then F4, all for the right hand. */
+const NOTES: readonly NoteEvent[] = [
+  note({ id: 'a', staff: 'treble' }),
+  note({ id: 'b', startMs: 500, staff: 'treble' }),
+  note({ id: 'c', midi: 65, startMs: 1000, staff: 'treble' }),
+];
+
+describe('the notes a result is played on', () => {
+  const changed = (index: number, change: Partial<NoteEvent>) =>
+    NOTES.map((each, at) => (at === index ? { ...each, ...change } : each));
+
+  it('come to the same content for the same take, however its notes are listed', () => {
+    expect(takeContent(NOTES)).toBe(takeContent(NOTES.map((each) => ({ ...each }))));
+    expect(takeContent(NOTES)).toBe(takeContent([...NOTES].reverse()));
+    expect(takeContent(NOTES)).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('come to new content for a note moved, lengthened, retuned, handed over or hidden', () => {
+    const content = takeContent(NOTES);
+    expect(takeContent(changed(1, { startMs: 520 }))).not.toBe(content);
+    expect(takeContent(changed(1, { durationMs: 400 }))).not.toBe(content);
+    expect(takeContent(changed(2, { midi: 67 }))).not.toBe(content);
+    expect(takeContent(changed(2, { staff: 'bass' }))).not.toBe(content);
+    expect(takeContent(changed(0, { hidden: true }))).not.toBe(content);
+  });
+
+  it('come to the same content however loud the notes, which asks nothing new', () => {
+    expect(takeContent(changed(0, { velocity: 0.2 }))).toBe(takeContent(NOTES));
+  });
+
+  it('are hashed from the fields alone, as the end-to-end tests hash a track', () => {
+    expect(
+      contentHash(
+        NOTES.map(({ startMs, midi, durationMs }) => ({
+          startMs,
+          midi,
+          durationMs,
+          hand: 'right',
+          hidden: false,
+        })),
+      ),
+    ).toBe(takeContent(NOTES));
+  });
+});
+
+describe('putting away the results of notes a track no longer has', () => {
+  it('drops each way practised on other notes, and keeps the rest', () => {
+    const stale: ModeRecord = {
+      best: waitScore({ content: 'feedface' }),
+      last: waitScore({ content: 'feedface' }),
+    };
+    const current: ModeRecord = { best: keepTimeScore(), last: keepTimeScore() };
+    const elise: ModeRecord = {
+      best: waitScore({ content: 'feedface' }),
+      last: waitScore({ content: 'feedface' }),
+    };
+    const book = records({
+      [ODE]: { 'wait:right': stale, 'along:both': current },
+      [ELISE]: { 'wait:left': elise },
+    });
+    expect(withoutOtherContent(book, ODE, CONTENT)).toEqual(
+      records({ [ODE]: { 'along:both': current }, [ELISE]: { 'wait:left': elise } }),
+    );
+    // A track with nothing left goes altogether.
+    expect(withoutOtherContent(book, ELISE, CONTENT)).toEqual(
+      records({ [ODE]: { 'wait:right': stale, 'along:both': current } }),
+    );
+  });
+
+  it('has nothing to put away for a track whose every result is of its notes, or none', () => {
+    const book = records({ [ODE]: { 'wait:right': { best: waitScore(), last: waitScore() } } });
+    expect(withoutOtherContent(book, ODE, CONTENT)).toBeNull();
+    expect(withoutOtherContent(book, ELISE, CONTENT)).toBeNull();
   });
 });
 

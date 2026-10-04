@@ -2,10 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { InputNoteEvent } from '@/audio/AudioEngine';
 import type { NoteEvent, TempoSettings } from '@/domain/takeTypes';
 import { END_GRACE_MS, type PlayAlongDeps } from '@/features/practice/playAlongSession';
-import type {
-  PracticeModeKey,
-  PracticeScore,
-  ResultRecord,
+import {
+  takeContent,
+  type PracticeModeKey,
+  type PracticeScore,
+  type ResultRecord,
 } from '@/features/practice/practiceRecords';
 import {
   createPracticeSession,
@@ -74,16 +75,21 @@ interface Kept {
   score: PracticeScore;
 }
 
+/** The open take's notes, as `takeContent` digests them. */
+const CONTENT = 'c0ffee00';
+
 /**
- * The take open, the catalog's tracks and the results kept, as the session
- * sees them. `keep` answers at once, the score its own best and last, unless
- * a test hands it something else to answer.
+ * The take open, the catalog's tracks, and the results kept and put away, as
+ * the session sees them. `keep` answers at once, the score its own best and
+ * last, unless a test hands it something else to answer.
  */
 const library = {
-  open: { id: 'take', noteCount: 16, durationMs: 16000 },
+  open: { id: 'take', noteCount: 16, durationMs: 16000, content: CONTENT },
   summaries: new Map<string, { noteCount: number; durationMs: number }>(),
   kept: [] as Kept[],
   answer: null as ((kept: Kept) => Promise<ResultRecord>) | null,
+  pruned: [] as { takeId: string; content: string }[],
+  prune: null as (() => Promise<boolean>) | null,
 };
 
 const records: PracticeRecordDeps = {
@@ -93,6 +99,10 @@ const records: PracticeRecordDeps = {
     const kept = { takeId, mode, score };
     library.kept.push(kept);
     return library.answer?.(kept) ?? Promise.resolve({ best: score, last: score, newBest: false });
+  },
+  prune: (takeId, content) => {
+    library.pruned.push({ takeId, content });
+    return library.prune?.() ?? Promise.resolve(false);
   },
 };
 
@@ -117,10 +127,12 @@ beforeEach(() => {
   clocks.audio = 10;
   clocks.page = 5000;
   flashed = [];
-  library.open = { id: 'take', noteCount: 16, durationMs: 16000 };
+  library.open = { id: 'take', noteCount: 16, durationMs: 16000, content: CONTENT };
   library.summaries.clear();
   library.kept = [];
   library.answer = null;
+  library.pruned = [];
+  library.prune = null;
   session = createPracticeSession({
     subscribePractice: practice.subscribe,
     subscribeTake: (listener) => {
@@ -539,7 +551,7 @@ describe('the practice session, keeping a run through a Library track', () => {
     vi.useFakeTimers({ now: new Date('2026-10-04T10:00:00.000Z') });
     // Sixteen notes over sixteen seconds, as the catalog and the take have it.
     library.summaries.set(ODE, { noteCount: 16, durationMs: 16000 });
-    library.open = { id: ODE, noteCount: 16, durationMs: 16000 };
+    library.open = { id: ODE, noteCount: 16, durationMs: 16000, content: CONTENT };
     open = { ...open, id: ODE };
   });
 
@@ -556,6 +568,7 @@ describe('the practice session, keeping a run through a Library track', () => {
       speed: 0.6,
       notes: 2,
       fingerprint: '16:16000',
+      content: CONTENT,
     };
     expect(library.kept).toEqual([{ takeId: ODE, mode: 'wait:left', score }]);
     // Shown at once; its best and last a moment later, once kept.
@@ -586,6 +599,7 @@ describe('the practice session, keeping a run through a Library track', () => {
           speed: 1,
           notes: 3,
           fingerprint: '16:16000',
+          content: CONTENT,
         },
       },
     ]);
@@ -602,7 +616,7 @@ describe('the practice session, keeping a run through a Library track', () => {
   });
 
   it('keeps no run on a take of the user’s', () => {
-    library.open = { id: 'take', noteCount: 16, durationMs: 16000 };
+    library.open = { id: 'take', noteCount: 16, durationMs: 16000, content: CONTENT };
     playOde(1, { takeId: 'take' });
     expect(library.kept).toEqual([]);
     expect(store().result?.runId).toBe(1);
@@ -641,17 +655,42 @@ describe('the practice session, keeping a run through a Library track', () => {
     start(odeRun(1));
     step(1, 0);
     step(1, 500);
-    library.open = { id: 'library:fur-elise', noteCount: 16, durationMs: 16000 };
+    library.open = { id: 'library:fur-elise', noteCount: 16, durationMs: 16000, content: CONTENT };
     end(1);
 
-    library.open = { id: ODE, noteCount: 16, durationMs: 16000 };
+    library.open = { id: ODE, noteCount: 16, durationMs: 16000, content: CONTENT };
     start(odeRun(2));
     step(2, 0);
     step(2, 500);
-    library.open = { id: ODE, noteCount: 15, durationMs: 16000 };
+    library.open = { id: ODE, noteCount: 15, durationMs: 16000, content: CONTENT };
     end(2);
     expect(library.kept).toEqual([]);
     expect(warn).not.toHaveBeenCalled();
+  });
+
+  it('puts away a Library track’s results of other notes once it is open', () => {
+    open = { ...open, id: 'take' };
+    const notes = [...NOTES, { id: 'n3', midi: 67, startMs: 1000, durationMs: 400, velocity: 0.7 }];
+    editTake({ id: ODE, notes });
+    expect(library.pruned).toEqual([{ takeId: ODE, content: takeContent(notes) }]);
+  });
+
+  it('puts nothing away for a take of the user’s, or a track already open', () => {
+    open = { ...open, id: 'take' };
+    editTake({ id: 'another-take', notes: NOTES.slice(0, 1) });
+    editTake({ id: ODE });
+    // A new tempo, or new notes from an Undo, on the track already open.
+    editTake({ tempo: { ...TEMPO, bpm: 90 } });
+    editTake({ notes: NOTES });
+    expect(library.pruned).toEqual([{ takeId: ODE, content: takeContent(NOTES.slice(0, 1)) }]);
+  });
+
+  it('says why a track’s results of other notes could not be put away', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    library.prune = () => Promise.reject(new Error('QuotaExceededError'));
+    open = { ...open, id: 'take' };
+    editTake({ id: ODE });
+    await vi.waitFor(() => expect(error).toHaveBeenCalledTimes(1));
   });
 
   it('adds a best and last only to the result they belong to', async () => {

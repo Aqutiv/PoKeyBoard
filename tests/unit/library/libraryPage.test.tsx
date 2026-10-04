@@ -33,6 +33,7 @@ function score(takeId: string, overrides: Partial<PracticeScore> = {}): Practice
     speed: 1,
     notes: 25,
     fingerprint: fingerprintOf(takeId),
+    content: 'c0ffee00',
     ...overrides,
   };
 }

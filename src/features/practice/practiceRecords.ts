@@ -1,8 +1,12 @@
 import { z } from 'zod';
+import { noteHand } from '@/domain/hands';
 import { isLibraryTakeId } from '@/domain/libraryTakes';
+import { isHiddenNote } from '@/domain/noteEvents';
+import type { NoteEvent } from '@/domain/takeTypes';
 import type { TrainingHand } from '@/domain/trainingGate';
 import type { PracticeStyle } from '@/features/transport/modes';
 import type { PracticeRun, RunEndReason } from '@/features/transport/practiceEvents';
+import { contentHash } from './contentHash';
 
 /**
  * A best and a last result for each Library track, for each way it has been
@@ -11,11 +15,13 @@ import type { PracticeRun, RunEndReason } from '@/features/transport/practiceEve
  * alone, in one metadata row (`practiceResultsRepository`), and never in a
  * backup.
  *
- * A result is of the track as it was when it was played, which its
- * fingerprint says: the track's notes and length, as the catalog counts them.
- * Once a track changes, a score transcribed again or a manifest regenerated,
- * its old results measure nothing: practising it again starts afresh, and the
- * Library shows none of them meanwhile.
+ * A result is of the track as it was when it was played, which two things
+ * say: its fingerprint, the track's notes and length as the catalog counts
+ * them, and its content, a digest of the very notes it asked for and when
+ * (`takeContent`). Once a track changes, a score transcribed again or a
+ * manifest regenerated, its old results measure nothing: practising it again
+ * starts afresh, and they go from the Library, with a changed count or length
+ * at once, and with only changed notes the first time the track is opened.
  */
 
 /** A way of practising a track: waiting for the player, or keeping time (`along`), and the hand. */
@@ -39,6 +45,8 @@ export interface PracticeScore {
   notes: number;
   /** The track it was played on, as `trackFingerprint` writes it. */
   fingerprint: string;
+  /** The notes it was played on, as `takeContent` digests them. */
+  content: string;
 }
 
 /** A way of practising a track: its best result so far, and its last. */
@@ -95,6 +103,29 @@ export function trackFingerprint({
 }
 
 /**
+ * A digest of a take's notes as practice asks for them and times them: each
+ * note's start, key, length, hand and whether it is hidden (`contentHash`).
+ * The catalog counts a track's notes and its length, which a new version can
+ * keep while moving a note, retuning one, or giving one to the other hand.
+ */
+export function takeContent(notes: readonly NoteEvent[]): string {
+  return contentHash(
+    notes.map((note) => ({
+      startMs: note.startMs,
+      midi: note.midi,
+      durationMs: note.durationMs,
+      hand: noteHand(note),
+      hidden: isHiddenNote(note),
+    })),
+  );
+}
+
+/** Whether two results are of one track as it was: its count, its length and its very notes. */
+function sameTrack(a: PracticeScore, b: PracticeScore): boolean {
+  return a.fingerprint === b.fingerprint && a.content === b.content;
+}
+
+/**
  * Whether a run went through the whole of what it asks for, as a best has to:
  * from no later than its first note to the take's end, round no loop. A run
  * paused, stopped or sent elsewhere is over, however far it got; one that
@@ -148,7 +179,7 @@ export function withScore(
 ): ResultRecord & { records: PracticeRecords } {
   const track = records.tracks[takeId] ?? {};
   const earlier = track[mode]?.best;
-  const standing = earlier?.fingerprint === score.fingerprint ? earlier : undefined;
+  const standing = earlier && sameTrack(earlier, score) ? earlier : undefined;
   const newBest = standing !== undefined && isBetter(score, standing, practiceModeOf(mode).style);
   const best = standing === undefined || newBest ? score : standing;
   return {
@@ -175,8 +206,33 @@ export function isOwnBest({ best, last }: ResultRecord): boolean {
     best.onTime === last.onTime &&
     best.speed === last.speed &&
     best.notes === last.notes &&
-    best.fingerprint === last.fingerprint
+    sameTrack(best, last)
   );
+}
+
+/**
+ * `records` without the ways `takeId` was practised on notes other than
+ * `content`'s: the results of a version of the track since changed. Null when
+ * there are none, so there is nothing to write. A track left with no results
+ * goes altogether.
+ */
+export function withoutOtherContent(
+  records: PracticeRecords,
+  takeId: string,
+  content: string,
+): PracticeRecords | null {
+  const track = records.tracks[takeId];
+  if (!track) return null;
+  const kept: TrackRecords = {};
+  let dropped = false;
+  for (const [mode, record] of Object.entries(track) as [PracticeModeKey, ModeRecord][]) {
+    if (record.best.content === content && record.last.content === content) kept[mode] = record;
+    else dropped = true;
+  }
+  if (!dropped) return null;
+  const others = Object.entries(records.tracks).filter(([id]) => id !== takeId);
+  if (Object.keys(kept).length > 0) others.push([takeId, kept]);
+  return { v: 1, tracks: Object.fromEntries(others) };
 }
 
 /**
@@ -231,6 +287,7 @@ const waitScoreSchema = z.object({
   speed: z.number().positive(),
   notes: z.number().int().positive(),
   fingerprint: z.string().min(1),
+  content: z.string().min(1),
 });
 
 /** A Keep-time result says how many of its notes were on time. */
@@ -238,9 +295,7 @@ const keepTimeScoreSchema = waitScoreSchema.extend({ onTime: share });
 
 /** A best and a last of one track as it was: of two versions, neither measures the other. */
 function modeRecordSchema(score: typeof waitScoreSchema | typeof keepTimeScoreSchema) {
-  return z
-    .object({ best: score, last: score })
-    .refine(({ best, last }) => best.fingerprint === last.fingerprint);
+  return z.object({ best: score, last: score }).refine(({ best, last }) => sameTrack(best, last));
 }
 
 const waitRecordSchema = modeRecordSchema(waitScoreSchema);

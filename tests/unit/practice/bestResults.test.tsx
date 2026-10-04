@@ -54,6 +54,7 @@ function score(overrides: Partial<PracticeScore> = {}): PracticeScore {
     speed: 1,
     notes: 10,
     fingerprint: '16:16000',
+    content: 'c0ffee00',
     ...overrides,
   };
 }

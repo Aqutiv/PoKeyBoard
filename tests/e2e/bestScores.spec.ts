@@ -1,24 +1,44 @@
 import type { Page } from '@playwright/test';
+import { ODE_TO_JOY_FIRST_STEPS } from '../../src/features/library/tracks/odeToJoyFirstSteps';
+import { contentHash } from '../../src/features/practice/contentHash';
 import { expect, test } from './fixtures';
 import { gotoAppReady, nav, transport } from './helpers';
 
 /** Eight bars for the right hand alone, authored in the repo: nothing to fetch. */
 const TITLE = 'Ode to Joy (first steps)';
 const TAKE_ID = 'library:ode-to-joy-first-steps';
-/** The track as the catalog counts it, 28 notes over 32 seconds, as a kept result says. */
-const FINGERPRINT = '28:32000';
 
-/** The computer key for each note the tune asks for (computerKeyboard.ts, from C4). */
-const KEY_FOR_NOTE: Record<string, string> = {
-  C4: 'KeyA',
-  D4: 'KeyS',
-  E4: 'KeyD',
-  F4: 'KeyF',
-  G4: 'KeyG',
+/** The computer key, and the key, for each note the tune asks for (computerKeyboard.ts, from C4). */
+const KEYS: Record<string, { code: string; midi: number }> = {
+  C4: { code: 'KeyA', midi: 60 },
+  D4: { code: 'KeyS', midi: 62 },
+  E4: { code: 'KeyD', midi: 64 },
+  F4: { code: 'KeyF', midi: 65 },
+  G4: { code: 'KeyG', midi: 67 },
 };
 
+/**
+ * The tune's notes, as the app builds them from its events (`buildLibraryTake`)
+ * and practice weighs them (`takeContent`): one tempo throughout, so a beat is
+ * a fixed number of milliseconds, every note the right hand's, and none hidden.
+ */
+const TUNE = ODE_TO_JOY_FIRST_STEPS.events.map(([beat, note, beats]) => ({
+  startMs: Math.round((beat * 60_000) / ODE_TO_JOY_FIRST_STEPS.bpm),
+  midi: KEYS[note as string]?.midi ?? Number.NaN,
+  durationMs: Math.round((beats * 60_000) / ODE_TO_JOY_FIRST_STEPS.bpm),
+  hand: 'right' as const,
+  hidden: false,
+}));
+
 /** The notes the right hand plays: both phrases, fourteen each. */
-const NOTES = 28;
+const NOTES = TUNE.length;
+
+/**
+ * What a result kept for the tune says of it: its count and length, as the
+ * catalog has them, and its notes.
+ */
+const FINGERPRINT = `${NOTES}:${Math.max(...TUNE.map((note) => note.startMs + note.durationMs))}`;
+const CONTENT = contentHash(TUNE);
 
 const card = (page: Page) => page.getByRole('group', { name: 'Practice results' });
 
@@ -46,10 +66,10 @@ async function playEveryNote(page: Page, wrongAt = -1): Promise<void> {
   for (let played = 0; played < NOTES; played += 1) {
     await expect(held).toHaveCount(1, { timeout: 10_000 });
     const note = ((await held.getAttribute('aria-label')) ?? '').replace(/ key$/, '');
-    const key = KEY_FOR_NOTE[note];
+    const key = KEYS[note];
     if (!key) throw new Error(`The tune asked for ${note}, which no key here plays`);
     if (played === wrongAt) await page.keyboard.press('KeyH'); // A4, asked for nowhere
-    await page.keyboard.press(key);
+    await page.keyboard.press(key.code);
     // Let go before the next hold, which may ask for the same key again.
     await expect(held).toHaveCount(0);
   }
@@ -59,10 +79,17 @@ async function playEveryNote(page: Page, wrongAt = -1): Promise<void> {
 /**
  * Keep an earlier result as the tune's best, and last, waiting for the right
  * hand: written straight into its metadata row (practiceResultsRepository),
- * as a run on another day would have left it.
+ * as a run on another day would have left it, on these very notes, so that
+ * opening the tune keeps it.
  */
 async function keepEarlierBest(page: Page, best: { accuracy: number; speed: number }) {
-  const score = { at: '2026-10-01T10:00:00.000Z', notes: NOTES, fingerprint: FINGERPRINT, ...best };
+  const score = {
+    at: '2026-10-01T10:00:00.000Z',
+    notes: NOTES,
+    fingerprint: FINGERPRINT,
+    content: CONTENT,
+    ...best,
+  };
   await page.evaluate(
     ({ takeId, score: kept }) =>
       new Promise<void>((resolve, reject) => {

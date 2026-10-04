@@ -335,9 +335,16 @@ the share right first time ranks results, then the speed; keeping time, the
 share on time, then the notes played, then the speed (`isBetter`). A faster run
 has to be as right to beat a slower one, so a slow perfect run stays the best;
 the card says the best's speed beside it, so the trade is never hidden. Each
-result carries its track's fingerprint, the catalog's note count and length:
-once a track changes, that way of practising it starts afresh, and the Library
-shows none of its old results. A run is only a new best when it beats a best of
+result carries its track's fingerprint, the catalog's note count and length,
+and its content, a digest of the very notes the run was played on
+(`takeContent`: FNV-1a over each note's start, key, length, hand and whether it
+is hidden, in a fixed order; tempo and velocity, which change neither what is
+asked for nor when, left out). Once either changes, that way of practising the
+track starts afresh. The Library has only the catalog's counts, and shows none
+of a track's results once its count or length changes; results of notes changed
+without either are put away the first time the track is opened, when the
+session hashes its notes (`prunePracticeRecords`, in one transaction, writing
+nothing when nothing differs). A run is only a new best when it beats a best of
 the track as it stands; a first result is the best, but not a new one.
 
 The practice session keeps a complete run as it ends, after showing its card:

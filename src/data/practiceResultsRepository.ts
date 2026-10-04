@@ -1,5 +1,6 @@
 import {
   parsePracticeRecords,
+  withoutOtherContent,
   withScore,
   type PracticeModeKey,
   type PracticeRecords,
@@ -44,5 +45,20 @@ export async function recordPracticeScore(
     );
     await setMetadata(META_PRACTICE_RESULTS, records);
     return { best, last, newBest };
+  });
+}
+
+/**
+ * Put away `takeId`'s results of notes other than `content`'s, a version of
+ * the track since changed (`withoutOtherContent`), in one transaction as a
+ * result is kept. Resolves to whether there were any: with none, nothing is
+ * written.
+ */
+export async function prunePracticeRecords(takeId: string, content: string): Promise<boolean> {
+  return db.transaction('rw', db.metadata, async () => {
+    const records = withoutOtherContent(await loadPracticeRecords(), takeId, content);
+    if (records === null) return false;
+    await setMetadata(META_PRACTICE_RESULTS, records);
+    return true;
   });
 }

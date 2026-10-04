@@ -1,5 +1,5 @@
 import { audioEngine } from '@/audio/AudioEngine';
-import { recordPracticeScore } from '@/data/practiceResultsRepository';
+import { prunePracticeRecords, recordPracticeScore } from '@/data/practiceResultsRepository';
 import { libraryTrackSummary } from '@/features/library/catalog';
 import type { PracticeEvent, PracticeRun, RunEndReason } from '@/features/transport/practiceEvents';
 import { transportController } from '@/features/transport/transportController';
@@ -14,6 +14,7 @@ import { startPlayAlongRun, type PlayAlongDeps, type PlayAlongRun } from './play
 import {
   isCompleteRun,
   practiceModeKey,
+  takeContent,
   trackFingerprint,
   type PracticeModeKey,
   type PracticeScore,
@@ -45,12 +46,23 @@ export interface PracticeSessionDeps {
 
 /** What keeping a run's result among its track's results needs; injected, for the tests. */
 export interface PracticeRecordDeps {
-  /** The take open now: its id, and how many notes and milliseconds it has. */
-  openTake(): { id: string; noteCount: number; durationMs: number };
+  /**
+   * The take open now: its id, how many notes and milliseconds it has, and
+   * its notes as `takeContent` digests them.
+   */
+  openTake(): { id: string; noteCount: number; durationMs: number; content: string };
   /** A Library track's catalog entry, by its take id, or none for a take of the user's. */
   trackSummary(takeId: string): { noteCount: number; durationMs: number } | undefined;
   /** Keep a score among its track's results, and say what its best and last are now. */
   keep(takeId: string, mode: PracticeModeKey, score: PracticeScore): Promise<ResultRecord>;
+  /** Put away a track's results of notes other than `content`'s: `prunePracticeRecords`. */
+  prune(takeId: string, content: string): Promise<boolean>;
+}
+
+/** The track a result is kept for, as it was: the catalog's count and length, and its notes. */
+interface KeptTrack {
+  fingerprint: string;
+  content: string;
 }
 
 export interface PracticeSession {
@@ -99,14 +111,15 @@ export function createPracticeSession({
   let disposed = false;
 
   /**
-   * The fingerprint a run's result is kept under, or null for a run that is
-   * not one to keep. Only a run through the whole of a Library track counts
+   * The track a run's result is kept for, or null for a run that is not one to
+   * keep. Only a run through the whole of a Library track counts
    * (`isCompleteRun`), on the notes the catalog has for it, with that track
-   * still open, as it was, when the run ended. A run on notes the catalog does
-   * not describe means a classics manifest out of date with its scores, which
-   * is worth a warning; any other run is simply not one to keep.
+   * still open, as it was, when the run ended: its notes, read off the take
+   * then, say which version of the track it was. A run on notes the catalog
+   * does not describe means a classics manifest out of date with its scores,
+   * which is worth a warning; any other run is simply not one to keep.
    */
-  const fingerprintToKeep = (run: PracticeRun, reason: RunEndReason): string | null => {
+  const trackToKeep = (run: PracticeRun, reason: RunEndReason): KeptTrack | null => {
     if (!isCompleteRun(run, reason)) return null;
     const summary = records.trackSummary(run.takeId);
     if (!summary) return null;
@@ -123,7 +136,7 @@ export function createPracticeSession({
       open.id === run.takeId &&
       open.noteCount === run.noteCount &&
       open.durationMs === run.takeDurationMs;
-    return unchanged ? trackFingerprint(summary) : null;
+    return unchanged ? { fingerprint: trackFingerprint(summary), content: open.content } : null;
   };
 
   /**
@@ -131,9 +144,9 @@ export function createPracticeSession({
    * last to it, if it is still the result shown. In the background: a write
    * that fails costs the record, never the card.
    */
-  const keep = (result: PracticeResult, fingerprint: string, at: string): void => {
+  const keep = (result: PracticeResult, track: KeptTrack, at: string): void => {
     const mode = practiceModeKey(result.style, result.hand);
-    records.keep(result.takeId, mode, scoreOf(result, fingerprint, at)).then(
+    records.keep(result.takeId, mode, scoreOf(result, track, at)).then(
       (record) => {
         if (!disposed) store.attachRecord(result.runId, record);
       },
@@ -165,7 +178,7 @@ export function createPracticeSession({
     current = null;
     // Whether the run is one to keep is settled as it ends: by the time a
     // Keep-time run's late notes are in, another take may be open.
-    const fingerprint = reading.spoiled ? null : fingerprintToKeep(run, event.reason);
+    const track = reading.spoiled ? null : trackToKeep(run, event.reason);
     const endedAt = new Date().toISOString();
     if (along) {
       // At once, or once its last notes have had time to be played late. The
@@ -187,7 +200,7 @@ export function createPracticeSession({
           keepTime,
         };
         store.show(result);
-        if (fingerprint !== null) keep(result, fingerprint, endedAt);
+        if (track !== null) keep(result, track, endedAt);
       });
     } else if (!reading.spoiled) {
       const wait = reduceWaitRun(run, events);
@@ -203,7 +216,7 @@ export function createPracticeSession({
           wait,
         };
         store.show(result);
-        if (fingerprint !== null) keep(result, fingerprint, endedAt);
+        if (track !== null) keep(result, track, endedAt);
       }
     }
     store.runEnded(run.runId);
@@ -220,6 +233,17 @@ export function createPracticeSession({
   const unsubscribeTake = subscribeTake((take, previous) => {
     store.keepOnlyTake(take);
     if (take.notes !== previous.notes) store.dismiss();
+    // A Library track just opened puts away its results of notes it no longer
+    // has, so the Library's chip, which cannot see a track's notes without
+    // fetching its score, never shows them again. Only once it is open, its
+    // notes all there: a score still loading has nothing to compare yet.
+    if (take.id !== previous.id && records.trackSummary(take.id)) {
+      records
+        .prune(take.id, takeContent(take.notes))
+        .catch((error: unknown) =>
+          console.error('Putting away a track’s practice results failed:', error),
+        );
+    }
     for (const reading of current ? [current, ...finishing] : finishing) {
       if (
         take.id !== reading.run.takeId ||
@@ -248,7 +272,7 @@ export function createPracticeSession({
  * the steps, waiting for the player; keeping time, the notes played and the
  * share on time, of the notes judged.
  */
-function scoreOf(result: PracticeResult, fingerprint: string, at: string): PracticeScore {
+function scoreOf(result: PracticeResult, track: KeptTrack, at: string): PracticeScore {
   if (result.style === 'wait') {
     const { wait } = result;
     return {
@@ -256,7 +280,7 @@ function scoreOf(result: PracticeResult, fingerprint: string, at: string): Pract
       accuracy: wait.accuracy,
       speed: result.slowestSpeed,
       notes: wait.steps,
-      fingerprint,
+      ...track,
     };
   }
   const { keepTime } = result;
@@ -266,7 +290,7 @@ function scoreOf(result: PracticeResult, fingerprint: string, at: string): Pract
     onTime: keepTime.onTimeShare,
     speed: result.slowestSpeed,
     notes: keepTime.notes,
-    fingerprint,
+    ...track,
   };
 }
 
@@ -307,10 +331,16 @@ export const practiceSession = {
       records: {
         openTake: () => {
           const { take } = useTakeStore.getState();
-          return { id: take.id, noteCount: take.notes.length, durationMs: take.durationMs };
+          return {
+            id: take.id,
+            noteCount: take.notes.length,
+            durationMs: take.durationMs,
+            content: takeContent(take.notes),
+          };
         },
         trackSummary: (takeId) => libraryTrackSummary(takeId),
         keep: (takeId, mode, score) => recordPracticeScore(takeId, mode, score),
+        prune: (takeId, content) => prunePracticeRecords(takeId, content),
       },
     });
   },
