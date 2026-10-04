@@ -167,6 +167,54 @@ stopped; `speed`; and `run-end`. Listeners are told synchronously, from inside
 the command, and one that throws is reported and passed over: nothing a listener
 does can stop the transport finishing what it started.
 
+## Keep time
+
+Keep time is the other way to practise a hand: the music never waits, and the
+hand's notes are left for the player to play in time with the rest. The style
+lives in the playback mode itself (`playalong-left|right|both`, beside the
+`training-*` modes of Wait for me), not in a setting of its own, because the
+mode is what everything else already reads. A Learn hand-off sets a `training-*`
+mode, so it opens in Wait for me as its copy promises, whatever style the player
+last chose on Play. That last choice (`practiceStyle`) is only the Modes menu's
+memory, the style a hand picked from Listen starts in; the transport never reads
+it.
+
+Play under a Keep-time mode starts a practice run as a training mode does, with
+`style: 'playAlong'`, and the run is what mutes the hand. `playAlongMutedIds`
+lists the notes it asks for, with any hidden copy struck on the same key at the
+same moment, and the scheduler skips those ids beside the silent notes. A hidden
+trill beside a written note still sounds: nothing on the page asks the player
+for it. There is no gate and no input listener. The muting ends with the run, so
+playback that carries on without it, after a change of page say, plays the take
+whole, as a run that waits leaves its holds behind.
+
+A fresh Keep-time run is counted in, never less than a bar
+(`keepTimeCountInMs`: the take's count-in at the tempo in force where the run
+starts, stretched by the practice speed). The music will not wait, so the player
+has to have heard the beat to come in on it. The count-in is a pre-roll inside
+`playing`, not a state of its own: the clock is anchored past it and runs toward
+the run's start, the playhead is held there (`getPlayheadMs`), `isCountingIn`
+says so, and the falling notes fall in to meet it as they do for a recording's
+count-in. Its clicks are a steady grid that stops short of the anchor, joined to
+the take's own grid when the metronome is on, so the run's first beat is queued
+ahead like any other click and lands with the music. The handover comes on the
+scheduler tick that finds the audio clock past the anchor rather than on a
+timeout, which a background tab would hold back; the metronome then clicks the
+take's grid if it is on and stops queuing if not. A loop's passes are one run,
+so only the first is counted in. A change of speed during the count-in starts
+the run again (`restart`), since the clicks count the speed it will play at;
+after it, the speed changes as it does for any run.
+
+Neither the muting nor the count-in can change under music already moving, so
+choosing another style or another hand, to or from Keep time, ends the run
+(`mode`) and pauses where playback is; at a hold, the hold is dropped rather
+than let through. The Modes menu does nothing for a choice already made, so a
+second click on it never pauses a run or lets a hold through. A run that would
+sound nothing (both hands, or the hand of a piece written for one) turns the
+metronome on at its start, visibly, for the player to turn off: without it,
+nothing would keep the beat. It goes off again when that run ends, unless the
+player has touched its switch in the meantime, which makes the choice theirs.
+
 ## Choosing a piano
 
 `audio/instruments.ts` lists the selectable pianos, each one a versioned sample
