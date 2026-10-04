@@ -140,6 +140,23 @@ export const es: Messages = {
     loopSection: ({ bars }) => (bars === 1 ? 'Repetir este compás.' : 'Repetir estos compases.'),
     passCell: ({ pass, good, total }) => `Vuelta ${pass}: ${good} de ${total} bien a la primera`,
     summaryWait: ({ facts }) => `Resultados de la práctica: ${facts}.`,
+    onTime: ({ good, total }) => `${good} de ${total} a tiempo`,
+    hit: ({ count }) => `${count} ${count === 1 ? 'acierto' : 'aciertos'}`,
+    early: ({ count }) => `${count} ${count === 1 ? 'adelantada' : 'adelantadas'}`,
+    late: ({ count }) => `${count} ${count === 1 ? 'atrasada' : 'atrasadas'}`,
+    missed: ({ count }) => `${count} sin tocar`,
+    wrongNotes: ({ count }) => `${count} ${count === 1 ? 'nota incorrecta' : 'notas incorrectas'}`,
+    rushing: ({ ms }) => `Te adelantas un poco (unos ${ms} ms antes)`,
+    dragging: ({ ms }) => `Te atrasas un poco (unos ${ms} ms tarde)`,
+    rushingShort: 'Te adelantas',
+    draggingShort: 'Te atrasas',
+    consistentlyLate: 'Siempre igual de tarde: quizá sea la latencia de tu audio (¿Bluetooth?)',
+    consistentlyLateShort: '¿Latencia del audio?',
+    sectionCellKeepTime: ({ from, to, good, total }) =>
+      `${from === to ? `Compás ${from}` : `Compases ${from}–${to}`}: ${good} de ${total} a tiempo.`,
+    passCellKeepTime: ({ pass, good, total }) => `Vuelta ${pass}: ${good} de ${total} a tiempo`,
+    summaryKeepTime: ({ facts, remarks }) =>
+      `Resultados de la práctica: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
   },
   metronome: {
     groupLabel: 'Metrónomo',

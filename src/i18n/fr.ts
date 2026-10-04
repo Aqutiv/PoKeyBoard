@@ -144,6 +144,24 @@ export const fr: Messages = {
     passCell: ({ pass, good, total }) =>
       `Tour ${pass} : ${good} sur ${total} ${good > 1 ? 'justes' : 'juste'} du premier coup`,
     summaryWait: ({ facts }) => `Résultats de l’entraînement : ${facts}.`,
+    onTime: ({ good, total }) => `${good} sur ${total} à temps`,
+    hit: ({ count }) => `${count} ${count > 1 ? 'jouées' : 'jouée'}`,
+    early: ({ count }) => `${count} en avance`,
+    late: ({ count }) => `${count} en retard`,
+    missed: ({ count }) => `${count} ${count > 1 ? 'manquées' : 'manquée'}`,
+    wrongNotes: ({ count }) => `${count} ${count > 1 ? 'fausses notes' : 'fausse note'}`,
+    rushing: ({ ms }) => `Vous pressez un peu (environ ${ms} ms en avance)`,
+    dragging: ({ ms }) => `Vous traînez un peu (environ ${ms} ms en retard)`,
+    rushingShort: 'Vous pressez',
+    draggingShort: 'Vous traînez',
+    consistentlyLate:
+      'Toujours autant en retard : peut-être la latence de votre audio (Bluetooth ?)',
+    consistentlyLateShort: 'Latence audio ?',
+    sectionCellKeepTime: ({ from, to, good, total }) =>
+      `${from === to ? `Mesure ${from}` : `Mesures ${from}–${to}`} : ${good} sur ${total} à temps.`,
+    passCellKeepTime: ({ pass, good, total }) => `Tour ${pass} : ${good} sur ${total} à temps`,
+    summaryKeepTime: ({ facts, remarks }) =>
+      `Résultats de l’entraînement : ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
   },
   metronome: {
     groupLabel: 'Métronome',

@@ -145,6 +145,24 @@ export const mg: Messages = {
     passCell: ({ pass, good, total }) =>
       `Fihodinana ${pass}: ${good} amin’ny ${total} marina avy hatrany`,
     summaryWait: ({ facts }) => `Vokatry ny fanazaran-tena: ${facts}.`,
+    onTime: ({ good, total }) => `${good} amin’ny ${total} ara-potoana`,
+    hit: ({ count }) => `voatendry ${count}`,
+    early: ({ count }) => `aloha loatra ${count}`,
+    late: ({ count }) => `tara ${count}`,
+    missed: ({ count }) => `tsy voatendry ${count}`,
+    wrongNotes: ({ count }) => `naoty ${count} diso`,
+    rushing: ({ ms }) => `Somary maika ianao (aloha manodidina ny ${ms} ms)`,
+    dragging: ({ ms }) => `Somary miadana ianao (tara manodidina ny ${ms} ms)`,
+    rushingShort: 'Maika ianao',
+    draggingShort: 'Miadana ianao',
+    consistentlyLate: 'Tara mitovy foana: angamba ny fahatarain’ny feo (Bluetooth?)',
+    consistentlyLateShort: 'Feo tara?',
+    sectionCellKeepTime: ({ from, to, good, total }) =>
+      `Mizana ${from === to ? from : `${from}–${to}`}: ${good} amin’ny ${total} ara-potoana.`,
+    passCellKeepTime: ({ pass, good, total }) =>
+      `Fihodinana ${pass}: ${good} amin’ny ${total} ara-potoana`,
+    summaryKeepTime: ({ facts, remarks }) =>
+      `Vokatry ny fanazaran-tena: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
   },
   metronome: {
     groupLabel: 'Metronoma',

@@ -142,6 +142,23 @@ export const en: Messages = {
     loopSection: ({ bars }) => (bars === 1 ? 'Loop this bar.' : 'Loop these bars.'),
     passCell: ({ pass, good, total }) => `Pass ${pass}: ${good} of ${total} right first time`,
     summaryWait: ({ facts }) => `Practice results: ${facts}.`,
+    onTime: ({ good, total }) => `${good} of ${total} on time`,
+    hit: ({ count }) => `${count} hit`,
+    early: ({ count }) => `${count} early`,
+    late: ({ count }) => `${count} late`,
+    missed: ({ count }) => `${count} missed`,
+    wrongNotes: ({ count }) => `${count} wrong note${count === 1 ? '' : 's'}`,
+    rushing: ({ ms }) => `You rush a little (about ${ms} ms early)`,
+    dragging: ({ ms }) => `You drag a little (about ${ms} ms late)`,
+    rushingShort: 'You rush',
+    draggingShort: 'You drag',
+    consistentlyLate: 'Always about that late: maybe your audio’s delay (Bluetooth?)',
+    consistentlyLateShort: 'Audio delay?',
+    sectionCellKeepTime: ({ from, to, good, total }) =>
+      `${from === to ? `Bar ${from}` : `Bars ${from}–${to}`}: ${good} of ${total} on time.`,
+    passCellKeepTime: ({ pass, good, total }) => `Pass ${pass}: ${good} of ${total} on time`,
+    summaryKeepTime: ({ facts, remarks }) =>
+      `Practice results: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
   },
   metronome: {
     groupLabel: 'Metronome',
