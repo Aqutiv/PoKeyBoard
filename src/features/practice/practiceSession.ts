@@ -2,6 +2,7 @@ import type { PracticeEvent, PracticeRun } from '@/features/transport/practiceEv
 import { transportController } from '@/features/transport/transportController';
 import { usePracticeStore, type OpenTake, type PracticeState } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
+import { sameBarGrid } from './resultCells';
 import { reduceWaitRun } from './trainingReport';
 
 /**
@@ -35,12 +36,15 @@ export function createPracticeSession({
   subscribeTake,
   store,
 }: PracticeSessionDeps): PracticeSession {
-  /** The run under way and its events so far; null between runs. */
-  let current: { run: PracticeRun; events: PracticeEvent[] } | null = null;
+  /**
+   * The run under way and its events so far; null between runs. `spoiled`
+   * once the take changed under it in a way its result could not describe.
+   */
+  let current: { run: PracticeRun; events: PracticeEvent[]; spoiled: boolean } | null = null;
 
   const onEvent = (event: PracticeEvent): void => {
     if (event.type === 'run-start') {
-      current = { run: event.run, events: [] };
+      current = { run: event.run, events: [], spoiled: false };
       store.runStarted(event.runId, event.run.takeId, event.run.style);
       return;
     }
@@ -51,9 +55,9 @@ export function createPracticeSession({
       if (current.run.style === 'wait') current.events.push(event);
       return;
     }
-    const { run, events } = current;
+    const { run, events, spoiled } = current;
     current = null;
-    if (run.style === 'wait') {
+    if (run.style === 'wait' && !spoiled) {
       const wait = reduceWaitRun(run, events);
       if (wait.steps >= MIN_RESULT_STEPS) {
         store.show({
@@ -75,10 +79,19 @@ export function createPracticeSession({
   // A result is about the take it was played on, as it was: opening another
   // take puts it away, and so does a tempo that moves its bars. A recording
   // pass, a clear or an undo writes the take new notes, and counts made of the
-  // old ones no longer describe it.
+  // old ones no longer describe it. The same edits made while a run is under
+  // way, a tempo at a hold or an Undo pass, spoil the result it would have.
   const unsubscribeTake = subscribeTake((take, previous) => {
     store.keepOnlyTake(take);
     if (take.notes !== previous.notes) store.dismiss();
+    if (
+      current &&
+      (take.id !== current.run.takeId ||
+        take.notes !== previous.notes ||
+        !sameBarGrid(current.run.tempo, take.tempo))
+    ) {
+      current.spoiled = true;
+    }
   });
   return {
     dispose() {

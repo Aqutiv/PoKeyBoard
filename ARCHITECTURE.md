@@ -188,7 +188,9 @@ another take; a result for a run since overtaken is dropped. So does anything
 that makes the result describe a take that is no longer there: a new tempo, time
 signature or tempo change, which moves the bars its sections name (compared by
 value, so a count-in keeps it), and new notes, from a recording pass, a clear or
-an undo. While a recording counts in or runs, the card stands aside.
+an undo. The same edits made while a run is under way, a tempo set at a hold or
+an Undo pass, leave it no card at all. While a recording counts in or runs, the
+card stands aside.
 
 A step is right first time when no wrong key was pressed at it and Play did not
 let it through, so every step played early is. The card adds the wrong keys

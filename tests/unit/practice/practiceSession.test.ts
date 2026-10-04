@@ -139,6 +139,52 @@ describe('the practice session', () => {
     expect(store().result).not.toBeNull();
   });
 
+  // The same edits made while a run is under way, before it has a result:
+  // the run was asked on bars, or notes, the take no longer has.
+  it('has no card for a run whose bars a new tempo moved under it', () => {
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    step(1, 500);
+    editTake({ tempo: { ...TEMPO, bpm: 100 } });
+    end(1);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+
+    // The next run is asked on the bars as they are now.
+    playRun(2, 2, { tempo: { ...TEMPO, bpm: 100 } });
+    expect(store().result?.runId).toBe(2);
+  });
+
+  it('has no card for a run whose bars a new time signature moved under it', () => {
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    editTake({ tempo: { ...TEMPO, timeSignature: { numerator: 3, denominator: 4 } } });
+    step(1, 500);
+    end(1);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+  });
+
+  it('still has a card for a run whose count-in changed under it', () => {
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    editTake({ tempo: { ...TEMPO, countInBars: 2 } });
+    step(1, 500);
+    end(1);
+    expect(store().result?.runId).toBe(1);
+  });
+
+  it('has no card for a run whose take was given new notes under it', () => {
+    // An Undo pass at a hold, say.
+    start(practiceRun({ runId: 1 }));
+    step(1, 0);
+    step(1, 500);
+    editTake({ notes: NOTES.slice(0, 1) });
+    end(1);
+    expect(store().result).toBeNull();
+    expect(store().live).toBeNull();
+  });
+
   // The notes stay where they are when the tempo changes, but the bar lines
   // move: the card's sections, and the steps counted in them, are bars that
   // are no longer there.
