@@ -4,7 +4,7 @@ import { loopBetween } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import { useMessages } from '@/i18n/i18nContext';
 import type { Messages } from '@/i18n/types';
-import { usePracticeStore, type PracticeResult } from '@/state/usePracticeStore';
+import { usePracticeStore, type WaitResult } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { TooltipButton } from '@/ui/TooltipButton';
 import type { BarsCell, ResultCell } from './resultCells';
@@ -55,7 +55,7 @@ const accuracy = (m: Messages, wait: WaitReport) =>
   m.practice.accuracy({ percent: percentRight(wait.rightFirstTime, wait.steps) });
 
 /** The one sentence a screen reader hears for a result: all of it, whatever the screen. */
-function summaryOf(m: Messages, result: PracticeResult): string {
+function summaryOf(m: Messages, result: WaitResult): string {
   const { wait } = result;
   const facts = [`${headline(m, wait)} ${accuracy(m, wait)}`];
   for (const [, text] of fullFacts(m, wait)) facts.push(text);
@@ -158,7 +158,8 @@ export function PracticeResults() {
   const live = usePracticeStore((s) => s.live !== null);
   const desktop = useMediaQuery(DESKTOP_QUERY);
   const compactLandscape = useMediaQuery(COMPACT_LANDSCAPE_QUERY);
-  const shown = live ? null : result;
+  // A Keep-time run's result has a card of its own to come.
+  const shown = live || result?.style !== 'wait' ? null : result;
   const wait = shown?.wait;
   const facts = wait ? (desktop ? fullFacts(m, wait) : shortFacts(m, wait)) : [];
 

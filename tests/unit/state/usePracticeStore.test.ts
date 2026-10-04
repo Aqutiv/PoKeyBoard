@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { usePracticeStore } from '@/state/usePracticeStore';
-import { waitResult } from '../practice/practiceFixtures';
+import { keepTimeResult, waitResult } from '../practice/practiceFixtures';
 
 const store = () => usePracticeStore.getState();
 
@@ -21,6 +21,22 @@ describe('the practice results store', () => {
     const result = waitResult({ runId: 1 });
     store().show(result);
     store().runEnded(1);
+    expect(store().live).toBeNull();
+    expect(store().result).toBe(result);
+  });
+
+  it('holds where a Keep-time run’s presses land while it lasts, and its result after', () => {
+    store().runStarted(3, 'take', 'playAlong', 7180);
+    expect(store().live).toEqual({
+      runId: 3,
+      takeId: 'take',
+      style: 'playAlong',
+      pressOriginMs: 7180,
+    });
+
+    const result = keepTimeResult({ runId: 3 });
+    store().show(result);
+    store().runEnded(3);
     expect(store().live).toBeNull();
     expect(store().result).toBe(result);
   });

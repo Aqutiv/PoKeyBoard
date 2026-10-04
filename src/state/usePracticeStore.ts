@@ -2,6 +2,7 @@ import { create } from 'zustand';
 // Types only: the results are collected outside React, by the practice
 // session, which is what reads the transport's events.
 import type { TrainingHand } from '@/domain/trainingGate';
+import type { KeepTimeReport } from '@/features/practice/playAlongSession';
 import type { WaitReport } from '@/features/practice/trainingReport';
 import type { PracticeStyle } from '@/features/transport/modes';
 import type { RunEndReason } from '@/features/transport/practiceEvents';
@@ -23,14 +24,26 @@ export interface WaitResult extends PracticeResultBase {
   wait: WaitReport;
 }
 
+/** How a Keep-time run went. */
+export interface KeepTimeResult extends PracticeResultBase {
+  style: 'playAlong';
+  keepTime: KeepTimeReport;
+}
+
 /** A finished run's result. Each style of practice brings a report of its own. */
-export type PracticeResult = WaitResult;
+export type PracticeResult = WaitResult | KeepTimeResult;
 
 /** The run under way. */
 export interface LiveRun {
   runId: number;
   takeId: string;
   style: PracticeStyle;
+  /**
+   * For a Keep-time run, the moment on the page's clock a press lands exactly
+   * on the run's start (`PlayAlongRun.pressOriginMs`). The card publishes it
+   * for the end-to-end tests, which play in time from it.
+   */
+  pressOriginMs?: number;
 }
 
 export interface PracticeState {
@@ -41,7 +54,7 @@ export interface PracticeState {
   /** The newest run started, so that a result for an older one is never shown. */
   latestRunId: number | null;
   /** Playing again puts the last result away: it is about the run before. */
-  runStarted(runId: number, takeId: string, style: PracticeStyle): void;
+  runStarted(runId: number, takeId: string, style: PracticeStyle, pressOriginMs?: number): void;
   runEnded(runId: number): void;
   /** Ignored for any run but the newest started, which has overtaken it. */
   show(result: PracticeResult): void;
@@ -59,8 +72,15 @@ export const usePracticeStore = create<PracticeState>()((set) => ({
   result: null,
   live: null,
   latestRunId: null,
-  runStarted: (runId, takeId, style) =>
-    set({ live: { runId, takeId, style }, result: null, latestRunId: runId }),
+  runStarted: (runId, takeId, style, pressOriginMs) =>
+    set({
+      live:
+        pressOriginMs === undefined
+          ? { runId, takeId, style }
+          : { runId, takeId, style, pressOriginMs },
+      result: null,
+      latestRunId: runId,
+    }),
   runEnded: (runId) => set((state) => (state.live?.runId === runId ? { live: null } : state)),
   show: (result) =>
     set((state) =>
