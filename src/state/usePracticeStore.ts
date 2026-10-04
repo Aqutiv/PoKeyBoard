@@ -3,6 +3,7 @@ import { create } from 'zustand';
 // session, which is what reads the transport's events.
 import type { TrainingHand } from '@/domain/trainingGate';
 import type { KeepTimeReport } from '@/features/practice/playAlongSession';
+import type { ResultRecord } from '@/features/practice/practiceRecords';
 import type { WaitReport } from '@/features/practice/trainingReport';
 import type { PracticeStyle } from '@/features/transport/modes';
 import type { RunEndReason } from '@/features/transport/practiceEvents';
@@ -16,6 +17,12 @@ interface PracticeResultBase {
   /** The slowest the run went: the speed it started at, or one it was turned down to. */
   slowestSpeed: number;
   reason: RunEndReason;
+  /**
+   * For a run through the whole of a Library track, the track's best and last
+   * in the way it was practised, the run's own the last: added a moment after
+   * the result itself, once the run is kept among them on the device.
+   */
+  record?: ResultRecord;
 }
 
 /** How a "wait for me" run went. */
@@ -58,6 +65,8 @@ export interface PracticeState {
   runEnded(runId: number): void;
   /** Ignored for any run but the newest started, which has overtaken it. */
   show(result: PracticeResult): void;
+  /** Add the track's best and last to run `runId`'s result, while it is the one shown. */
+  attachRecord(runId: number, record: ResultRecord): void;
   dismiss(): void;
   /** Put away a result for any take but this one, the take now open. */
   keepOnlyTake(takeId: string): void;
@@ -85,6 +94,10 @@ export const usePracticeStore = create<PracticeState>()((set) => ({
   show: (result) =>
     set((state) =>
       state.latestRunId === null || state.latestRunId === result.runId ? { result } : state,
+    ),
+  attachRecord: (runId, record) =>
+    set((state) =>
+      state.result?.runId === runId ? { result: { ...state.result, record } } : state,
     ),
   dismiss: () => set({ result: null }),
   keepOnlyTake: (takeId) =>
