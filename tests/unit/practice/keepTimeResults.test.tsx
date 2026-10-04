@@ -10,12 +10,22 @@ import { usePracticeStore } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { keepTimeReport, keepTimeResult } from './practiceFixtures';
 
-const setLoop = vi.fn();
-const seek = vi.fn();
+/** What the card asked of the transport, in order, and the state it found it in. */
+const transport = vi.hoisted(() => ({
+  calls: [] as unknown[][],
+  state: 'paused',
+  listeners: new Set<() => void>(),
+}));
 vi.mock('@/features/transport/transportController', () => ({
   transportController: {
-    setLoop: (loop: unknown) => setLoop(loop),
-    seek: (ms: number) => seek(ms),
+    getState: () => transport.state,
+    subscribeState: (listener: () => void) => {
+      transport.listeners.add(listener);
+      return () => transport.listeners.delete(listener);
+    },
+    pause: () => transport.calls.push(['pause']),
+    setLoop: (loop: unknown) => transport.calls.push(['setLoop', loop]),
+    seek: (ms: number) => transport.calls.push(['seek', ms]),
   },
 }));
 
@@ -65,8 +75,8 @@ const STEADILY_LATE = keepTimeResult({
 
 beforeEach(() => {
   usePracticeStore.setState({ result: null, live: null, latestRunId: null });
-  setLoop.mockClear();
-  seek.mockClear();
+  transport.calls = [];
+  transport.state = 'paused';
   onScreen('desktop');
 });
 
@@ -180,8 +190,10 @@ describe('the results card for a run kept in time', () => {
     expect(cell).toHaveTextContent(/^1–4 · 64%$/);
     expect(cell!.dataset.grade).toBe('fair');
     fireEvent.click(cell!);
-    expect(setLoop).toHaveBeenCalledWith({ startMs: 0, endMs: 8000 });
-    expect(seek).toHaveBeenCalledWith(0);
+    expect(transport.calls).toEqual([
+      ['setLoop', { startMs: 0, endMs: 8000 }],
+      ['seek', 0],
+    ]);
   });
 
   it('names each pass round a loop by its share on time', () => {

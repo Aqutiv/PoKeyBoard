@@ -1332,6 +1332,9 @@ export class TransportController {
    */
   setSpeed(speed: number): void {
     const next = clampPlaybackSpeed(speed);
+    // The speed already in force, chosen again, changes nothing, and must not
+    // look like a change: during a count-in, that would start the run again.
+    if (next === this.getSpeed()) return;
     useTakeStore.getState().setPlaybackSpeed(next);
     if (this.preRoll) {
       // A count-in counts the beat the run will play to, so at a new speed the
@@ -1587,14 +1590,46 @@ export class TransportController {
   handleNavigation(): void {
     // A wait left armed on another route would resume playback from a
     // keypress the user meant for that page's keyboard. Playback carries on
-    // without its holds, so the practice run ends here.
+    // without its holds, or its muting, so the practice run ends here.
+    const muted = this.playAlongMuted.size > 0;
     this.endPracticeRun('navigation');
     this.clearTrainingGate();
     if (this.state === 'recording' || this.state === 'countIn') {
       this.stop();
     } else if (this.state === 'scrubbing') {
       this.endScrub(this.scrubTimeMs);
+    } else if (this.state === 'playing' && muted) {
+      // The whole take plays on, the player's notes too: those the schedule
+      // has already passed over unqueued, as far as it looks ahead, are queued
+      // after all.
+      this.rescheduleFromNow();
     }
+  }
+
+  /**
+   * Walk the schedule again from where playback is: what was queued and has
+   * not begun is called off, as `retimeRun` calls it off, and queued again
+   * along with whatever the walk passed over. Nothing that has begun is walked
+   * again, so nothing is heard twice.
+   */
+  private rescheduleFromNow(): void {
+    audioEngine.cancelPending('playback', audioEngine.currentTime);
+    this.queuedNotes = [];
+    const loop = this.playLoop;
+    if (this.preRoll) {
+      // Counting in, nothing of the run has begun: it walks from its start.
+      this.schedulePass = 0;
+      this.playCursor = lowerBoundByStart(this.playNotes, this.runFromMs);
+    } else {
+      const nowMs = this.clock.currentVirtualMs();
+      const takeMs = loop ? foldIntoLoop(loop, nowMs) : nowMs;
+      this.schedulePass = loop ? loopPassAt(loop, nowMs) : 0;
+      // From the first note still to begin: one due this very moment has begun.
+      let cursor = lowerBoundByStart(this.playNotes, takeMs);
+      while ((this.playNotes[cursor]?.startMs ?? Number.POSITIVE_INFINITY) <= takeMs) cursor += 1;
+      this.playCursor = cursor;
+    }
+    this.scheduleTick();
   }
 
   private clearScheduler(): void {

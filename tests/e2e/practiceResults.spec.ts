@@ -136,7 +136,7 @@ test.describe('practice results', () => {
   test.describe('on a narrow phone', () => {
     test.use({ viewport: { width: 320, height: 568 } });
 
-    test('keep to two lines, with nothing cut off', async ({ page }) => {
+    test('stay compact, with nothing cut off', async ({ page }) => {
       await gotoAppReady(page);
       await importTake(page, TRIAD);
       await transport(page).getByRole('button', { name: 'Modes' }).click();
@@ -147,6 +147,9 @@ test.describe('practice results', () => {
       await expect(results.locator('p')).toHaveText(
         '1 of 3 right first time · 1 wrong · 1 let through',
       );
+      // Read off what is drawn, so it holds in any font: the facts fit on one
+      // line in the fonts phones use, but a wider one may wrap them. Nothing
+      // may be cut off, though, nor the card grow past three rows.
       const layout = await results.evaluate((element) => {
         const box = element.getBoundingClientRect();
         const cut = [...element.querySelectorAll('*')]
@@ -161,27 +164,43 @@ test.describe('practice results', () => {
           )
           .map(({ child }) => child.getAttribute('aria-label') ?? child.className);
         const facts = element.querySelector('p') as HTMLElement;
-        const lineHeight = parseFloat(getComputedStyle(facts).lineHeight);
-        // Each of the card's rows has its children centred on one line.
-        const rows = new Set(
-          [...element.children].map((child) => {
-            const rect = child.getBoundingClientRect();
-            return Math.round(rect.top + rect.height / 2);
-          }),
-        );
+        // The card's rows: each line of the facts, and the cells and the
+        // close button beside them, merged where they share a line's height.
+        const text = document.createRange();
+        text.selectNodeContents(facts);
+        const spans = [
+          ...text.getClientRects(),
+          ...[...element.children]
+            .filter((child) => child !== facts)
+            .map((child) => child.getBoundingClientRect()),
+        ]
+          .filter((rect) => rect.height > 0)
+          .map((rect) => [rect.top, rect.bottom] as const)
+          .sort((a, b) => a[0] - b[0]);
+        let rows = 0;
+        let rowBottom = -Infinity;
+        for (const [top, bottom] of spans) {
+          if (top >= rowBottom - 1) {
+            rows += 1;
+            rowBottom = bottom;
+          } else {
+            rowBottom = Math.max(rowBottom, bottom);
+          }
+        }
         return {
           cut,
-          factsLines: Math.round(facts.getBoundingClientRect().height / lineHeight),
           factsOverflow: facts.scrollWidth > facts.clientWidth,
-          rows: rows.size,
+          headlineLines: (facts.querySelector('strong') as HTMLElement).getClientRects().length,
+          rows,
           right: box.right,
         };
       });
       expect(layout.cut).toEqual([]);
       expect(layout.factsOverflow).toBe(false);
-      expect(layout.factsLines).toBe(1);
-      expect(layout.rows).toBeLessThanOrEqual(2);
       expect(layout.right).toBeLessThanOrEqual(320);
+      // The headline is never broken across lines, whatever else wraps.
+      expect(layout.headlineLines).toBe(1);
+      expect(layout.rows).toBeLessThanOrEqual(3);
     });
   });
 });

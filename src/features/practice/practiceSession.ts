@@ -1,9 +1,10 @@
 import { audioEngine } from '@/audio/AudioEngine';
 import type { PracticeEvent, PracticeRun } from '@/features/transport/practiceEvents';
 import { transportController } from '@/features/transport/transportController';
-import { usePracticeStore, type PracticeState } from '@/state/usePracticeStore';
+import { usePracticeStore, type OpenTake, type PracticeState } from '@/state/usePracticeStore';
 import { useTakeStore } from '@/state/useTakeStore';
 import { startPlayAlongRun, type PlayAlongDeps, type PlayAlongRun } from './playAlongSession';
+import { sameBarGrid } from './resultCells';
 import { reduceWaitRun } from './trainingReport';
 
 /**
@@ -15,15 +16,26 @@ export const MIN_RESULT_STEPS = 2;
 export interface PracticeSessionDeps {
   /** The transport's practice runs, as they happen. */
   subscribePractice(listener: (event: PracticeEvent) => void): () => void;
-  /** Hears the open take change to another. */
-  subscribeTakeId(listener: (takeId: string) => void): () => void;
-  store: Pick<PracticeState, 'runStarted' | 'runEnded' | 'show' | 'keepOnlyTake'>;
+  /** Hears the open take change: another take, a new tempo, or new notes. */
+  subscribeTake(listener: (take: OpenTake, previous: OpenTake) => void): () => void;
+  store: Pick<PracticeState, 'runStarted' | 'runEnded' | 'show' | 'keepOnlyTake' | 'dismiss'>;
   /** What a Keep-time run listens to and flashes as it plays; see `startPlayAlongRun`. */
   playAlong: PlayAlongDeps;
 }
 
 export interface PracticeSession {
   dispose(): void;
+}
+
+/** A run being read into its result. */
+interface Reading {
+  run: PracticeRun;
+  /** A "wait for me" run's events so far. */
+  events: PracticeEvent[];
+  /** What is listening to a Keep-time run's keys; null for a run that waits. */
+  along: PlayAlongRun | null;
+  /** The take changed under the run in a way its result could not describe. */
+  spoiled: boolean;
 }
 
 /**
@@ -38,31 +50,23 @@ export interface PracticeSession {
  */
 export function createPracticeSession({
   subscribePractice,
-  subscribeTakeId,
+  subscribeTake,
   store,
   playAlong,
 }: PracticeSessionDeps): PracticeSession {
-  /**
-   * The run under way: its events so far, or, keeping time, what is listening
-   * to it. Null between runs.
-   */
-  let current: { run: PracticeRun; events: PracticeEvent[]; along: PlayAlongRun | null } | null =
-    null;
-  /** Keep-time runs still listening: the one under way, and any waiting on late notes. */
-  const listening = new Set<PlayAlongRun>();
+  /** The run under way; null between runs. */
+  let current: Reading | null = null;
+  /** Keep-time runs that have ended, listening on for their last notes played late. */
+  const finishing = new Set<Reading>();
 
   const onEvent = (event: PracticeEvent): void => {
     if (event.type === 'run-start') {
       // A run's end always comes before the next one starts; one that never
       // came has nothing more to say.
-      if (current?.along) {
-        current.along.cancel();
-        listening.delete(current.along);
-      }
+      current?.along?.cancel();
       const { run } = event;
       const along = run.style === 'playAlong' ? startPlayAlongRun(run, playAlong) : null;
-      if (along) listening.add(along);
-      current = { run, events: [], along };
+      current = { run, events: [], along, spoiled: false };
       store.runStarted(event.runId, run.takeId, run.style, along?.pressOriginMs);
       return;
     }
@@ -74,14 +78,16 @@ export function createPracticeSession({
       else current.events.push(event);
       return;
     }
-    const { run, events, along } = current;
+    const reading = current;
+    const { run, events, along } = reading;
     current = null;
     if (along) {
       // At once, or once its last notes have had time to be played late. The
       // store drops it then if another run has started meanwhile.
+      finishing.add(reading);
       along.end(event, (keepTime) => {
-        listening.delete(along);
-        if (keepTime.notes < MIN_RESULT_STEPS) return;
+        finishing.delete(reading);
+        if (reading.spoiled || keepTime.notes < MIN_RESULT_STEPS) return;
         store.show({
           runId: run.runId,
           takeId: run.takeId,
@@ -89,10 +95,11 @@ export function createPracticeSession({
           hand: run.hand,
           slowestSpeed: keepTime.slowestSpeed,
           reason: event.reason,
+          tempo: run.tempo,
           keepTime,
         });
       });
-    } else {
+    } else if (!reading.spoiled) {
       const wait = reduceWaitRun(run, events);
       if (wait.steps >= MIN_RESULT_STEPS) {
         store.show({
@@ -102,6 +109,7 @@ export function createPracticeSession({
           hand: run.hand,
           slowestSpeed: wait.slowestSpeed,
           reason: event.reason,
+          tempo: run.tempo,
           wait,
         });
       }
@@ -110,14 +118,30 @@ export function createPracticeSession({
   };
 
   const unsubscribePractice = subscribePractice(onEvent);
-  // A result is about the take it was played on, so opening another puts it away.
-  const unsubscribeTakeId = subscribeTakeId((takeId) => store.keepOnlyTake(takeId));
+  // A result is about the take it was played on, as it was: opening another
+  // take puts it away, and so does a tempo that moves its bars. A recording
+  // pass, a clear or an undo writes the take new notes, and counts made of the
+  // old ones no longer describe it. The same edits made while a run is under
+  // way, a tempo at a hold or an Undo pass, spoil the result it would have.
+  const unsubscribeTake = subscribeTake((take, previous) => {
+    store.keepOnlyTake(take);
+    if (take.notes !== previous.notes) store.dismiss();
+    if (
+      current &&
+      (take.id !== current.run.takeId ||
+        take.notes !== previous.notes ||
+        !sameBarGrid(current.run.tempo, take.tempo))
+    ) {
+      current.spoiled = true;
+    }
+  });
   return {
     dispose() {
       unsubscribePractice();
-      unsubscribeTakeId();
-      for (const along of listening) along.cancel();
-      listening.clear();
+      unsubscribeTake();
+      current?.along?.cancel();
+      for (const reading of finishing) reading.along?.cancel();
+      finishing.clear();
       current = null;
     },
   };
@@ -140,10 +164,13 @@ export const practiceSession = {
   init(): void {
     started ??= createPracticeSession({
       subscribePractice: (listener) => transportController.subscribePractice(listener),
-      // A rename or an edit keeps the take; only another take puts a result away.
-      subscribeTakeId: (listener) =>
-        useTakeStore.subscribe((state, previous) => {
-          if (state.take.id !== previous.take.id) listener(state.take.id);
+      // Another take, a new tempo, or new notes. A rename, a level or the
+      // playhead leaves all three as they were, and is never heard.
+      subscribeTake: (listener) =>
+        useTakeStore.subscribe(({ take }, { take: before }) => {
+          if (take.id !== before.id || take.tempo !== before.tempo || take.notes !== before.notes) {
+            listener(take, before);
+          }
         }),
       store: usePracticeStore.getState(),
       playAlong: {

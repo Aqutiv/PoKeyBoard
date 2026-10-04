@@ -5,6 +5,7 @@ import {
   MAX_PASS_CELLS,
   passCells,
   resultCells,
+  sameBarGrid,
   type Outcome,
 } from '@/features/practice/resultCells';
 
@@ -160,6 +161,36 @@ describe('a run round a loop', () => {
       [1, 2, 3],
       [2, 3, 3],
     ]);
+  });
+});
+
+describe('the bars a result was scored on', () => {
+  it('stay while the tempo, time signature and tempo changes do', () => {
+    // Compared by value: a tempo built afresh, a count-in or a key keeps them.
+    const rebuilt: TempoSettings = {
+      bpm: 120,
+      timeSignature: { numerator: 4, denominator: 4 },
+      countInBars: 0,
+      changes: [],
+      keySignature: -3,
+    };
+    expect(sameBarGrid(STEADY, rebuilt)).toBe(true);
+    const changed = { ...STEADY, changes: [{ atMs: 4000, bpm: 60 }] };
+    expect(sameBarGrid(changed, { ...STEADY, changes: [{ atMs: 4000, bpm: 60 }] })).toBe(true);
+  });
+
+  it('move with any of them', () => {
+    expect(sameBarGrid(STEADY, { ...STEADY, bpm: 121 })).toBe(false);
+    expect(
+      sameBarGrid(STEADY, { ...STEADY, timeSignature: { numerator: 4, denominator: 8 } }),
+    ).toBe(false);
+    expect(sameBarGrid(STEADY, { ...STEADY, changes: [{ atMs: 4000, bpm: 60 }] })).toBe(false);
+    expect(
+      sameBarGrid(
+        { ...STEADY, changes: [{ atMs: 4000, bpm: 60 }] },
+        { ...STEADY, changes: [{ atMs: 6000, bpm: 60 }] },
+      ),
+    ).toBe(false);
   });
 });
 

@@ -175,16 +175,23 @@ does can stop the transport finishing what it started.
 
 ### Practice results
 
-A card under the transport says how the last run went (`features/practice`).
-The results are collected outside React: `practiceSession`, started with the
-other services, buffers the run under way's events from `subscribePractice` and,
-as the run ends, reads a "wait for me" run into its report (`trainingReport`)
-and hands it to `usePracticeStore`. So a card mounted twice under StrictMode, or
-not at all on another route, reads nothing twice and misses nothing. The
-listener only writes the store and never calls the transport back. A run of
-fewer than two steps leaves no card. The next run puts the card away, a run
-played along included, as do Dismiss and opening another take; a result for a
-run since overtaken is dropped.
+A card under the transport says how the last run went (`features/practice`). The
+results are collected outside React: `practiceSession`, started with the other
+services, buffers the run under way's events from `subscribePractice` and, as
+the run ends, reads a "wait for me" run into its report (`trainingReport`), or a
+Keep-time run into its own (see Keep-time results), and hands it to
+`usePracticeStore`. So a card mounted twice under StrictMode, or not at all on
+another route, reads nothing twice and misses nothing. The listener only writes
+the store and never calls the transport back. A run of fewer than two steps, or
+two notes kept in time, leaves no card. The next run puts the card away,
+whichever way it is practised, as do Dismiss and opening another take; a result
+for a run since overtaken is dropped. So does anything
+that makes the result describe a take that is no longer there: a new tempo, time
+signature or tempo change, which moves the bars its sections name (compared by
+value, so a count-in keeps it), and new notes, from a recording pass, a clear or
+an undo. The same edits made while a run is under way, a tempo set at a hold or
+an Undo pass, leave it no card at all. While a recording counts in or runs, the
+card stands aside.
 
 A step is right first time when no wrong key was pressed at it and Play did not
 let it through, so every step played early is. The card adds the wrong keys
@@ -290,13 +297,16 @@ card says the sound may be reaching them late.
 
 A run played to its end listens on for 230 ms past the latency, for its last
 notes played late. A run stopped short is judged at once, and a note whose
-window was still open, with nothing played in it yet, is left out. The cells
-show each section's share on time, or each pass's round a loop, the notes told
-apart by the pass they came in (`passCells`), since notes kept in time share
-moments. While the run lasts, the card's status carries `data-keep-time-origin-ms`,
-the moment on the page's clock a press lands on the run's start, rendered from
-the store for the end-to-end tests to play in time from, as Learn's runner
-publishes `data-click-origin-ms`.
+window was still open, with nothing played in it yet, is left out. The result
+carries the tempo it was scored on, and is put away, or never shown, for the
+same changes to the take as any run's (above). The cells show each section's
+share on time, or each pass's round a loop, the notes told apart by the pass
+they came in (`passCells`), since notes kept in time share moments; a section
+tapped loops as any does, music still playing paused first. While the run lasts,
+the card's status carries `data-keep-time-origin-ms`, the moment on the page's
+clock a press lands on the run's start, rendered from the store for the
+end-to-end tests to play in time from, as Learn's runner publishes
+`data-click-origin-ms`.
 
 ## Choosing a piano
 
