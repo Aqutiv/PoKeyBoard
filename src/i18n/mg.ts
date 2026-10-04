@@ -163,6 +163,23 @@ export const mg: Messages = {
       `Fihodinana ${pass}: ${good} amin’ny ${total} ara-potoana`,
     summaryKeepTime: ({ facts, remarks }) =>
       `Vokatry ny fanazaran-tena: ${facts}.${remarks.map((remark) => ` ${remark}.`).join('')}`,
+    best: ({ percent, speed }) =>
+      `Tsara indrindra: ${percent}%${speed === undefined ? '' : ` (amin’ny ${speed}%)`}`,
+    last: ({ percent, speed }) =>
+      `Farany: ${percent}%${speed === undefined ? '' : ` (amin’ny ${speed}%)`}`,
+    newBest: 'Tsara indrindra vaovao',
+    summaryRecord: ({ facts, newBest }) => `${newBest ? 'Tsara indrindra vaovao! ' : ''}${facts}.`,
+    handLeft: 'Tanana havia',
+    handRight: 'Tanana havanana',
+    handBoth: 'Tanana roa',
+    handLeftInTime: 'Tanana havia ara-potoana',
+    handRightInTime: 'Tanana havanana ara-potoana',
+    handBothInTime: 'Tanana roa ara-potoana',
+    chip: ({ hand, percent }) => `${hand} · ${percent}%`,
+    chipDetail: ({ hand, keepTime, percent }) =>
+      `Tsara indrindra amin’ny ${
+        hand === 'both' ? 'tanana roa' : hand === 'right' ? 'tanana havanana' : 'tanana havia'
+      }, ${keepTime ? 'mitazona ny fitempo' : 'miandry anao'}: ${percent}%`,
   },
   metronome: {
     groupLabel: 'Metronoma',
