@@ -1,5 +1,6 @@
 import { Fragment, useId } from 'react';
 import { COMPACT_LANDSCAPE_QUERY, useMediaQuery } from '@/app/hooks/useMediaQuery';
+import type { PracticeStyle } from '@/features/transport/modes';
 import { loopBetween } from '@/features/transport/practiceLoop';
 import { transportController } from '@/features/transport/transportController';
 import { useMessages } from '@/i18n/i18nContext';
@@ -8,6 +9,7 @@ import { usePracticeStore, type PracticeResult } from '@/state/usePracticeStore'
 import { useTakeStore } from '@/state/useTakeStore';
 import { TooltipButton } from '@/ui/TooltipButton';
 import type { KeepTimeReport } from './playAlongSession';
+import { headlinePercent, type PracticeScore, type ResultRecord } from './practiceRecords';
 import type { BarsCell, ResultCell } from './resultCells';
 import type { WaitReport } from './trainingReport';
 import './practice.css';
@@ -136,6 +138,51 @@ function toldOf(m: Messages, result: PracticeResult): Told {
   return result.style === 'wait' ? toldOfWait(m, result.wait) : toldOfKeepTime(m, result.keepTime);
 }
 
+/** What the card says of the track's best and last, once the run is kept among them. */
+interface ToldRecord {
+  newBest: boolean;
+  /** Best and Last, each at its speed, for a desktop. */
+  full: Fact[];
+  /** What a phone has room for. */
+  short: Fact[];
+  /** What a screen reader hears of them, once they are known, after the result. */
+  summary: string;
+}
+
+/** The speed a best or last was played at, when it was not the take's own. */
+function scoreSpeed(score: PracticeScore): number | undefined {
+  const speed = Math.round(score.speed * 100);
+  return speed === 100 ? undefined : speed;
+}
+
+/**
+ * The track's best and last in the way just practised, each by the headline
+ * share of its style, right first time or on time, and the speed it was
+ * played at. A desktop says both; a phone keeps to the best, without its
+ * speed, and to the badge alone for a new best, which is this very run.
+ */
+function toldOfRecord(m: Messages, style: PracticeStyle, record: ResultRecord): ToldRecord {
+  const best = m.practice.best({
+    percent: headlinePercent(record.best, style),
+    speed: scoreSpeed(record.best),
+  });
+  const last = m.practice.last({
+    percent: headlinePercent(record.last, style),
+    speed: scoreSpeed(record.last),
+  });
+  return {
+    newBest: record.newBest,
+    full: [
+      ['best', best],
+      ['last', last],
+    ],
+    short: record.newBest
+      ? []
+      : [['best', m.practice.best({ percent: headlinePercent(record.best, style) })]],
+    summary: m.practice.summaryRecord({ facts: [best, last].join(', '), newBest: record.newBest }),
+  };
+}
+
 /** Loop a section's bars and stand at their start, ready to play them again. */
 function loopSection(cell: BarsCell): void {
   const loop = loopBetween(useTakeStore.getState().take, cell.startMs, cell.endMs);
@@ -225,7 +272,10 @@ function ResultCells({ cells, names }: { cells: readonly ResultCell[]; names: Ce
  *
  * A desktop has room for every fact on one line; a phone keeps to the few
  * that matter most; a short landscape screen gives the card one line and no
- * cells.
+ * cells. A run through the whole of a Library track adds the track's best and
+ * last to the line, once they are known, and a badge by the headline for a
+ * new best: the last facts on it, so a phone's line that has no room for them
+ * wraps before them, and the cells keep their row.
  */
 export function PracticeResults() {
   const m = useMessages();
@@ -237,7 +287,11 @@ export function PracticeResults() {
   const compactLandscape = useMediaQuery(COMPACT_LANDSCAPE_QUERY);
   const shown = live ? null : result;
   const told = shown ? toldOf(m, shown) : null;
-  const facts = told ? (desktop ? told.full : told.short) : [];
+  const record = shown?.record ? toldOfRecord(m, shown.style, shown.record) : null;
+  const facts = [
+    ...(told ? (desktop ? told.full : told.short) : []),
+    ...(record ? (desktop ? record.full : record.short) : []),
+  ];
 
   return (
     <>
@@ -245,19 +299,29 @@ export function PracticeResults() {
           one sentence, while the card is there. It also carries, while a
           Keep-time run lasts, the moment on the page's clock a press lands
           on the run's start, for the end-to-end tests to play in time from:
-          a fact about the running transport, as `data-piano-ready` is. */}
+          a fact about the running transport, as `data-piano-ready` is. The
+          track's best and last come a moment after the result, and are added
+          after it, leaving what was said as it was, so a reader hears only
+          the addition. */}
       <p
         role="status"
         className="visually-hidden"
         data-keep-time-origin-ms={pressOriginMs === undefined ? undefined : String(pressOriginMs)}
       >
         {told ? told.summary : ''}
+        {told && record ? <span>{` ${record.summary}`}</span> : null}
       </p>
       {told ? (
         <div className="practice-results" role="group" aria-label={m.practice.resultsLabel}>
           <p className="practice-results__facts">
             <strong>{told.headline}</strong>
             {desktop ? ` ${told.share}` : null}
+            {record?.newBest ? (
+              <>
+                {' '}
+                <span className="practice-results__new-best">{m.practice.newBest}</span>
+              </>
+            ) : null}
             {facts.map(([key, text]) => (
               <Fragment key={key}>
                 <span aria-hidden="true"> · </span>
