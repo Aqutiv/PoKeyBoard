@@ -163,6 +163,23 @@ export function withScore(
 }
 
 /**
+ * Whether a run's best is the run itself: its first result in that way of
+ * practising, or a new best. Otherwise the best is an earlier run, as good or
+ * better. Told by value, since a record read back from the device holds
+ * copies, never the very score kept.
+ */
+export function isOwnBest({ best, last }: ResultRecord): boolean {
+  return (
+    best.at === last.at &&
+    best.accuracy === last.accuracy &&
+    best.onTime === last.onTime &&
+    best.speed === last.speed &&
+    best.notes === last.notes &&
+    best.fingerprint === last.fingerprint
+  );
+}
+
+/**
  * A result's headline share, as a whole percentage rounded down, as the
  * results card writes it: right first time, waiting for the player; on time,
  * keeping time. From the count it stands for, since a share kept as a ratio

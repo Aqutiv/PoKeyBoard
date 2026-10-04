@@ -5,6 +5,7 @@ import {
   headlinePercent,
   isBetter,
   isCompleteRun,
+  isOwnBest,
   parsePracticeRecords,
   practiceModeKey,
   trackFingerprint,
@@ -192,6 +193,50 @@ describe('keeping a result', () => {
     expect(practiceModeKey('wait', 'right')).toBe('wait:right');
     expect(practiceModeKey('playAlong', 'both')).toBe('along:both');
     expect(trackFingerprint(SUMMARY)).toBe(FINGERPRINT);
+  });
+});
+
+describe('whether a run is its own best', () => {
+  const later = '2026-10-04T10:05:00.000Z';
+
+  it('is, for a first result or a new best', () => {
+    const first = withScore(EMPTY_PRACTICE_RECORDS, ODE, 'wait:right', waitScore());
+    expect(isOwnBest(first)).toBe(true);
+    const better = withScore(
+      first.records,
+      ODE,
+      'wait:right',
+      waitScore({ at: later, accuracy: 1 }),
+    );
+    expect(isOwnBest(better)).toBe(true);
+  });
+
+  it('is not, while an earlier best stands, however near the run came to it', () => {
+    const first = withScore(EMPTY_PRACTICE_RECORDS, ODE, 'wait:right', waitScore({ accuracy: 1 }));
+    const worse = withScore(
+      first.records,
+      ODE,
+      'wait:right',
+      waitScore({ at: later, accuracy: 0.5 }),
+    );
+    expect(isOwnBest(worse)).toBe(false);
+    const asGood = withScore(
+      first.records,
+      ODE,
+      'wait:right',
+      waitScore({ at: later, accuracy: 1 }),
+    );
+    expect(isOwnBest(asGood)).toBe(false);
+  });
+
+  it('is told by value, as a record read back from the device has to be', () => {
+    const { best, last, newBest } = withScore(
+      EMPTY_PRACTICE_RECORDS,
+      ODE,
+      'along:both',
+      keepTimeScore(),
+    );
+    expect(isOwnBest(JSON.parse(JSON.stringify({ best, last, newBest })))).toBe(true);
   });
 });
 
