@@ -71,8 +71,9 @@ export interface PlayAlongRun {
  * so a player in time with what they hear is in time, Bluetooth and all; the
  * latency is read once, as the run starts, and held for the whole of it.
  *
- * Nothing is asked for while the run counts in, so a press before the first
- * note's window counts for nothing. A press with no note of its key within
+ * Nothing is asked for while the run counts in, so a press before it sets
+ * off counts for nothing unless it plays a first note early, and nor does one
+ * before the first note's window. A press with no note of its key within
  * reach, as the run has placed them, flashes on the keys as it is played.
  */
 export function startPlayAlongRun(run: PracticeRun, deps: PlayAlongDeps): PlayAlongRun {
@@ -107,9 +108,14 @@ export function startPlayAlongRun(run: PracticeRun, deps: PlayAlongDeps): PlayAl
       return;
     }
     const due = dueNotes(run, runMsAt(timeline, audioTime + MATCH_MS / 1000));
+    const near = askedNear(due, event.midi, audioTime);
+    // Counting in, nothing is asked for yet, though a first note due as the
+    // run sets off opens its window in the count-in's last moments: a press
+    // then plays it early, or is nothing at all, never kept and never flashed.
+    if (audioTime < run.anchorAudioTime && !near) return;
     if (due.length === 0) return;
     presses.push({ midi: event.midi, audioTime });
-    if (!askedNear(due, event.midi, audioTime)) deps.flashWrongKey(event.midi);
+    if (!near) deps.flashWrongKey(event.midi);
   };
 
   let unsubscribe: (() => void) | null = deps.subscribeInput(onInput);
@@ -156,7 +162,8 @@ export function startPlayAlongRun(run: PracticeRun, deps: PlayAlongDeps): PlayAl
  * Read a Keep-time run into its report: its notes up to where it ended, each
  * placed on the audio clock by the run's timeline, judged by `presses` (on
  * the music's clock, latency taken off); see `scorePlayAlong` for
- * `endAudioTime` and `heardUntil`. Pure.
+ * `endAudioTime` and `heardUntil`. The music sets off at the run's anchor, so
+ * a press before it is never a wrong note. Pure.
  *
  * A run through the take is told in sections of four bars, a run round a loop
  * pass by pass, by each part's share of notes on time.
@@ -173,7 +180,11 @@ export function reducePlayAlongRun(
     ...note,
     dueAudioTime: audioTimeAt(timeline, note.runMs),
   }));
-  const { outcomes, ...score } = scorePlayAlong(due, presses, { endAudioTime, heardUntil });
+  const { outcomes, ...score } = scorePlayAlong(due, presses, {
+    startAudioTime: run.anchorAudioTime,
+    endAudioTime,
+    heardUntil,
+  });
   let slowestSpeed = run.speed;
   for (const event of events) {
     if (event.runId === run.runId && event.type === 'speed') {

@@ -126,6 +126,40 @@ describe('a Keep-time run’s presses', () => {
     expect(h.flashed).toEqual([]);
   });
 
+  // The first note falls due as the run sets off, at 12, so its window opens
+  // in the last 200 ms of the count-in: heard there, a press is 11.8 or later.
+  it('count for nothing in the last of the count-in unless they play the first note', () => {
+    start();
+    // Heard at 11.85 and 11.9: E4 is asked for nowhere near.
+    press(E4, 12.03);
+    press(B4, 12.08);
+    expect(h.flashed).toEqual([]);
+    // Heard at 12, as the run sets off.
+    press(C4, 12.18);
+    end('pause', 12.25);
+    expect(reports[0]).toMatchObject({ notes: 1, onTime: 1, wrong: 0 });
+    expect(h.flashed).toEqual([]);
+  });
+
+  it('play the first note early in the last of the count-in', () => {
+    start();
+    // Heard at 11.88, 120 ms ahead of C4.
+    press(C4, 12.06);
+    end('pause', 12.25);
+    expect(reports[0]).toMatchObject({ notes: 1, early: 1, wrong: 0 });
+    expect(h.flashed).toEqual([]);
+  });
+
+  it('flash, and count as wrong, a key played just after the run sets off with no note near', () => {
+    start();
+    press(C4, 12.18);
+    // Heard at 12.05, past the anchor: E4 is not due until 13.
+    press(E4, 12.23);
+    expect(h.flashed).toEqual([E4]);
+    end('pause', 12.25);
+    expect(reports[0]).toMatchObject({ notes: 1, onTime: 1, wrong: 1 });
+  });
+
   it('flash a key at once where no note near it asks for that key', () => {
     start();
     // Asked for nowhere.
