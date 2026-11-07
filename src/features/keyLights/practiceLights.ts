@@ -101,15 +101,29 @@ const NOTHING_COMING: ReadonlyMap<number, Hand> = new Map();
  * be the loop's first (from its start, never before), as far off as the rest
  * of this pass and the way into the next.
  */
+export interface ComingOptions {
+  /** The practice speed: the window is real time, so it covers less music slower. */
+  readonly speed: number;
+  readonly loop?: PlaybackLoop | null;
+  /** Held at a hold: the chord after the one held for is next. */
+  readonly atHold?: boolean;
+  /**
+   * Real ms before the playhead moves on from where it waits: the rest of a
+   * Keep-time count-in. Every chord is that much further off.
+   */
+  readonly waitMs?: number;
+}
+
 export function comingNotes(
   notes: readonly NoteEvent[],
   playheadMs: number,
   hand: TrainingHand,
-  speed: number,
-  loop: PlaybackLoop | null = null,
-  atHold = false,
+  { speed, loop = null, atHold = false, waitMs = 0 }: ComingOptions,
 ): ReadonlyMap<number, Hand> {
-  const reachMs = COMING_WINDOW_MS * Math.max(speed, 0.01);
+  const rate = Math.max(speed, 0.01);
+  // In take time, as the notes are: the window, less what the wait uses up.
+  const reachMs = (COMING_WINDOW_MS - Math.max(0, waitMs)) * rate;
+  if (reachMs < 0) return NOTHING_COMING;
   const looping = loop !== null && playheadMs < loop.endMs;
   const endMs = looping ? loop.endMs : Number.POSITIVE_INFINITY;
   const fromMs = Math.min(

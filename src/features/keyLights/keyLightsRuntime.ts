@@ -40,14 +40,13 @@ function practiceScene(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming' | '
   // recording's count-in is `countIn`, and asks nothing of a practised hand.
   const practising = hand !== null && (state === 'playing' || held.size > 0);
   const coming = practising
-    ? comingNotes(
-        notes,
-        playheadMs,
-        hand,
-        transportController.getSpeed(),
-        transportController.getLoop(),
-        held.size > 0,
-      )
+    ? comingNotes(notes, playheadMs, hand, {
+        speed: transportController.getSpeed(),
+        loop: transportController.getLoop(),
+        atHold: held.size > 0,
+        // Counting in, the playhead waits at the run's start until the count ends.
+        waitMs: transportController.countInRemainingMs(),
+      })
     : NOT_COMING;
   return { targets, wrong: screen.wrong, coming, faint: screen.picturedSecond };
 }
