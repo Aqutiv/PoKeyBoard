@@ -228,6 +228,23 @@ describe('bluetoothMidi', () => {
     expect(bluetooth.requestDevice).not.toHaveBeenCalled();
   });
 
+  it('stays disconnected when MIDI goes off while the browser is still listing keyboards', async () => {
+    let list: (devices: FakeDevice[]) => void = () => undefined;
+    bluetooth.getDevices = vi.fn(
+      () =>
+        new Promise<FakeDevice[]>((resolve) => {
+          list = resolve;
+        }),
+    );
+    const reconnecting = reconnectBluetoothMidi('dev-1');
+    disconnectBluetoothMidi();
+    list([device]);
+
+    await expect(reconnecting).resolves.toBe(true);
+    expect(device.gatt.connect).not.toHaveBeenCalled();
+    expect(getBluetoothMidiSnapshot()).toEqual({ kind: 'idle' });
+  });
+
   it('needs the chooser where the browser cannot list granted keyboards', async () => {
     delete bluetooth.getDevices;
     await expect(reconnectBluetoothMidi('dev-1')).resolves.toBe(false);

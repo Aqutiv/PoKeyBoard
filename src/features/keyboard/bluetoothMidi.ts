@@ -341,15 +341,19 @@ export async function reconnectBluetoothMidi(id: string, persistent = true): Pro
   if (device?.id === id && (session || connecting || retryTimer !== null)) return true;
   let target = device?.id === id ? device : null;
   if (!target && typeof navigator.bluetooth.getDevices === 'function') {
+    // Every Disconnect and every attempt moves the generation on: one that
+    // happens while the browser lists its devices wins over the listing.
+    const asked = generation;
     try {
       const granted = await navigator.bluetooth.getDevices();
       target = granted.find((candidate) => candidate.id === id) ?? null;
     } catch {
       target = null;
     }
+    if (generation !== asked) return true;
   }
   if (!target) return false;
-  // Disconnect, or another keyboard chosen meanwhile, wins over a late listing.
+  // Another keyboard chosen meanwhile wins over a late listing.
   if (device && device !== target && (session || connecting)) return true;
   adopt(target);
   wanted = true;
