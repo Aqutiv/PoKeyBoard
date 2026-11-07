@@ -32,6 +32,8 @@ export interface KeyLightScene {
   readonly wrong: ReadonlySet<number>;
   /** The practised hand's next notes, before they are due. */
   readonly coming: ReadonlyMap<number, Hand>;
+  /** Keys a lesson's picture marks second, apart from its main marks: a dim accent. */
+  readonly faint: ReadonlySet<number>;
 }
 
 const NONE = new Map<never, never>();
@@ -44,12 +46,13 @@ export const EMPTY_SCENE: KeyLightScene = {
   targets: NONE,
   wrong: new Set(),
   coming: NONE,
+  faint: new Set(),
 };
 
 /**
  * One note's light. Highest first, as the screen layers them: a wrong key, a
- * key held from elsewhere, the take's own, a key asked for, a note coming,
- * else dark.
+ * key held from elsewhere, the take's own, a key asked for (or marked on a
+ * lesson's picture), a note coming, a picture's second marks, else dark.
  */
 export function noteLight(scene: KeyLightScene, note: number): Rgb8 {
   if (!scene.shown) return DARK;
@@ -64,6 +67,7 @@ export function noteLight(scene: KeyLightScene, note: number): Rgb8 {
   }
   const coming = scene.coming.get(note);
   if (coming) return dimLight(LIGHT_COLOURS[coming], COMING_LEVEL);
+  if (scene.faint.has(note)) return dimLight(LIGHT_COLOURS.target, COMING_LEVEL);
   return DARK;
 }
 

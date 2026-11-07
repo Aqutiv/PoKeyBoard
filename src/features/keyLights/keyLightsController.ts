@@ -62,7 +62,7 @@ export interface KeyLightsDeps {
    * What the screen's keyboard asks for beyond the take: keys waited for, wrong
    * keys, notes coming. Empty until the practice and lesson lights fill it.
    */
-  extras?(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming'>;
+  extras?(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming' | 'faint'>;
   subscribeExtras?(listener: () => void): () => void;
 }
 
@@ -179,6 +179,7 @@ export class KeyLightsController {
       targets: extras.targets,
       wrong: extras.wrong,
       coming: extras.coming,
+      faint: extras.faint,
     };
   }
 

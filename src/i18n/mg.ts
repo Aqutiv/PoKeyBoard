@@ -700,7 +700,7 @@ export const mg: Messages = {
       'Tsy afaka mampifandray klavie Bluetooth ity navigatera ity. Afaka kosa ny Chrome sy Edge, amin’ny ordinatera sy Android; na ampifandraiso amin’ny USB ny klavie.',
     keyLights: 'Jiron’ny kitendry',
     keyLightsHint: ({ name }) =>
-      `Mampirehitra ny kitendrin’i ${name} toy ny fireharehan’ny kitendry eo amin’ny efijery: ny mozika mandritra ny fandehany, samy amin’ny lokony ny tanana tsirairay ary malefaka kokoa ny naoty moramora, sy ny kitendry tendrenao amin’ny efijery na amin’ny klavien’ny ordinatera. Rehefa manazatra, mirehitra ny kitendry tokony hotendrena, ary mamirapiratra malefaka mialoha ny naoty manaraka ho an’ny tananao; amin’ny lesona, ny kitendry asehon’ny torolalana. Manjelanjelatra mena ny kitendry diso. Mirehitra fotsy ny kitendry tazoninao amin’i ${name} mihitsy.`,
+      `Mampirehitra ny kitendrin’i ${name} toy ny fireharehan’ny kitendry eo amin’ny efijery: ny mozika mandritra ny fandehany, samy amin’ny lokony ny tanana tsirairay ary malefaka kokoa ny naoty moramora, sy ny kitendry tendrenao amin’ny efijery na amin’ny klavien’ny ordinatera. Rehefa manazatra, mirehitra ny kitendry tokony hotendrena, ary mamirapiratra malefaka mialoha ny naoty manaraka ho an’ny tananao; amin’ny lesona, ny kitendry asehon’ny torolalana na ny sarin’ny klavie. Manjelanjelatra mena ny kitendry diso. Mirehitra fotsy ny kitendry tazoninao amin’i ${name} mihitsy.`,
     keyLightsAllowUsb: 'Avelao ny jiro amin’ny USB',
     keyLightsUsbHint: ({ name }) =>
       `Mifandray ${name}. Mba hampirehetana ny kitendriny, tsy maintsy avelan’ny navigatera handefa hafatra jiro ho azy ny PoKeyBoard: manontany indray mandeha izy, ary antsoiny hoe mifehy sy manova ny fitaovana MIDI-nao izany.`,

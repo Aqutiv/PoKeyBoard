@@ -15,11 +15,11 @@ const NOT_COMING: ReadonlyMap<number, Hand> = new Map();
 
 /**
  * Beyond the take: the keys a hold waits for, in their hands (read from the
- * transport itself, so they light on any tab), the keys a lesson asks for and
- * the wrong ones (as the key bed on screen marks them), and, while a hand is
- * practised, its next notes.
+ * transport itself, so they light on any tab), the keys a lesson asks for or
+ * pictures and the wrong ones (as the screen marks them), and, while a hand
+ * is practised, its next notes.
  */
-function practiceScene(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming'> {
+function practiceScene(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming' | 'faint'> {
   const screen = getScreenCues();
   const notes = useTakeStore.getState().take.notes;
   const state = transportController.getState();
@@ -27,15 +27,24 @@ function practiceScene(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming'> {
   const held = transportController.getTrainingTargets();
 
   const targets = new Map<number, Hand | null>();
+  for (const midi of screen.pictured) targets.set(midi, null);
   for (const midi of screen.targets) targets.set(midi, null);
   for (const [midi, hand] of holdTargetHands(notes, held, playheadMs)) targets.set(midi, hand);
 
+  // Practice plays (Keep time counts in while playing, too) or holds. A
+  // recording's count-in is `countIn`, and asks nothing of a practised hand.
   const hand = practiceHandFor(useSettingsStore.getState().playbackMode);
-  const practising = hand !== null && (state === 'playing' || state === 'countIn' || held.size > 0);
+  const practising = hand !== null && (state === 'playing' || held.size > 0);
   const coming = practising
-    ? comingNotes(notes, playheadMs, hand, transportController.getSpeed())
+    ? comingNotes(
+        notes,
+        playheadMs,
+        hand,
+        transportController.getSpeed(),
+        transportController.getLoop(),
+      )
     : NOT_COMING;
-  return { targets, wrong: screen.wrong, coming };
+  return { targets, wrong: screen.wrong, coming, faint: screen.picturedSecond };
 }
 
 function listen(target: EventTarget, type: string, listener: () => void): () => void {

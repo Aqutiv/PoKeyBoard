@@ -1,5 +1,6 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { layoutKeyboard } from '@/features/keyboard/keyboardGeometry';
+import { clearPictureMarks, publishPictureMarks } from '@/features/keyboard/screenCues';
 import { noteLabel, type NoteSpelling } from './noteLabel';
 import '@/features/keyboard/keyboard.css';
 
@@ -40,6 +41,13 @@ export function KeyboardDiagram({
 }: KeyboardDiagramProps) {
   const layout = useMemo(() => layoutKeyboard(lowMidi, highMidi), [lowMidi, highMidi]);
   const whiteWidthPercent = 100 / layout.whiteCount;
+
+  // A light-up keyboard lights the keys the picture marks, on the real keys.
+  const [owner] = useState(() => Symbol('KeyboardDiagram'));
+  useEffect(() => {
+    publishPictureMarks(owner, highlight, highlightSecondary);
+  }, [owner, highlight, highlightSecondary]);
+  useEffect(() => () => clearPictureMarks(owner), [owner]);
 
   const classFor = (midi: number, isBlack: boolean): string => {
     const base = `piano-key piano-key--${isBlack ? 'black' : 'white'}`;

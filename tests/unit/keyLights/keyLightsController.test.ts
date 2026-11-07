@@ -129,7 +129,7 @@ function controller(): KeyLightsController {
   return new KeyLightsController(deps);
 }
 
-let scenery: Pick<KeyLightScene, 'targets' | 'wrong' | 'coming'>;
+let scenery: Pick<KeyLightScene, 'targets' | 'wrong' | 'coming' | 'faint'>;
 let extrasChanged: () => void = () => undefined;
 
 /** Connects `link`, lets the startup run, and clears what it sent. */
@@ -147,7 +147,7 @@ beforeEach(() => {
   enabled = true;
   hidden = false;
   frames = null;
-  scenery = { targets: new Map(), wrong: new Set(), coming: new Map() };
+  scenery = { targets: new Map(), wrong: new Set(), coming: new Map(), faint: new Set() };
   stop = controller().start();
 });
 
@@ -332,6 +332,7 @@ describe('KeyLightsController', () => {
       ]),
       wrong: new Set([64]),
       coming: new Map([[65, 'right' as const]]),
+      faint: new Set([67]),
     };
     extrasChanged();
     await vi.advanceTimersByTimeAsync(50);
@@ -342,6 +343,7 @@ describe('KeyLightsController', () => {
           { key: 14, colour: ledColour(LIGHT_COLOURS.target) },
           { key: 16, colour: ledColour(LIGHT_COLOURS.wrong) },
           { key: 17, colour: dimLight(LIGHT_COLOURS.right, COMING_LEVEL) },
+          { key: 19, colour: dimLight(LIGHT_COLOURS.target, COMING_LEVEL) },
         ]),
       ),
     );

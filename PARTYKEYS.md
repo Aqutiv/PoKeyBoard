@@ -11,19 +11,21 @@ Each key shows one colour. The colours are the dark theme's key colours (`src/th
 squared for LEDs (`src/features/keyLights/ledColours.ts`). When several of these apply, the one
 higher in the list wins (`keyLightModel.ts`), as on screen:
 
-| State                                                      | Key light                                                                                         |
-| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
-| Wrong key (practice, Learn)                                | Red, while it flashes on screen                                                                   |
-| Held on screen, the computer keyboard or a game controller | Gold, brighter for a harder press                                                                 |
-| Played by the take                                         | Its hand's colour (right gold, left orange), dimmer for a softer note when velocity shading is on |
-| Waited for by a Wait-for-me hold                           | Its note's hand colour, full                                                                      |
-| Asked for by a lesson hint (Learn)                         | Accent gold, full                                                                                 |
-| The practised hand's next chord (Wait for me, Keep time)   | Its hand colour, dim (LED level 40), within 2 s of being due                                      |
-| Anything else                                              | Dark                                                                                              |
+| State                                                                | Key light                                                                                         |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Wrong key (practice, Learn)                                          | Red, while it flashes on screen                                                                   |
+| Held on screen, the computer keyboard or a game controller           | Gold, brighter for a harder press                                                                 |
+| Played by the take                                                   | Its hand's colour (right gold, left orange), dimmer for a softer note when velocity shading is on |
+| Waited for by a Wait-for-me hold                                     | Its note's hand colour, full                                                                      |
+| Asked for by a lesson hint, or marked on a lesson's keyboard picture | Accent gold, full                                                                                 |
+| The practised hand's next chord (Wait for me, Keep time)             | Its hand colour, dim (LED level 40), within 2 s of being due (wrapping round an A–B loop)         |
+| Marked second on a lesson's keyboard picture                         | Accent gold, dim (LED level 40)                                                                   |
+| Anything else                                                        | Dark                                                                                              |
 
-Hold targets are read from the transport itself, so they light on any tab; lesson hints and wrong
-keys are what the key bed on screen marks (`src/features/keyboard/screenCues.ts`). Learn keeps
-its own hint timing: a key lights when the lesson shows its hint, not before.
+Hold targets are read from the transport itself, so they light on any tab. Lesson hints, wrong
+keys and a lesson picture's marks (the "Which key is this?" quiz, a chapter's illustration) are
+what the screen marks (`src/features/keyboard/screenCues.ts`). Learn keeps its own hint timing: a
+key lights when the lesson shows its hint, not before.
 
 Keys held on the PartyKeys itself light white. The firmware draws that over any host colour, and
 the host colour comes back on release. Notes outside the 36 keys aren't drawn. The keyboard's

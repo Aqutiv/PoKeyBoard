@@ -1,5 +1,5 @@
 import { noteHand, type Hand } from '@/domain/hands';
-import type { NoteEvent } from '@/domain/takeTypes';
+import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
 import { asksFor, CHORD_WINDOW_MS, type TrainingHand } from '@/domain/trainingGate';
 
 /**
@@ -45,30 +45,74 @@ export function holdTargetHands(
   return hands;
 }
 
+/** A playhead this close before a chord's onset is at it: a hold parks exactly there. */
+const AT_ONSET_MS = 1;
+
+interface Chord {
+  readonly onsetMs: number;
+  readonly notes: Map<number, Hand>;
+}
+
+/**
+ * The first chord `hand` is asked to play whose onset falls after `afterMs`
+ * (at or after, when `inclusive`) and before `endMs`. A chord is its first
+ * note and every note asked within `CHORD_WINDOW_MS` of that onset, so a
+ * chord the playhead is inside of — one sounding, or one a hold waits on —
+ * is never the next one, while a chord still to come stays next until its
+ * own onset, however close the playhead gets.
+ */
+function nextChord(
+  notes: readonly NoteEvent[],
+  afterMs: number,
+  hand: TrainingHand,
+  endMs: number,
+  inclusive: boolean,
+): Chord | null {
+  const after = (onsetMs: number) =>
+    inclusive ? onsetMs >= afterMs : onsetMs > afterMs + AT_ONSET_MS;
+  let onsetMs: number | null = null;
+  let chord = new Map<number, Hand>();
+  // A chord reaching past `afterMs` began within one window before it; one
+  // window more keeps a chord's first note from being taken for its middle.
+  for (let i = firstStartingAfter(notes, afterMs - 2 * CHORD_WINDOW_MS); i < notes.length; i += 1) {
+    const note = notes[i] as NoteEvent;
+    // A loop plays only the notes that start before its end.
+    if (note.startMs >= endMs) break;
+    if (!asksFor(note, hand)) continue;
+    if (onsetMs === null || note.startMs > onsetMs + CHORD_WINDOW_MS) {
+      if (onsetMs !== null && after(onsetMs)) break;
+      onsetMs = note.startMs;
+      chord = new Map();
+    }
+    if (!chord.has(note.midi)) chord.set(note.midi, noteHand(note));
+  }
+  return onsetMs !== null && after(onsetMs) ? { onsetMs, notes: chord } : null;
+}
+
+const NOTHING_COMING: ReadonlyMap<number, Hand> = new Map();
+
 /**
  * The practised hand's next notes: the first chord it is asked to play after
- * the one at the playhead (which sounds, or is held for, already), in its
- * hand, if it starts within `COMING_WINDOW_MS` of real time at `speed`.
+ * the one at the playhead, if it is due within `COMING_WINDOW_MS` of real
+ * time at `speed`. Inside a loop, the pass ends at the loop's end and the
+ * next chord can be the loop's first, as far off as the rest of this pass and
+ * the way into the next.
  */
 export function comingNotes(
   notes: readonly NoteEvent[],
   playheadMs: number,
   hand: TrainingHand,
   speed: number,
-): Map<number, Hand> {
-  const coming = new Map<number, Hand>();
-  const horizon = playheadMs + COMING_WINDOW_MS * Math.max(speed, 0.01);
-  let groupStart: number | null = null;
-  for (let i = firstStartingAfter(notes, playheadMs + CHORD_WINDOW_MS); i < notes.length; i += 1) {
-    const note = notes[i] as NoteEvent;
-    if (groupStart === null) {
-      if (note.startMs > horizon) break;
-      if (!asksFor(note, hand)) continue;
-      groupStart = note.startMs;
-    } else if (note.startMs > groupStart + CHORD_WINDOW_MS) {
-      break;
-    }
-    if (asksFor(note, hand) && !coming.has(note.midi)) coming.set(note.midi, noteHand(note));
-  }
-  return coming;
+  loop: PlaybackLoop | null = null,
+): ReadonlyMap<number, Hand> {
+  const reachMs = COMING_WINDOW_MS * Math.max(speed, 0.01);
+  const looping = loop !== null && playheadMs < loop.endMs;
+  const endMs = looping ? loop.endMs : Number.POSITIVE_INFINITY;
+  const next = nextChord(notes, playheadMs, hand, endMs, false);
+  if (next) return next.onsetMs - playheadMs <= reachMs ? next.notes : NOTHING_COMING;
+  if (!looping) return NOTHING_COMING;
+  const first = nextChord(notes, loop.startMs, hand, loop.endMs, true);
+  if (!first) return NOTHING_COMING;
+  const awayMs = loop.endMs - playheadMs + (first.onsetMs - loop.startMs);
+  return awayMs <= reachMs ? first.notes : NOTHING_COMING;
 }

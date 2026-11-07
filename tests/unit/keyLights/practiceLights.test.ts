@@ -6,9 +6,11 @@ import {
   holdTargetHands,
 } from '@/features/keyLights/practiceLights';
 import {
+  clearPictureMarks,
   clearScreenCues,
   getScreenCues,
   NO_SCREEN_CUES,
+  publishPictureMarks,
   publishScreenCues,
   subscribeScreenCues,
 } from '@/features/keyboard/screenCues';
@@ -74,6 +76,38 @@ describe('comingNotes', () => {
     expect(comingNotes(NOTES, 6000 - COMING_WINDOW_MS, 'right', 0.5).size).toBe(0);
   });
 
+  it('keeps a coming chord lit right up to its onset', () => {
+    // The chord at 1000 is next however close the playhead comes (to within
+    // the millisecond a hold's rounding may leave), and whole: 79 at 1030
+    // belongs to it, not a chord of its own.
+    for (const playhead of [960, 990, 998]) {
+      expect(comingNotes(NOTES, playhead, 'right', 0.25)).toEqual(
+        new Map([
+          [76, 'right'],
+          [79, 'right'],
+        ]),
+      );
+    }
+  });
+
+  it('looks past the chord the playhead is in, or a hold waits on', () => {
+    const chords = [note(60, 1000), note(64, 1030), note(67, 1400)];
+    expect(comingNotes(chords, 1000, 'right', 1)).toEqual(new Map([[67, 'right']]));
+    expect(comingNotes(chords, 1015, 'right', 1)).toEqual(new Map([[67, 'right']]));
+  });
+
+  it('comes round to the top of a loop, never past its end', () => {
+    const notes = [note(60, 0), note(64, 2500), note(67, 3100)];
+    const loop = { startMs: 0, endMs: 3000 };
+    expect(comingNotes(notes, 1000, 'right', 1, loop)).toEqual(new Map([[64, 'right']]));
+    // Near the end the next chord is the loop's first, 400 ms away, not 67.
+    expect(comingNotes(notes, 2600, 'right', 1, loop)).toEqual(new Map([[60, 'right']]));
+    expect(comingNotes(notes, 2600, 'right', 1)).toEqual(new Map([[67, 'right']]));
+    // The way round counts: a first chord far into the loop waits.
+    const late = [note(60, 1900), note(64, 2500)];
+    expect(comingNotes(late, 2600, 'right', 1, loop).size).toBe(0);
+  });
+
   it('leaves out notes the score hides', () => {
     const hidden = { ...note(74, 200, 'treble'), hidden: true } as NoteEvent;
     const withHidden = [...NOTES, hidden].sort((a, b) => a.startMs - b.startMs);
@@ -95,8 +129,28 @@ describe('screenCues', () => {
     clearScreenCues(play);
     expect([...getScreenCues().wrong]).toEqual([61]);
     clearScreenCues(learn);
-    expect(getScreenCues()).toBe(NO_SCREEN_CUES);
+    expect(getScreenCues()).toEqual(NO_SCREEN_CUES);
     expect(heard).toBe(3);
+    stop();
+  });
+
+  it('holds a lesson picture’s marks beside the key bed’s, unmoved by an equal redraw', () => {
+    const picture = Symbol('picture');
+    let heard = 0;
+    const stop = subscribeScreenCues(() => {
+      heard += 1;
+    });
+    publishPictureMarks(picture, [60], [62, 64]);
+    expect([...getScreenCues().pictured]).toEqual([60]);
+    expect([...getScreenCues().picturedSecond]).toEqual([62, 64]);
+    // A render hands over new arrays of the same keys: nothing changes.
+    publishPictureMarks(picture, [60], [64, 62]);
+    expect(heard).toBe(1);
+    clearPictureMarks(Symbol('another'));
+    expect(getScreenCues().pictured.size).toBe(1);
+    clearPictureMarks(picture);
+    expect(getScreenCues()).toEqual(NO_SCREEN_CUES);
+    expect(heard).toBe(2);
     stop();
   });
 });
