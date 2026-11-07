@@ -1,0 +1,791 @@
+{
+  "reviewed": "2026-11-07",
+  "sourceCommit": "9128876f6164d96997c877a2be843349a32bdabb",
+  "source": "https://github.com/musetrainer/library",
+  "standard": "Retain straightforward public-domain transcriptions under the upstream designation; exclude unresolved arrangements. This records the evidence and editorial decision, not a worldwide legal guarantee.",
+  "scores": [
+    {
+      "file": "12_Variations_of_Twinkle_Twinkle_Little_Star.mxl",
+      "sha256": "e82399bf868a9d8f93e1d9b5999bb231591e03257a7e2971cc379d3690b74112",
+      "gitBlob": "9f56c8b6b2e8cfc795cc8613582afe821e1cc6a2",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Mozart"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "Arabesque_L._66_No._1_in_E_Major.mxl",
+      "sha256": "d526127174a299c24486e9b5b074528c2153e8a4c5c82e3c1d9ad331032bb2b4",
+      "gitBlob": "8a360308b50e8a89057c7b6e497b072fc862644d",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Claude Achille Debussy(1862–1918)"
+        }
+      ],
+      "sources": ["https://musescore.com/user/19710/scores/55396"]
+    },
+    {
+      "file": "Ave_Maria_D839_-_Schubert_-_Solo_Piano_Arrg..mxl",
+      "sha256": "b29154686ca9dc995d603ef13cc9c3258938e57d800000a559ab7938095fb0da",
+      "gitBlob": "cbf1240b4bc751aacd91525498daf2c72eb8bf28",
+      "status": "excluded",
+      "basis": "Piano arrangement credited to Simon Ewers; no arrangement permission documented.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Schubert"
+        },
+        {
+          "role": "lyricist",
+          "name": "Simon Ewers"
+        }
+      ],
+      "sources": ["http://musescore.com/user/10783116/scores/4584986"]
+    },
+    {
+      "file": "Bach_Minuet_in_G_Major_BWV_Anh._114.mxl",
+      "sha256": "490aba9a679e06429e0b7e6e58e50701658389d64c3b5c91511af3ec68355b4d",
+      "gitBlob": "dd7f1b37b37d8a031a71379b4ee1bb4ceaddd968",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": ["Public Domain (PianoXML typeset)"],
+      "creators": [],
+      "sources": ["http://api.musescore.com/score/2086106"]
+    },
+    {
+      "file": "Bach_Toccata_and_Fugue_in_D_Minor_Piano_solo.mxl",
+      "sha256": "504e160a588bf1b7cff067dd6855720f0e694830e4fa1c945bd5a1e1265a15b2",
+      "gitBlob": "10b2d8b09491f5fb716ea787b2bdc3a4568c4cb9",
+      "status": "excluded",
+      "basis": "Piano adaptation of organ work; arranger and arrangement permission not established.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Beethoven_Symphony_No._5_1st_movement_Piano_solo.mxl",
+      "sha256": "4e3c41a54baedf019233a322da524264d1560a772d3f677849e0a9872bb07f71",
+      "gitBlob": "0c83281debb70a0c7c295410db67aad3058d74cd",
+      "status": "excluded",
+      "basis": "Piano reduction of orchestral work; arranger and permission not established.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Bella_Ciao.mxl",
+      "sha256": "35fbcb0ff5f82c78cf0299ea24d463c6fd7f37ee6eb625f2b9887dbf855f9f69",
+      "gitBlob": "332356ab6434c7ab6088118ed484bc9fa0a3e05f",
+      "status": "excluded",
+      "basis": "Unattributed piano setting of a traditional song; arrangement provenance unresolved.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/user/9429701/scores/4992158"]
+    },
+    {
+      "file": "Canon_in_D.mxl",
+      "sha256": "23762273abf1d6bd7001c89dc620bee6accf0045573078e2865e086df2f1bb14",
+      "gitBlob": "414983e063e05176bf873084da4a2bf14138c316",
+      "status": "excluded",
+      "basis": "Piano adaptation of a work for strings and continuo; arrangement provenance unresolved.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Johann Pachelbel"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "Canon_in_D_3.mxl",
+      "sha256": "5941582e4ee3089e8a87a10b630e71cc2498be3d151720d6815fd344e219dfa2",
+      "gitBlob": "8d0c219082d907e63093592b69f44422c08d0d6b",
+      "status": "excluded",
+      "basis": "Credits arrangement to Jacob Danao and carries a 2016 rights notice; no permission documented.",
+      "embeddedRights": ["2016"],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Johann Pachelbel"
+        },
+        {
+          "role": "lyricist",
+          "name": "Arr. by Jacob Danao"
+        }
+      ],
+      "sources": ["http://api.musescore.com/score/3161616"]
+    },
+    {
+      "file": "Canon_in_D_easy.mxl",
+      "sha256": "de018427df8cbe3bc8000bb08db058bf7ab6464fee4976ad691b0fd088433183",
+      "gitBlob": "22269111a5d84b05fd43ebe9baead6e434073958",
+      "status": "excluded",
+      "basis": "Simplified piano arrangement; no arrangement permission documented. Lesson now uses a new authored excerpt.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Pachelbel"
+        }
+      ],
+      "sources": ["http://musescore.com/score/1376056"]
+    },
+    {
+      "file": "Carol_of_the_Bells.mxl",
+      "sha256": "e77decb46c56df394826e69e3cccdbcfb48f0cbe78305c2a4756ad1661f31509",
+      "gitBlob": "a9b5b653c412a4ae3c9b02b6ed05c1827e3da854",
+      "status": "excluded",
+      "basis": "Credits Will_Ross rather than the historical composer; arrangement permission unresolved.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Will_Ross"
+        },
+        {
+          "role": "lyricist",
+          "name": "Will_Ross"
+        }
+      ],
+      "sources": ["http://musescore.com/score/3022181"]
+    },
+    {
+      "file": "Carol_of_the_Bells_easy_piano.mxl",
+      "sha256": "77d17e0d394740ea8daa34961c493bba3bbe8cb33619ed4c9428b9e9ead57b00",
+      "gitBlob": "853f1b2711ee419c5ea408fac8fade532cb81f57",
+      "status": "excluded",
+      "basis": "Modern simplified piano arrangement; edition permission unresolved.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/2782256"]
+    },
+    {
+      "file": "Chopin_-_Ballade_no._1_in_G_minor_Op._23.mxl",
+      "sha256": "2badc459bef62413448a93dda8f86598dd93d35f8f81c287f355737090e174de",
+      "gitBlob": "0550197452e1c6175c4bd8c857a219141b009a95",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Chopin"
+        }
+      ],
+      "sources": ["http://api.musescore.com/score/2182146"]
+    },
+    {
+      "file": "Chopin_-_Nocturne_Op._9_No._1.mxl",
+      "sha256": "858f821a7b410fe3667fc0196ac7fb47c831f203f4c0a363ccd5b5b752c50f6a",
+      "gitBlob": "df70e9dcb72815c6267d7a68cedd734af79ee855",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/169484"]
+    },
+    {
+      "file": "Chopin_-_Nocturne_Op_9_No_2_E_Flat_Major.mxl",
+      "sha256": "271cb6b0be8bad3f784bad4ea30fba26848f929d257b47ec9b43a77d39bc7969",
+      "gitBlob": "f62fecfbcbebee884f4a82456c562d75c5417e2d",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Fredrik Chopin"
+        }
+      ],
+      "sources": ["http://musescore.com/user/6662591/scores/4383881"]
+    },
+    {
+      "file": "Clair_de_lune_-_Claude_Debussy.mxl",
+      "sha256": "47bb4b35ec35f79eeaa2b9858c6b413793bdcc1317d3983e001d245e3e67939d",
+      "gitBlob": "b81cd0017f24afd97565b492e155d0e912f0ea8b",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Claude Debussy"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "Clair_de_Lune__Debussy.mxl",
+      "sha256": "1c2b0c329295a2b1cd1387f18a063fbb5672721574dbd32cf91a5daf0f551072",
+      "gitBlob": "375ffea2b1cd7441adb0cdd39c807a8a58f6440e",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Claude Debussy(1862 – 1918)"
+        }
+      ],
+      "sources": ["https://musescore.com/user/19710/scores/58553"]
+    },
+    {
+      "file": "Dance_of_the_sugar_plum_fairy.mxl",
+      "sha256": "e60c154a846be67a13fc9ed51108af8b17377eb6dcfbab40857e45419b761b90",
+      "gitBlob": "9d2311efb58fe03a4529c036e84c6ef0c62cbcf0",
+      "status": "excluded",
+      "basis": "Piano adaptation of orchestral ballet; arranger and permission unresolved.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Tchaikovsky"
+        }
+      ],
+      "sources": ["http://musescore.com/score/2899321"]
+    },
+    {
+      "file": "DANSE_VILLAGEOISE_Beethoven.mxl",
+      "sha256": "9feef438e49325d05dd5a27950244a97909500258470254ae532241e2640ce3a",
+      "gitBlob": "5c46950980493659b5f0f10762f8359a8fb53ba1",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": ["©"],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Erik_Satie_-_Gymnopedie_No.1.mxl",
+      "sha256": "dc0191ae303450692632fa60aec1b10b2528a0bab54159e530911ed2e8eeaafe",
+      "gitBlob": "ed2e969464f4fc903793c494308aa417e65b6451",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/980686"]
+    },
+    {
+      "file": "Flight_of_the_Bumblebee.mxl",
+      "sha256": "05e65c9bd597f9e60996066beec6b1a775ed1e0d635e7c811dfb116657ea1a51",
+      "gitBlob": "efa8203ceee7ae3963f578aac6f718a7a486177f",
+      "status": "excluded",
+      "basis": "Piano adaptation of operatic orchestral music; arranger and permission unresolved.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Fur_Elise.mxl",
+      "sha256": "21787ffe3196193718ecfdca7c8b631d63d7fe66b532635f4c5e9cab039c524f",
+      "gitBlob": "3650e302b256339d833eef40618a7991daa2b50d",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Ludwig van Beethoven(1770–1827)"
+        }
+      ],
+      "sources": ["https://musescore.com/user/19710/scores/33816"]
+    },
+    {
+      "file": "Fur_Elise_-_Beethoven_-_for_beginner_piano.mxl",
+      "sha256": "c3ae3d2a4f5642c23aa8691e8f6b6aa336ea1dce5f62f90a40fb3310a7f3014f",
+      "gitBlob": "a4d657f0038f22e487c17575626e4e9b87907a65",
+      "status": "excluded",
+      "basis": "Beginner adaptation; arrangement permission unresolved.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["https://musescore.com/classicman/scores/33816"]
+    },
+    {
+      "file": "Fur_Elise_Easy_Piano.mxl",
+      "sha256": "44efa40c1c927ba0d0ca89acd0d3659dcb4760a885b2054de0b8f4d4a763ab40",
+      "gitBlob": "77c8c38d2844f588c8967dbbeb80f6bec1554e8f",
+      "status": "excluded",
+      "basis": "Simplified adaptation; arrangement permission unresolved.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Fur_Elise_fingered.mxl",
+      "sha256": "bf3c7e9c0d7cbcabd3c8b4849e3e370a49b0915e09e525594842fc807cf7ab80",
+      "gitBlob": "1c868dc76cc1a314af84f75e097616e0543dec1e",
+      "status": "excluded",
+      "basis": "Explicitly credits arr. Verona and pianolessenassen.nl/bladmuziek; edition permission unresolved.",
+      "embeddedRights": ["pianolessenassen.nl/bladmuziek"],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "arr. Verona"
+        }
+      ],
+      "sources": ["https://musescore.com/user/2423821/scores/6647035"]
+    },
+    {
+      "file": "Gnossienne_No._1.mxl",
+      "sha256": "bac538dd28460a808f3d24a30900a9453fb4fc7b578a3b57c5d05384f3951840",
+      "gitBlob": "1f2987002ebd8ff6b07ec99b2d0c5b7b61d56ffe",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Erik Satie(1866 – 1925)"
+        },
+        {
+          "role": "lyricist",
+          "name": "Éric Alfred Leslie Satie"
+        }
+      ],
+      "sources": ["http://musescore.com/classicman/scores/4131536"]
+    },
+    {
+      "file": "Greensleeves_for_Piano_easy_and_beautiful.mxl",
+      "sha256": "0ad671a423701077141599cfc76dbbe3830150fabc5b32314b3428d1d159c940",
+      "gitBlob": "d67c11fbc66afb333e20b1bc8f2780be409dbfda",
+      "status": "excluded",
+      "basis": "Unattributed piano arrangement of traditional melody; permission unresolved.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Unknown"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "Gymnopdie_No._1__Satie.mxl",
+      "sha256": "caa620432bb90503e62f5978e60935bc881e633e594f2d83eb655152968e424b",
+      "gitBlob": "7843b33af2714d9ff982f04002177daa09982c7f",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Erik Satie(1866 – 1925)"
+        },
+        {
+          "role": "lyricist",
+          "name": "Éric Alfred Leslie Satie"
+        }
+      ],
+      "sources": ["https://musescore.com/user/19710/scores/4766391"]
+    },
+    {
+      "file": "Happy_Birthday_To_You_C_Major.mxl",
+      "sha256": "32cd97167d5c3dcef483c9d3e81a9e94b81e58f504416710c38524cd48b7eacf",
+      "gitBlob": "c86348d7cb0ab39eefb052026e7d368a2e968d0e",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/166951"]
+    },
+    {
+      "file": "Happy_Birthday_To_You_Piano.mxl",
+      "sha256": "f98c9081accdb360a5bc74ca8468f7f103d2d2fbd5b03e0121f988dac13e8feb",
+      "gitBlob": "52a3d4ffc02f39fa7157d428c46f5940d9701d46",
+      "status": "excluded",
+      "basis": "Explicitly credits Arranged by Manjuprasad; arrangement permission unresolved.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Arranged by Manjuprasad"
+        }
+      ],
+      "sources": ["http://musescore.com/user/27657013/scores/5282628"]
+    },
+    {
+      "file": "Hungarian_Dance_No_5_in_G_Minor.mxl",
+      "sha256": "578d9e52c3daf51c1e5be3ac826535bab30eed25711870b142c68c6001b52823",
+      "gitBlob": "9c1102a1577a0a943e124d1492a4948319fd2404",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Johannes Brahms"
+        }
+      ],
+      "sources": ["http://musescore.com/user/191208/scores/4776321"]
+    },
+    {
+      "file": "J._S._Bach_-_Air_on_the_G_String_Piano_arrangement.mxl",
+      "sha256": "f775a5978f723b7d6ab17103c94de6a0c663753d4379b1a1ee1be92f0c33de84",
+      "gitBlob": "4e9b1a67051efe3d93aacc277eeeafaf906553f3",
+      "status": "excluded",
+      "basis": "Piano arrangement without documented arranger permission.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "J. S. Bach"
+        }
+      ],
+      "sources": ["http://musescore.com/user/18625336/scores/3722131"]
+    },
+    {
+      "file": "La_Campanella_-_Grandes_Etudes_de_Paganini_No._3_-_Franz_Liszt.mxl",
+      "sha256": "2da9b329953a588aa0bc430aa798216fb726b5eaf6bcdeba0e45e454990324bd",
+      "gitBlob": "cc83c15b285ad5046e7380c0c1f173578ffed2c1",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Franz Liszt"
+        }
+      ],
+      "sources": ["http://musescore.com/user/15293341/scores/4426976"]
+    },
+    {
+      "file": "Lacrimosa_-_Requiem.mxl",
+      "sha256": "191331e36f0576506c2d76aaaf50265ff58450f6f629ac0974fa9166fc2e07f9",
+      "gitBlob": "741b43aaeb640f06e268ad4732acd6eeab3bdc9b",
+      "status": "excluded",
+      "basis": "Piano reduction of choral/orchestral work; arrangement permission unresolved.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://api.musescore.com/score/2275496"]
+    },
+    {
+      "file": "Liebestraum_No._3_in_A_Major.mxl",
+      "sha256": "1b99e590cf32f458973d9caea7c51774833286d41be303d80b2c756355147643",
+      "gitBlob": "332699a70b57469cb86f450e67ca8fac0ea4346a",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Franz Liszt(1811 - 1886)"
+        }
+      ],
+      "sources": ["https://musescore.com/score/65159"]
+    },
+    {
+      "file": "Maple_Leaf_Rag_Scott_Joplin.mxl",
+      "sha256": "5fe979be991095d18bb9ee3394bf70d26237e37903ab7e751ee32e30b8e6460a",
+      "gitBlob": "4318d052903e1144c678c77e7f5e05bd0578ffb2",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/user/116681/scores/145724"]
+    },
+    {
+      "file": "Minuet_in_G_Major_Bach.mxl",
+      "sha256": "916199657896f18ccab835efe700798dcc424b4e8f1a2b8356a5049bc68df532",
+      "gitBlob": "32437175506b1d6d8897ba7edbe51b69662084fc",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["https://musescore.com/classicman/scores/62312"]
+    },
+    {
+      "file": "moonlight_sonata_3rd_movement.mxl",
+      "sha256": "3d3aab3cca3be4a712cb72c2c1f355794615119b810cda0cedecd81a66b1f98a",
+      "gitBlob": "5405f3a2790d6c225af50850df1a7332ecf5b0e3",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "l.v.beethoven"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "Mozart_-_Piano_Sonata_No._16_-_Allegro.mxl",
+      "sha256": "5d188517c1dc05466e7298406139abe0d413339d69782a54abdb42060c5281c1",
+      "gitBlob": "040d0bd8f8c56dda2001d617df8dacba410a6393",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Nocturne_in_C_sharp_Minor.mxl",
+      "sha256": "31b11d67ba4afd376f6ef81a30420fa8c03af708c40fe392a70ec567f8db7502",
+      "gitBlob": "660921287b5b7dc693edde05eca59594da547edf",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Chopin"
+        }
+      ],
+      "sources": ["http://musescore.com/user/16938116/scores/3896061"]
+    },
+    {
+      "file": "Nocturne_in_E-flat_Major_Op._9_No._2_Easy.mxl",
+      "sha256": "14200f6a8765c00b5235c3bc1f5f4f577370e29fb669d73b7c7c443b47505fa9",
+      "gitBlob": "46940ea581166791f9ba0498d80c6ca93f80609c",
+      "status": "excluded",
+      "basis": "Explicitly credits arranger Murilo Pedroza; no arrangement permission documented.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "arranger",
+          "name": "Murilo Pedroza"
+        },
+        {
+          "role": "composer",
+          "name": "Frédéric Chopin"
+        }
+      ],
+      "sources": ["http://musescore.com/user/11105406/scores/3044996"]
+    },
+    {
+      "file": "Nocturne_No._20_in_C_Minor.mxl",
+      "sha256": "d657122d89b4c0658412d0afd4e96025ef49f461e83cf533ac5bf52989e9c200",
+      "gitBlob": "bb0cf5179f64848cbdeca96293245cfdd925bb98",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Ode_to_Joy_Easy_variation.mxl",
+      "sha256": "96e7b89cd7509749e554f8e7aaa4e566a33fdc9b7968115ed44b96da8c2f12b1",
+      "gitBlob": "166d9f52d1e4f9e684bc681467f56b30a8df9db1",
+      "status": "excluded",
+      "basis": "Unattributed new variation; permission unresolved. Authored first-steps version remains.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Piano_Sonata_No._11_K._331_3rd_Movement_Rondo_alla_Turca.mxl",
+      "sha256": "fecc02bf1ba2ce6c45977a2c614afe17ba1bdc59eb30de098401ce5fb031af83",
+      "gitBlob": "041bba517f0899eae9c5f26f7aff10496d9a57ca",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/classicman/scores/49143"]
+    },
+    {
+      "file": "Prelude_I_in_C_major_BWV_846_-_Well_Tempered_Clavier_First_Book.mxl",
+      "sha256": "286535dfb99cf841bfa9848e4cd71ddb2339c476a123971cb326b3d85e410018",
+      "gitBlob": "134e9d1555ca324530b71ced0f6a1c3c598c6780",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/117279"]
+    },
+    {
+      "file": "Prelude_No._2_BWV_847_in_C_Minor.mxl",
+      "sha256": "e7ccf882be8e032adc86b69a818c3288ce1be3c3dce16083ae1b9098173ea62f",
+      "gitBlob": "e28af439323b595d1cfebcb168f7b9a5835fa014",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/227966"]
+    },
+    {
+      "file": "Prlude_No._4_in_E_Minor_Op._28_-_Frdric_Chopin.mxl",
+      "sha256": "af16b22270dd243a6c4ecb627b840f4450e1d477ae2bc7c885ccb0ba25c4fd5d",
+      "gitBlob": "7d8abbd432591eca4a74160bdb735d1fa546310e",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": ["Public Domain"],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Frédéric Chopin"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "Prlude_Opus_28_No._4_in_E_Minor__Chopin.mxl",
+      "sha256": "700288637922ecd6fcab5047f0df4579c04819f517530a5103b6d5f26dfd6a5e",
+      "gitBlob": "f86cc25094045b9c8a9d93004545db02277752c7",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Fréderic François Chopin(1810–1849)"
+        },
+        {
+          "role": "lyricist",
+          "name": "Fryderyk Franciszek Chopin"
+        }
+      ],
+      "sources": ["https://musescore.com/user/19710/scores/65474"]
+    },
+    {
+      "file": "Schubert_Serenade_-_Standchen_-_By_Lizst.mxl",
+      "sha256": "61f0839768b7c6407501b4d8e8ab04fe0ba1564d0ae6db598126f01e4b47ec3e",
+      "gitBlob": "b8d6fdaad48f273592725cecc9f9821b830d597e",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Schubert"
+        }
+      ],
+      "sources": ["http://musescore.com/user/15453381/scores/3252906"]
+    },
+    {
+      "file": "Sonata_No._16_1st_Movement_K._545.mxl",
+      "sha256": "6bba95fc4775431e91f1003deefe991ec9e0d0333f1e08d2390d2d80fe236486",
+      "gitBlob": "f04eefbbf90e241b3c681a15129d5d48982e8914",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Sonate_No._14_Moonlight_1st_Movement.mxl",
+      "sha256": "720157f962523207a783d40e5c6573a131f943b38b73bd563f695a05bc3a4f78",
+      "gitBlob": "0cb13c413c31ec698607cef102a3ed9058ab1814",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/classicman/scores/55352"]
+    },
+    {
+      "file": "Sonate_No._14_Moonlight_3rd_Movement.mxl",
+      "sha256": "49998f449f3aa44620272029af30ca3221a954c999c24c9f338af6da65be016b",
+      "gitBlob": "13ac24178392bdd38599b9ffc911f597313080ef",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/classicman/scores/33715"]
+    },
+    {
+      "file": "Sonate_No._8_Pathetique_2nd_Movement.mxl",
+      "sha256": "88482d188e4b104d375f5ba065839fd0e8440e4efcb3a652f4b0ae6145faa3c0",
+      "gitBlob": "13bef918a90698cbb19efb810dffbb487d768561",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/49148"]
+    },
+    {
+      "file": "Swan_Lake.mxl",
+      "sha256": "5118e682a0b09e2b6e5107b3138edae211f6f63752fdd5ce7bd1ade55c7258b1",
+      "gitBlob": "49b16d76dd7b3bc4e929108a90a7731b5b87ca37",
+      "status": "excluded",
+      "basis": "Piano adaptation of orchestral ballet; arrangement provenance unresolved.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Pyotr Ilyich Tchaikovsky"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "The_Entertainer_-_Scott_Joplin.mxl",
+      "sha256": "c9b23cc70947fdc4a3c2cdbb223b1b44165fa88eb655dec7ad6e1a4b0e989e53",
+      "gitBlob": "54417df1f1ee8a5bd825d2456f8c62058fff4069",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/162108"]
+    },
+    {
+      "file": "The_Entertainer_-_Scott_Joplin_-_1902.mxl",
+      "sha256": "e11fc1386747c1dd5d1ca352b65da23653d15d241aee17a2f42354c14f61eba7",
+      "gitBlob": "f1aa9855bed3d31808e47ea02b340d2e8d0dce22",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": ["Public Domain"],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Scott Joplin"
+        }
+      ],
+      "sources": []
+    },
+    {
+      "file": "WA_Mozart_Marche_Turque_Turkish_March_fingered.mxl",
+      "sha256": "897cf71bf9728163316cb46cffa1dadfd7da5dbadcfbe8d22cac80ddee50390a",
+      "gitBlob": "e4fb3d9c95965b04ffec83afeb2a8c0472caf541",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": []
+    },
+    {
+      "file": "Waltz_in_A_MinorChopin.mxl",
+      "sha256": "07c809a6d0f4bab8c6a3f11a10694087c8ecc8bd421e9ee0977cd17339a06613",
+      "gitBlob": "fbf5ee6a8d2edaf42529512b69840da419f0610e",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/1749181"]
+    },
+    {
+      "file": "Waltz_of_the_Flowers.mxl",
+      "sha256": "745f06e9e8ea0d2e9f2fc6d1b8c63c3195238acbb57826144376982edd6432c6",
+      "gitBlob": "acc3d12a192b99914f31586a5b83f4fca3c7b380",
+      "status": "excluded",
+      "basis": "Piano adaptation of orchestral ballet; arrangement provenance unresolved.",
+      "embeddedRights": [],
+      "creators": [
+        {
+          "role": "composer",
+          "name": "Tchaikovsky"
+        }
+      ],
+      "sources": ["http://musescore.com/user/124709/scores/1131706"]
+    },
+    {
+      "file": "Waltz_Opus_64_No._2_in_C_Minor.mxl",
+      "sha256": "2fafb3a6bd7e4775c662195a1bd8ddd6b8ce19c6034a8c6040ba9fd6c3c1ec50",
+      "gitBlob": "979e8cb2f1ad956751a09c32146f463366ba4a2e",
+      "status": "retained",
+      "basis": "Retained under the upstream public-domain designation as a transcription of historical public-domain music; no contrary arrangement claim identified in this review.",
+      "embeddedRights": [],
+      "creators": [],
+      "sources": ["http://musescore.com/score/55375"]
+    }
+  ]
+}

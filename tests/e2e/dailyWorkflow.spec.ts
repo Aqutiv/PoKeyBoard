@@ -24,6 +24,7 @@ test('library restores the search after opening a result and switching folders',
 }) => {
   await page.goto('/#/library');
   await page.getByRole('button', { name: 'Classics', exact: true }).click();
+  const allClassics = await page.locator('.library-item').count();
   const filter = page.getByRole('searchbox', { name: 'Filter classics' });
   await filter.fill('fur elise');
   const count = await page.locator('.library-item').count();
@@ -37,7 +38,7 @@ test('library restores the search after opening a result and switching folders',
   await expect(filter).toHaveValue('fur elise');
   await page.getByRole('button', { name: 'Clear filter' }).click();
   await expect(filter).toHaveValue('');
-  await expect(page.locator('.library-item')).toHaveCount(64);
+  await expect(page.locator('.library-item')).toHaveCount(allClassics);
 });
 
 test('Now playing stays visible when paused, resumes, and disappears on stop', async ({ page }) => {

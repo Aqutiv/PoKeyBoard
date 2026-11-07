@@ -7,10 +7,12 @@
  * "public domain" in its README, and its filenames match MuseScore.com
  * uploads. Two consequences shape this script:
  *
- *   1. EXCLUSIONS below drops the files whose *compositions* are modern and in
- *      copyright despite what the filename claims (several are misattributed
- *      to Chopin or Bach). Each entry carries its reason.
- *   2. Everything kept is recorded in SOURCES.md with its upstream blob hash,
+ *   1. EXCLUSIONS below drops modern copyrighted compositions (several are
+ *      misattributed to Chopin or Bach) and unresolved arrangements of older
+ *      works. Each entry carries its reason.
+ *   2. Straightforward transcriptions are retained under the upstream public-domain
+ *      designation. Unresolved arrangements are excluded. Every decision is
+ *      recorded in store/score-rights.json and SOURCES.md with its upstream blob hash,
  *      so the curation decision is auditable and reversible per file.
  *
  * Even for public-domain compositions, a typeset edition can carry rights of
@@ -36,10 +38,53 @@ const PINNED_SHA = '9128876f6164d96997c877a2be843349a32bdabb';
 const OUT_DIR = fileURLToPath(new URL('../public/scores/classics-v1/', import.meta.url));
 
 /**
- * Files left behind, by upstream filename. These are not public-domain
- * compositions — the filenames misattribute several of them.
+ * Files left behind, by upstream filename: modern compositions and unresolved
+ * arrangements, including several misleading composer attributions.
  */
 const EXCLUSIONS = {
+  'Ave_Maria_D839_-_Schubert_-_Solo_Piano_Arrg..mxl':
+    'Piano arrangement credited to Simon Ewers; no arrangement permission documented.',
+  'Bach_Toccata_and_Fugue_in_D_Minor_Piano_solo.mxl':
+    'Piano adaptation of organ work; arranger and arrangement permission not established.',
+  'Beethoven_Symphony_No._5_1st_movement_Piano_solo.mxl':
+    'Piano reduction of orchestral work; arranger and permission not established.',
+  'Bella_Ciao.mxl':
+    'Unattributed piano setting of a traditional song; arrangement provenance unresolved.',
+  'Canon_in_D.mxl':
+    'Piano adaptation of a work for strings and continuo; arrangement provenance unresolved.',
+  'Canon_in_D_3.mxl':
+    'Credits arrangement to Jacob Danao and carries a 2016 rights notice; no permission documented.',
+  'Canon_in_D_easy.mxl':
+    'Simplified piano arrangement; no arrangement permission documented. Lesson now uses a new authored excerpt.',
+  'Carol_of_the_Bells.mxl':
+    'Credits Will_Ross rather than the historical composer; arrangement permission unresolved.',
+  'Carol_of_the_Bells_easy_piano.mxl':
+    'Modern simplified piano arrangement; edition permission unresolved.',
+  'Dance_of_the_sugar_plum_fairy.mxl':
+    'Piano adaptation of orchestral ballet; arranger and permission unresolved.',
+  'Flight_of_the_Bumblebee.mxl':
+    'Piano adaptation of operatic orchestral music; arranger and permission unresolved.',
+  'Fur_Elise_-_Beethoven_-_for_beginner_piano.mxl':
+    'Beginner adaptation; arrangement permission unresolved.',
+  'Fur_Elise_Easy_Piano.mxl': 'Simplified adaptation; arrangement permission unresolved.',
+  'Fur_Elise_fingered.mxl':
+    'Explicitly credits arr. Verona and pianolessenassen.nl/bladmuziek; edition permission unresolved.',
+  'Greensleeves_for_Piano_easy_and_beautiful.mxl':
+    'Unattributed piano arrangement of traditional melody; permission unresolved.',
+  'Happy_Birthday_To_You_Piano.mxl':
+    'Explicitly credits Arranged by Manjuprasad; arrangement permission unresolved.',
+  'J._S._Bach_-_Air_on_the_G_String_Piano_arrangement.mxl':
+    'Piano arrangement without documented arranger permission.',
+  'Lacrimosa_-_Requiem.mxl':
+    'Piano reduction of choral/orchestral work; arrangement permission unresolved.',
+  'Nocturne_in_E-flat_Major_Op._9_No._2_Easy.mxl':
+    'Explicitly credits arranger Murilo Pedroza; no arrangement permission documented.',
+  'Ode_to_Joy_Easy_variation.mxl':
+    'Unattributed new variation; permission unresolved. Authored first-steps version remains.',
+  'Swan_Lake.mxl': 'Piano adaptation of orchestral ballet; arrangement provenance unresolved.',
+  'Waltz_of_the_Flowers.mxl':
+    'Piano adaptation of orchestral ballet; arrangement provenance unresolved.',
+
   'Mariage_dAmour.mxl': 'Paul de Senneville, 1979 — in copyright, not Chopin.',
   'Chopin_-_Spring_Waltz.mxl': "Same piece as Mariage d'Amour; not by Chopin.",
   'Spring_Waltz_Mariage_dAmour_-_Chopin.mxl': "Same piece as Mariage d'Amour; not by Chopin.",
@@ -104,9 +149,9 @@ function sourcesMarkdown(kept) {
     `- Regenerate with: \`node scripts/vendor-classics.mjs\``,
     '',
     'Upstream ships no LICENSE file; its README asserts these are public-domain',
-    'works. The files below were kept on the basis that the *composition* is in',
-    'the public domain. The engravings themselves are third-party typesettings and',
-    'may carry rights of their own.',
+    'works. Straightforward transcriptions are retained under that designation.',
+    'Unresolved piano arrangements and adaptations are excluded after the',
+    '2026-11-07 review. See store/score-rights.json for per-file evidence.',
     '',
     '## Included',
     '',
@@ -116,8 +161,8 @@ function sourcesMarkdown(kept) {
     '',
     '## Excluded',
     '',
-    'Present upstream, deliberately not vendored — the compositions are modern and',
-    'in copyright, whatever the filename claims.',
+    'Not shipped: modern compositions or arrangements whose permissions remain',
+    'unresolved. An exclusion is not a claim that the original composition is protected.',
     '',
     '| File | Reason |',
     '| --- | --- |',

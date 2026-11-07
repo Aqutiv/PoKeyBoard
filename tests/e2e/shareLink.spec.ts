@@ -175,6 +175,25 @@ test.describe('share links', () => {
     await expect(dialog).toContainText('the link only names it');
   });
 
+  test('explains a withdrawn score link without fetching or replacing a personal take', async ({
+    page,
+  }) => {
+    await gotoAppReady(page);
+    await importTake(page, longTake());
+    const scoreRequests: string[] = [];
+    page.on('request', (request) => {
+      if (request.url().includes('/scores/')) scoreRequests.push(request.url());
+    });
+    await page.goto('/#/lib/score-canon-in-d-easy');
+    const alert = page.getByRole('alertdialog');
+    await expect(alert).toContainText('This link names a piece the Library does not have');
+    await alert.getByRole('button', { name: 'Close' }).click();
+    await expect(page.locator('.play-header__title')).toHaveText('Long evening');
+    expect(scoreRequests).toEqual([]);
+    await page.reload();
+    await expect(page.locator('.play-header__title')).toHaveText('Long evening');
+  });
+
   test('say why a damaged link would not open', async ({ page }) => {
     await page.goto('/#/s/1.not-a-take');
     const alert = page.getByRole('alertdialog', { name: 'Import take' });

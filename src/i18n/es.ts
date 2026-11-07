@@ -279,6 +279,8 @@ export const es: Messages = {
     opening: 'Abriendo…',
     openFailed: 'No se pudo abrir esa pista. Comprueba tu conexión e inténtalo de nuevo.',
     descriptions: {
+      canonFirstSteps:
+        'Una nueva adaptación breve del Canon de Pachelbel: el bajo, seguido de una melodía para la mano derecha en re mayor.',
       aBeautifulDay:
         'Una melodía original cálida y suave que cabe entera en las teclas visibles — una primera pieza fácil de seguir.',
       eveningTide:
@@ -781,8 +783,10 @@ export const es: Messages = {
       },
     ],
     privacyTitle: 'Dónde vive tu música',
+    privacyLink: 'Política de privacidad',
+    supportLink: 'Ayuda',
     privacyBody:
-      'No hay cuenta, ni servidor, ni nada que subir. Las tomas y los ajustes se escriben en el almacenamiento de este navegador, en este dispositivo, y el micrófono nunca se usa: todo lo que oyes se sintetiza a partir de las notas que tocaste.',
+      'Las tomas, el progreso y los ajustes se guardan en este navegador, en tu dispositivo. No hay cuenta ni subida automática de música, y la grabación nunca usa el micrófono. La política de privacidad explica el alojamiento y las opciones para compartir.',
     backgroundHint:
       'El audio normalmente se pausa cuando la app pasa a segundo plano o la pantalla se bloquea. Las tomas son locales a este perfil del navegador — la app instalada puede usar un almacenamiento distinto, así que exporta respaldos JSON de lo importante.',
     installTitle: 'Instálala',

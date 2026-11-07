@@ -279,6 +279,8 @@ export const en: Messages = {
     opening: 'Opening…',
     openFailed: 'That track could not be opened. Check your connection and try again.',
     descriptions: {
+      canonFirstSteps:
+        'A short, newly arranged introduction to Pachelbel’s Canon: the ground bass, then a right-hand melody in D major.',
       aBeautifulDay:
         'A warm, gentle original tune that sits entirely on the visible keys — an easy first piece to follow.',
       eveningTide:
@@ -777,8 +779,10 @@ export const en: Messages = {
       },
     ],
     privacyTitle: 'Where your music lives',
+    privacyLink: 'Privacy policy',
+    supportLink: 'Support',
     privacyBody:
-      'There is no account, no server, and nothing to upload. Takes and settings are written to this browser’s storage on this device, and the microphone is never touched — everything you hear is synthesised from the notes you played.',
+      'Takes, practice progress, and settings stay in this browser’s storage on your device. There is no account or automatic music upload, and recording never uses the microphone. Hosting and optional sharing are explained in the privacy policy.',
     backgroundHint:
       'Audio normally pauses when the app goes to the background or the screen locks. Takes are local to this browser profile — installing the app can use separate storage, so export JSON backups for anything important.',
     installTitle: 'Install it',

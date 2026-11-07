@@ -17,3 +17,4 @@ assets/
 .agents/
 .claude/
 *.plan
+store/artifacts/

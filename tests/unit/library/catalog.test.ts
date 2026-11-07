@@ -28,6 +28,7 @@ describe('library catalog', () => {
       'good-night',
       'moonlight-sonata',
       'ode-to-joy-first-steps',
+      'canon-in-d-first-steps',
       'where-starlight-lingers',
       'silverwood-tale',
     ]);
@@ -49,11 +50,17 @@ describe('library catalog', () => {
       LIBRARY_FOLDER_SUMMARIES.classics
         .filter((track) => track.source === 'authored')
         .map((track) => track.trackId),
-    ).toEqual(['fur-elise', 'gymnopedie-1', 'moonlight-sonata', 'ode-to-joy-first-steps']);
+    ).toEqual([
+      'fur-elise',
+      'gymnopedie-1',
+      'moonlight-sonata',
+      'ode-to-joy-first-steps',
+      'canon-in-d-first-steps',
+    ]);
     expect(
-      LIBRARY_FOLDER_SUMMARIES.classics.slice(0, 4).every((t) => t.source === 'authored'),
+      LIBRARY_FOLDER_SUMMARIES.classics.slice(0, 5).every((t) => t.source === 'authored'),
     ).toBe(true);
-    expect(LIBRARY_FOLDER_SUMMARIES.classics.slice(4).every((t) => t.source === 'score')).toBe(
+    expect(LIBRARY_FOLDER_SUMMARIES.classics.slice(5).every((t) => t.source === 'score')).toBe(
       true,
     );
     // The default folder is the one shown before the user has chosen.
@@ -89,6 +96,7 @@ describe('library catalog', () => {
       'gymnopedie-1',
       'moonlight-sonata',
       'ode-to-joy-first-steps',
+      'canon-in-d-first-steps',
     ]);
     expect(groups.length).toBeGreaterThan(1);
     // Every later section is a real composer holding only their own tracks.
@@ -323,7 +331,7 @@ describe('library catalog', () => {
    * Tracks a Learn chapter hands off to, which are exactly as long as the
    * lesson that teaches them — short on purpose, not a snippet by accident.
    */
-  const LESSON_PIECES = new Set(['ode-to-joy-first-steps']);
+  const LESSON_PIECES = new Set(['ode-to-joy-first-steps', 'canon-in-d-first-steps']);
 
   for (const def of LIBRARY_TRACKS) {
     describe(`track "${def.trackId}"`, () => {

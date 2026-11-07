@@ -204,13 +204,10 @@ describe('noteFingers against the library’s printed fingers', () => {
   // The library's scores that print fingers.
   const FINGERED = [
     'Chopin_-_Ballade_no._1_in_G_minor_Op._23.mxl',
-    'Fur_Elise_fingered.mxl',
     'The_Entertainer_-_Scott_Joplin.mxl',
     'Chopin_-_Nocturne_Op_9_No_2_E_Flat_Major.mxl',
-    'Canon_in_D_easy.mxl',
     'WA_Mozart_Marche_Turque_Turkish_March_fingered.mxl',
     'Waltz_in_A_MinorChopin.mxl',
-    'Greensleeves_for_Piano_easy_and_beautiful.mxl',
   ];
 
   it('agrees with the editors on as many notes as it did when written, working blind', async () => {
@@ -231,10 +228,10 @@ describe('noteFingers against the library’s printed fingers', () => {
     }
     // Every finger the scores print on a note that is struck, grace notes and
     // held ties aside.
-    expect(printed).toBe(1428);
-    // 809 of them (57%) since The Entertainer's two parts were read as its two
-    // hands. A change to the costs that agrees with the editors less often
-    // should be a deliberate one.
-    expect(agreed).toBeGreaterThanOrEqual(809);
+    expect(printed).toBe(1131);
+    // 636 of them (56%) in the retained score set after the rights review.
+    // The fingering algorithm is unchanged; only the three withdrawn fixtures
+    // were removed. Lower agreement should be a deliberate change.
+    expect(agreed).toBeGreaterThanOrEqual(636);
   }, 60_000);
 });

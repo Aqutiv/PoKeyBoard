@@ -136,6 +136,15 @@ export function AboutPage() {
 
         <h2 className="about__section">{m.about.privacyTitle}</h2>
         <p className="page__hint">{m.about.privacyBody}</p>
+        <p className="about__links">
+          <ExternalLink href={`${import.meta.env.BASE_URL}privacy.html`}>
+            {m.about.privacyLink}
+          </ExternalLink>
+          {' · '}
+          <ExternalLink href={`${import.meta.env.BASE_URL}support.html`}>
+            {m.about.supportLink}
+          </ExternalLink>
+        </p>
         <p className="page__hint">{m.about.backgroundHint}</p>
 
         <h2 className="about__section">{m.about.installTitle}</h2>

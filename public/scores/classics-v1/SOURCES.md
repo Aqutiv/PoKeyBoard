@@ -7,12 +7,15 @@ Vendored from the MuseTrainer public-domain MusicXML library.
 - Retrieved: 2026-07-28
 - Regenerate with: `node scripts/vendor-classics.mjs`
 
-Upstream ships no LICENSE file; its README asserts these are public-domain
-works. The files below were kept on the basis that the *composition* is in
-the public domain. The engravings themselves are third-party typesettings and
-may carry rights of their own.
+Upstream describes this library as public domain. The 2026-11-07 review retains
+38 straightforward transcriptions under that designation and withdraws 22
+unresolved arrangements. Per-file decisions, embedded credits, rights statements,
+and SHA-256 hashes are recorded in `store/score-rights.json` in the source repo.
+The historical inventory below records the original import, including withdrawn
+files; it does not imply those files remain shipped. The vendor script excludes
+all withdrawn editions.
 
-## Included
+## Original import inventory (2026-07-28)
 
 | File | Bytes | Upstream blob |
 | --- | --- | --- |

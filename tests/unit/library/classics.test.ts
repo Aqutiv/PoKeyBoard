@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 import { describe, expect, it } from 'vitest';
@@ -12,6 +12,21 @@ import { SCORE_PACK_PATH } from '@/features/library/scoreLoader';
 const PACK_DIR = path.resolve(process.cwd(), 'public', SCORE_PACK_PATH);
 
 describe('vendored classics', () => {
+  it('ships only the editions retained by the rights review', () => {
+    const audit = JSON.parse(readFileSync('store/score-rights.json', 'utf8')) as {
+      scores: { file: string; status: string }[];
+    };
+    const retained = audit.scores
+      .filter((score) => score.status === 'retained')
+      .map((score) => score.file)
+      .sort();
+    expect(CLASSIC_SCORES.map((entry) => entry.file).sort()).toEqual(retained);
+    expect(
+      readdirSync(PACK_DIR)
+        .filter((file) => file.endsWith('.mxl'))
+        .sort(),
+    ).toEqual(retained);
+  });
   it('ships a manifest entry for every score, each with a file on disk', () => {
     expect(CLASSIC_SCORES.length).toBeGreaterThan(0);
     for (const entry of CLASSIC_SCORES) {

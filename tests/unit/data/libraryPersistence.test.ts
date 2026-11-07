@@ -76,13 +76,20 @@ describe('startup restore of library takes', () => {
 
   it('falls back to an empty take when the catalog entry is gone', async () => {
     const g = await freshGraph();
-    await g.setMetadata(g.metaLastOpen, 'library:retired-track');
+    const personal = createEmptyTake({ title: 'My imported arrangement' });
+    const repository = await import('@/data/takeRepository');
+    await repository.saveTake(personal);
+    const personalRow = await g.db.takes.get(personal.id);
+    const retiredId = 'library:score-canon-in-d-easy';
+    await g.setMetadata(g.metaLastOpen, retiredId);
 
     await g.persistenceService.init();
 
     const active = g.useTakeStore.getState().take;
-    expect(active.id).not.toBe('library:retired-track');
+    expect(active.id).not.toBe(retiredId);
     expect(active.notes).toHaveLength(0);
+    expect(await g.db.takes.get(personal.id)).toEqual(personalRow);
+    expect(await repository.getTake(personal.id)).toEqual(personal);
   });
 
   it('bounds the score download so an unreachable one cannot hang boot', async () => {

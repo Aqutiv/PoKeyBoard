@@ -23,6 +23,40 @@ import { chooseSettingsSection, gotoAppReady, nav } from './helpers';
 test.use({ serviceWorkers: 'allow' });
 
 test.describe('offline shell', () => {
+  test('public information pages remain readable offline and old score caches are retired', async ({
+    page,
+    context,
+  }) => {
+    // A static page does not register the worker: seed the old cache before
+    // the new app activates, simulating an upgrade from the previous release.
+    await page.goto('/support.html');
+    await expect(
+      page.getByRole('heading', { name: 'PoKeyBoard support', exact: true }),
+    ).toBeVisible();
+    await page.evaluate(async () => {
+      const old = await caches.open('pokeyboard-library-scores-v1');
+      await old.put('/scores/classics-v1/retired.mxl', new Response('old score'));
+      const unrelated = await caches.open('user-test-cache');
+      await unrelated.put('/my-recording', new Response('personal content'));
+    });
+    await page.goto('/');
+    await page.waitForFunction(() => navigator.serviceWorker?.controller !== null);
+    await expect
+      .poll(() => page.evaluate(() => caches.has('pokeyboard-library-scores-v1')))
+      .toBe(false);
+    expect(await page.evaluate(() => caches.has('user-test-cache'))).toBe(true);
+    await context.setOffline(true);
+    for (const [url, title] of [
+      ['privacy.html', 'Privacy policy'],
+      ['support.html', 'PoKeyBoard support'],
+    ]) {
+      await page.goto(`/${url}?from=store`);
+      await expect(page.getByRole('heading', { name: title, exact: true })).toBeVisible();
+      await expect(page.locator('#root')).toHaveCount(0);
+    }
+    await context.setOffline(false);
+  });
+
   test('service worker activates and the shell loads offline', async ({ page, context }) => {
     // Not gotoAppReady: the shell and the worker are what is under test, and the
     // sample decode is unrelated to both.

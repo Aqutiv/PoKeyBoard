@@ -8,7 +8,12 @@ import {
 } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { CacheFirst } from 'workbox-strategies';
-import { LIBRARY_SCORE_CACHE, PIANO_SAMPLE_CACHE, STALE_PIANO_SAMPLE_CACHES } from './cacheNames';
+import {
+  LIBRARY_SCORE_CACHE,
+  PIANO_SAMPLE_CACHE,
+  STALE_LIBRARY_SCORE_CACHES,
+  STALE_PIANO_SAMPLE_CACHES,
+} from './cacheNames';
 
 declare const self: ServiceWorkerGlobalScope & {
   __WB_MANIFEST: Array<PrecacheEntry | string>;
@@ -18,8 +23,26 @@ declare const self: ServiceWorkerGlobalScope & {
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
 
-// Offline navigation fallback: every navigation serves the precached shell.
-registerRoute(new NavigationRoute(createHandlerBoundToURL('index.html')));
+// Ignore referral query strings for these static documents, too. The default
+// precache matcher only ignores known tracking parameters such as utm_*.
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('privacy.html'), {
+    allowlist: [/\/privacy\.html(?:\?|$)/],
+  }),
+);
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('support.html'), {
+    allowlist: [/\/support\.html(?:\?|$)/],
+  }),
+);
+
+// Public information pages have their own precached HTML. Never replace them
+// with the app shell, including a query-string visit while offline.
+registerRoute(
+  new NavigationRoute(createHandlerBoundToURL('index.html'), {
+    denylist: [/\/(?:privacy|support)\.html(?:\?|$)/],
+  }),
+);
 
 // Versioned, immutable piano samples: Cache First, shared with the explicit
 // "Download piano for offline use" flow. Purging on quota pressure protects
@@ -40,7 +63,7 @@ registerRoute(
 // Vendored library scores: same Cache First treatment as the samples, and for
 // the same reason — the files are immutable under a versioned path, so a score
 // stays playable offline once it has been opened. Deliberately left out of the
-// precache: 1.2 MB of scores would otherwise ride along with every install and
+// precache: the scores would otherwise ride along with every install and
 // every app update, for tracks most users never open.
 //
 // Matched narrowly, on purpose. URL import fetches arbitrary links, and the
@@ -58,7 +81,13 @@ registerRoute(
 // cleanupOutdatedCaches() only covers workbox precaches, so superseded sample
 // caches (keyed by the old .mp3 URLs) are dropped explicitly.
 self.addEventListener('activate', (event: ExtendableEvent) => {
-  event.waitUntil(Promise.all(STALE_PIANO_SAMPLE_CACHES.map((name) => caches.delete(name))));
+  event.waitUntil(
+    Promise.all(
+      [...STALE_PIANO_SAMPLE_CACHES, ...STALE_LIBRARY_SCORE_CACHES].map((name) =>
+        caches.delete(name),
+      ),
+    ),
+  );
 });
 
 // Updates activate only when the user applies them at a safe moment

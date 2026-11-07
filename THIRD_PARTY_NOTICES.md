@@ -2,6 +2,19 @@
 
 PoKeyBoard bundles the following third-party assets and libraries.
 
+## Classical repertoire and score editions
+
+The imported MusicXML files retained for distribution are documented individually
+in [store/score-rights.json](store/score-rights.json), with their source hashes,
+credits, embedded rights statements and retention basis. The 2026-11-07 review
+retains 38 straightforward transcriptions under the MuseTrainer library's
+public-domain designation and excludes 22 unresolved arrangements. See
+[store/RIGHTS.md](store/RIGHTS.md) for the review standard and authored-track sources.
+
+The independently entered Canon in D (first steps) teaching arrangement uses
+Pachelbel's public-domain ground bass and opening melody; it does not use an
+imported piano arrangement.
+
 ## Salamander Grand Piano v3 (piano samples)
 
 - **Author:** Alexander Holm
