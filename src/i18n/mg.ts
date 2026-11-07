@@ -676,7 +676,7 @@ export const mg: Messages = {
     midiError: 'Tsy afaka nampandeha ny MIDI.',
     bluetoothMidi: 'Klavie Bluetooth',
     bluetoothMidiHint:
-      'Tendreo tsy misy tariby ny klavie MIDI Bluetooth, toy ny PartyKeys: velomy, ampifandraiso eto, dia mitendry toy ny klavie USB izy. Mifandray indray ho azy izy isaky ny mandeha ny MIDI.',
+      'Tendreo tsy misy tariby ny klavie MIDI Bluetooth: velomy, ampifandraiso eto, dia mitendry toy ny klavie USB izy. Mifandray indray ho azy izy isaky ny mandeha ny MIDI.',
     bluetoothMidiConnect: 'Ampifandraiso',
     bluetoothMidiReconnect: ({ name }) => `Ampifandraiso indray ${name}`,
     bluetoothMidiDisconnect: 'Esory ny fifandraisana',

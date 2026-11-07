@@ -671,7 +671,7 @@ export const fr: Messages = {
     midiError: 'Impossible de démarrer le MIDI.',
     bluetoothMidi: 'Clavier Bluetooth',
     bluetoothMidiHint:
-      'Jouez sur un clavier MIDI Bluetooth, comme un PartyKeys, sans câble : allumez-le, connectez-le ici, et il joue comme un clavier USB. Il se reconnecte dès que le MIDI est activé.',
+      'Jouez sur un clavier MIDI Bluetooth sans câble : allumez-le, connectez-le ici, et il joue comme un clavier USB. Il se reconnecte dès que le MIDI est activé.',
     bluetoothMidiConnect: 'Connecter',
     bluetoothMidiReconnect: ({ name }) => `Reconnecter ${name}`,
     bluetoothMidiDisconnect: 'Déconnecter',

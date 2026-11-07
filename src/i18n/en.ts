@@ -665,7 +665,7 @@ export const en: Messages = {
     midiError: 'MIDI could not be started.',
     bluetoothMidi: 'Bluetooth keyboard',
     bluetoothMidiHint:
-      'Play a Bluetooth MIDI keyboard, such as a PartyKeys, without a cable: turn it on, connect it here, and it plays like a USB one. It is reconnected whenever MIDI is on.',
+      'Play a Bluetooth MIDI keyboard without a cable: turn it on, connect it here, and it plays like a USB one. It is reconnected whenever MIDI is on.',
     bluetoothMidiConnect: 'Connect',
     bluetoothMidiReconnect: ({ name }) => `Reconnect ${name}`,
     bluetoothMidiDisconnect: 'Disconnect',
