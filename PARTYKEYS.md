@@ -16,7 +16,14 @@ higher in the list wins (`keyLightModel.ts`), as on screen:
 | Wrong key (practice, Learn)                                | Red, while it flashes on screen                                                                   |
 | Held on screen, the computer keyboard or a game controller | Gold, brighter for a harder press                                                                 |
 | Played by the take                                         | Its hand's colour (right gold, left orange), dimmer for a softer note when velocity shading is on |
+| Waited for by a Wait-for-me hold                           | Its note's hand colour, full                                                                      |
+| Asked for by a lesson hint (Learn)                         | Accent gold, full                                                                                 |
+| The practised hand's next chord (Wait for me, Keep time)   | Its hand colour, dim (LED level 40), within 2 s of being due                                      |
 | Anything else                                              | Dark                                                                                              |
+
+Hold targets are read from the transport itself, so they light on any tab; lesson hints and wrong
+keys are what the key bed on screen marks (`src/features/keyboard/screenCues.ts`). Learn keeps
+its own hint timing: a key lights when the lesson shows its hint, not before.
 
 Keys held on the PartyKeys itself light white. The firmware draws that over any host colour, and
 the host colour comes back on release. Notes outside the 36 keys aren't drawn. The keyboard's

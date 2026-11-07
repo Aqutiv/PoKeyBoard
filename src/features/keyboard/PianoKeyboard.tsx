@@ -53,6 +53,7 @@ import {
 import { keyShade } from './keyShading';
 import { cuesMove, NO_KEYS, takeCuesAt } from './playbackCues';
 import { KeyboardPointerTracker } from './pointerTracker';
+import { clearScreenCues, publishScreenCues } from './screenCues';
 import { SoundingNotes } from './soundingNotes';
 import { registerMidiKeyboard } from './useMidiInput';
 import './keyboard.css';
@@ -360,6 +361,13 @@ export const PianoKeyboard = memo(function PianoKeyboard({
     const next = anchorToReveal(lowest, layout.lowMidi, visibleWhites);
     if (next !== layout.lowMidi) setAnchorMidi(next);
   }, [revealTargets, targetMidis, layout.lowMidi, layout.highMidi, visibleWhites, setAnchorMidi]);
+
+  // A light-up keyboard shows the keys asked for and the wrong ones too.
+  const [cueOwner] = useState(() => Symbol('PianoKeyboard'));
+  useEffect(() => {
+    publishScreenCues(cueOwner, targetMidis, wrongMidis);
+  }, [cueOwner, targetMidis, wrongMidis]);
+  useEffect(() => () => clearScreenCues(cueOwner), [cueOwner]);
 
   const [tracker] = useState(
     () =>

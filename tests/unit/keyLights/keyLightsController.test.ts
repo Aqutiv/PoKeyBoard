@@ -8,7 +8,14 @@ import {
   RETRY_AFTER_FAILURE_MS,
   type KeyLightsDeps,
 } from '@/features/keyLights/keyLightsController';
-import { handLight } from '@/features/keyLights/ledColours';
+import type { KeyLightScene } from '@/features/keyLights/keyLightModel';
+import {
+  COMING_LEVEL,
+  dimLight,
+  handLight,
+  ledColour,
+  LIGHT_COLOURS,
+} from '@/features/keyLights/ledColours';
 import type { LightLink, LightLinksSnapshot } from '@/features/keyLights/lightLinks';
 import {
   allDark,
@@ -104,9 +111,17 @@ function controller(): KeyLightsController {
     backgroundPlayback: () => false,
     subscribeVisibility: () => () => undefined,
     subscribePageHide: () => () => undefined,
+    extras: () => scenery,
+    subscribeExtras: (listener) => {
+      extrasChanged = listener;
+      return () => undefined;
+    },
   };
   return new KeyLightsController(deps);
 }
+
+let scenery: Pick<KeyLightScene, 'targets' | 'wrong' | 'coming'>;
+let extrasChanged: () => void = () => undefined;
 
 /** Connects `link`, lets the startup run, and clears what it sent. */
 async function connect(link: FakeLink) {
@@ -123,6 +138,7 @@ beforeEach(() => {
   enabled = true;
   hidden = false;
   frames = null;
+  scenery = { targets: new Map(), wrong: new Set(), coming: new Map() };
   stop = controller().start();
 });
 
@@ -256,6 +272,31 @@ describe('KeyLightsController', () => {
     transport();
     await vi.advanceTimersByTimeAsync(50);
     expect(link.take()).toEqual(sameBytes(rgbFrames([{ key: 12, colour: { r: 0, g: 0, b: 0 } }])));
+  });
+
+  it('shows what practice and lessons ask for, as soon as it changes', async () => {
+    const link = new FakeLink('usb:1');
+    await connect(link);
+    scenery = {
+      targets: new Map<number, 'left' | 'right' | null>([
+        [60, 'left'],
+        [62, null],
+      ]),
+      wrong: new Set([64]),
+      coming: new Map([[65, 'right' as const]]),
+    };
+    extrasChanged();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(link.take()).toEqual(
+      sameBytes(
+        rgbFrames([
+          { key: 12, colour: ledColour(LIGHT_COLOURS.left) },
+          { key: 14, colour: ledColour(LIGHT_COLOURS.target) },
+          { key: 16, colour: ledColour(LIGHT_COLOURS.wrong) },
+          { key: 17, colour: dimLight(LIGHT_COLOURS.right, COMING_LEVEL) },
+        ]),
+      ),
+    );
   });
 
   it('reports the keyboard it lights, and a USB one waiting on SysEx', () => {
