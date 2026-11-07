@@ -76,6 +76,8 @@ Sources, as PianoBallDesktop cites them (`docs/PARTYKEYS-KEY-LIGHTS.md` there):
   - Right gold, left orange and wrong-key red, squared, read as three distinct colours, and closer
     to the screen than the raw colours.
   - The softest note (42% strength) and a dim level-40 hint were visible and clearly quieter.
+  - The whole path, from Settings → Key lights to a Library track playing: the keys lit in time
+    with the music.
 - **Bluetooth:** not yet checked on hardware. PianoBallDesktop lit this keyboard from CMD 15 over
   a direct Bluetooth link, and found that on Windows it fails _uncached_ GATT service discovery.
   If Chrome hits the same failure, the console names the step (`Bluetooth MIDI service failed`).

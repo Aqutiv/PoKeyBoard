@@ -290,6 +290,9 @@ export class KeyLightsController {
   private onButton(): void {
     const now = this.deps.now();
     this.holdUntil = now + BUTTON_HOLD_MS;
+    // Colours still going out would land on the keyboard's own hints; the
+    // repaint after the hold draws every key anyway.
+    this.batch += 1;
     this.session.repaintAll();
     if (this.repaintTimer !== null) this.deps.clearTimer(this.repaintTimer);
     this.repaintTimer = this.deps.setTimer(() => {
