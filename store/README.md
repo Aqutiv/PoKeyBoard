@@ -2,8 +2,10 @@
 
 Publisher: Idan Robbins. Product: PoKeyBoard, `9PGS4N7RZWFF`.
 
-The first submission is a draft. Do not submit it for certification without the
-publisher's separate review. [Open Partner Center](https://partner.microsoft.com/en-us/dashboard/products/9PGS4N7RZWFF/overview).
+The publisher authorized certification submission on November 7, 2026. Partner
+Center accepted the submission and shows **In certification**, with automatic
+publishing after approval. See `READINESS.md` for validation results and remaining
+manual checks. [Open Partner Center](https://partner.microsoft.com/en-us/dashboard/products/9PGS4N7RZWFF/overview).
 
 ## Reproducible inputs
 

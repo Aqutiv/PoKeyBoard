@@ -1,23 +1,25 @@
-# PoKeyBoard Microsoft Store draft readiness
+# PoKeyBoard Microsoft Store submission record
 
-As of November 7, 2026, the Partner Center draft is complete and both final Store
-packages are validated. Certification has **not** been submitted. Local validation
-of the final package still has the outstanding items listed below.
+On November 7, 2026, the publisher explicitly authorized submission and PoKeyBoard
+was submitted for certification. Partner Center shows **In certification**, with
+submission complete and pre-processing underway. The product will start publishing
+as soon as it passes certification. Both final Store packages are validated and
+the final Windows App Certification Kit run passed all 24 tests. Local manual
+validation still has the outstanding items listed below.
 
-[Open the draft](https://partner.microsoft.com/en-us/dashboard/products/9PGS4N7RZWFF/overview).
+[Open the submission](https://partner.microsoft.com/en-us/dashboard/products/9PGS4N7RZWFF/overview).
 
 ## Completed
 
 - Publisher **Idan Robbins**, product **PoKeyBoard**, Store ID **9PGS4N7RZWFF**.
 - Pricing and availability, properties, age ratings, packages, Store listings,
-  and submission options all show **Complete**. The certification submission
-  button is available and has not been clicked.
+  and submission options all showed **Complete** before submission.
 - Free, Music category, public discoverability, 240 eligible markets and future
   markets. Packages target Windows PCs; other device families are unchecked.
 - English (US), French (France), and Spanish (Spain) listings, each with five
   genuine 1920×1080 PNG screenshots: playing, practice, lessons, library, takes.
 - Age ratings saved after the publisher explicitly approved the IARC terms and
-  legal-age declaration. General-audience ratings are saved in the draft.
+  legal-age declaration. General-audience ratings are included in the submission.
 - Public privacy and support pages are deployed, linked from About with translated
   labels, and covered by offline routing tests. MIDI/Bluetooth, local data,
   sharing, backups, deletion, and GitHub Pages logging are disclosed.
@@ -64,11 +66,12 @@ The first installed-package Windows App Certification Kit run reports overall
 four generated tile PNGs over 200 KiB. Those images were subsequently reduced,
 visually inspected, repacked with MakeAppx, and accepted by Partner Center.
 
-The final WACK rerun has **not** completed: Windows reported that the elevation
-request was canceled. `artifacts/run-wack.ps1` is prepared to test the currently
-installed PoKeyBoard package. The existing `wack-report.xml` and
-`wack-before-image-optimization.xml` are the **initial** report, not evidence of a
-final-version rerun.
+After the publisher approved the Windows elevation prompt, the final WACK rerun
+completed on November 7, 2026 at 23:22:50 local time for installed version
+`1.0.3.0`: **PASS**, `PARTIAL_RUN=FALSE`, **24 of 24 tests PASS**, exit code 0.
+The report is `artifacts/wack-final-1.0.3.0-20261107-232224.xml`;
+`wack-latest-report.txt` points to it. The existing `wack-report.xml` and
+`wack-before-image-optimization.xml` remain the **initial** report.
 
 Still to verify on the final installed package:
 
@@ -83,7 +86,9 @@ Still to verify on the final installed package:
 ## Evidence and reproduction
 
 `artifacts/store-draft-complete.jpg` shows all six sections complete and both
-packages validated. The artifacts directory also holds original captures, PNG
+packages validated. `artifacts/store-submitted.jpg` confirms the accepted
+submission and automatic publishing after certification. The artifacts directory
+also holds original captures, PNG
 listing screenshots, original/generated/rebuilt archives, image-size records,
 installation output, manifests, hashes, and WACK logs.
 
