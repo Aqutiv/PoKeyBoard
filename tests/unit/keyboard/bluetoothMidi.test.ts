@@ -78,6 +78,17 @@ describe('bluetoothMidi', () => {
     watch.stop();
   });
 
+  it('reads the MIDI characteristic once before notifications start, as BLE-MIDI asks', async () => {
+    await connectBluetoothMidi();
+    expect(device.characteristic.calls).toEqual(['read', 'notify']);
+  });
+
+  it('still connects a keyboard that does not allow the initial read', async () => {
+    device.characteristic.refuseRead = true;
+    await connectBluetoothMidi();
+    expect(getBluetoothMidiSnapshot().kind).toBe('connected');
+  });
+
   it('turns notifications into whole MIDI messages on the port', async () => {
     const watch = latestPorts();
     await connectBluetoothMidi();

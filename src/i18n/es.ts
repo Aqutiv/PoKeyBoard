@@ -665,7 +665,7 @@ export const es: Messages = {
     midiError: 'No se pudo iniciar el MIDI.',
     bluetoothMidi: 'Teclado Bluetooth',
     bluetoothMidiHint:
-      'Toca un teclado MIDI Bluetooth, como un PartyKeys, sin cable: enciéndelo, conéctalo aquí y suena como uno USB. Se vuelve a conectar siempre que el MIDI está activado.',
+      'Toca un teclado MIDI Bluetooth sin cable: enciéndelo, conéctalo aquí y suena como uno USB. Se vuelve a conectar siempre que el MIDI está activado.',
     bluetoothMidiConnect: 'Conectar',
     bluetoothMidiReconnect: ({ name }) => `Reconectar ${name}`,
     bluetoothMidiDisconnect: 'Desconectar',
