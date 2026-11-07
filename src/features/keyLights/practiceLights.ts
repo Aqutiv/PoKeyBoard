@@ -26,32 +26,34 @@ function firstStartingAfter(notes: readonly NoteEvent[], ms: number): number {
   return low;
 }
 
+/** A playhead this close before a note's onset is at it: a hold parks exactly there. */
+const AT_ONSET_MS = 1;
+
 /**
- * The hand of each key a hold waits for: the note on that key starting at the
- * hold, where the playhead stands. A key with no such note (none should be)
- * takes no hand.
+ * The hand of each key a hold waits for, from the notes the hold asks for:
+ * those `hand` is asked to play in its chord, which starts where the playhead
+ * parks and runs `CHORD_WINDOW_MS` on. Nothing before the hold counts, so a
+ * key the other hand struck just before keeps nothing of its colour. A key
+ * with no such note (none should be) takes no hand.
  */
 export function holdTargetHands(
   notes: readonly NoteEvent[],
   targets: ReadonlySet<number>,
   playheadMs: number,
+  hand: TrainingHand,
 ): Map<number, Hand | null> {
   const hands = new Map<number, Hand | null>();
   if (targets.size === 0) return hands;
-  // A hold's chord spans CHORD_WINDOW_MS from its first note; the playhead
-  // can sit a rounding hair either side of it.
-  const from = firstStartingAfter(notes, playheadMs - CHORD_WINDOW_MS - 1);
-  for (let i = from; i < notes.length; i += 1) {
+  for (let i = firstStartingAfter(notes, playheadMs - AT_ONSET_MS); i < notes.length; i += 1) {
     const note = notes[i] as NoteEvent;
-    if (note.startMs > playheadMs + CHORD_WINDOW_MS + 1) break;
-    if (targets.has(note.midi) && !hands.has(note.midi)) hands.set(note.midi, noteHand(note));
+    if (note.startMs > playheadMs + CHORD_WINDOW_MS + AT_ONSET_MS) break;
+    if (targets.has(note.midi) && asksFor(note, hand) && !hands.has(note.midi)) {
+      hands.set(note.midi, noteHand(note));
+    }
   }
   for (const midi of targets) if (!hands.has(midi)) hands.set(midi, null);
   return hands;
 }
-
-/** A playhead this close before a note's onset is at it: a hold parks exactly there. */
-const AT_ONSET_MS = 1;
 
 interface Chord {
   readonly onsetMs: number;

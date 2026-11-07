@@ -32,7 +32,7 @@ const NOTES = [
 
 describe('holdTargetHands', () => {
   it('gives each key a hold waits for the hand of its note at the hold', () => {
-    expect(holdTargetHands(NOTES, new Set([52, 76]), 1000)).toEqual(
+    expect(holdTargetHands(NOTES, new Set([52, 76]), 1000, 'both')).toEqual(
       new Map([
         [52, 'left'],
         [76, 'right'],
@@ -41,8 +41,18 @@ describe('holdTargetHands', () => {
   });
 
   it('takes no hand for a key with no note there', () => {
-    expect(holdTargetHands(NOTES, new Set([61]), 1000)).toEqual(new Map([[61, null]]));
-    expect(holdTargetHands(NOTES, new Set(), 1000).size).toBe(0);
+    expect(holdTargetHands(NOTES, new Set([61]), 1000, 'both')).toEqual(new Map([[61, null]]));
+    expect(holdTargetHands(NOTES, new Set(), 1000, 'both').size).toBe(0);
+  });
+
+  it('reads the hand from the notes the hold asks for, not one the other hand struck just before', () => {
+    // A bass C4 at 980, then the treble C4 a right-hand hold at 1000 asks for.
+    const both = [note(60, 980, 'bass'), note(60, 1000, 'treble')];
+    expect(holdTargetHands(both, new Set([60]), 1000, 'right')).toEqual(new Map([[60, 'right']]));
+    // The same key in both hands at the hold itself: the practised hand's.
+    const unison = [note(60, 1000, 'bass'), note(60, 1010, 'treble')];
+    expect(holdTargetHands(unison, new Set([60]), 1000, 'right')).toEqual(new Map([[60, 'right']]));
+    expect(holdTargetHands(unison, new Set([60]), 1000, 'left')).toEqual(new Map([[60, 'left']]));
   });
 });
 

@@ -25,15 +25,19 @@ function practiceScene(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming' | '
   const state = transportController.getState();
   const playheadMs = transportController.getPlayheadMs();
   const held = transportController.getTrainingTargets();
+  const hand = practiceHandFor(useSettingsStore.getState().playbackMode);
 
   const targets = new Map<number, Hand | null>();
   for (const midi of screen.pictured) targets.set(midi, null);
   for (const midi of screen.targets) targets.set(midi, null);
-  for (const [midi, hand] of holdTargetHands(notes, held, playheadMs)) targets.set(midi, hand);
+  if (hand !== null) {
+    for (const [midi, from] of holdTargetHands(notes, held, playheadMs, hand)) {
+      targets.set(midi, from);
+    }
+  }
 
   // Practice plays (Keep time counts in while playing, too) or holds. A
   // recording's count-in is `countIn`, and asks nothing of a practised hand.
-  const hand = practiceHandFor(useSettingsStore.getState().playbackMode);
   const practising = hand !== null && (state === 'playing' || held.size > 0);
   const coming = practising
     ? comingNotes(
