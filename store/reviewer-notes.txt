@@ -1,0 +1,22 @@
+PoKeyBoard is a free piano, practice, and recording PWA. No account, payment, subscription, or special credentials are required.
+
+FIRST LAUNCH AND AUDIO
+Connect to the internet on first launch so the app shell and piano samples can load. Click a piano key (or another control) to allow browser audio. Use the on-screen keyboard or the computer-key labels on the piano. Check the app volume and Windows output if silent. The app records note events and pedal actions; it does not request microphone access.
+
+CORE FLOW
+Open Library, choose an authored track such as A Beautiful Day, and use Play. Practice can slow playback, loop a phrase, and wait for played notes. Learn provides guided exercises. Record a few notes, stop, name the take, and reopen it from Takes. Local takes persist on this device; no cloud account is involved.
+
+OPTIONAL HARDWARE
+No hardware is required. Settings > Playing offers compatible Web MIDI inputs. Bluetooth MIDI uses an optional device chooser on supported Windows/browser configurations. Canceling or denying a hardware permission leaves the on-screen and computer keyboard usable. PartyKeys lighting is optional and only relevant to compatible devices.
+
+OFFLINE
+In Settings > Sound, choose a piano and download its complete sample pack for offline use. Keep the app open until download completion, then disconnect and relaunch. The app shell, public privacy/support pages, and the downloaded piano should work offline. Library MusicXML scores become available offline after opening them online. URL import and external support links require a connection. Other pianos may need their own download.
+
+IMPORT, EXPORT, AND SHARING
+Takes supports user-selected imports (PoKeyBoard JSON, MIDI, MusicXML/MXL) and local backups. Export controls provide take JSON, MIDI, MP3/FLAC audio, and PDF sheet music. Files are generated locally. Sharing uses the Windows/browser share interface, a download fallback, or a link carrying take data in its fragment. Sharing is user initiated; there is no in-app public feed, messaging system, or user account directory.
+
+LANGUAGES AND UPDATES
+Settings offers English, French, Spanish, and Malagasy interfaces. Detailed lesson text currently falls back to English. Store copy is provided in English, French, and Spanish. Web updates are offered in Settings and deferred during active recording; Windows package updates are delivered by Microsoft Store. Existing takes and settings use the same storage formats. The hosted app and a browser profile may have separate local storage.
+
+Privacy: https://aqutiv.github.io/PoKeyBoard/privacy.html
+Support: https://aqutiv.github.io/PoKeyBoard/support.html

@@ -45,6 +45,8 @@ export interface LibraryTrackDef {
   timeSignature: TimeSignature;
   countInBars?: CountInBars;
   quantization?: QuantizationSetting;
+  /** Explicit signature for an authored teaching arrangement. */
+  keySignature?: number;
   /** 'bar' lays a sustain-pedal cycle under every bar (lifting just before the next). */
   pedal?: 'bar' | 'none';
   /**
@@ -129,6 +131,7 @@ export function buildLibraryTake(def: LibraryTrackDef): Take {
       bpm: def.bpm,
       timeSignature: def.timeSignature,
       countInBars: def.countInBars ?? 1,
+      ...(def.keySignature !== undefined ? { keySignature: def.keySignature } : {}),
       ...(changes.length > 0 ? { changes } : {}),
     },
     notes: sorted,

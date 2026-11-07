@@ -103,7 +103,7 @@ export const scalesBeyondCEn: ChapterProse = {
     heading: 'That is chapter three',
     body: [
       'Every major scale is the same staircase. G major lands on one black key, F sharp; D major on two, F sharp and C sharp; F major on one, B flat. And the fingers follow one rule — the thumb stays off the black keys — which is why F major crosses a note later than the others.',
-      'The button below opens Pachelbel’s Canon in D on Play, waiting for your right hand. Its tune comes in at bar five with the D major scale walking down in long, slow notes. On a computer keyboard, X and Z move the rows up and down an octave there too.',
+      'The button below opens our short beginner arrangement of Pachelbel’s Canon in D on Play, waiting for your right hand. Its tune comes in at bar five with the D major scale walking down in long, slow notes. On a computer keyboard, X and Z move the rows up and down an octave there too.',
       'Next: minor keys — the same signatures, with a different home.',
     ],
   },

@@ -2046,11 +2046,11 @@ describe('intermediate chapter three', () => {
 
   it('hands off to the Canon in D, whose right hand comes in walking down the D major scale', () => {
     expect(SCALES_BEYOND_C.handoff).toEqual({
-      trackId: 'score-canon-in-d-easy',
+      trackId: 'canon-in-d-first-steps',
       mode: 'training-right',
     });
-    expect(handoffTitle('score-canon-in-d-easy')).toBe('Canon in D (easy)');
-    const take = handoffTake('score-canon-in-d-easy');
+    expect(handoffTitle('canon-in-d-first-steps')).toBe('Canon in D (first steps)');
+    const take = handoffTake('canon-in-d-first-steps');
     if (!take) throw new Error('expected the Canon');
     expect(take.tempo.keySignature).toBe(2);
     const map = createTakeTempoMap(take.tempo);

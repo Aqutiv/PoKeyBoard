@@ -105,6 +105,13 @@ describe('resolveLibraryTake', () => {
     expect(take?.title).toBe('A Beautiful Day');
   });
 
+  it('does not fetch a withdrawn edition, even if an old share link names it', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    expect(await resolveLibraryTake(libraryTakeId('score-canon-in-d-easy'))).toBeUndefined();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
   it('resolves vendored scores and ignores ids from neither source', async () => {
     stubFetch();
     const take = await resolveLibraryTake(libraryTakeId(SAMPLE.trackId));

@@ -3,6 +3,8 @@ node_modules/
 dist/
 dev-dist/
 *.tsbuildinfo
+.worktrees/
+store/artifacts/
 
 # Test artifacts
 coverage/

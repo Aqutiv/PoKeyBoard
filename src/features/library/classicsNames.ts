@@ -28,10 +28,6 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
     title: 'Arabesque No. 1',
     composer: 'Claude Debussy',
   },
-  'score-ave-maria-d839-schubert-solo-piano-arrg': {
-    title: 'Ave Maria, D. 839',
-    composer: 'Franz Schubert',
-  },
   'score-bach-minuet-in-g-major-bwv-anh-114': {
     // Long credited to Bach; the Notebook for Anna Magdalena piece is Petzold's.
     title: 'Minuet in G major, BWV Anh. 114',
@@ -41,14 +37,6 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
     title: 'Minuet in G major, BWV Anh. 114 (alternate edition)',
     composer: 'Christian Petzold',
   },
-  'score-bach-toccata-and-fugue-in-d-minor-piano-solo': {
-    title: 'Toccata and Fugue in D minor, BWV 565',
-    composer: 'Johann Sebastian Bach',
-  },
-  'score-j-s-bach-air-on-the-g-string-piano-arrangement': {
-    title: 'Air on the G String',
-    composer: 'Johann Sebastian Bach',
-  },
   'score-prelude-i-in-c-major-bwv-846-well-tempered-clavier-first-book': {
     title: 'Prelude in C major, BWV 846',
     composer: 'Johann Sebastian Bach',
@@ -57,32 +45,12 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
     title: 'Prelude in C minor, BWV 847',
     composer: 'Johann Sebastian Bach',
   },
-  'score-beethoven-symphony-no-5-1st-movement-piano-solo': {
-    title: 'Symphony No. 5 — first movement',
-    composer: 'Ludwig van Beethoven',
-  },
   'score-danse-villageoise-beethoven': {
     title: 'Danse villageoise',
     composer: 'Ludwig van Beethoven',
   },
   'score-fur-elise': {
     title: 'Für Elise (complete)',
-    composer: 'Ludwig van Beethoven',
-  },
-  'score-fur-elise-fingered': {
-    title: 'Für Elise (fingered)',
-    composer: 'Ludwig van Beethoven',
-  },
-  'score-fur-elise-beethoven-for-beginner-piano': {
-    title: 'Für Elise (beginner)',
-    composer: 'Ludwig van Beethoven',
-  },
-  'score-fur-elise-easy-piano': {
-    title: 'Für Elise (easy)',
-    composer: 'Ludwig van Beethoven',
-  },
-  'score-ode-to-joy-easy-variation': {
-    title: 'Ode to Joy (easy)',
     composer: 'Ludwig van Beethoven',
   },
   'score-sonate-no-14-moonlight-1st-movement': {
@@ -101,30 +69,6 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
     title: 'Pathétique Sonata — second movement',
     composer: 'Ludwig van Beethoven',
   },
-  'score-bella-ciao': {
-    title: 'Bella ciao',
-    composer: 'Traditional',
-  },
-  'score-canon-in-d': {
-    title: 'Canon in D',
-    composer: 'Johann Pachelbel',
-  },
-  'score-canon-in-d-3': {
-    title: 'Canon in D (shorter setting)',
-    composer: 'Johann Pachelbel',
-  },
-  'score-canon-in-d-easy': {
-    title: 'Canon in D (easy)',
-    composer: 'Johann Pachelbel',
-  },
-  'score-carol-of-the-bells': {
-    title: 'Carol of the Bells',
-    composer: 'Mykola Leontovych',
-  },
-  'score-carol-of-the-bells-easy-piano': {
-    title: 'Carol of the Bells (easy)',
-    composer: 'Mykola Leontovych',
-  },
   'score-chopin-ballade-no-1-in-g-minor-op-23': {
     title: 'Ballade No. 1 in G minor, Op. 23',
     composer: 'Frédéric Chopin',
@@ -135,10 +79,6 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
   },
   'score-chopin-nocturne-op-9-no-2-e-flat-major': {
     title: 'Nocturne in E♭ major, Op. 9 No. 2',
-    composer: 'Frédéric Chopin',
-  },
-  'score-nocturne-in-e-flat-major-op-9-no-2-easy': {
-    title: 'Nocturne in E♭ major, Op. 9 No. 2 (easy)',
     composer: 'Frédéric Chopin',
   },
   'score-nocturne-no-20-in-c-minor': {
@@ -185,18 +125,6 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
     title: 'Gnossienne No. 1',
     composer: 'Erik Satie',
   },
-  'score-flight-of-the-bumblebee': {
-    title: 'Flight of the Bumblebee',
-    composer: 'Nikolai Rimsky-Korsakov',
-  },
-  'score-greensleeves-for-piano-easy-and-beautiful': {
-    title: 'Greensleeves',
-    composer: 'Traditional',
-  },
-  'score-happy-birthday-to-you-piano': {
-    title: 'Happy Birthday to You',
-    composer: 'Traditional',
-  },
   'score-happy-birthday-to-you-c-major': {
     title: 'Happy Birthday to You (C major)',
     composer: 'Traditional',
@@ -218,10 +146,6 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
     // the piece in a group of one and sort the list under "Liszt".
     title: 'Ständchen (Serenade), arr. Liszt',
     composer: 'Franz Schubert',
-  },
-  'score-lacrimosa-requiem': {
-    title: 'Lacrimosa, from the Requiem',
-    composer: 'Wolfgang Amadeus Mozart',
   },
   'score-mozart-piano-sonata-no-16-allegro': {
     title: 'Piano Sonata No. 16, K. 545 — Allegro',
@@ -250,17 +174,5 @@ export const CLASSIC_SCORE_NAMES: Record<string, ClassicScoreName> = {
   'score-the-entertainer-scott-joplin-1902': {
     title: 'The Entertainer (1902 edition)',
     composer: 'Scott Joplin',
-  },
-  'score-dance-of-the-sugar-plum-fairy': {
-    title: 'Dance of the Sugar Plum Fairy',
-    composer: 'Pyotr Ilyich Tchaikovsky',
-  },
-  'score-waltz-of-the-flowers': {
-    title: 'Waltz of the Flowers',
-    composer: 'Pyotr Ilyich Tchaikovsky',
-  },
-  'score-swan-lake': {
-    title: 'Swan Lake (theme)',
-    composer: 'Pyotr Ilyich Tchaikovsky',
   },
 };

@@ -61,6 +61,8 @@ export default defineConfig({
         name: 'PoKeyBoard',
         short_name: 'PoKeyBoard',
         description: 'Play, record, and share piano performances from your browser.',
+        lang: 'en',
+        categories: ['music', 'education'],
         start_url: basePath,
         scope: basePath,
         display: 'standalone',

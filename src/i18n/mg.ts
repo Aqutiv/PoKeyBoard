@@ -286,6 +286,8 @@ export const mg: Messages = {
     opening: 'Manokatra…',
     openFailed: 'Tsy afaka nosokafana io hira io. Jereo ny fifandraisanao dia andramo indray.',
     descriptions: {
+      canonFirstSteps:
+        'Fandaminana fohy vaovao amin’ny Canon an’i Pachelbel: feo ambany, avy eo feon-kira amin’ny tanana havanana amin’ny Re lehibe.',
       aBeautifulDay:
         'Hira noforonina, mafana sy malefaka, mipetraka manontolo eo amin’ny kitendry hita — tsara hanombohana.',
       eveningTide:
@@ -792,8 +794,10 @@ export const mg: Messages = {
       },
     ],
     privacyTitle: 'Aiza no misy ny mozikanao',
+    privacyLink: 'Politikan’ny fiainana manokana',
+    supportLink: 'Fanampiana',
     privacyBody:
-      'Tsy misy kaonty, tsy misy serivera, tsy misy alefa any ivelany. Voasoratra ao amin’ny fitehirizan’ity navigatera ity, eto amin’ity fitaovana ity, ny rakitra sy ny safidy, ary tsy kasihina mihitsy ny mikrô — avy amin’ny naoty notendrenao no anaovana ny feo rehetra renao.',
+      'Voatahiry ato amin’ity navigateur ity, amin’ny fitaovanao, ny rakipeo, ny fandrosoana ary ny fikirana. Tsy mila kaonty, tsy alefa ho azy ny mozikanao, ary tsy mampiasa mikrô ny fandraisam-peo. Hazavaina ao amin’ny politikan’ny fiainana manokana ny fampiantranoana sy ny fizarana.',
     backgroundHint:
       'Mitsahatra matetika ny feo rehefa lasa ambadika ny rindrambaiko na mihidy ny efijery. An’ity profil navigatera ity ihany ny rakitra — mety hampiasa fitehirizana hafa ny rindrambaiko voapetraka, koa avoahy ho tahiry JSON izay rehetra manan-danja.',
     installTitle: 'Apetraho',

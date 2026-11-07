@@ -153,7 +153,7 @@ const byHeart = (pitchClasses: readonly PitchClass[]): ExerciseSpec => ({
 export const SCALES_BEYOND_C: LearnChapter = {
   id: 'scalesBeyondC',
   handoff: {
-    trackId: 'score-canon-in-d-easy',
+    trackId: 'canon-in-d-first-steps',
     mode: 'training-right',
   },
   steps: [

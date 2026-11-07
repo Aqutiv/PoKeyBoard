@@ -457,6 +457,7 @@ export interface Messages {
       crookedLanternWaltz: string;
       furElise: string;
       odeToJoyFirstSteps: string;
+      canonFirstSteps: string;
       gymnopedie1: string;
       bluesInC: string;
       goodNight: string;
@@ -826,6 +827,8 @@ export interface Messages {
     features: readonly { title: string; body: string }[];
     privacyTitle: string;
     privacyBody: string;
+    privacyLink: string;
+    supportLink: string;
     backgroundHint: string;
     installTitle: string;
     installBody: string;

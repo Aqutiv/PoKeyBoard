@@ -1,0 +1,20 @@
+{
+  "storeId": "9PGS4N7RZWFF",
+  "submissionId": "1152921505702342512",
+  "packageIdentityName": "IdanRobbins.PoKeyBoard",
+  "publisher": "CN=A93C3002-92A6-4C36-8714-D7DE434D5EFE",
+  "publisherDisplayName": "Idan Robbins",
+  "packageFamilyName": "IdanRobbins.PoKeyBoard_8vr0ex233z9f0",
+  "packageVersion": "1.0.0.0",
+  "displayName": "PoKeyBoard",
+  "url": "https://aqutiv.github.io/PoKeyBoard/",
+  "privacyUrl": "https://aqutiv.github.io/PoKeyBoard/privacy.html",
+  "supportUrl": "https://aqutiv.github.io/PoKeyBoard/support.html",
+  "websiteUrl": "https://aqutiv.github.io/PoKeyBoard/",
+  "category": "Music",
+  "price": "Free",
+  "languages": ["en-us", "fr-fr", "es-es"],
+  "deviceFamilies": ["Windows.Desktop"],
+  "draftUrl": "https://partner.microsoft.com/en-us/dashboard/products/9PGS4N7RZWFF/overview",
+  "certificationSubmissionAuthorized": false
+}

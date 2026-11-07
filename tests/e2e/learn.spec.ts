@@ -1766,8 +1766,8 @@ test.describe('intermediate chapter three', () => {
     await expect(
       page.getByText('It opens in Training, so Play waits for you at every note.'),
     ).toBeVisible();
-    await page.getByRole('button', { name: 'Practise Canon in D (easy) on Play' }).click();
-    await expect(page.locator('.play-header__title')).toHaveText('Canon in D (easy)', {
+    await page.getByRole('button', { name: 'Practise Canon in D (first steps) on Play' }).click();
+    await expect(page.locator('.play-header__title')).toHaveText('Canon in D (first steps)', {
       timeout: 30_000,
     });
     await expect.poll(() => persistedSetting(page, 'playbackMode')).toBe('training-right');

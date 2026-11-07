@@ -32,8 +32,8 @@ test.describe('library folders', () => {
     await expect(page.getByRole('button', { name: 'Open A Beautiful Day' })).toBeVisible();
 
     await folders(page).getByRole('button', { name: 'Classics' }).click();
-    // Three authored transcriptions plus the vendored pack.
-    expect(await trackButtons(page).count()).toBeGreaterThan(50);
+    // Five authored transcriptions plus the vendored pack.
+    expect(await trackButtons(page).count()).toBeGreaterThan(30);
     await expect(page.getByRole('button', { name: 'Open Für Elise', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Open A Beautiful Day' })).toHaveCount(0);
   });
@@ -60,13 +60,13 @@ test.describe('library folders', () => {
     // Scrolled by reaching for a track well down the list, not by setting an
     // offset: the track that gets opened has to be one the click does not scroll
     // back to the top to reach.
-    const track = page.getByRole('button', { name: 'Open Canon in D', exact: true });
+    const track = page.getByRole('button', { name: 'Open La campanella', exact: true });
     await track.scrollIntoViewIfNeeded();
     const offset = await groups.evaluate((el) => el.scrollTop);
     expect(offset).toBeGreaterThan(0);
 
     await track.click();
-    await expect(page.locator('.play-header__title')).toHaveText('Canon in D');
+    await expect(page.locator('.play-header__title')).toHaveText('La campanella');
     await nav(page).getByRole('button', { name: 'Library' }).click();
     await expect(folders(page)).toBeVisible();
     await expect.poll(() => groups.evaluate((el) => el.scrollTop)).toBe(offset);
@@ -97,8 +97,8 @@ test.describe('vendored classics', () => {
     // The list renders from the generated manifest; 1.2 MB of scores must not
     // be pulled just to show titles.
     expect(scoreRequests).toEqual([]);
-    // Vendored entries carry no description, so only the authored four do.
-    expect(await page.locator('.library-item__description').count()).toBe(4);
+    // Vendored entries carry no description, so only the authored five do.
+    expect(await page.locator('.library-item__description').count()).toBe(5);
   });
 
   test('files the pack under composer headings, authored tracks on top', async ({ page }) => {
@@ -108,7 +108,7 @@ test.describe('vendored classics', () => {
 
     await folders(page).getByRole('button', { name: 'Classics' }).click();
     const headings = page.locator('.library-group__heading');
-    expect(await headings.count()).toBeGreaterThan(10);
+    expect(await headings.count()).toBeGreaterThanOrEqual(8);
     await expect(headings.first()).toContainText('Johann Sebastian Bach');
     await expect(headings.first()).toContainText('tracks');
 
@@ -138,7 +138,9 @@ test.describe('vendored classics', () => {
     await filter.fill('nocturne');
     expect(await trackButtons(page).count()).toBeLessThan(unfiltered);
     await expect(page.getByRole('button', { name: /Open Nocturne/ }).first()).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Open Canon in D', exact: true })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Open La campanella', exact: true })).toHaveCount(
+      0,
+    );
 
     // Accents are optional: "fur elise" reaches "Für Elise".
     await filter.fill('fur elise');

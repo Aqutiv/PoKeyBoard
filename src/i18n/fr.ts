@@ -284,6 +284,8 @@ export const fr: Messages = {
     opening: 'Ouverture…',
     openFailed: 'Ce morceau n’a pas pu être ouvert. Vérifiez votre connexion et réessayez.',
     descriptions: {
+      canonFirstSteps:
+        'Une courte nouvelle adaptation du Canon de Pachelbel : la basse, puis une mélodie à la main droite en ré majeur.',
       aBeautifulDay:
         'Une mélodie originale, chaleureuse et douce, qui tient entièrement sur les touches visibles — une première pièce facile à suivre.',
       eveningTide:
@@ -786,8 +788,10 @@ export const fr: Messages = {
       },
     ],
     privacyTitle: 'Où vit votre musique',
+    privacyLink: 'Politique de confidentialité',
+    supportLink: 'Assistance',
     privacyBody:
-      'Pas de compte, pas de serveur, rien à téléverser. Les prises et les réglages sont écrits dans le stockage de ce navigateur, sur cet appareil, et le microphone n’est jamais sollicité — tout ce que vous entendez est synthétisé à partir des notes jouées.',
+      'Les prises, la progression et les réglages restent dans le stockage de ce navigateur, sur votre appareil. Aucun compte ni envoi automatique de musique, et aucun enregistrement au microphone. La politique de confidentialité explique l’hébergement et le partage facultatif.',
     backgroundHint:
       'L’audio se met normalement en pause quand l’application passe en arrière-plan ou que l’écran se verrouille. Les prises sont locales à ce profil de navigateur — l’application installée peut utiliser un stockage distinct, alors exportez des sauvegardes JSON de tout ce qui compte.',
     installTitle: 'Installer l’application',

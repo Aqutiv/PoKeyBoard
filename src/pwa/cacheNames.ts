@@ -15,7 +15,10 @@ export const PIANO_SAMPLE_CACHE = 'pokeyboard-piano-samples-v3';
  * evicted independently — a purge of ~53 MB of audio should not also throw away
  * a megabyte of scores.
  */
-export const LIBRARY_SCORE_CACHE = 'pokeyboard-library-scores-v1';
+export const LIBRARY_SCORE_CACHE = 'pokeyboard-library-scores-v2';
+
+/** Remove cached editions withdrawn during the Store rights review. */
+export const STALE_LIBRARY_SCORE_CACHES = ['pokeyboard-library-scores-v1'];
 
 /**
  * Superseded cache generations, deleted on service worker activation.
