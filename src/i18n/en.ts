@@ -663,6 +663,39 @@ export const en: Messages = {
     midiNoDevices: 'No MIDI keyboard found. Plug one in — it is picked up automatically.',
     midiDevices: ({ names }) => `Connected: ${names}`,
     midiError: 'MIDI could not be started.',
+    bluetoothMidi: 'Bluetooth keyboard',
+    bluetoothMidiHint:
+      'Play a Bluetooth MIDI keyboard without a cable: turn it on, connect it here, and it plays like a USB one. It is reconnected whenever MIDI is on.',
+    bluetoothMidiConnect: 'Connect',
+    bluetoothMidiReconnect: ({ name }) => `Reconnect ${name}`,
+    bluetoothMidiDisconnect: 'Disconnect',
+    bluetoothMidiRetry: 'Try again',
+    bluetoothMidiIdle: 'No Bluetooth keyboard connected.',
+    bluetoothMidiLast: ({ name }) => `${name} is not connected.`,
+    bluetoothMidiChoosing: 'Choose your keyboard in the browser’s list…',
+    bluetoothMidiConnecting: ({ name }) => `Connecting to ${name}…`,
+    bluetoothMidiConnected: ({ name }) => `Connected over Bluetooth: ${name}`,
+    bluetoothMidiReconnecting: ({ name }) =>
+      `Looking for ${name}… Turn it on and keep it nearby; it reconnects on its own.`,
+    bluetoothMidiFailed: ({ name }) =>
+      `Could not connect to ${name}. Make sure it is on and nearby, then try again.`,
+    bluetoothMidiFailedAny:
+      'Could not connect to the keyboard. Make sure it is on and nearby, then try again.',
+    bluetoothMidiNoAdapter:
+      'Bluetooth is off or not available on this device. Turn it on, then try again.',
+    bluetoothMidiBlocked:
+      'Bluetooth was blocked for this site. Allow it in your browser’s site settings, then try again.',
+    bluetoothMidiUnsupported:
+      'This browser cannot connect Bluetooth keyboards. Chrome and Edge can, on desktop and Android — or plug the keyboard in with USB.',
+    keyLights: 'Key lights',
+    keyLightsHint: ({ name }) =>
+      `Lights ${name}’s keys as the keys on screen light: the music as it plays, each hand in its own colour and softer notes dimmer, and the keys you play on screen or on the computer keyboard. In practice the keys to play light up, and your hand’s next notes glow faintly before they are due; in lessons, the keys a hint or a keyboard picture shows. Wrong keys flash red. Keys you hold on ${name} itself light white.`,
+    keyLightsAllowUsb: 'Allow lights over USB',
+    keyLightsUsbHint: ({ name }) =>
+      `${name} is plugged in. To light its keys, the browser has to let PoKeyBoard send it light messages: it asks once, calling this controlling and reprogramming your MIDI devices.`,
+    keyLightsUsbDenied:
+      'The browser blocked messages to MIDI devices. Allow them for this site in your browser’s site settings, then try again.',
+    keyLightsUsbError: 'The keyboard could not be opened for its lights.',
     checking: 'Checking…',
     downloadPiano: ({ piano, size }) => `Download ${piano} (${size})`,
     deletePiano: ({ piano }) => `Delete ${piano} download`,
@@ -709,6 +742,7 @@ export const en: Messages = {
       touch: 'Touch input',
       gamepad: 'Game controller API',
       webMidi: 'Web MIDI API',
+      webBluetooth: 'Web Bluetooth API',
     },
   },
   about: {

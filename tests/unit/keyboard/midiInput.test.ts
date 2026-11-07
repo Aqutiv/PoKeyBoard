@@ -78,10 +78,14 @@ beforeEach(() => {
     value: requestSpy,
   });
   // MidiInput only opens access that is already granted; the prompt belongs
-  // to the Settings toggle.
+  // to the Settings toggle. SysEx is a permission of its own, never granted
+  // unless the Key lights row asked for it.
   Object.defineProperty(navigator, 'permissions', {
     configurable: true,
-    value: { query: () => Promise.resolve({ state: 'granted' }) },
+    value: {
+      query: (descriptor: { sysex?: boolean }) =>
+        Promise.resolve({ state: descriptor.sysex ? 'prompt' : 'granted' }),
+    },
   });
   Object.defineProperty(document, 'hidden', { configurable: true, get: () => hidden });
 });

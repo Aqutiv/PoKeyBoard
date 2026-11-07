@@ -674,6 +674,39 @@ export const mg: Messages = {
     midiNoDevices: 'Tsy nahitana klavie MIDI. Ampifandraiso iray: fantatra ho azy izy.',
     midiDevices: ({ names }) => `Mifandray: ${names}`,
     midiError: 'Tsy afaka nampandeha ny MIDI.',
+    bluetoothMidi: 'Klavie Bluetooth',
+    bluetoothMidiHint:
+      'Tendreo tsy misy tariby ny klavie MIDI Bluetooth: velomy, ampifandraiso eto, dia mitendry toy ny klavie USB izy. Mifandray indray ho azy izy isaky ny mandeha ny MIDI.',
+    bluetoothMidiConnect: 'Ampifandraiso',
+    bluetoothMidiReconnect: ({ name }) => `Ampifandraiso indray ${name}`,
+    bluetoothMidiDisconnect: 'Esory ny fifandraisana',
+    bluetoothMidiRetry: 'Andramo indray',
+    bluetoothMidiIdle: 'Tsy misy klavie Bluetooth mifandray.',
+    bluetoothMidiLast: ({ name }) => `Tsy mifandray ${name}.`,
+    bluetoothMidiChoosing: 'Fidio ao amin’ny lisitry ny navigatera ny klavienao…',
+    bluetoothMidiConnecting: ({ name }) => `Mampifandray amin’i ${name}…`,
+    bluetoothMidiConnected: ({ name }) => `Mifandray amin’ny Bluetooth: ${name}`,
+    bluetoothMidiReconnecting: ({ name }) =>
+      `Mitady an’i ${name}… Velomy ary apetraho akaiky: hifandray indray ho azy izy.`,
+    bluetoothMidiFailed: ({ name }) =>
+      `Tsy afaka nifandray tamin’i ${name}. Jereo fa velona sy akaiky izy, dia andramo indray.`,
+    bluetoothMidiFailedAny:
+      'Tsy afaka nifandray tamin’ny klavie. Jereo fa velona sy akaiky izy, dia andramo indray.',
+    bluetoothMidiNoAdapter:
+      'Maty na tsy misy ny Bluetooth amin’ity fitaovana ity. Velomy, dia andramo indray.',
+    bluetoothMidiBlocked:
+      'Voasakana ho an’ity tranokala ity ny Bluetooth. Avelao ao amin’ny kirakira navigateranao, dia andramo indray.',
+    bluetoothMidiUnsupported:
+      'Tsy afaka mampifandray klavie Bluetooth ity navigatera ity. Afaka kosa ny Chrome sy Edge, amin’ny ordinatera sy Android; na ampifandraiso amin’ny USB ny klavie.',
+    keyLights: 'Jiron’ny kitendry',
+    keyLightsHint: ({ name }) =>
+      `Mampirehitra ny kitendrin’i ${name} toy ny fireharehan’ny kitendry eo amin’ny efijery: ny mozika mandritra ny fandehany, samy amin’ny lokony ny tanana tsirairay ary malefaka kokoa ny naoty moramora, sy ny kitendry tendrenao amin’ny efijery na amin’ny klavien’ny ordinatera. Rehefa manazatra, mirehitra ny kitendry tokony hotendrena, ary mamirapiratra malefaka mialoha ny naoty manaraka ho an’ny tananao; amin’ny lesona, ny kitendry asehon’ny torolalana na ny sarin’ny klavie. Manjelanjelatra mena ny kitendry diso. Mirehitra fotsy ny kitendry tazoninao amin’i ${name} mihitsy.`,
+    keyLightsAllowUsb: 'Avelao ny jiro amin’ny USB',
+    keyLightsUsbHint: ({ name }) =>
+      `Mifandray ${name}. Mba hampirehetana ny kitendriny, tsy maintsy avelan’ny navigatera handefa hafatra jiro ho azy ny PoKeyBoard: manontany indray mandeha izy, ary antsoiny hoe mifehy sy manova ny fitaovana MIDI-nao izany.`,
+    keyLightsUsbDenied:
+      'Nosakanan’ny navigatera ny hafatra ho an’ny fitaovana MIDI. Avelao ho an’ity tranokala ity ao amin’ny kirakira navigateranao, dia andramo indray.',
+    keyLightsUsbError: 'Tsy afaka nosokafana ho an’ny jirony ny klavie.',
     checking: 'Mijery…',
     downloadPiano: ({ piano, size }) => `Alaivo ${piano} (${size})`,
     deletePiano: ({ piano }) => `Fafao ny ${piano} voatariny`,
@@ -723,6 +756,7 @@ export const mg: Messages = {
       touch: 'Fidirana kasika',
       gamepad: 'API kapila lalao',
       webMidi: 'API Web MIDI',
+      webBluetooth: 'API Web Bluetooth',
     },
   },
   about: {

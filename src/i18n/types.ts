@@ -744,6 +744,29 @@ export interface Messages {
     midiNoDevices: string;
     midiDevices: (p: { names: string }) => string;
     midiError: string;
+    bluetoothMidi: string;
+    bluetoothMidiHint: string;
+    bluetoothMidiConnect: string;
+    bluetoothMidiReconnect: (p: { name: string }) => string;
+    bluetoothMidiDisconnect: string;
+    bluetoothMidiRetry: string;
+    bluetoothMidiIdle: string;
+    bluetoothMidiLast: (p: { name: string }) => string;
+    bluetoothMidiChoosing: string;
+    bluetoothMidiConnecting: (p: { name: string }) => string;
+    bluetoothMidiConnected: (p: { name: string }) => string;
+    bluetoothMidiReconnecting: (p: { name: string }) => string;
+    bluetoothMidiFailed: (p: { name: string }) => string;
+    bluetoothMidiFailedAny: string;
+    bluetoothMidiNoAdapter: string;
+    bluetoothMidiBlocked: string;
+    bluetoothMidiUnsupported: string;
+    keyLights: string;
+    keyLightsHint: (p: { name: string }) => string;
+    keyLightsAllowUsb: string;
+    keyLightsUsbHint: (p: { name: string }) => string;
+    keyLightsUsbDenied: string;
+    keyLightsUsbError: string;
     checking: string;
     downloadPiano: (p: { piano: string; size: string }) => string;
     deletePiano: (p: { piano: string }) => string;
@@ -789,6 +812,7 @@ export interface Messages {
       touch: string;
       gamepad: string;
       webMidi: string;
+      webBluetooth: string;
     };
   };
   about: {

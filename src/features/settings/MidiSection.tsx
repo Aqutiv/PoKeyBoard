@@ -6,10 +6,13 @@ import {
   type MidiAccessSnapshot,
 } from '@/features/keyboard/midiAccess';
 import { registerRawVelocityListener } from '@/features/keyboard/midiInput';
+import { useBluetoothMidiConnected } from '@/features/keyboard/useBluetoothMidi';
 import { MIDI_VELOCITY_CURVES, type MidiVelocityCurve } from '@/features/keyboard/velocityResponse';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
+import { BluetoothMidiRow } from './BluetoothMidiRow';
 import { ChoiceSwitch } from './ChoiceSwitch';
+import { KeyLightsRow } from './KeyLightsRow';
 import {
   CALIBRATION_IDLE,
   calibrationReducer,
@@ -43,6 +46,7 @@ export function MidiSection() {
   // would have nothing to shape.
   const deviceVelocity = useSettingsStore((s) => s.velocityMode === 'touch');
   const snapshot = useSyncExternalStore(subscribe, getSnapshot);
+  const bluetoothConnected = useBluetoothMidiConnected();
 
   if (snapshot.kind === 'unsupported') {
     return (
@@ -71,8 +75,14 @@ export function MidiSection() {
       </label>
       <p className="settings__hint">{m.settings.midiHint}</p>
       {enabled ? <MidiStatus snapshot={snapshot} /> : null}
+      {enabled ? <BluetoothMidiRow /> : null}
+      {enabled ? <KeyLightsRow /> : null}
       {enabled && deviceVelocity ? (
-        <MidiVelocity connected={snapshot.kind === 'ready' && snapshot.inputs.length > 0} />
+        <MidiVelocity
+          connected={
+            (snapshot.kind === 'ready' && snapshot.inputs.length > 0) || bluetoothConnected
+          }
+        />
       ) : null}
     </>
   );

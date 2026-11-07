@@ -669,6 +669,39 @@ export const fr: Messages = {
     midiNoDevices: 'Aucun clavier MIDI trouvé. Branchez-en un : il est détecté automatiquement.',
     midiDevices: ({ names }) => `Connecté : ${names}`,
     midiError: 'Impossible de démarrer le MIDI.',
+    bluetoothMidi: 'Clavier Bluetooth',
+    bluetoothMidiHint:
+      'Jouez sur un clavier MIDI Bluetooth sans câble : allumez-le, connectez-le ici, et il joue comme un clavier USB. Il se reconnecte dès que le MIDI est activé.',
+    bluetoothMidiConnect: 'Connecter',
+    bluetoothMidiReconnect: ({ name }) => `Reconnecter ${name}`,
+    bluetoothMidiDisconnect: 'Déconnecter',
+    bluetoothMidiRetry: 'Réessayer',
+    bluetoothMidiIdle: 'Aucun clavier Bluetooth connecté.',
+    bluetoothMidiLast: ({ name }) => `${name} n’est pas connecté.`,
+    bluetoothMidiChoosing: 'Choisissez votre clavier dans la liste du navigateur…',
+    bluetoothMidiConnecting: ({ name }) => `Connexion à ${name}…`,
+    bluetoothMidiConnected: ({ name }) => `Connecté en Bluetooth : ${name}`,
+    bluetoothMidiReconnecting: ({ name }) =>
+      `Recherche de ${name}… Allumez-le et gardez-le à proximité : il se reconnecte tout seul.`,
+    bluetoothMidiFailed: ({ name }) =>
+      `Impossible de se connecter à ${name}. Vérifiez qu’il est allumé et à proximité, puis réessayez.`,
+    bluetoothMidiFailedAny:
+      'Impossible de se connecter au clavier. Vérifiez qu’il est allumé et à proximité, puis réessayez.',
+    bluetoothMidiNoAdapter:
+      'Le Bluetooth est désactivé ou indisponible sur cet appareil. Activez-le, puis réessayez.',
+    bluetoothMidiBlocked:
+      'Le Bluetooth a été bloqué pour ce site. Autorisez-le dans les réglages de votre navigateur, puis réessayez.',
+    bluetoothMidiUnsupported:
+      'Ce navigateur ne peut pas connecter de clavier Bluetooth. Chrome et Edge le peuvent, sur ordinateur et Android ; sinon, branchez le clavier en USB.',
+    keyLights: 'Lumières des touches',
+    keyLightsHint: ({ name }) =>
+      `Éclaire les touches de ${name} comme s’éclairent celles de l’écran : la musique pendant qu’elle joue, chaque main dans sa couleur et les notes douces plus faibles, ainsi que les touches que vous jouez à l’écran ou au clavier de l’ordinateur. En pratique, les touches à jouer s’allument, et les prochaines notes de votre main luisent faiblement avant leur tour ; dans les leçons, les touches qu’un indice ou un dessin du clavier montre. Les fausses notes clignotent en rouge. Les touches que vous tenez sur ${name} lui-même s’allument en blanc.`,
+    keyLightsAllowUsb: 'Autoriser les lumières en USB',
+    keyLightsUsbHint: ({ name }) =>
+      `${name} est branché. Pour éclairer ses touches, le navigateur doit laisser PoKeyBoard lui envoyer des messages de lumière : il le demande une fois, en parlant de contrôler et reprogrammer vos périphériques MIDI.`,
+    keyLightsUsbDenied:
+      'Le navigateur a bloqué les messages vers les périphériques MIDI. Autorisez-les pour ce site dans les réglages de votre navigateur, puis réessayez.',
+    keyLightsUsbError: 'Impossible d’ouvrir le clavier pour ses lumières.',
     checking: 'Vérification…',
     downloadPiano: ({ piano, size }) => `Télécharger ${piano} (${size})`,
     deletePiano: ({ piano }) => `Supprimer le téléchargement de ${piano}`,
@@ -718,6 +751,7 @@ export const fr: Messages = {
       touch: 'Saisie tactile',
       gamepad: 'API de manette de jeu',
       webMidi: 'API Web MIDI',
+      webBluetooth: 'API Web Bluetooth',
     },
   },
   about: {

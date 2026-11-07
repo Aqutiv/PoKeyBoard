@@ -840,6 +840,15 @@ export class TransportController {
   }
 
   /**
+   * How long, in real ms, a Keep-time count-in has still to run before the
+   * playhead sets off from where it waits; 0 once it has, or with none.
+   */
+  countInRemainingMs(): number {
+    if (!this.preRoll) return 0;
+    return Math.max(0, (this.preRoll.anchorAudioTime - audioEngine.currentTime) * 1000);
+  }
+
+  /**
    * Start (or restart) the look-ahead scheduler that plays `notes` from
    * `fromMs`. Used by playback and by overdub recording (to sound the
    * already-recorded take as backing). The clock must already be started.

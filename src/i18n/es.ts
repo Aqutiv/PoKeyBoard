@@ -663,6 +663,39 @@ export const es: Messages = {
     midiNoDevices: 'No se encontró ningún teclado MIDI. Conecta uno: se detecta automáticamente.',
     midiDevices: ({ names }) => `Conectado: ${names}`,
     midiError: 'No se pudo iniciar el MIDI.',
+    bluetoothMidi: 'Teclado Bluetooth',
+    bluetoothMidiHint:
+      'Toca un teclado MIDI Bluetooth sin cable: enciéndelo, conéctalo aquí y suena como uno USB. Se vuelve a conectar siempre que el MIDI está activado.',
+    bluetoothMidiConnect: 'Conectar',
+    bluetoothMidiReconnect: ({ name }) => `Reconectar ${name}`,
+    bluetoothMidiDisconnect: 'Desconectar',
+    bluetoothMidiRetry: 'Reintentar',
+    bluetoothMidiIdle: 'Ningún teclado Bluetooth conectado.',
+    bluetoothMidiLast: ({ name }) => `${name} no está conectado.`,
+    bluetoothMidiChoosing: 'Elige tu teclado en la lista del navegador…',
+    bluetoothMidiConnecting: ({ name }) => `Conectando con ${name}…`,
+    bluetoothMidiConnected: ({ name }) => `Conectado por Bluetooth: ${name}`,
+    bluetoothMidiReconnecting: ({ name }) =>
+      `Buscando ${name}… Enciéndelo y mantenlo cerca; se reconecta solo.`,
+    bluetoothMidiFailed: ({ name }) =>
+      `No se pudo conectar con ${name}. Comprueba que esté encendido y cerca, y vuelve a intentarlo.`,
+    bluetoothMidiFailedAny:
+      'No se pudo conectar con el teclado. Comprueba que esté encendido y cerca, y vuelve a intentarlo.',
+    bluetoothMidiNoAdapter:
+      'El Bluetooth está apagado o no está disponible en este dispositivo. Actívalo y vuelve a intentarlo.',
+    bluetoothMidiBlocked:
+      'Se bloqueó el Bluetooth para este sitio. Permítelo en la configuración de tu navegador y vuelve a intentarlo.',
+    bluetoothMidiUnsupported:
+      'Este navegador no puede conectar teclados Bluetooth. Chrome y Edge sí, en escritorio y Android; o conecta el teclado por USB.',
+    keyLights: 'Luces de las teclas',
+    keyLightsHint: ({ name }) =>
+      `Ilumina las teclas de ${name} como se iluminan las de la pantalla: la música mientras suena, cada mano en su color y las notas suaves más tenues, y las teclas que tocas en la pantalla o en el teclado del ordenador. En la práctica se encienden las teclas que hay que tocar, y las próximas notas de tu mano brillan tenues antes de tiempo; en las lecciones, las teclas que muestra una pista o un dibujo del teclado. Las teclas equivocadas parpadean en rojo. Las teclas que mantienes pulsadas en el propio ${name} se encienden en blanco.`,
+    keyLightsAllowUsb: 'Permitir luces por USB',
+    keyLightsUsbHint: ({ name }) =>
+      `${name} está conectado. Para iluminar sus teclas, el navegador tiene que dejar que PoKeyBoard le envíe mensajes de luz: lo pregunta una vez y lo llama controlar y reprogramar tus dispositivos MIDI.`,
+    keyLightsUsbDenied:
+      'El navegador bloqueó los mensajes a dispositivos MIDI. Permítelos para este sitio en la configuración de tu navegador y vuelve a intentarlo.',
+    keyLightsUsbError: 'No se pudo abrir el teclado para sus luces.',
     checking: 'Comprobando…',
     downloadPiano: ({ piano, size }) => `Descargar ${piano} (${size})`,
     deletePiano: ({ piano }) => `Eliminar la descarga de ${piano}`,
@@ -713,6 +746,7 @@ export const es: Messages = {
       touch: 'Entrada táctil',
       gamepad: 'API de mando de juego',
       webMidi: 'API Web MIDI',
+      webBluetooth: 'API Web Bluetooth',
     },
   },
   about: {

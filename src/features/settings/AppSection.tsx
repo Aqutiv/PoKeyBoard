@@ -25,6 +25,7 @@ const CAPABILITY_KEYS: ReadonlyArray<keyof AppCapabilities> = [
   'touch',
   'gamepad',
   'webMidi',
+  'webBluetooth',
 ];
 
 /**

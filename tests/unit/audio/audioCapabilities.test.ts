@@ -19,6 +19,7 @@ describe('detectCapabilities', () => {
       'touch',
       'gamepad',
       'webMidi',
+      'webBluetooth',
     ];
     for (const key of expectedKeys) {
       expect(typeof caps[key as keyof typeof caps]).toBe('boolean');
