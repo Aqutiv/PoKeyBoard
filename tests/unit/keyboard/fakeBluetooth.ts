@@ -11,7 +11,19 @@ export class FakeCharacteristic extends EventTarget {
   value: DataView | null = null;
   readonly properties = { writeWithoutResponse: true };
   readonly writes: number[][] = [];
-  readonly startNotifications = vi.fn(async () => this);
+  /** What happened, in order: the spec's initial read comes before notifications. */
+  readonly calls: string[] = [];
+  /** BLE-MIDI's initial read: an empty payload. Set `refuseRead` for a keyboard that does not allow it. */
+  refuseRead = false;
+  readonly readValue = vi.fn(async () => {
+    this.calls.push('read');
+    if (this.refuseRead) throw new DOMException('Read not permitted', 'NotSupportedError');
+    return new DataView(new ArrayBuffer(0));
+  });
+  readonly startNotifications = vi.fn(async () => {
+    this.calls.push('notify');
+    return this;
+  });
   readonly writeValueWithoutResponse = vi.fn(async (value: Uint8Array) => {
     this.writes.push([...value]);
   });

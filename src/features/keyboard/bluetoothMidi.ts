@@ -222,6 +222,14 @@ async function attempt(
     const service = await server.getPrimaryService(BLE_MIDI_SERVICE);
     step = 'characteristic';
     const characteristic = await service.getCharacteristic(BLE_MIDI_IO);
+    // BLE-MIDI 1.0, section 5: the central reads the characteristic once
+    // (the keyboard answers with nothing), and some keyboards hold their
+    // notes until it does. A keyboard that refuses the read still plays.
+    try {
+      await characteristic.readValue();
+    } catch {
+      // Not every keyboard allows it; the PartyKeys works without.
+    }
     step = 'notifications';
     characteristic.addEventListener('characteristicvaluechanged', onValue);
     await characteristic.startNotifications();
