@@ -251,6 +251,25 @@ describe('KeyLightsController', () => {
     expect(sent.slice(1, -1)).toEqual(sameBytes(allDark()));
   });
 
+  it('sends nothing more of a batch in flight once the button takes the lights over', async () => {
+    const link = new FakeLink('usb:1');
+    await connect(link);
+    link.block = true;
+    for (let i = 0; i < 20; i += 1) {
+      input({ type: 'on', midi: 50 + i, velocity: i / 19, audioTime: 0, sourceId: 'kbd' });
+    }
+    await vi.advanceTimersByTimeAsync(10);
+    expect(link.frames).toHaveLength(1);
+
+    link.emit(0xf0, 0x05, 0x30, 0x10, 0x00, 0x00, 0x3f, 0x16, 0xf7);
+    link.unblock();
+    await vi.advanceTimersByTimeAsync(BUTTON_HOLD_MS - 50);
+    expect(link.take()).toHaveLength(1); // only the frame already in flight
+
+    await vi.advanceTimersByTimeAsync(200);
+    expect(link.take()[0]).toEqual([...enterLedMode()]); // then the repaint
+  });
+
   it('starts over after a refused frame, without hammering the link', async () => {
     const link = new FakeLink('usb:1');
     await connect(link);
