@@ -1,6 +1,11 @@
 import { noteHand, type Hand } from '@/domain/hands';
 import type { NoteEvent, PlaybackLoop } from '@/domain/takeTypes';
-import { asksFor, CHORD_WINDOW_MS, type TrainingHand } from '@/domain/trainingGate';
+import {
+  asksFor,
+  CHORD_WINDOW_MS,
+  nextTrainingGate,
+  type TrainingHand,
+} from '@/domain/trainingGate';
 
 /**
  * How far ahead, in real time, the practised hand's next notes light dimly:
@@ -45,58 +50,54 @@ export function holdTargetHands(
   return hands;
 }
 
-/** A playhead this close before a chord's onset is at it: a hold parks exactly there. */
+/** A playhead this close before a note's onset is at it: a hold parks exactly there. */
 const AT_ONSET_MS = 1;
 
 interface Chord {
   readonly onsetMs: number;
-  readonly notes: Map<number, Hand>;
+  readonly notes: ReadonlyMap<number, Hand>;
 }
 
 /**
- * The first chord `hand` is asked to play whose onset falls after `afterMs`
- * (at or after, when `inclusive`) and before `endMs`. A chord is its first
- * note and every note asked within `CHORD_WINDOW_MS` of that onset, so a
- * chord the playhead is inside of — one sounding, or one a hold waits on —
- * is never the next one, while a chord still to come stays next until its
- * own onset, however close the playhead gets.
+ * The chord a hold placed at or after `fromMs` asks for, exactly as the
+ * transport places one (`nextTrainingGate`): the first note `hand` is asked
+ * for, and every one asked within `CHORD_WINDOW_MS` of it, none from `endMs`
+ * on. Grouped from that first note, wherever the search starts, so the chord
+ * the player sees coming is the one they will be asked for.
  */
-function nextChord(
+function chordFrom(
   notes: readonly NoteEvent[],
-  afterMs: number,
+  fromMs: number,
   hand: TrainingHand,
   endMs: number,
-  inclusive: boolean,
 ): Chord | null {
-  const after = (onsetMs: number) =>
-    inclusive ? onsetMs >= afterMs : onsetMs > afterMs + AT_ONSET_MS;
-  let onsetMs: number | null = null;
-  let chord = new Map<number, Hand>();
-  // A chord reaching past `afterMs` began within one window before it; one
-  // window more keeps a chord's first note from being taken for its middle.
-  for (let i = firstStartingAfter(notes, afterMs - 2 * CHORD_WINDOW_MS); i < notes.length; i += 1) {
+  const gate = nextTrainingGate(notes, fromMs, hand, endMs);
+  if (!gate) return null;
+  const chord = new Map<number, Hand>();
+  // From the chord's own first note: `firstStartingAfter` is strict.
+  for (let i = firstStartingAfter(notes, gate.atMs - 1e-6); i < notes.length; i += 1) {
     const note = notes[i] as NoteEvent;
-    // A loop plays only the notes that start before its end.
-    if (note.startMs >= endMs) break;
-    if (!asksFor(note, hand)) continue;
-    if (onsetMs === null || note.startMs > onsetMs + CHORD_WINDOW_MS) {
-      if (onsetMs !== null && after(onsetMs)) break;
-      onsetMs = note.startMs;
-      chord = new Map();
+    if (note.startMs > gate.atMs + CHORD_WINDOW_MS || note.startMs >= endMs) break;
+    if (gate.midis.has(note.midi) && asksFor(note, hand) && !chord.has(note.midi)) {
+      chord.set(note.midi, noteHand(note));
     }
-    if (!chord.has(note.midi)) chord.set(note.midi, noteHand(note));
   }
-  return onsetMs !== null && after(onsetMs) ? { onsetMs, notes: chord } : null;
+  return { onsetMs: gate.atMs, notes: chord };
 }
 
 const NOTHING_COMING: ReadonlyMap<number, Hand> = new Map();
 
 /**
- * The practised hand's next notes: the first chord it is asked to play after
- * the one at the playhead, if it is due within `COMING_WINDOW_MS` of real
- * time at `speed`. Inside a loop, the pass ends at the loop's end and the
- * next chord can be the loop's first, as far off as the rest of this pass and
- * the way into the next.
+ * The practised hand's next notes, if they are due within `COMING_WINDOW_MS`
+ * of real time at `speed`:
+ * - playing, the chord grouped from the first note asked for after the
+ *   playhead, so a key leaves the preview only as its own onset passes;
+ * - at a hold (`atHold`), the chord after the one held for, from where the
+ *   transport looks for its next hold once this one is played.
+ *
+ * Inside a loop the pass ends at the loop's end, and the next chord can then
+ * be the loop's first (from its start, never before), as far off as the rest
+ * of this pass and the way into the next.
  */
 export function comingNotes(
   notes: readonly NoteEvent[],
@@ -104,14 +105,19 @@ export function comingNotes(
   hand: TrainingHand,
   speed: number,
   loop: PlaybackLoop | null = null,
+  atHold = false,
 ): ReadonlyMap<number, Hand> {
   const reachMs = COMING_WINDOW_MS * Math.max(speed, 0.01);
   const looping = loop !== null && playheadMs < loop.endMs;
   const endMs = looping ? loop.endMs : Number.POSITIVE_INFINITY;
-  const next = nextChord(notes, playheadMs, hand, endMs, false);
+  const fromMs = Math.min(
+    atHold ? playheadMs + CHORD_WINDOW_MS + 1 : playheadMs + AT_ONSET_MS,
+    endMs,
+  );
+  const next = chordFrom(notes, fromMs, hand, endMs);
   if (next) return next.onsetMs - playheadMs <= reachMs ? next.notes : NOTHING_COMING;
   if (!looping) return NOTHING_COMING;
-  const first = nextChord(notes, loop.startMs, hand, loop.endMs, true);
+  const first = chordFrom(notes, loop.startMs, hand, loop.endMs);
   if (!first) return NOTHING_COMING;
   const awayMs = loop.endMs - playheadMs + (first.onsetMs - loop.startMs);
   return awayMs <= reachMs ? first.notes : NOTHING_COMING;

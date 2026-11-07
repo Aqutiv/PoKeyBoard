@@ -90,10 +90,26 @@ describe('comingNotes', () => {
     }
   });
 
-  it('looks past the chord the playhead is in, or a hold waits on', () => {
+  it('at a hold, shows the chord the transport will hold for next', () => {
     const chords = [note(60, 1000), note(64, 1030), note(67, 1400)];
-    expect(comingNotes(chords, 1000, 'right', 1)).toEqual(new Map([[67, 'right']]));
-    expect(comingNotes(chords, 1015, 'right', 1)).toEqual(new Map([[67, 'right']]));
+    // Held at 1000 for 60 and 64: next is 67, as the transport resumes past the chord.
+    expect(comingNotes(chords, 1000, 'right', 1, null, true)).toEqual(new Map([[67, 'right']]));
+    // Playing on, a chord's later note is still coming until its own onset.
+    expect(comingNotes(chords, 1015, 'right', 1)).toEqual(new Map([[64, 'right']]));
+  });
+
+  it('never drops a key before its onset in a dense passage', () => {
+    // A key every 30 ms: whatever the playhead, the first key not yet played leads the chord.
+    const run = Array.from({ length: 12 }, (_, i) => note(60 + i, i * 30));
+    for (const playhead of [155, 160, 175, 179]) {
+      expect(comingNotes(run, playhead, 'right', 1)).toEqual(
+        new Map([
+          [66, 'right'],
+          [67, 'right'],
+        ]),
+      );
+    }
+    expect([...comingNotes(run, 181, 'right', 1).keys()]).toEqual([67, 68]);
   });
 
   it('comes round to the top of a loop, never past its end', () => {
@@ -106,6 +122,16 @@ describe('comingNotes', () => {
     // The way round counts: a first chord far into the loop waits.
     const late = [note(60, 1900), note(64, 2500)];
     expect(comingNotes(late, 2600, 'right', 1, loop).size).toBe(0);
+  });
+
+  it('comes round to the loop’s first note asked for, never one before the loop', () => {
+    // 1000 is outside a loop from 1020; the next pass starts its asking at 1030.
+    const notes = [note(60, 1000), note(64, 1030)];
+    const loop = { startMs: 1020, endMs: 2000 };
+    expect(comingNotes(notes, 1900, 'right', 1, loop)).toEqual(new Map([[64, 'right']]));
+    // A hold just before the loop's end looks round the loop too.
+    const edge = [note(60, 1030), note(64, 1990)];
+    expect(comingNotes(edge, 1990, 'right', 1, loop, true)).toEqual(new Map([[60, 'right']]));
   });
 
   it('leaves out notes the score hides', () => {

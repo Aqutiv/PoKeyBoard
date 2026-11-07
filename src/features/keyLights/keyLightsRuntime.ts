@@ -42,6 +42,7 @@ function practiceScene(): Pick<KeyLightScene, 'targets' | 'wrong' | 'coming' | '
         hand,
         transportController.getSpeed(),
         transportController.getLoop(),
+        held.size > 0,
       )
     : NOT_COMING;
   return { targets, wrong: screen.wrong, coming, faint: screen.picturedSecond };
