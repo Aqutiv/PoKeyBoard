@@ -669,6 +669,30 @@ export const fr: Messages = {
     midiNoDevices: 'Aucun clavier MIDI trouvé. Branchez-en un : il est détecté automatiquement.',
     midiDevices: ({ names }) => `Connecté : ${names}`,
     midiError: 'Impossible de démarrer le MIDI.',
+    bluetoothMidi: 'Clavier Bluetooth',
+    bluetoothMidiHint:
+      'Jouez sur un clavier MIDI Bluetooth sans câble : allumez-le, connectez-le ici, et il joue comme un clavier USB. Il se reconnecte dès que le MIDI est activé.',
+    bluetoothMidiConnect: 'Connecter',
+    bluetoothMidiReconnect: ({ name }) => `Reconnecter ${name}`,
+    bluetoothMidiDisconnect: 'Déconnecter',
+    bluetoothMidiRetry: 'Réessayer',
+    bluetoothMidiIdle: 'Aucun clavier Bluetooth connecté.',
+    bluetoothMidiLast: ({ name }) => `${name} n’est pas connecté.`,
+    bluetoothMidiChoosing: 'Choisissez votre clavier dans la liste du navigateur…',
+    bluetoothMidiConnecting: ({ name }) => `Connexion à ${name}…`,
+    bluetoothMidiConnected: ({ name }) => `Connecté en Bluetooth : ${name}`,
+    bluetoothMidiReconnecting: ({ name }) =>
+      `Recherche de ${name}… Allumez-le et gardez-le à proximité : il se reconnecte tout seul.`,
+    bluetoothMidiFailed: ({ name }) =>
+      `Impossible de se connecter à ${name}. Vérifiez qu’il est allumé et à proximité, puis réessayez.`,
+    bluetoothMidiFailedAny:
+      'Impossible de se connecter au clavier. Vérifiez qu’il est allumé et à proximité, puis réessayez.',
+    bluetoothMidiNoAdapter:
+      'Le Bluetooth est désactivé ou indisponible sur cet appareil. Activez-le, puis réessayez.',
+    bluetoothMidiBlocked:
+      'Le Bluetooth a été bloqué pour ce site. Autorisez-le dans les réglages de votre navigateur, puis réessayez.',
+    bluetoothMidiUnsupported:
+      'Ce navigateur ne peut pas connecter de clavier Bluetooth. Chrome et Edge le peuvent, sur ordinateur et Android ; sinon, branchez le clavier en USB.',
     checking: 'Vérification…',
     downloadPiano: ({ piano, size }) => `Télécharger ${piano} (${size})`,
     deletePiano: ({ piano }) => `Supprimer le téléchargement de ${piano}`,
@@ -718,6 +742,7 @@ export const fr: Messages = {
       touch: 'Saisie tactile',
       gamepad: 'API de manette de jeu',
       webMidi: 'API Web MIDI',
+      webBluetooth: 'API Web Bluetooth',
     },
   },
   about: {

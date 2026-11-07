@@ -55,6 +55,7 @@ const SETTING_SCHEMAS = {
   backgroundPlayback: z.boolean(),
   gamepadInput: z.boolean(),
   midiInput: z.boolean(),
+  bluetoothMidiDevice: z.object({ id: z.string().min(1), name: z.string() }).nullable(),
   metronomeVolume: z.number().min(0).max(1),
   keyboardAnchorMidi: z.number().int().min(21).max(108),
   sheetPaperSize: z.enum(['a4', 'letter']),
