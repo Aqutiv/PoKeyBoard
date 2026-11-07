@@ -764,7 +764,7 @@ export interface Messages {
     keyLights: string;
     keyLightsHint: (p: { name: string }) => string;
     keyLightsAllowUsb: string;
-    keyLightsUsbHint: string;
+    keyLightsUsbHint: (p: { name: string }) => string;
     keyLightsUsbDenied: string;
     keyLightsUsbError: string;
     checking: string;

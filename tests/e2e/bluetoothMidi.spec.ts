@@ -22,6 +22,9 @@ async function installFakeKeyboard(page: Page): Promise<void> {
     class Characteristic extends EventTarget {
       value: DataView | null = null;
       properties = { writeWithoutResponse: true };
+      async readValue() {
+        return new DataView(new ArrayBuffer(0));
+      }
       async startNotifications() {
         return this;
       }

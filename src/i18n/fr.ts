@@ -671,7 +671,7 @@ export const fr: Messages = {
     midiError: 'Impossible de démarrer le MIDI.',
     bluetoothMidi: 'Clavier Bluetooth',
     bluetoothMidiHint:
-      'Jouez sur un clavier MIDI Bluetooth, comme un PartyKeys, sans câble : allumez-le, connectez-le ici, et il joue comme un clavier USB. Il se reconnecte dès que le MIDI est activé.',
+      'Jouez sur un clavier MIDI Bluetooth sans câble : allumez-le, connectez-le ici, et il joue comme un clavier USB. Il se reconnecte dès que le MIDI est activé.',
     bluetoothMidiConnect: 'Connecter',
     bluetoothMidiReconnect: ({ name }) => `Reconnecter ${name}`,
     bluetoothMidiDisconnect: 'Déconnecter',
@@ -697,8 +697,8 @@ export const fr: Messages = {
     keyLightsHint: ({ name }) =>
       `Éclaire les touches de ${name} comme s’éclairent celles de l’écran : la musique pendant qu’elle joue, chaque main dans sa couleur et les notes douces plus faibles, ainsi que les touches que vous jouez à l’écran ou au clavier de l’ordinateur. En pratique, les touches à jouer s’allument, et les prochaines notes de votre main luisent faiblement avant leur tour ; dans les leçons, les touches qu’un indice montre. Les fausses notes clignotent en rouge. Les touches que vous tenez sur ${name} lui-même s’allument en blanc.`,
     keyLightsAllowUsb: 'Autoriser les lumières en USB',
-    keyLightsUsbHint:
-      'Un PartyKeys est branché. Pour éclairer ses touches, le navigateur doit laisser PoKeyBoard lui envoyer des messages de lumière : il le demande une fois, en parlant de contrôler et reprogrammer vos périphériques MIDI.',
+    keyLightsUsbHint: ({ name }) =>
+      `${name} est branché. Pour éclairer ses touches, le navigateur doit laisser PoKeyBoard lui envoyer des messages de lumière : il le demande une fois, en parlant de contrôler et reprogrammer vos périphériques MIDI.`,
     keyLightsUsbDenied:
       'Le navigateur a bloqué les messages vers les périphériques MIDI. Autorisez-les pour ce site dans les réglages de votre navigateur, puis réessayez.',
     keyLightsUsbError: 'Impossible d’ouvrir le clavier pour ses lumières.',

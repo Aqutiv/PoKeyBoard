@@ -32,7 +32,15 @@ class FakeLink extends EventTarget implements LightLink {
   readonly transport: LightLink['transport'];
   readonly frames: number[][] = [];
   refuse = false;
+  /** While set, each send is taken but not finished until `unblock`: a write in flight. */
+  block = false;
+  private blocked: (() => void)[] = [];
   readonly input = this;
+
+  unblock() {
+    this.block = false;
+    for (const resolve of this.blocked.splice(0)) resolve();
+  }
 
   constructor(id: string, transport: LightLink['transport'] = 'usb') {
     super();
@@ -43,6 +51,7 @@ class FakeLink extends EventTarget implements LightLink {
   send(frame: Uint8Array): Promise<void> {
     if (this.refuse) return Promise.reject(new DOMException('gone', 'InvalidStateError'));
     this.frames.push([...frame]);
+    if (this.block) return new Promise((resolve) => this.blocked.push(resolve));
     return Promise.resolve();
   }
 
@@ -125,7 +134,7 @@ let extrasChanged: () => void = () => undefined;
 
 /** Connects `link`, lets the startup run, and clears what it sent. */
 async function connect(link: FakeLink) {
-  links({ links: [link], usbAwaitingSysex: false });
+  links({ links: [link], awaitingSysex: null });
   await vi.advanceTimersByTimeAsync(100);
   return link.take();
 }
@@ -238,6 +247,26 @@ describe('KeyLightsController', () => {
     expect(link.take()).toEqual([]);
   });
 
+  it('sends nothing of a batch in flight after the hand-back', async () => {
+    const link = new FakeLink('usb:1');
+    await connect(link);
+    // Twenty keys at twenty strengths: too many colours for one frame.
+    link.block = true;
+    for (let i = 0; i < 20; i += 1) {
+      input({ type: 'on', midi: 50 + i, velocity: i / 19, audioTime: 0, sourceId: 'kbd' });
+    }
+    await vi.advanceTimersByTimeAsync(10);
+    expect(link.frames).toHaveLength(1); // the first colour frame, still going out
+
+    enabled = false;
+    settings();
+    link.unblock();
+    await vi.advanceTimersByTimeAsync(100);
+    const sent = link.take();
+    expect(sent.at(-1)).toEqual([...builtInMode()]);
+    expect(sent.slice(1, -1)).toEqual(sameBytes(allDark()));
+  });
+
   it('starts over after a refused frame, without hammering the link', async () => {
     const link = new FakeLink('usb:1');
     await connect(link);
@@ -256,7 +285,7 @@ describe('KeyLightsController', () => {
     const usb = new FakeLink('usb:1');
     await connect(usb);
     const bluetooth = new FakeLink('bluetooth:1', 'bluetooth');
-    links({ links: [bluetooth, usb], usbAwaitingSysex: false });
+    links({ links: [bluetooth, usb], awaitingSysex: null });
     await vi.advanceTimersByTimeAsync(100);
     expect(usb.take()).toEqual([...sameBytes(allDark()), [...builtInMode()]]);
     expect(bluetooth.take()[0]).toEqual([...enterLedMode()]);
@@ -302,12 +331,12 @@ describe('KeyLightsController', () => {
   it('reports the keyboard it lights, and a USB one waiting on SysEx', () => {
     const c = controller();
     const stopAgain = c.start();
-    links({ links: [], usbAwaitingSysex: true });
-    expect(c.getStatus()).toEqual({ keyboard: null, usbAwaitingSysex: true });
-    links({ links: [new FakeLink('usb:2')], usbAwaitingSysex: false });
+    links({ links: [], awaitingSysex: 'PartyKeys' });
+    expect(c.getStatus()).toEqual({ keyboard: null, awaitingSysex: 'PartyKeys' });
+    links({ links: [new FakeLink('usb:2')], awaitingSysex: null });
     expect(c.getStatus()).toEqual({
       keyboard: { name: 'PartyKeys', transport: 'usb' },
-      usbAwaitingSysex: false,
+      awaitingSysex: null,
     });
     stopAgain();
   });

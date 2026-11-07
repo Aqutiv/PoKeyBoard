@@ -676,7 +676,7 @@ export const mg: Messages = {
     midiError: 'Tsy afaka nampandeha ny MIDI.',
     bluetoothMidi: 'Klavie Bluetooth',
     bluetoothMidiHint:
-      'Tendreo tsy misy tariby ny klavie MIDI Bluetooth, toy ny PartyKeys: velomy, ampifandraiso eto, dia mitendry toy ny klavie USB izy. Mifandray indray ho azy izy isaky ny mandeha ny MIDI.',
+      'Tendreo tsy misy tariby ny klavie MIDI Bluetooth: velomy, ampifandraiso eto, dia mitendry toy ny klavie USB izy. Mifandray indray ho azy izy isaky ny mandeha ny MIDI.',
     bluetoothMidiConnect: 'Ampifandraiso',
     bluetoothMidiReconnect: ({ name }) => `Ampifandraiso indray ${name}`,
     bluetoothMidiDisconnect: 'Esory ny fifandraisana',
@@ -702,8 +702,8 @@ export const mg: Messages = {
     keyLightsHint: ({ name }) =>
       `Mampirehitra ny kitendrin’i ${name} toy ny fireharehan’ny kitendry eo amin’ny efijery: ny mozika mandritra ny fandehany, samy amin’ny lokony ny tanana tsirairay ary malefaka kokoa ny naoty moramora, sy ny kitendry tendrenao amin’ny efijery na amin’ny klavien’ny ordinatera. Rehefa manazatra, mirehitra ny kitendry tokony hotendrena, ary mamirapiratra malefaka mialoha ny naoty manaraka ho an’ny tananao; amin’ny lesona, ny kitendry asehon’ny torolalana. Manjelanjelatra mena ny kitendry diso. Mirehitra fotsy ny kitendry tazoninao amin’i ${name} mihitsy.`,
     keyLightsAllowUsb: 'Avelao ny jiro amin’ny USB',
-    keyLightsUsbHint:
-      'Misy PartyKeys mifandray. Mba hampirehetana ny kitendriny, tsy maintsy avelan’ny navigatera handefa hafatra jiro ho azy ny PoKeyBoard: manontany indray mandeha izy, ary antsoiny hoe mifehy sy manova ny fitaovana MIDI-nao izany.',
+    keyLightsUsbHint: ({ name }) =>
+      `Mifandray ${name}. Mba hampirehetana ny kitendriny, tsy maintsy avelan’ny navigatera handefa hafatra jiro ho azy ny PoKeyBoard: manontany indray mandeha izy, ary antsoiny hoe mifehy sy manova ny fitaovana MIDI-nao izany.`,
     keyLightsUsbDenied:
       'Nosakanan’ny navigatera ny hafatra ho an’ny fitaovana MIDI. Avelao ho an’ity tranokala ity ao amin’ny kirakira navigateranao, dia andramo indray.',
     keyLightsUsbError: 'Tsy afaka nosokafana ho an’ny jirony ny klavie.',

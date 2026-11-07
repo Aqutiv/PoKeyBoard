@@ -105,10 +105,10 @@ export interface LightLinksSnapshot {
   /** Keyboards that can be lit now, Bluetooth first. */
   readonly links: readonly LightLink[];
   /**
-   * A PartyKeys on USB that could be lit once SysEx is allowed: what the Key
-   * lights row offers to ask for.
+   * The name of a PartyKeys on USB that could be lit once SysEx is allowed,
+   * as its port reports it: what the Key lights row offers to ask for.
    */
-  readonly usbAwaitingSysex: boolean;
+  readonly awaitingSysex: string | null;
 }
 
 /**
@@ -126,21 +126,21 @@ export function watchLightLinks(listener: (snapshot: LightLinksSnapshot) => void
     const links: LightLink[] = bluetoothPorts
       .filter((port) => isPartyKeys(port.name))
       .map(bluetoothLink);
-    let usbAwaitingSysex = false;
+    let awaitingSysex: string | null = null;
     for (const input of inputs) {
       if (!isPartyKeys(input.name)) continue;
       const output = pairOutput(input, outputs);
       if (!output) continue;
       if (getSysexState() === 'granted') links.push(usbLink(input, output));
-      else usbAwaitingSysex = true;
+      else awaitingSysex ??= input.name ?? '';
     }
     const same =
       last &&
-      last.usbAwaitingSysex === usbAwaitingSysex &&
+      last.awaitingSysex === awaitingSysex &&
       last.links.length === links.length &&
       last.links.every((link, index) => link === links[index]);
     if (same) return;
-    last = { links, usbAwaitingSysex };
+    last = { links, awaitingSysex };
     listener(last);
   };
 

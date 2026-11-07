@@ -78,11 +78,11 @@ function drawsPressesFrom(sourceId: string): boolean {
 export interface KeyLightsStatus {
   /** The keyboard being lit, if any. */
   readonly keyboard: { readonly name: string; readonly transport: LightLink['transport'] } | null;
-  /** A PartyKeys on USB that SysEx would let the app light. */
-  readonly usbAwaitingSysex: boolean;
+  /** The name of a PartyKeys on USB that SysEx would let the app light. */
+  readonly awaitingSysex: string | null;
 }
 
-const NO_STATUS: KeyLightsStatus = { keyboard: null, usbAwaitingSysex: false };
+const NO_STATUS: KeyLightsStatus = { keyboard: null, awaitingSysex: null };
 
 /**
  * Lights a connected PartyKeys the way the on-screen keys are lit: the take's
@@ -105,6 +105,8 @@ export class KeyLightsController {
   private readonly statusListeners = new Set<() => void>();
   private wasEnabled = false;
   private sending = false;
+  /** Moved on by each batch of frames, and by a release, which ends the one in flight. */
+  private batch = 0;
   private timer: unknown = null;
   private timerAt = Number.POSITIVE_INFINITY;
   private holdUntil = Number.NEGATIVE_INFINITY;
@@ -182,7 +184,7 @@ export class KeyLightsController {
 
   private setStatus(next: KeyLightsStatus): void {
     const same =
-      next.usbAwaitingSysex === this.status.usbAwaitingSysex &&
+      next.awaitingSysex === this.status.awaitingSysex &&
       next.keyboard?.name === this.status.keyboard?.name &&
       next.keyboard?.transport === this.status.keyboard?.transport;
     if (same) return;
@@ -200,7 +202,7 @@ export class KeyLightsController {
     }
     this.setStatus({
       keyboard: next ? { name: next.name, transport: next.transport } : null,
-      usbAwaitingSysex: snapshot.usbAwaitingSysex,
+      awaitingSysex: snapshot.awaitingSysex,
     });
     this.requestTick();
   }
@@ -208,6 +210,8 @@ export class KeyLightsController {
   private useLink(next: LightLink | null): void {
     if (this.stopInput) this.stopInput();
     this.stopInput = null;
+    // A batch still going to the last keyboard has nowhere left to go.
+    this.batch += 1;
     this.link = next;
     // A new connection is a keyboard back at octave 0 in its own light mode.
     this.session = new KeyLightSession();
@@ -348,8 +352,14 @@ export class KeyLightsController {
   private async send(link: LightLink, frames: readonly Uint8Array[]): Promise<void> {
     this.sending = true;
     const session = this.session;
+    const batch = ++this.batch;
     try {
-      for (const frame of frames) await link.send(frame);
+      for (const frame of frames) {
+        // Released or handed over since this batch began: what is left of it
+        // would land after the hand-back and light a keyboard given back.
+        if (batch !== this.batch) break;
+        await link.send(frame);
+      }
     } catch (error) {
       if (session === this.session) {
         session.fail();
@@ -368,6 +378,7 @@ export class KeyLightsController {
     const link = this.link;
     if (!link) return;
     this.clearTimer();
+    this.batch += 1;
     for (const frame of this.session.release()) void link.send(frame).catch(() => undefined);
   }
 }
