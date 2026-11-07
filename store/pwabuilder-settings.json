@@ -1,0 +1,28 @@
+{
+  "name": "PoKeyBoard",
+  "packageId": "IdanRobbins.PoKeyBoard",
+  "applicationId": "App",
+  "url": "https://aqutiv.github.io/PoKeyBoard/",
+  "version": "1.0.1",
+  "allowSigning": true,
+  "publisher": {
+    "displayName": "Idan Robbins",
+    "commonName": "CN=A93C3002-92A6-4C36-8714-D7DE434D5EFE"
+  },
+  "generateModernPackage": true,
+  "classicPackage": {
+    "generate": true,
+    "version": "1.0.0",
+    "url": "https://aqutiv.github.io/PoKeyBoard/"
+  },
+  "edgeHtmlPackage": { "generate": false },
+  "edgeChannel": "stable",
+  "resourceLanguage": "EN-US,FR-FR,ES-ES",
+  "targetDeviceFamilies": ["Desktop"],
+  "usePwaBuilderWithCustomManifest": false,
+  "enableWebAppWidgets": false,
+  "images": {
+    "baseImage": "https://aqutiv.github.io/PoKeyBoard/icons/icon-transparent-512.png",
+    "backgroundColor": "transparent"
+  }
+}

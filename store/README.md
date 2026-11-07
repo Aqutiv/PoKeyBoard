@@ -7,7 +7,10 @@ publisher's separate review. [Open Partner Center](https://partner.microsoft.com
 
 ## Reproducible inputs
 
-- `identity.json`: exact Partner Center identity, version, URLs, and intended settings.
+- `identity.json`: exact Partner Center identity, versions, URLs, and intended settings.
+- `pwabuilder-settings.json`: request body for the official PWABuilder packaging API.
+- `optimize-windows-package.py`: Windows SDK repack step that reduces oversized
+  generated PNG resources while retaining the existing logo and image dimensions.
 - `listings.json`: English, French, and Spanish copy, including the English lesson-text limitation.
 - `reviewer-notes.txt`: first-run, hardware, offline, export, language, and update instructions.
 - `RIGHTS.md` and `score-rights.json`: retained/withdrawn music decisions and provenance.
@@ -40,7 +43,10 @@ redirects LocalAppData. The test browser needs access to the local preview serve
 
 1. Merge only after CI passes, then verify the deployed build commit.
 2. Analyze `https://aqutiv.github.io/PoKeyBoard/` in PWABuilder and package for Windows
-   with the exact identity in `identity.json`, starting at `1.0.0.0`.
+   with the exact identity in `identity.json`. PWABuilder's paired workflow uses
+   classic version `1.0.0.0` and modern version `1.0.1.0`; the modern package must
+   have a higher version. The public packaging API is documented in
+   [PWABuilder's repository](https://github.com/pwa-builder/PWABuilder/blob/main/apps/pwabuilder-microsoft-store/readme.md).
 3. Retain the generated archive, settings, and SHA-256 hashes in `artifacts/`.
 4. Install the test package and validate actual Windows launch, audio, persistence,
    imports/exports/sharing, languages, device permissions, offline playback, and
@@ -52,3 +58,32 @@ redirects LocalAppData. The test browser needs access to the local preview serve
 
 Public PWA identity, start URL, and scope remain `/PoKeyBoard/`. No storage keys or
 take formats are migrated. Old score-cache removal does not touch personal data.
+
+## Generated package records
+
+Release source was merged in [PR 147](https://github.com/Aqutiv/PoKeyBoard/pull/147).
+GitHub Pages build `08ea2e1c9ce0c2e4f675aadfe4996ce5dd11f45e` was verified in the
+live About page before packaging. PWABuilder reported zero required fixes and
+passing offline support.
+
+The browser's first archive contained placeholder identity values and was rejected
+locally before upload. Use `artifacts/PoKeyBoard-store.zip`, generated with the
+explicit API settings, as the original package input. Do not use
+`artifacts/PoKeyBoard.zip` or `artifacts/windows/` for distribution.
+
+The first installed-package WACK run passed overall but flagged four oversized
+tile images in its optional App resources test. `optimize-windows-package.py`
+uses Pillow 12.2.0 to encode generated resources over 200 KiB as indexed PNGs and
+Windows SDK 10.0.26100.0 MakeAppx to rebuild packages. It preserves manifest
+identity, versions, languages, dimensions, and transparency. Original files remain
+in `windows-store/`; final package candidates are in `windows-optimized/`.
+The sideload package's extra publisher OID intentionally gives it a different
+package family suffix from the Store package. Never upload the sideload package.
+
+Partner Center rejected changed contents under the already-uploaded modern
+`1.0.1.0` package identity. The corrected draft therefore uses unique versions:
+modern `1.0.3.0` and classic `1.0.2.0`, as recorded in `identity.json`. The API
+settings preserve the original generator input; the repack script applies the
+final version values from `identity.json` to each package manifest and bundle.
+Final upload filenames include their version numbers to distinguish them from
+earlier candidates.
