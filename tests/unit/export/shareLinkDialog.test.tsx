@@ -48,6 +48,19 @@ function openDialog(takeId = 'take-1') {
 const dialog = () => screen.findByRole('dialog', { name: en.share.linkTitle });
 const field = () => screen.findByRole<HTMLInputElement>('textbox', { name: en.share.linkField });
 
+/**
+ * The link field, once the dialog has settled: Copy takes the focus in an
+ * effect after the link appears, and a click made before that effect runs has
+ * its focus moved on under it — which, on a loaded CI runner, it sometimes was.
+ */
+async function settledField(): Promise<HTMLInputElement> {
+  const input = await field();
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: en.share.linkCopy })).toHaveFocus(),
+  );
+  return input;
+}
+
 beforeEach(() => {
   mock.take = createEmptyTake({ id: 'take-1', title: 'Evening scale' });
   mock.encodeTakeLink.mockImplementation(() => mock.payload);
@@ -93,7 +106,7 @@ describe('the share link dialog', () => {
   it('selects the link and says how to copy it when the clipboard refuses', async () => {
     writeText.mockRejectedValue(new DOMException('Denied', 'NotAllowedError'));
     openDialog();
-    const input = await field();
+    const input = await settledField();
     fireEvent.click(screen.getByRole('button', { name: en.share.linkCopy }));
 
     expect(await screen.findByRole('status')).toHaveTextContent(en.share.linkCopyManual);
@@ -104,7 +117,7 @@ describe('the share link dialog', () => {
   it('says how to copy it where there is no clipboard at all', async () => {
     setNavigator('clipboard', undefined);
     openDialog();
-    const input = await field();
+    const input = await settledField();
     fireEvent.click(screen.getByRole('button', { name: en.share.linkCopy }));
 
     expect(await screen.findByRole('status')).toHaveTextContent(en.share.linkCopyManual);
