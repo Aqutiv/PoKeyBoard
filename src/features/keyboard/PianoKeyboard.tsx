@@ -16,14 +16,12 @@ import { audioEngine } from '@/audio/AudioEngine';
 import type { KeyCue } from '@/domain/hands';
 import type { PedalEvent } from '@/domain/takeTypes';
 import { contributeRange } from '@/audio/playableRange';
-import { scrubController } from '@/features/notation/scrubController';
 import {
   isPedalDownIn,
   sustainIntervals,
   type SustainInterval,
 } from '@/features/transport/sustainPedal';
 import { transportController } from '@/features/transport/transportController';
-import type { TransportState } from '@/features/transport/transportMachine';
 import { useTakeStore } from '@/state/useTakeStore';
 import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
@@ -53,17 +51,11 @@ import {
   type KeyboardLayout,
 } from './keyboardGeometry';
 import { keyShade } from './keyShading';
+import { cuesMove, NO_KEYS, takeCuesAt } from './playbackCues';
 import { KeyboardPointerTracker } from './pointerTracker';
 import { SoundingNotes } from './soundingNotes';
 import { registerMidiKeyboard } from './useMidiInput';
 import './keyboard.css';
-
-/** The transport states whose playhead the key bed lights: moving, or dragged. */
-function cuesMove(state: TransportState): boolean {
-  return state === 'playing' || state === 'recording' || state === 'scrubbing';
-}
-
-const NO_KEYS: ReadonlyMap<number, KeyCue> = new Map();
 
 /**
  * How deep a key is lit, as a share of its hand's full colour (keyShading.ts),
@@ -487,13 +479,9 @@ export const PianoKeyboard = memo(function PianoKeyboard({
       const state = transportController.getState();
       const take = useTakeStore.getState().take;
       const ms = transportController.getPlayheadMs();
-      if (state === 'scrubbing') {
-        show(scrubController.getActiveKeys(), pedalDownAt(take.pedalEvents, ms));
-        return;
-      }
-      sounding.setNotes(take.notes);
-      const cues = sounding.keysAt(ms);
+      const cues = takeCuesAt(sounding, state, take.notes, ms);
       show(cues, pedalDownAt(take.pedalEvents, ms));
+      if (state === 'scrubbing') return;
 
       const inputs = frameInputs.current;
       if (

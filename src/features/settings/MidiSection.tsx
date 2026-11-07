@@ -12,6 +12,7 @@ import { useMessages } from '@/i18n/i18nContext';
 import { useSettingsStore } from '@/state/useSettingsStore';
 import { BluetoothMidiRow } from './BluetoothMidiRow';
 import { ChoiceSwitch } from './ChoiceSwitch';
+import { KeyLightsRow } from './KeyLightsRow';
 import {
   CALIBRATION_IDLE,
   calibrationReducer,
@@ -75,6 +76,7 @@ export function MidiSection() {
       <p className="settings__hint">{m.settings.midiHint}</p>
       {enabled ? <MidiStatus snapshot={snapshot} /> : null}
       {enabled ? <BluetoothMidiRow /> : null}
+      {enabled ? <KeyLightsRow /> : null}
       {enabled && deviceVelocity ? (
         <MidiVelocity
           connected={
