@@ -689,7 +689,7 @@ export const es: Messages = {
       'Este navegador no puede conectar teclados Bluetooth. Chrome y Edge sí, en escritorio y Android; o conecta el teclado por USB.',
     keyLights: 'Luces de las teclas',
     keyLightsHint: ({ name }) =>
-      `Ilumina las teclas de ${name} como se iluminan las de la pantalla: la música mientras suena, cada mano en su color y las notas suaves más tenues, y las teclas que tocas en la pantalla o en el teclado del ordenador. Las teclas que mantienes pulsadas en el propio ${name} se encienden en blanco.`,
+      `Ilumina las teclas de ${name} como se iluminan las de la pantalla: la música mientras suena, cada mano en su color y las notas suaves más tenues, y las teclas que tocas en la pantalla o en el teclado del ordenador. En la práctica se encienden las teclas que hay que tocar, y las próximas notas de tu mano brillan tenues antes de tiempo; en las lecciones, las teclas que muestra una pista o un dibujo del teclado. Las teclas equivocadas parpadean en rojo. Las teclas que mantienes pulsadas en el propio ${name} se encienden en blanco.`,
     keyLightsAllowUsb: 'Permitir luces por USB',
     keyLightsUsbHint: ({ name }) =>
       `${name} está conectado. Para iluminar sus teclas, el navegador tiene que dejar que PoKeyBoard le envíe mensajes de luz: lo pregunta una vez y lo llama controlar y reprogramar tus dispositivos MIDI.`,

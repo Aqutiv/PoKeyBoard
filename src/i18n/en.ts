@@ -689,7 +689,7 @@ export const en: Messages = {
       'This browser cannot connect Bluetooth keyboards. Chrome and Edge can, on desktop and Android — or plug the keyboard in with USB.',
     keyLights: 'Key lights',
     keyLightsHint: ({ name }) =>
-      `Lights ${name}’s keys as the keys on screen light: the music as it plays, each hand in its own colour and softer notes dimmer, and the keys you play on screen or on the computer keyboard. Keys you hold on ${name} itself light white.`,
+      `Lights ${name}’s keys as the keys on screen light: the music as it plays, each hand in its own colour and softer notes dimmer, and the keys you play on screen or on the computer keyboard. In practice the keys to play light up, and your hand’s next notes glow faintly before they are due; in lessons, the keys a hint or a keyboard picture shows. Wrong keys flash red. Keys you hold on ${name} itself light white.`,
     keyLightsAllowUsb: 'Allow lights over USB',
     keyLightsUsbHint: ({ name }) =>
       `${name} is plugged in. To light its keys, the browser has to let PoKeyBoard send it light messages: it asks once, calling this controlling and reprogramming your MIDI devices.`,

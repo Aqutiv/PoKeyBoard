@@ -1,6 +1,13 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { gotoAppReady, nav, openSettings, persistedSetting, transport } from './helpers';
+import {
+  gotoAppReady,
+  nav,
+  openSettings,
+  persistedSetting,
+  recordShortTake,
+  transport,
+} from './helpers';
 
 /**
  * A Bluetooth MIDI keyboard for the page: Web Bluetooth's device chooser
@@ -143,6 +150,22 @@ function lightsSomething(frame: number[]): boolean {
   return false;
 }
 
+/** Every key's light after `frames`, replayed from dark: [r, g, b] by key. */
+function replay(frames: number[][]): number[][] {
+  const keys = Array.from({ length: 36 }, () => [0, 0, 0]);
+  for (const frame of frames) {
+    if (frame[7] !== 0x15) continue;
+    for (let at = 9, group = 0; group < (frame[8] ?? 0); group += 1) {
+      const level = (i: number) => ((frame[at + i] ?? 0) << 7) | (frame[at + i + 1] ?? 0);
+      const colour = [level(0), level(2), level(4)];
+      const count = frame[at + 6] ?? 0;
+      for (const key of frame.slice(at + 7, at + 7 + count)) keys[key] = colour;
+      at += 7 + count;
+    }
+  }
+  return keys;
+}
+
 function chooserOpened(page: Page): Promise<number> {
   return page.evaluate(
     () => (window as unknown as { __fakeBle: { chooserOpened: number } }).__fakeBle.chooserOpened,
@@ -215,5 +238,29 @@ test.describe('Bluetooth MIDI keyboard', () => {
     await openSettings(page, 'Playing');
     await lights.uncheck();
     await expect.poll(async () => framesFrom(await writes(page)).at(-1)).toEqual(HAND_BACK);
+  });
+
+  test('lights the key a practice hold waits for, and the next note dimly', async ({ page }) => {
+    await installFakeKeyboard(page);
+    await gotoAppReady(page);
+    await openSettings(page, 'Playing');
+    await page.getByRole('checkbox', { name: 'Play with a MIDI keyboard' }).check();
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    await expect(page.getByRole('checkbox', { name: 'Key lights' })).toBeChecked();
+
+    // C4 then E4, both above middle C's split: right hand.
+    await nav(page).getByRole('button', { name: 'Play' }).click();
+    await expect(page.getByLabel('Count-in length')).toBeVisible();
+    await recordShortTake(page, 350);
+    await transport(page).getByRole('button', { name: 'Return to beginning' }).click();
+    await page.getByRole('button', { name: 'Practice both', exact: true }).click();
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(page.getByText('Waiting for you to play the lit keys')).toBeVisible();
+
+    // Playback holds, so nothing of the take lights: C4 (key 12) is the target,
+    // in the right hand's full colour, and E4 (key 16) glows dimly as next.
+    const lit = async () => replay(framesFrom(await writes(page)));
+    await expect.poll(async () => (await lit())[12]).toEqual([208, 128, 8]);
+    expect(Math.max(...((await lit())[16] as number[]))).toBe(40);
   });
 });
