@@ -123,7 +123,7 @@ describe('watchLightLinks', () => {
     stop = watchLightLinks((snapshot) => snapshots.push(snapshot));
 
     await ensureAccess();
-    expect(latest()).toEqual({ links: [], usbAwaitingSysex: true });
+    expect(latest()).toEqual({ links: [], awaitingSysex: 'PartyKeys' });
 
     await expect(ensureSysexAccess()).resolves.toBe(true);
     expect(request).toHaveBeenLastCalledWith({ sysex: true });
@@ -146,7 +146,7 @@ describe('watchLightLinks', () => {
 
     await expect(ensureSysexAccess()).resolves.toBe(false);
     expect(getSysexState()).toBe('denied');
-    expect(latest()).toEqual({ links: [], usbAwaitingSysex: true });
+    expect(latest()).toEqual({ links: [], awaitingSysex: 'PartyKeys' });
   });
 
   it('lights a Bluetooth PartyKeys through its own port, ahead of USB, but no other Bluetooth keyboard', async () => {

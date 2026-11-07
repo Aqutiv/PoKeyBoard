@@ -691,8 +691,8 @@ export const es: Messages = {
     keyLightsHint: ({ name }) =>
       `Ilumina las teclas de ${name} como se iluminan las de la pantalla: la música mientras suena, cada mano en su color y las notas suaves más tenues, y las teclas que tocas en la pantalla o en el teclado del ordenador. Las teclas que mantienes pulsadas en el propio ${name} se encienden en blanco.`,
     keyLightsAllowUsb: 'Permitir luces por USB',
-    keyLightsUsbHint:
-      'Hay un PartyKeys conectado. Para iluminar sus teclas, el navegador tiene que dejar que PoKeyBoard le envíe mensajes de luz: lo pregunta una vez y lo llama controlar y reprogramar tus dispositivos MIDI.',
+    keyLightsUsbHint: ({ name }) =>
+      `${name} está conectado. Para iluminar sus teclas, el navegador tiene que dejar que PoKeyBoard le envíe mensajes de luz: lo pregunta una vez y lo llama controlar y reprogramar tus dispositivos MIDI.`,
     keyLightsUsbDenied:
       'El navegador bloqueó los mensajes a dispositivos MIDI. Permítelos para este sitio en la configuración de tu navegador y vuelve a intentarlo.',
     keyLightsUsbError: 'No se pudo abrir el teclado para sus luces.',

@@ -17,7 +17,7 @@ export function KeyLightsRow() {
   const enabled = useSettingsStore((s) => s.keyLights);
   const setEnabled = useSettingsStore((s) => s.setKeyLights);
 
-  if (!status.keyboard && !status.usbAwaitingSysex) return null;
+  if (!status.keyboard && !status.awaitingSysex) return null;
 
   return (
     <>
@@ -30,7 +30,9 @@ export function KeyLightsRow() {
       ) : (
         <>
           <div className="setting-row">
-            <span className="settings__hint">{m.settings.keyLightsUsbHint}</span>
+            <span className="settings__hint">
+              {m.settings.keyLightsUsbHint({ name: status.awaitingSysex ?? '' })}
+            </span>
             <span className="setting-row__actions">
               <button
                 type="button"
