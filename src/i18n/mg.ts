@@ -698,6 +698,15 @@ export const mg: Messages = {
       'Voasakana ho an’ity tranokala ity ny Bluetooth. Avelao ao amin’ny kirakira navigateranao, dia andramo indray.',
     bluetoothMidiUnsupported:
       'Tsy afaka mampifandray klavie Bluetooth ity navigatera ity. Afaka kosa ny Chrome sy Edge, amin’ny ordinatera sy Android; na ampifandraiso amin’ny USB ny klavie.',
+    keyLights: 'Jiron’ny kitendry',
+    keyLightsHint: ({ name }) =>
+      `Mampirehitra ny kitendrin’i ${name} toy ny fireharehan’ny kitendry eo amin’ny efijery: ny mozika mandritra ny fandehany, samy amin’ny lokony ny tanana tsirairay ary malefaka kokoa ny naoty moramora, sy ny kitendry tendrenao amin’ny efijery na amin’ny klavien’ny ordinatera. Mirehitra fotsy ny kitendry tazoninao amin’i ${name} mihitsy.`,
+    keyLightsAllowUsb: 'Avelao ny jiro amin’ny USB',
+    keyLightsUsbHint:
+      'Misy PartyKeys mifandray. Mba hampirehetana ny kitendriny, tsy maintsy avelan’ny navigatera handefa hafatra jiro ho azy ny PoKeyBoard: manontany indray mandeha izy, ary antsoiny hoe mifehy sy manova ny fitaovana MIDI-nao izany.',
+    keyLightsUsbDenied:
+      'Nosakanan’ny navigatera ny hafatra ho an’ny fitaovana MIDI. Avelao ho an’ity tranokala ity ao amin’ny kirakira navigateranao, dia andramo indray.',
+    keyLightsUsbError: 'Tsy afaka nosokafana ho an’ny jirony ny klavie.',
     checking: 'Mijery…',
     downloadPiano: ({ piano, size }) => `Alaivo ${piano} (${size})`,
     deletePiano: ({ piano }) => `Fafao ny ${piano} voatariny`,

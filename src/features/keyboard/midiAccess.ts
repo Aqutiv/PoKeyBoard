@@ -21,15 +21,27 @@ export type MidiAccessSnapshot =
   | { kind: 'ready'; inputs: readonly MidiPortInfo[] };
 
 type PortsListener = (inputs: readonly MIDIInput[]) => void;
+type OutputsListener = (outputs: readonly MIDIOutput[]) => void;
+
+/**
+ * SysEx, which a PartyKeys' lights are set with, is a permission of its own:
+ * Chrome asks a second time, warning the site could "reprogram" the device.
+ * So it is only ever asked for from the Key lights row, and plain MIDI stays
+ * a plain prompt for everyone else.
+ */
+export type SysexState = 'none' | 'requesting' | 'granted' | 'denied' | 'error';
 
 const UNSUPPORTED: MidiAccessSnapshot = { kind: 'unsupported' };
 const IDLE: MidiAccessSnapshot = { kind: 'idle' };
 
 let access: MIDIAccess | null = null;
 let pending: Promise<void> | null = null;
+let pendingSysex: Promise<boolean> | null = null;
+let sysexState: SysexState = 'none';
 let snapshot: MidiAccessSnapshot = IDLE;
 const listeners = new Set<() => void>();
 const portsListeners = new Set<PortsListener>();
+const outputsListeners = new Set<OutputsListener>();
 
 function isSupported(): boolean {
   return typeof navigator.requestMIDIAccess === 'function';
@@ -38,6 +50,12 @@ function isSupported(): boolean {
 function readInputs(): MIDIInput[] {
   if (!access) return [];
   return [...access.inputs.values()];
+}
+
+function readOutputs(): MIDIOutput[] {
+  // A test double may come without outputs at all.
+  if (!access?.outputs) return [];
+  return [...access.outputs.values()];
 }
 
 function publish(next: MidiAccessSnapshot): void {
@@ -66,11 +84,29 @@ function publishPorts(): void {
     });
   }
   for (const listener of portsListeners) listener(inputs);
+  if (outputsListeners.size > 0) {
+    const outputs = readOutputs();
+    for (const listener of outputsListeners) listener(outputs);
+  }
 }
 
 const onStateChange = () => {
   publishPorts();
 };
+
+/** Takes `granted` as the one MIDIAccess: SysEx access replaces a plain one. */
+function adopt(granted: MIDIAccess): void {
+  if (access) access.removeEventListener('statechange', onStateChange);
+  access = granted;
+  granted.addEventListener('statechange', onStateChange);
+  publishPorts();
+}
+
+function setSysexState(next: SysexState): void {
+  if (sysexState === next) return;
+  sysexState = next;
+  for (const listener of listeners) listener();
+}
 
 /**
  * Whether the browser has already granted MIDI, so access can be opened
@@ -105,9 +141,8 @@ export function ensureAccess(): Promise<void> {
   pending = navigator
     .requestMIDIAccess({ sysex: false })
     .then((granted) => {
-      access = granted;
-      granted.addEventListener('statechange', onStateChange);
-      publishPorts();
+      // SysEx access granted meanwhile is the better of the two.
+      if (sysexState !== 'granted') adopt(granted);
     })
     .catch((error: unknown) => {
       const name = error instanceof DOMException ? error.name : '';
@@ -124,12 +159,66 @@ export function ensureAccess(): Promise<void> {
   return pending;
 }
 
+/** Whether the browser has already granted MIDI with SysEx, so it opens without a prompt. */
+export async function isSysexGranted(): Promise<boolean> {
+  if (!isSupported()) return false;
+  try {
+    const status = await navigator.permissions.query({
+      name: 'midi' as PermissionName,
+      sysex: true,
+    } as PermissionDescriptor);
+    return status.state === 'granted';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * MIDI with SysEx, which raises its own prompt unless already granted. Once
+ * granted it replaces plain access, so there is still one MIDIAccess, and the
+ * ports it lists are bound anew. Resolves whether SysEx can now be sent.
+ */
+export function ensureSysexAccess(): Promise<boolean> {
+  if (!isSupported()) return Promise.resolve(false);
+  if (sysexState === 'granted' && access) return Promise.resolve(true);
+  if (pendingSysex) return pendingSysex;
+
+  setSysexState('requesting');
+  const wasIdle = !access;
+  if (wasIdle) publish({ kind: 'requesting' });
+  pendingSysex = navigator
+    .requestMIDIAccess({ sysex: true })
+    .then((granted) => {
+      sysexState = 'granted';
+      adopt(granted);
+      for (const listener of listeners) listener();
+      return true;
+    })
+    .catch((error: unknown) => {
+      const name = error instanceof DOMException ? error.name : '';
+      setSysexState(name === 'NotAllowedError' || name === 'SecurityError' ? 'denied' : 'error');
+      // A refused SysEx prompt leaves plain MIDI as it was.
+      if (wasIdle && !access) publish(IDLE);
+      return false;
+    })
+    .finally(() => {
+      pendingSysex = null;
+    });
+  return pendingSysex;
+}
+
+export function getSysexState(): SysexState {
+  return sysexState;
+}
+
 /**
  * Open access only if the browser has already granted MIDI. This is the path
  * the piano takes on load: a returning player gets their keyboard back with
  * no ceremony, and nobody meets a permission prompt they did not ask for.
+ * SysEx granted before (for a PartyKeys' lights) is opened the same way.
  */
 export async function ensureAccessIfGranted(): Promise<void> {
+  if ((await isSysexGranted()) && (await ensureSysexAccess())) return;
   if (!(await isAlreadyGranted())) return;
   await ensureAccess();
 }
@@ -159,12 +248,27 @@ export function subscribePorts(listener: PortsListener): () => void {
   return () => portsListeners.delete(listener);
 }
 
+/** Outputs, delivered now (once access is open) and on every hot-plug. */
+export function subscribeOutputs(listener: OutputsListener): () => void {
+  outputsListeners.add(listener);
+  if (access) listener(readOutputs());
+  return () => outputsListeners.delete(listener);
+}
+
+/** Every input and output now, or none before access is open. */
+export function currentPorts(): { inputs: readonly MIDIInput[]; outputs: readonly MIDIOutput[] } {
+  return { inputs: readInputs(), outputs: readOutputs() };
+}
+
 /** Test-only: the module-level access and snapshot outlive a single test. */
 export function __resetForTests(): void {
   if (access) access.removeEventListener('statechange', onStateChange);
   access = null;
   pending = null;
+  pendingSysex = null;
+  sysexState = 'none';
   snapshot = IDLE;
   listeners.clear();
   portsListeners.clear();
+  outputsListeners.clear();
 }

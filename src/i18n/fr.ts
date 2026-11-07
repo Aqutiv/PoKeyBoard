@@ -693,6 +693,15 @@ export const fr: Messages = {
       'Le Bluetooth a été bloqué pour ce site. Autorisez-le dans les réglages de votre navigateur, puis réessayez.',
     bluetoothMidiUnsupported:
       'Ce navigateur ne peut pas connecter de clavier Bluetooth. Chrome et Edge le peuvent, sur ordinateur et Android ; sinon, branchez le clavier en USB.',
+    keyLights: 'Lumières des touches',
+    keyLightsHint: ({ name }) =>
+      `Éclaire les touches de ${name} comme s’éclairent celles de l’écran : la musique pendant qu’elle joue, chaque main dans sa couleur et les notes douces plus faibles, ainsi que les touches que vous jouez à l’écran ou au clavier de l’ordinateur. Les touches que vous tenez sur ${name} lui-même s’allument en blanc.`,
+    keyLightsAllowUsb: 'Autoriser les lumières en USB',
+    keyLightsUsbHint:
+      'Un PartyKeys est branché. Pour éclairer ses touches, le navigateur doit laisser PoKeyBoard lui envoyer des messages de lumière : il le demande une fois, en parlant de contrôler et reprogrammer vos périphériques MIDI.',
+    keyLightsUsbDenied:
+      'Le navigateur a bloqué les messages vers les périphériques MIDI. Autorisez-les pour ce site dans les réglages de votre navigateur, puis réessayez.',
+    keyLightsUsbError: 'Impossible d’ouvrir le clavier pour ses lumières.',
     checking: 'Vérification…',
     downloadPiano: ({ piano, size }) => `Télécharger ${piano} (${size})`,
     deletePiano: ({ piano }) => `Supprimer le téléchargement de ${piano}`,

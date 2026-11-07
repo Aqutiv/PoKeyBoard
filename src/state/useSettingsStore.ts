@@ -83,6 +83,8 @@ export interface SettingsState {
    * while MIDI is on; null once the player disconnects it.
    */
   bluetoothMidiDevice: BluetoothMidiDeviceInfo | null;
+  /** Light a connected PartyKeys' keys as the keys on screen are lit. */
+  keyLights: boolean;
   metronomeVolume: number;
   keyboardAnchorMidi: number;
   sheetPaperSize: PaperSize;
@@ -131,6 +133,7 @@ export interface SettingsState {
   setGamepadInput(enabled: boolean): void;
   setMidiInput(enabled: boolean): void;
   setBluetoothMidiDevice(device: BluetoothMidiDeviceInfo | null): void;
+  setKeyLights(enabled: boolean): void;
   setMetronomeVolume(value: number): void;
   setKeyboardAnchorMidi(midi: number): void;
   setSheetPaperSize(size: PaperSize): void;
@@ -171,6 +174,7 @@ export const SETTINGS_DEFAULTS = {
   gamepadInput: true,
   midiInput: false,
   bluetoothMidiDevice: null as BluetoothMidiDeviceInfo | null,
+  keyLights: true,
   metronomeVolume: 0.6,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
   sheetPaperSize: 'a4' as PaperSize,
@@ -222,6 +226,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),
   setMidiInput: (midiInput) => set({ midiInput }),
   setBluetoothMidiDevice: (bluetoothMidiDevice) => set({ bluetoothMidiDevice }),
+  setKeyLights: (keyLights) => set({ keyLights }),
   setMetronomeVolume: (metronomeVolume) => set({ metronomeVolume }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),

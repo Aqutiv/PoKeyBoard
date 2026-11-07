@@ -761,6 +761,12 @@ export interface Messages {
     bluetoothMidiNoAdapter: string;
     bluetoothMidiBlocked: string;
     bluetoothMidiUnsupported: string;
+    keyLights: string;
+    keyLightsHint: (p: { name: string }) => string;
+    keyLightsAllowUsb: string;
+    keyLightsUsbHint: string;
+    keyLightsUsbDenied: string;
+    keyLightsUsbError: string;
     checking: string;
     downloadPiano: (p: { piano: string; size: string }) => string;
     deletePiano: (p: { piano: string }) => string;

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
-import { gotoAppReady, nav, openSettings, persistedSetting } from './helpers';
+import { gotoAppReady, nav, openSettings, persistedSetting, transport } from './helpers';
 
 /**
  * A Bluetooth MIDI keyboard for the page: Web Bluetooth's device chooser
@@ -99,6 +99,47 @@ async function send(page: Page, bytes: number[]): Promise<void> {
   }, bytes);
 }
 
+function writes(page: Page): Promise<number[][]> {
+  return page.evaluate(
+    () => (window as unknown as { __fakeBle: { writes: number[][] } }).__fakeBle.writes,
+  );
+}
+
+/**
+ * The SysEx messages a run of BLE-MIDI packets carries: a message opens with
+ * the header, a timestamp and F0, continues with the header and bare data,
+ * and closes with a timestamp and F7.
+ */
+function framesFrom(packets: number[][]): number[][] {
+  const frames: number[][] = [];
+  let current: number[] = [];
+  for (const packet of packets) {
+    const opens = packet[2] === 0xf0;
+    if (opens) current = [];
+    const body = packet.slice(opens ? 2 : 1);
+    if (body[body.length - 1] === 0xf7) {
+      frames.push([...current, ...body.slice(0, -2), 0xf7]);
+      current = [];
+    } else {
+      current.push(...body);
+    }
+  }
+  return frames;
+}
+
+const LED_MODE = [0xf0, 0x05, 0x30, 0x7f, 0x7f, 0x20, 0x00, 0x0f, 0x01, 0xf7];
+const HAND_BACK = [0xf0, 0x05, 0x30, 0x7f, 0x7f, 0x20, 0x00, 0x0f, 0x00, 0xf7];
+
+/** Whether a CMD 15 frame lights any key, rather than darkening keys. */
+function lightsSomething(frame: number[]): boolean {
+  if (frame[7] !== 0x15) return false;
+  for (let at = 9, group = 0; group < (frame[8] ?? 0); group += 1) {
+    if (frame.slice(at, at + 6).some((byte) => byte !== 0)) return true;
+    at += 7 + (frame[at + 6] ?? 0);
+  }
+  return false;
+}
+
 function chooserOpened(page: Page): Promise<number> {
   return page.evaluate(
     () => (window as unknown as { __fakeBle: { chooserOpened: number } }).__fakeBle.chooserOpened,
@@ -142,5 +183,34 @@ test.describe('Bluetooth MIDI keyboard', () => {
     await page.getByRole('button', { name: 'Disconnect' }).click();
     await expect(page.getByText('No Bluetooth keyboard connected.')).toBeVisible();
     await expect.poll(() => persistedSetting(page, 'bluetoothMidiDevice')).toBeNull();
+  });
+
+  test('lights a PartyKeys’ keys as a Library track plays, and hands them back when switched off', async ({
+    page,
+  }) => {
+    await installFakeKeyboard(page);
+    await gotoAppReady(page);
+    await openSettings(page, 'Playing');
+    await page.getByRole('checkbox', { name: 'Play with a MIDI keyboard' }).check();
+    await page.getByRole('button', { name: 'Connect', exact: true }).click();
+    const lights = page.getByRole('checkbox', { name: 'Key lights' });
+    await expect(lights).toBeChecked();
+
+    // LED mode first, then every key dark.
+    await expect.poll(async () => framesFrom(await writes(page))[0]).toEqual(LED_MODE);
+    await expect.poll(async () => framesFrom(await writes(page)).length).toBeGreaterThanOrEqual(2);
+    expect(framesFrom(await writes(page)).some(lightsSomething)).toBe(false);
+
+    await nav(page).getByRole('button', { name: 'Library' }).click();
+    await page.getByRole('button', { name: 'Open A Beautiful Day' }).click();
+    await transport(page).getByRole('button', { name: 'Play', exact: true }).click();
+    await expect.poll(async () => framesFrom(await writes(page)).some(lightsSomething)).toBe(true);
+    for (const frame of framesFrom(await writes(page)))
+      expect(frame.length).toBeLessThanOrEqual(90);
+    await transport(page).getByRole('button', { name: 'Pause', exact: true }).click();
+
+    await openSettings(page, 'Playing');
+    await lights.uncheck();
+    await expect.poll(async () => framesFrom(await writes(page)).at(-1)).toEqual(HAND_BACK);
   });
 });

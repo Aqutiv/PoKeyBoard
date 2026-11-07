@@ -687,6 +687,15 @@ export const en: Messages = {
       'Bluetooth was blocked for this site. Allow it in your browser’s site settings, then try again.',
     bluetoothMidiUnsupported:
       'This browser cannot connect Bluetooth keyboards. Chrome and Edge can, on desktop and Android — or plug the keyboard in with USB.',
+    keyLights: 'Key lights',
+    keyLightsHint: ({ name }) =>
+      `Lights ${name}’s keys as the keys on screen light: the music as it plays, each hand in its own colour and softer notes dimmer, and the keys you play on screen or on the computer keyboard. Keys you hold on ${name} itself light white.`,
+    keyLightsAllowUsb: 'Allow lights over USB',
+    keyLightsUsbHint:
+      'A PartyKeys is plugged in. To light its keys, the browser has to let PoKeyBoard send it light messages: it asks once, calling this controlling and reprogramming your MIDI devices.',
+    keyLightsUsbDenied:
+      'The browser blocked messages to MIDI devices. Allow them for this site in your browser’s site settings, then try again.',
+    keyLightsUsbError: 'The keyboard could not be opened for its lights.',
     checking: 'Checking…',
     downloadPiano: ({ piano, size }) => `Download ${piano} (${size})`,
     deletePiano: ({ piano }) => `Delete ${piano} download`,
