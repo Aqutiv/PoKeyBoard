@@ -11,12 +11,12 @@ Each key shows one colour. The colours are the dark theme's key colours (`src/th
 squared for LEDs (`src/features/keyLights/ledColours.ts`). When several of these apply, the one
 higher in the list wins (`keyLightModel.ts`), as on screen:
 
-| State | Key light |
-|---|---|
-| Wrong key (practice, Learn) | Red, while it flashes on screen |
-| Held on screen, the computer keyboard or a game controller | Gold, brighter for a harder press |
-| Played by the take | Its hand's colour (right gold, left orange), dimmer for a softer note when velocity shading is on |
-| Anything else | Dark |
+| State                                                      | Key light                                                                                         |
+| ---------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Wrong key (practice, Learn)                                | Red, while it flashes on screen                                                                   |
+| Held on screen, the computer keyboard or a game controller | Gold, brighter for a harder press                                                                 |
+| Played by the take                                         | Its hand's colour (right gold, left orange), dimmer for a softer note when velocity shading is on |
+| Anything else                                              | Dark                                                                                              |
 
 Keys held on the PartyKeys itself light white. The firmware draws that over any host colour, and
 the host colour comes back on release. Notes outside the 36 keys aren't drawn. The keyboard's
@@ -40,12 +40,14 @@ Every message is SysEx with the header `F0 05 30 7F 7F 20 00` (`partyKeysProtoco
   and does it again at 4 s.
 
 **Sending** (`keyLightSession.ts`, `lightLinks.ts`, `keyLightsController.ts`):
+
 - Startup: LED mode, a 50 ms settle, every key dark, then the live state.
 - Only changed keys are sent, at most 25 updates a second, with frames at least 8 ms apart.
 - A failed send starts the session over, after a one-second pause.
 - Nothing ticks while nothing moves.
 
 **Links:**
+
 - **Bluetooth:** frames go through the BLE-MIDI characteristic as 20-byte SysEx packets
   (`bleMidiCodec.ts`).
 - **USB:** frames go to the PartyKeys output paired with its input by name. Sending SysEx needs
@@ -54,6 +56,7 @@ Every message is SysEx with the header `F0 05 30 7F 7F 20 00` (`partyKeysProtoco
   Once granted, later visits open it silently.
 
 Sources, as PianoBallDesktop cites them (`docs/PARTYKEYS-KEY-LIGHTS.md` there):
+
 - protocol.partykeys.org
 - github.com/allen4z/PartykeysProtocol (`LED_PROTOCOL.md`)
 - github.com/aortegaCampanillas/MIDIChords (`docs/integrations/partykeys`)
@@ -67,5 +70,5 @@ Sources, as PianoBallDesktop cites them (`docs/PARTYKEYS-KEY-LIGHTS.md` there):
     to the screen than the raw colours.
   - The softest note (42% strength) and a dim level-40 hint were visible and clearly quieter.
 - **Bluetooth:** not yet checked on hardware. PianoBallDesktop lit this keyboard from CMD 15 over
-  a direct Bluetooth link, and found that on Windows it fails *uncached* GATT service discovery.
+  a direct Bluetooth link, and found that on Windows it fails _uncached_ GATT service discovery.
   If Chrome hits the same failure, the console names the step (`Bluetooth MIDI service failed`).
