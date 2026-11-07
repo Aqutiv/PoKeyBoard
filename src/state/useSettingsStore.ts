@@ -9,6 +9,7 @@ import {
   DEFAULT_REVERB_ROOM,
   type ReverbRoom,
 } from '@/domain/takeTypes';
+import type { BluetoothMidiDeviceInfo } from '@/features/keyboard/bluetoothMidi';
 import { DEFAULT_ANCHOR_MIDI } from '@/features/keyboard/keyboardGeometry';
 import type {
   MidiVelocityCurve,
@@ -77,6 +78,11 @@ export interface SettingsState {
   /** Let a connected MIDI keyboard play the piano. Off by default: turning it
    *  on is what raises the browser's MIDI permission prompt. */
   midiInput: boolean;
+  /**
+   * The Bluetooth keyboard last connected, which the app reaches for again
+   * while MIDI is on; null once the player disconnects it.
+   */
+  bluetoothMidiDevice: BluetoothMidiDeviceInfo | null;
   metronomeVolume: number;
   keyboardAnchorMidi: number;
   sheetPaperSize: PaperSize;
@@ -124,6 +130,7 @@ export interface SettingsState {
   setBackgroundPlayback(enabled: boolean): void;
   setGamepadInput(enabled: boolean): void;
   setMidiInput(enabled: boolean): void;
+  setBluetoothMidiDevice(device: BluetoothMidiDeviceInfo | null): void;
   setMetronomeVolume(value: number): void;
   setKeyboardAnchorMidi(midi: number): void;
   setSheetPaperSize(size: PaperSize): void;
@@ -163,6 +170,7 @@ export const SETTINGS_DEFAULTS = {
   backgroundPlayback: false,
   gamepadInput: true,
   midiInput: false,
+  bluetoothMidiDevice: null as BluetoothMidiDeviceInfo | null,
   metronomeVolume: 0.6,
   keyboardAnchorMidi: DEFAULT_ANCHOR_MIDI,
   sheetPaperSize: 'a4' as PaperSize,
@@ -213,6 +221,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setBackgroundPlayback: (backgroundPlayback) => set({ backgroundPlayback }),
   setGamepadInput: (gamepadInput) => set({ gamepadInput }),
   setMidiInput: (midiInput) => set({ midiInput }),
+  setBluetoothMidiDevice: (bluetoothMidiDevice) => set({ bluetoothMidiDevice }),
   setMetronomeVolume: (metronomeVolume) => set({ metronomeVolume }),
   setKeyboardAnchorMidi: (keyboardAnchorMidi) => set({ keyboardAnchorMidi }),
   setSheetPaperSize: (sheetPaperSize) => set({ sheetPaperSize }),

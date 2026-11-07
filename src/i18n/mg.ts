@@ -674,6 +674,30 @@ export const mg: Messages = {
     midiNoDevices: 'Tsy nahitana klavie MIDI. Ampifandraiso iray: fantatra ho azy izy.',
     midiDevices: ({ names }) => `Mifandray: ${names}`,
     midiError: 'Tsy afaka nampandeha ny MIDI.',
+    bluetoothMidi: 'Klavie Bluetooth',
+    bluetoothMidiHint:
+      'Tendreo tsy misy tariby ny klavie MIDI Bluetooth, toy ny PartyKeys: velomy, ampifandraiso eto, dia mitendry toy ny klavie USB izy. Mifandray indray ho azy izy isaky ny mandeha ny MIDI.',
+    bluetoothMidiConnect: 'Ampifandraiso',
+    bluetoothMidiReconnect: ({ name }) => `Ampifandraiso indray ${name}`,
+    bluetoothMidiDisconnect: 'Esory ny fifandraisana',
+    bluetoothMidiRetry: 'Andramo indray',
+    bluetoothMidiIdle: 'Tsy misy klavie Bluetooth mifandray.',
+    bluetoothMidiLast: ({ name }) => `Tsy mifandray ${name}.`,
+    bluetoothMidiChoosing: 'Fidio ao amin’ny lisitry ny navigatera ny klavienao…',
+    bluetoothMidiConnecting: ({ name }) => `Mampifandray amin’i ${name}…`,
+    bluetoothMidiConnected: ({ name }) => `Mifandray amin’ny Bluetooth: ${name}`,
+    bluetoothMidiReconnecting: ({ name }) =>
+      `Mitady an’i ${name}… Velomy ary apetraho akaiky: hifandray indray ho azy izy.`,
+    bluetoothMidiFailed: ({ name }) =>
+      `Tsy afaka nifandray tamin’i ${name}. Jereo fa velona sy akaiky izy, dia andramo indray.`,
+    bluetoothMidiFailedAny:
+      'Tsy afaka nifandray tamin’ny klavie. Jereo fa velona sy akaiky izy, dia andramo indray.',
+    bluetoothMidiNoAdapter:
+      'Maty na tsy misy ny Bluetooth amin’ity fitaovana ity. Velomy, dia andramo indray.',
+    bluetoothMidiBlocked:
+      'Voasakana ho an’ity tranokala ity ny Bluetooth. Avelao ao amin’ny kirakira navigateranao, dia andramo indray.',
+    bluetoothMidiUnsupported:
+      'Tsy afaka mampifandray klavie Bluetooth ity navigatera ity. Afaka kosa ny Chrome sy Edge, amin’ny ordinatera sy Android; na ampifandraiso amin’ny USB ny klavie.',
     checking: 'Mijery…',
     downloadPiano: ({ piano, size }) => `Alaivo ${piano} (${size})`,
     deletePiano: ({ piano }) => `Fafao ny ${piano} voatariny`,
@@ -723,6 +747,7 @@ export const mg: Messages = {
       touch: 'Fidirana kasika',
       gamepad: 'API kapila lalao',
       webMidi: 'API Web MIDI',
+      webBluetooth: 'API Web Bluetooth',
     },
   },
   about: {

@@ -14,6 +14,7 @@ export interface AppCapabilities {
   touch: boolean;
   gamepad: boolean;
   webMidi: boolean;
+  webBluetooth: boolean;
 }
 
 interface NavigatorMaybeStandalone extends Navigator {
@@ -59,5 +60,7 @@ export function detectCapabilities(): AppCapabilities {
     touch: 'ontouchstart' in window || navigator.maxTouchPoints > 0,
     gamepad: typeof navigator.getGamepads === 'function',
     webMidi: typeof navigator.requestMIDIAccess === 'function',
+    webBluetooth:
+      'bluetooth' in navigator && typeof navigator.bluetooth?.requestDevice === 'function',
   };
 }

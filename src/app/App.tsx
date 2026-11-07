@@ -1,4 +1,5 @@
 import { lazy, Suspense } from 'react';
+import { useBluetoothMidi } from '@/features/keyboard/useBluetoothMidi';
 import { useMidiInput } from '@/features/keyboard/useMidiInput';
 import { useExportUiStore } from '@/state/useExportUiStore';
 import { ImportDialogs } from './ImportDialogs';
@@ -99,6 +100,7 @@ function Shell() {
   // Lives here rather than with the key bed so a connected MIDI keyboard keeps
   // playing on every tab, not just Play.
   useMidiInput();
+  useBluetoothMidi();
   return (
     <div className="app-shell">
       <div className="app-shell__content">

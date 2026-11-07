@@ -1,5 +1,6 @@
 import type { VelocityMode } from '@/state/useSettingsStore';
 import { MIDI_MAX, MIDI_MIN } from '@/utils/midi';
+import { subscribeBluetoothPorts } from './bluetoothMidi';
 import { isModalOpen } from './computerKeyboard';
 import { ensureAccessIfGranted, subscribePorts } from './midiAccess';
 import { midiVelocity, type MidiVelocityCurve, type MidiVelocityRange } from './velocityResponse';
@@ -76,7 +77,7 @@ export class MidiInput {
    */
   private readonly down = new Map<number, EventTarget>();
   private readonly sustainPorts = new Set<EventTarget>();
-  private readonly boundPorts = new Set<MIDIInput>();
+  private readonly boundPorts = new Set<EventTarget>();
   private callbacks: MidiCallbacks | null = null;
   private bendLatched = false;
   private velocity = 0.75;
@@ -84,11 +85,27 @@ export class MidiInput {
   private velocityCurve: MidiVelocityCurve = 'normal';
   private velocityRange: MidiVelocityRange | null = null;
   private unsubscribePorts: (() => void) | null = null;
+  /** Web MIDI inputs and Bluetooth keyboards arrive separately; both play. */
+  private webMidiPorts: readonly EventTarget[] = [];
+  private bluetoothPorts: readonly EventTarget[] = [];
 
   attach(callbacks: MidiCallbacks): () => void {
     this.callbacks = callbacks;
     document.addEventListener('visibilitychange', this.onVisibilityChange);
-    this.unsubscribePorts = subscribePorts(this.bindPorts);
+    const unsubscribeWebMidi = subscribePorts((inputs) => {
+      this.webMidiPorts = inputs;
+      this.bindPorts([...this.webMidiPorts, ...this.bluetoothPorts]);
+    });
+    const unsubscribeBluetooth = subscribeBluetoothPorts((ports) => {
+      this.bluetoothPorts = ports;
+      this.bindPorts([...this.webMidiPorts, ...this.bluetoothPorts]);
+    });
+    this.unsubscribePorts = () => {
+      unsubscribeWebMidi();
+      unsubscribeBluetooth();
+      this.webMidiPorts = [];
+      this.bluetoothPorts = [];
+    };
     // Never prompts: the Settings toggle is where permission is asked for.
     void ensureAccessIfGranted();
     return () => {
@@ -135,7 +152,7 @@ export class MidiInput {
     if (sustained && this.sustainPorts.size === 0) this.callbacks?.setSustain(false);
   }
 
-  private readonly bindPorts = (inputs: readonly MIDIInput[]) => {
+  private readonly bindPorts = (inputs: readonly EventTarget[]) => {
     const live = new Set(inputs);
     for (const port of [...this.boundPorts]) {
       if (live.has(port)) continue;

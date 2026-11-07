@@ -663,6 +663,30 @@ export const es: Messages = {
     midiNoDevices: 'No se encontró ningún teclado MIDI. Conecta uno: se detecta automáticamente.',
     midiDevices: ({ names }) => `Conectado: ${names}`,
     midiError: 'No se pudo iniciar el MIDI.',
+    bluetoothMidi: 'Teclado Bluetooth',
+    bluetoothMidiHint:
+      'Toca un teclado MIDI Bluetooth, como un PartyKeys, sin cable: enciéndelo, conéctalo aquí y suena como uno USB. Se vuelve a conectar siempre que el MIDI está activado.',
+    bluetoothMidiConnect: 'Conectar',
+    bluetoothMidiReconnect: ({ name }) => `Reconectar ${name}`,
+    bluetoothMidiDisconnect: 'Desconectar',
+    bluetoothMidiRetry: 'Reintentar',
+    bluetoothMidiIdle: 'Ningún teclado Bluetooth conectado.',
+    bluetoothMidiLast: ({ name }) => `${name} no está conectado.`,
+    bluetoothMidiChoosing: 'Elige tu teclado en la lista del navegador…',
+    bluetoothMidiConnecting: ({ name }) => `Conectando con ${name}…`,
+    bluetoothMidiConnected: ({ name }) => `Conectado por Bluetooth: ${name}`,
+    bluetoothMidiReconnecting: ({ name }) =>
+      `Buscando ${name}… Enciéndelo y mantenlo cerca; se reconecta solo.`,
+    bluetoothMidiFailed: ({ name }) =>
+      `No se pudo conectar con ${name}. Comprueba que esté encendido y cerca, y vuelve a intentarlo.`,
+    bluetoothMidiFailedAny:
+      'No se pudo conectar con el teclado. Comprueba que esté encendido y cerca, y vuelve a intentarlo.',
+    bluetoothMidiNoAdapter:
+      'El Bluetooth está apagado o no está disponible en este dispositivo. Actívalo y vuelve a intentarlo.',
+    bluetoothMidiBlocked:
+      'Se bloqueó el Bluetooth para este sitio. Permítelo en la configuración de tu navegador y vuelve a intentarlo.',
+    bluetoothMidiUnsupported:
+      'Este navegador no puede conectar teclados Bluetooth. Chrome y Edge sí, en escritorio y Android; o conecta el teclado por USB.',
     checking: 'Comprobando…',
     downloadPiano: ({ piano, size }) => `Descargar ${piano} (${size})`,
     deletePiano: ({ piano }) => `Eliminar la descarga de ${piano}`,
@@ -713,6 +737,7 @@ export const es: Messages = {
       touch: 'Entrada táctil',
       gamepad: 'API de mando de juego',
       webMidi: 'API Web MIDI',
+      webBluetooth: 'API Web Bluetooth',
     },
   },
   about: {
