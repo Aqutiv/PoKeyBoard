@@ -2,6 +2,10 @@
 
 Publisher: Idan Robbins. Product: PoKeyBoard, `9PGS4N7RZWFF`.
 
+November 9 update: the first release is **In Microsoft Store**. A listing-only
+update highlighting PartyKeys 36 compatibility and key lights in English, French,
+and Spanish is **Update in certification**. See `LISTING-UPDATE-2026-11-09.md`.
+
 The publisher authorized certification submission on November 7, 2026. Partner
 Center accepted the submission and shows **In certification**, with automatic
 publishing after approval. See `READINESS.md` for validation results and remaining
