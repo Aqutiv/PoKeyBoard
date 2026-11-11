@@ -464,6 +464,7 @@ export interface Messages {
       moonlightSonata: string;
       whereStarlightLingers: string;
       silverwoodTale: string;
+      comingOfWinter: string;
     };
   };
   learn: {

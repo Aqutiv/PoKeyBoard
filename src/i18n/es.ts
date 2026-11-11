@@ -304,6 +304,8 @@ export const es: Messages = {
         'Un nocturno encantador de dos minutos para piano: una tierna melodía se despliega entre armonías luminosas, voces entrelazadas y un ascenso apasionado, antes de volver a una despedida íntima que perdura.',
       silverwoodTale:
         'Un cuento de fantasía original en 6/8: una caja de música abre el libro de cuentos, una balada errante se adentra en un bosque encantado y la vieja canción rompe el hechizo de un dragón dormido para volar al amanecer.',
+      comingOfWinter:
+        'Una balada original en F menor, al modo de Chopin: un presagio de cinco notas en octavas desnudas, un tema cantabile que asciende tres veces, un último himno cálido… y estalla la ventisca, hasta que la nieve se posa sobre una quinta vacía.',
     },
   },
   learn: {

@@ -304,6 +304,8 @@ export const en: Messages = {
         'An enchanting two-minute piano nocturne: a tender melody unfolds through luminous harmonies, interwoven voices, and a passionate ascent before returning to a lingering, intimate farewell.',
       silverwoodTale:
         'An original fantasy tale in 6/8: a music box opens the storybook, a wanderer’s ballad winds through an enchanted wood, and the old song breaks the spell on a sleeping dragon for a flight at dawn.',
+      comingOfWinter:
+        'An original ballade in F minor, in the spirit of Chopin: a five-note omen in bare octaves, a singing theme that climbs three times, one last warm hymn — then the blizzard breaks, and the snow settles on an open fifth.',
     },
   },
   learn: {

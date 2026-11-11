@@ -32,7 +32,7 @@ an independently authored replacement, with its own stable track identity.
 
 ## Authored music
 
-The eight Originals tracks are project-authored music; the source modules record
+The nine Originals tracks are project-authored music; the source modules record
 their credits. Für Elise, Gymnopédie No. 1, and Ode to Joy are project transcriptions
 or teaching arrangements of historical compositions. Moonlight Sonata uses the
 public-domain Dukas/Durand 1915 note text via Craig Stuart Sapp's

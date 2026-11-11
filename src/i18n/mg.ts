@@ -311,6 +311,8 @@ export const mg: Messages = {
         'Hira piano mahavariana maharitra roa minitra: feonkira malefaka mivelatra miaraka amin’ny firindrana mamiratra sy feo mifampirary, miakatra feno fihetseham-po, ary miverina amin’ny veloma mangina sady mamy izay mbola manako.',
       silverwoodTale:
         'Angano noforonina amin’ny gadona 6/8: boaty mozika no manokatra ny boky, ny hiran’ny mpandehandeha mamakivaky ala feno majika, ary ny hira taloha no manala ny ody nampatory ny dragona, ka manidina izy amin’ny fiposahan’ny masoandro.',
+      comingOfWinter:
+        'Balada noforonina amin’ny F minora, araka ny fomban’i Chopin: famantarana dimy naoty, feonkira mihira miakatra intelo, hira mafana farany — dia mipoaka ny tafio-drivotra, ary milatsaka mangina ny oram-panala.',
     },
   },
   learn: {
