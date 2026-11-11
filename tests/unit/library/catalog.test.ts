@@ -11,7 +11,7 @@ import {
 } from '@/features/library/catalog';
 import { DEFAULT_LIBRARY_FOLDER, LIBRARY_FOLDER_IDS } from '@/features/library/folders';
 import { buildLibraryTake } from '@/features/library/trackBuilder';
-import { detectFifths } from '@/features/notation/keyDetection';
+import { detectFifths, detectMode } from '@/features/notation/keyDetection';
 import { layoutScore } from '@/features/notation/notationLayout';
 import { MIDI_MAX, MIDI_MIN } from '@/utils/midi';
 
@@ -31,6 +31,7 @@ describe('library catalog', () => {
       'canon-in-d-first-steps',
       'where-starlight-lingers',
       'silverwood-tale',
+      'coming-of-winter',
     ]);
   });
 
@@ -44,6 +45,7 @@ describe('library catalog', () => {
       'good-night',
       'where-starlight-lingers',
       'silverwood-tale',
+      'coming-of-winter',
     ]);
     // Classics leads with the authored transcriptions, then the vendored pack.
     expect(
@@ -259,6 +261,48 @@ describe('library catalog', () => {
     // The book closes on F with its ninth, spread up to a bell on A6.
     const finalChord = notes.filter((note) => note.startMs >= 118_000);
     expect(finalChord.map((note) => note.midi)).toEqual([29, 48, 57, 67, 72, 77, 81, 93]);
+  });
+
+  it('lets winter come in F minor, and resolves its omen only in the last bar', () => {
+    const take = getLibraryTake(libraryTakeId('coming-of-winter'));
+    expect(take?.tempo.bpm).toBe(60);
+    expect(take?.tempo.timeSignature).toEqual({ numerator: 6, denominator: 8 });
+    // The theme at 84, the fall down the keyboard at 138, the last chord at 40.
+    const bpms = take?.tempo.changes?.map((change) => change.bpm) ?? [];
+    expect(bpms).toHaveLength(32);
+    expect(bpms[1]).toBe(84);
+    expect(Math.max(...bpms)).toBe(138);
+    expect(bpms.at(-1)).toBe(40);
+
+    const notes = take?.notes ?? [];
+    // Four flats read from the pitches, and read as the minor: the hymn's
+    // A flat major never outweighs the key it is a memory in.
+    expect(detectFifths(notes)).toBe(-4);
+    expect(detectMode(notes, -4)).toBe('minor');
+    expect(notes.every((note) => note.staff !== undefined)).toBe(true);
+
+    // The pedal goes down on every bar line; nothing is released onto one.
+    const pedalDowns = new Set(
+      take?.pedalEvents.filter((event) => event.down).map((event) => event.atMs),
+    );
+    expect(notes.filter((note) => pedalDowns.has(note.startMs + note.durationMs))).toEqual([]);
+
+    // A storm, but one for two hands: neither is asked to strike more than an
+    // octave at once.
+    const struck = new Map<string, number[]>();
+    for (const note of notes) {
+      const key = `${note.staff}@${note.startMs}`;
+      struck.set(key, [...(struck.get(key) ?? []), note.midi]);
+    }
+    const spans = [...struck.values()].map((midis) => Math.max(...midis) - Math.min(...midis));
+    expect(Math.max(...spans)).toBe(12);
+
+    // The omen's sigh, D flat to C, goes on down to F at last — a fifth with
+    // no third in it, under one last flake at the top of the keyboard.
+    const finalChord = notes.filter((note) => note.startMs >= 178_000);
+    expect(finalChord.map((note) => note.midi)).toEqual([29, 41, 60, 65, 96]);
+    const pitchClasses = new Set(finalChord.map((note) => note.midi % 12));
+    expect([...pitchClasses].sort((a, b) => a - b)).toEqual([0, 5]);
   });
 
   it('writes the Blues Bass in C in straight eighths and still plays them swung', () => {

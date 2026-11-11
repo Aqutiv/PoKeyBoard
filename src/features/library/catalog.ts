@@ -9,6 +9,7 @@ import { buildLibraryTake, type LibraryTrackDef } from './trackBuilder';
 import { A_BEAUTIFUL_DAY } from './tracks/aBeautifulDay';
 import { BLUES_IN_C } from './tracks/bluesInC';
 import { CANON_FIRST_STEPS } from './tracks/canonFirstSteps';
+import { COMING_OF_WINTER } from './tracks/comingOfWinter';
 import { CROOKED_LANTERN_WALTZ } from './tracks/crookedLanternWaltz';
 import { EVENING_TIDE } from './tracks/eveningTide';
 import { FORWARD_GENTLY } from './tracks/forwardGently';
@@ -39,6 +40,7 @@ export const LIBRARY_TRACKS: readonly LibraryTrackDef[] = [
   CANON_FIRST_STEPS,
   WHERE_STARLIGHT_LINGERS,
   SILVERWOOD_TALE,
+  COMING_OF_WINTER,
 ];
 
 export interface LibraryTrackSummary {
