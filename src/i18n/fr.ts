@@ -310,6 +310,8 @@ export const fr: Messages = {
         'Un conte fantastique original en 6/8 : une boîte à musique ouvre le livre de contes, une ballade vagabonde s’enfonce dans une forêt enchantée, et la vieille chanson rompt le sortilège d’un dragon endormi pour un envol à l’aube.',
       comingOfWinter:
         'Une ballade originale en F mineur, dans l’esprit de Chopin : un présage de cinq notes en octaves nues, un thème chantant qui s’élève par trois fois, un dernier hymne chaleureux — puis le blizzard éclate, et la neige se pose sur une quinte à vide.',
+      coffeeByTheWindow:
+        'Une pièce chaleureuse et paisible de piano jazz matinal en F majeur : swing doux, accords lumineux de neuvième, pont ensoleillé, refrain léger à la basse marchante et tendre soupir final.',
     },
   },
   learn: {
