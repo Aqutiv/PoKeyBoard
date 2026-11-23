@@ -313,6 +313,8 @@ export const mg: Messages = {
         'Angano noforonina amin’ny gadona 6/8: boaty mozika no manokatra ny boky, ny hiran’ny mpandehandeha mamakivaky ala feno majika, ary ny hira taloha no manala ny ody nampatory ny dragona, ka manidina izy amin’ny fiposahan’ny masoandro.',
       comingOfWinter:
         'Balada noforonina amin’ny F minora, araka ny fomban’i Chopin: famantarana dimy naoty, feonkira mihira miakatra intelo, hira mafana farany — dia mipoaka ny tafio-drivotra, ary milatsaka mangina ny oram-panala.',
+      coffeeByTheWindow:
+        'Hira piano jazz maraina mafana sy milamina amin’ny F mazora — swing malefaka, firindrana feno hazavana, tetezana masoandro, fizarana mavitrika misy bass mandeha, ary fisentoana malefaka eo am-pamaranana.',
     },
   },
   learn: {

@@ -13,7 +13,7 @@ import { DEFAULT_LIBRARY_FOLDER, LIBRARY_FOLDER_IDS } from '@/features/library/f
 import { buildLibraryTake } from '@/features/library/trackBuilder';
 import { detectFifths, detectMode } from '@/features/notation/keyDetection';
 import { layoutScore } from '@/features/notation/notationLayout';
-import { MIDI_MAX, MIDI_MIN } from '@/utils/midi';
+import { DEFAULT_RANGE_HIGH, DEFAULT_RANGE_LOW, MIDI_MAX, MIDI_MIN } from '@/utils/midi';
 
 describe('library catalog', () => {
   it('ships the library tracks in display order', () => {
@@ -32,6 +32,7 @@ describe('library catalog', () => {
       'where-starlight-lingers',
       'silverwood-tale',
       'coming-of-winter',
+      'coffee-by-the-window',
     ]);
   });
 
@@ -46,6 +47,7 @@ describe('library catalog', () => {
       'where-starlight-lingers',
       'silverwood-tale',
       'coming-of-winter',
+      'coffee-by-the-window',
     ]);
     // Classics leads with the authored transcriptions, then the vendored pack.
     expect(
@@ -303,6 +305,51 @@ describe('library catalog', () => {
     expect(finalChord.map((note) => note.midi)).toEqual([29, 41, 60, 65, 96]);
     const pitchClasses = new Set(finalChord.map((note) => note.midi % 12));
     expect([...pitchClasses].sort((a, b) => a - b)).toEqual([0, 5]);
+  });
+
+  it('keeps Coffee by the Window swinging in F major with clean hand separation', () => {
+    const take = getLibraryTake(libraryTakeId('coffee-by-the-window'))!;
+    expect(take.tempo.bpm).toBe(88);
+    expect(take.tempo.timeSignature).toEqual({ numerator: 4, denominator: 4 });
+    // Bars 5, 21, 37, and the four-bar coda ritardando.
+    expect(take.tempo.changes).toEqual([
+      { atMs: 10_909, bpm: 94 },
+      { atMs: 51_760, bpm: 96 },
+      { atMs: 91_760, bpm: 92 },
+      { atMs: 112_630, bpm: 86 },
+      { atMs: 115_420, bpm: 78 },
+      { atMs: 118_497, bpm: 70 },
+      { atMs: 121_926, bpm: 54 },
+    ]);
+
+    const { notes } = take;
+    expect(detectFifths(notes)).toBe(-1); // F major (one flat)
+    expect(detectMode(notes, -1)).toBe('major');
+    expect(notes.every((note) => note.staff !== undefined)).toBe(true);
+
+    // Every simultaneous chord in either hand stays comfortably within an octave.
+    const struck = new Map<string, number[]>();
+    for (const note of notes) {
+      const key = `${note.staff}@${note.startMs}`;
+      struck.set(key, [...(struck.get(key) ?? []), note.midi]);
+    }
+    const spans = [...struck.values()].map((midis) => Math.max(...midis) - Math.min(...midis));
+    expect(Math.max(...spans)).toBeLessThanOrEqual(11);
+
+    // The entire right-hand melody stays inside the default visible keyboard.
+    const treble = notes.filter((note) => note.staff === 'treble');
+    expect(Math.min(...treble.map((note) => note.midi))).toBeGreaterThanOrEqual(DEFAULT_RANGE_LOW);
+    expect(Math.max(...treble.map((note) => note.midi))).toBeLessThanOrEqual(DEFAULT_RANGE_HIGH);
+
+    // Left-hand jazz voicings reach E4 above middle C, so explicit staffs matter.
+    const bass = notes.filter((note) => note.staff === 'bass');
+    expect(Math.max(...bass.map((note) => note.midi))).toBe(64); // E4
+
+    // Final bar blooms upward into an open Fmaj9 chord (F2..G5).
+    const finalBar = notes.filter((note) => note.startMs >= 121_926);
+    expect(finalBar.map((note) => note.midi).sort((a, b) => a - b)).toEqual([
+      41, 48, 53, 57, 64, 67, 69, 72, 76, 79,
+    ]);
   });
 
   it('writes the Blues Bass in C in straight eighths and still plays them swung', () => {

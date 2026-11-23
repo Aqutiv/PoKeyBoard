@@ -465,6 +465,7 @@ export interface Messages {
       whereStarlightLingers: string;
       silverwoodTale: string;
       comingOfWinter: string;
+      coffeeByTheWindow: string;
     };
   };
   learn: {
